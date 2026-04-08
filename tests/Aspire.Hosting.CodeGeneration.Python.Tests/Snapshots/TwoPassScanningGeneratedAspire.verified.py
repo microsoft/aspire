@@ -1496,7 +1496,7 @@ def _validate_dict_types(args: typing.Any, arg_types: typing.Any) -> bool:
 
 CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
-CommandResultFormat = typing.Literal["Text", "Json"]
+CommandResultFormat = typing.Literal["Text", "Json", "Markdown"]
 
 ContainerLifetime = typing.Literal["Session", "Persistent"]
 
@@ -1671,6 +1671,11 @@ class CommandOptions(typing.TypedDict, total=False):
     IsHighlighted: bool
     UpdateState: typing.Any
 
+class CommandResultData(typing.TypedDict, total=False):
+    Value: str
+    Format: CommandResultFormat
+    DisplayImmediately: bool
+
 class CreateBuilderOptions(typing.TypedDict, total=False):
     Args: typing.Iterable[str]
     ProjectDirectory: str
@@ -1685,8 +1690,8 @@ class ExecuteCommandResult(typing.TypedDict, total=False):
     Success: bool
     Canceled: bool
     ErrorMessage: str
-    Result: str
-    ResultFormat: CommandResultFormat
+    Message: str
+    Data: CommandResultData
 
 class ResourceEventDto(typing.TypedDict, total=False):
     ResourceName: str

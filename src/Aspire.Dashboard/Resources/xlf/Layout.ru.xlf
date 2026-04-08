@@ -17,9 +17,19 @@
         <target state="translated">Репозиторий Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutLaunchNotifications">
+        <source>Notifications</source>
+        <target state="new">Notifications</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutLaunchSettings">
         <source>Settings</source>
         <target state="translated">Параметры</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutNotificationCenterTitle">
+        <source>Notifications</source>
+        <target state="new">Notifications</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">

@@ -217,7 +217,7 @@ internal sealed class TestInteractionService : IInteractionService
         DisplayRawTextCallback?.Invoke(text);
     }
 
-    public void DisplayMarkdown(string markdown)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
     {
     }
 

@@ -128,7 +128,12 @@ public enum CommandResultFormat
     /// <summary>
     /// JSON result.
     /// </summary>
-    Json
+    Json,
+
+    /// <summary>
+    /// Markdown result.
+    /// </summary>
+    Markdown
 }
 
 /// <summary>
@@ -142,17 +147,25 @@ public static class CommandResults
     public static ExecuteCommandResult Success() => new() { Success = true };
 
     /// <summary>
-    /// Produces a success result with result data.
+    /// Produces a success result with a message and result data.
     /// </summary>
+    /// <param name="message">The message associated with the result.</param>
     /// <param name="result">The result data.</param>
     /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
-    public static ExecuteCommandResult Success(string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Result = result, ResultFormat = resultFormat };
+    public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Message = message, Data = new CommandResultData { Value = result, Format = resultFormat } };
+
+    /// <summary>
+    /// Produces a success result with a message and a value.
+    /// </summary>
+    /// <param name="message">The message associated with the result.</param>
+    /// <param name="value">The value produced by the command.</param>
+    public static ExecuteCommandResult Success(string message, CommandResultData value) => new() { Success = true, Message = message, Data = value };
 
     /// <summary>
     /// Produces an unsuccessful result with an error message.
     /// </summary>
     /// <param name="errorMessage">An optional error message.</param>
-    public static ExecuteCommandResult Failure(string? errorMessage = null) => new() { Success = false, ErrorMessage = errorMessage };
+    public static ExecuteCommandResult Failure(string? errorMessage = null) => new() { Success = false, Message = errorMessage };
 
     /// <summary>
     /// Produces an unsuccessful result with an error message and result data.
@@ -160,7 +173,14 @@ public static class CommandResults
     /// <param name="errorMessage">The error message.</param>
     /// <param name="result">The result data.</param>
     /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
-    public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = false, ErrorMessage = errorMessage, Result = result, ResultFormat = resultFormat };
+    public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = false, Message = errorMessage, Data = new CommandResultData { Value = result, Format = resultFormat } };
+
+    /// <summary>
+    /// Produces an unsuccessful result with an error message and a value.
+    /// </summary>
+    /// <param name="errorMessage">The error message.</param>
+    /// <param name="value">The value produced by the command.</param>
+    public static ExecuteCommandResult Failure(string errorMessage, CommandResultData value) => new() { Success = false, Message = errorMessage, Data = value };
 
     /// <summary>
     /// Produces a canceled result.
@@ -193,17 +213,50 @@ public sealed class ExecuteCommandResult
     /// <summary>
     /// An optional error message that can be set when the command is unsuccessful.
     /// </summary>
-    public string? ErrorMessage { get; init; }
+    [Obsolete("Use Message instead.")]
+    public string? ErrorMessage
+    {
+        get => _message;
+        init => _message ??= value;
+    }
 
     /// <summary>
-    /// An optional result value produced by the command.
+    /// An optional message associated with the command result.
     /// </summary>
-    public string? Result { get; init; }
+    public string? Message
+    {
+        get => _message;
+        init => _message = value;
+    }
+
+    private string? _message;
 
     /// <summary>
-    /// The format of the <see cref="Result"/> value.
+    /// An optional value produced by the command.
     /// </summary>
-    public CommandResultFormat? ResultFormat { get; init; }
+    public CommandResultData? Data { get; init; }
+}
+
+/// <summary>
+/// Represents a value produced by a command.
+/// </summary>
+[AspireDto]
+public sealed class CommandResultData
+{
+    /// <summary>
+    /// The value data.
+    /// </summary>
+    public required string Value { get; init; }
+
+    /// <summary>
+    /// The format of the <see cref="Value"/> data.
+    /// </summary>
+    public CommandResultFormat Format { get; init; }
+
+    /// <summary>
+    /// When <see langword="true"/>, the dashboard will immediately display the value in a dialog when the command completes.
+    /// </summary>
+    public bool DisplayImmediately { get; init; }
 }
 
 /// <summary>

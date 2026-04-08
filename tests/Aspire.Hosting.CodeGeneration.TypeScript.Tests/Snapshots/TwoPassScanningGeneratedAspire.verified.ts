@@ -257,6 +257,7 @@ export enum CertificateTrustScope {
 export enum CommandResultFormat {
     Text = "Text",
     Json = "Json",
+    Markdown = "Markdown",
 }
 
 /** Enum type for ContainerLifetime */
@@ -382,6 +383,13 @@ export interface CommandOptions {
     updateState?: any;
 }
 
+/** DTO interface for CommandResultData */
+export interface CommandResultData {
+    value?: string;
+    format?: CommandResultFormat;
+    displayImmediately?: boolean;
+}
+
 /** DTO interface for CreateBuilderOptions */
 export interface CreateBuilderOptions {
     args?: string[];
@@ -399,8 +407,8 @@ export interface ExecuteCommandResult {
     success?: boolean;
     canceled?: boolean;
     errorMessage?: string;
-    result?: string;
-    resultFormat?: CommandResultFormat;
+    message?: string;
+    data?: CommandResultData;
 }
 
 /** DTO interface for ResourceEventDto */

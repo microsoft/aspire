@@ -56,7 +56,7 @@ public class ResourceCommandService
     {
         if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
         {
-            return new ExecuteCommandResult { Success = false, ErrorMessage = $"Resource '{resourceId}' not found." };
+            return new ExecuteCommandResult { Success = false, Message = $"Resource '{resourceId}' not found." };
         }
 
         return await ExecuteCommandCoreAsync(resourceEvent.ResourceId, resourceEvent.Resource, commandName, cancellationToken).ConfigureAwait(false);
@@ -106,12 +106,11 @@ public class ResourceCommandService
 
         if (failures.Count == 0 && cancellations.Count == 0)
         {
-            var successWithResult = results.FirstOrDefault(r => r.Result is not null);
+            var successWithResult = results.FirstOrDefault(r => r.Data is not null);
             return new ExecuteCommandResult
             {
                 Success = true,
-                Result = successWithResult?.Result,
-                ResultFormat = successWithResult?.ResultFormat
+                Data = successWithResult?.Data
             };
         }
         else if (failures.Count == 0 && cancellations.Count > 0)
@@ -123,12 +122,12 @@ public class ResourceCommandService
         {
             // There were actual failures (possibly with some cancellations)
             var errorMessage = $"{failures.Count} command executions failed.";
-            errorMessage += Environment.NewLine + string.Join(Environment.NewLine, failures.Select(f => $"Resource '{f.resourceId}' failed with error message: {f.result.ErrorMessage}"));
+            errorMessage += Environment.NewLine + string.Join(Environment.NewLine, failures.Select(f => $"Resource '{f.resourceId}' failed with error message: {f.result.Message}"));
 
             return new ExecuteCommandResult
             {
                 Success = false,
-                ErrorMessage = errorMessage
+                Message = errorMessage
             };
         }
     }
@@ -178,7 +177,7 @@ public class ResourceCommandService
                 }
                 else
                 {
-                    logger.LogInformation("Failure executing command '{CommandName}'. Error message: {ErrorMessage}", commandName, result.ErrorMessage);
+                    logger.LogInformation("Failure executing command '{CommandName}'. Error message: {ErrorMessage}", commandName, result.Message);
                     return result;
                 }
             }
@@ -190,11 +189,11 @@ public class ResourceCommandService
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error executing command '{CommandName}'.", commandName);
-                return new ExecuteCommandResult { Success = false, ErrorMessage = "Unhandled exception thrown." };
+                return new ExecuteCommandResult { Success = false, Message = "Unhandled exception thrown." };
             }
         }
 
         logger.LogInformation("Command '{CommandName}' not available.", commandName);
-        return new ExecuteCommandResult { Success = false, ErrorMessage = $"Command '{commandName}' not available for resource '{resourceId}'." };
+        return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resourceId}'." };
     }
 }

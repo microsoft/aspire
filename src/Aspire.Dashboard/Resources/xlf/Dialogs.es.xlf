@@ -457,6 +457,21 @@
         <target state="translated">Seguimientos</target>
         <note />
       </trans-unit>
+      <trans-unit id="NotificationCenterDismissAll">
+        <source>Dismiss all</source>
+        <target state="new">Dismiss all</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NotificationCenterEmpty">
+        <source>No notifications</source>
+        <target state="new">No notifications</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NotificationEntryDismiss">
+        <source>Dismiss notification</source>
+        <target state="new">Dismiss notification</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OpenInTextVisualizer">
         <source>Open in text visualizer</source>
         <target state="translated">Abrir en visualizador de texto</target>
@@ -578,8 +593,13 @@
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogJsonFormat">
-        <source>Format JSON</source>
-        <target state="translated">Formato JSON</target>
+        <source>JSON</source>
+        <target state="needs-review-translation">Formato JSON</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TextVisualizerDialogMarkdownFormat">
+        <source>Markdown</source>
+        <target state="new">Markdown</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogPlaintextFormat">
@@ -588,8 +608,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogXmlFormat">
-        <source>Format XML</source>
-        <target state="translated">Formato XML</target>
+        <source>XML</source>
+        <target state="needs-review-translation">Formato XML</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningAcknowledge">

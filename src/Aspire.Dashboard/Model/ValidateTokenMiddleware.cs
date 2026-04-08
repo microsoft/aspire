@@ -68,7 +68,10 @@ internal sealed class ValidateTokenMiddleware
 
     private static void RedirectAfterValidation(HttpContext context)
     {
-        if (context.Request.Query.TryGetValue("returnUrl", out var returnUrl))
+        // An optional returnurl value must be a valid URL and it must be local.
+        // We don't want an open redirect (the potential to create a URL that redirects to a third-party site).
+        if (context.Request.Query.TryGetValue("returnUrl", out var returnUrl)
+            && UrlValidationHelper.IsSafeRedirectUrl(returnUrl.ToString()))
         {
             context.Response.Redirect(returnUrl.ToString());
         }

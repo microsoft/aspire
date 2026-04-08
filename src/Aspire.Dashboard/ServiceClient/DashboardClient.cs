@@ -780,7 +780,8 @@ internal sealed class DashboardClient : IDashboardClient
             return new ResourceCommandResponseViewModel()
             {
                 Kind = ResourceCommandResponseKind.Failed,
-                ErrorMessage = errorMessage
+                ErrorMessage = errorMessage,
+                Message = errorMessage
             };
         }
     }

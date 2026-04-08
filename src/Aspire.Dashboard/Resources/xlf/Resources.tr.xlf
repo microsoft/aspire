@@ -53,23 +53,28 @@
         <note />
       </trans-unit>
       <trans-unit id="ResourceCommandFailed">
-        <source>{0} "{1}" failed</source>
-        <target state="translated">{0} "{1}" başarısız</target>
-        <note>{0} is the resource. {1} is the display name of the command.</note>
+        <source>"{0}" failed</source>
+        <target state="new">"{0}" failed</target>
+        <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandStarting">
-        <source>{0} "{1}" starting</source>
-        <target state="translated">{0} "{1}" başlatılıyor</target>
-        <note>{0} is the resource. {1} is the display name of the command.</note>
+        <source>"{0}" starting</source>
+        <target state="new">"{0}" starting</target>
+        <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandSuccess">
-        <source>{0} "{1}" succeeded</source>
-        <target state="translated">{0} "{1}" başarılı</target>
-        <note>{0} is the resource. {1} is the display name of the command.</note>
+        <source>"{0}" succeeded</source>
+        <target state="new">"{0}" succeeded</target>
+        <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandToastViewLogs">
         <source>View console logs</source>
         <target state="translated">Konsol günlüklerini görüntüle</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceCommandViewResponse">
+        <source>View response</source>
+        <target state="new">View response</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsViewConsoleLogs">

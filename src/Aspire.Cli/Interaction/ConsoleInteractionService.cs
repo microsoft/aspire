@@ -352,10 +352,12 @@ internal class ConsoleInteractionService : IInteractionService
         target.Profile.Out.Writer.WriteLine(text);
     }
 
-    public void DisplayMarkdown(string markdown)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
     {
+        var effectiveConsole = consoleOverride ?? Console;
+        var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
         var spectreMarkup = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
-        MessageConsole.MarkupLine(spectreMarkup);
+        target.MarkupLine(spectreMarkup);
     }
 
     public void DisplayMarkupLine(string markup)
@@ -437,7 +439,21 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         MessageLogger.LogInformation("Confirm: {PromptText} (default: {DefaultValue})", promptText, defaultValue);
-        var result = await MessageConsole.ConfirmAsync(promptText, defaultValue, cancellationToken);
+
+        // Use [Y/n] or [y/N] convention where the capitalized letter indicates the default value.
+        // Double brackets [[ ]] are used to escape literal brackets in Spectre.Console markup.
+        var yesChoice = defaultValue ? "Y" : "y";
+        var noChoice = defaultValue ? "n" : "N";
+        var fullPromptText = $"{promptText} [[{yesChoice}/{noChoice}]]";
+
+        var prompt = new ConfirmationPrompt(fullPromptText)
+        {
+            ShowChoices = false,
+            ShowDefaultValue = false,
+            DefaultValue = defaultValue,
+        };
+
+        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Confirm result: {Result}", result);
         return result;
     }

@@ -133,6 +133,7 @@ type CommandResultFormat string
 const (
 	CommandResultFormatText CommandResultFormat = "Text"
 	CommandResultFormatJson CommandResultFormat = "Json"
+	CommandResultFormatMarkdown CommandResultFormat = "Markdown"
 )
 
 // UrlDisplayLocation represents UrlDisplayLocation.
@@ -243,8 +244,8 @@ type ExecuteCommandResult struct {
 	Success bool `json:"Success,omitempty"`
 	Canceled bool `json:"Canceled,omitempty"`
 	ErrorMessage string `json:"ErrorMessage,omitempty"`
-	Result string `json:"Result,omitempty"`
-	ResultFormat CommandResultFormat `json:"ResultFormat,omitempty"`
+	Message string `json:"Message,omitempty"`
+	Data *CommandResultData `json:"Data,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -253,8 +254,24 @@ func (d *ExecuteCommandResult) ToMap() map[string]any {
 		"Success": SerializeValue(d.Success),
 		"Canceled": SerializeValue(d.Canceled),
 		"ErrorMessage": SerializeValue(d.ErrorMessage),
-		"Result": SerializeValue(d.Result),
-		"ResultFormat": SerializeValue(d.ResultFormat),
+		"Message": SerializeValue(d.Message),
+		"Data": SerializeValue(d.Data),
+	}
+}
+
+// CommandResultData represents CommandResultData.
+type CommandResultData struct {
+	Value string `json:"Value,omitempty"`
+	Format CommandResultFormat `json:"Format,omitempty"`
+	DisplayImmediately bool `json:"DisplayImmediately,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CommandResultData) ToMap() map[string]any {
+	return map[string]any{
+		"Value": SerializeValue(d.Value),
+		"Format": SerializeValue(d.Format),
+		"DisplayImmediately": SerializeValue(d.DisplayImmediately),
 	}
 }
 

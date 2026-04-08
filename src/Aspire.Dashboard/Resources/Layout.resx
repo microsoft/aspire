@@ -138,6 +138,12 @@
   <data name="MainLayoutSettingsDialogClose" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="MainLayoutLaunchNotifications" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
+  <data name="MainLayoutNotificationCenterTitle" xml:space="preserve">
+    <value>Notifications</value>
+  </data>
   <data name="NavMenuResourcesTab" xml:space="preserve">
     <value>Resources</value>
   </data>
