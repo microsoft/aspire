@@ -71,12 +71,27 @@ environment:
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
 ```
 
-When you see this pattern:
+**⚠️ CRITICAL: Do not model passwords for typed Aspire integrations.**
 
-1. **Trace the variable** — find it in the `.env` or `.env.example` file
-2. **Classify it** — is it a secret (password, key, token) or plain config?
-3. **Model it** — secrets become `AddParameter(name, secret: true)`, plain config becomes `AddParameter(name)` with a default or `WithEnvironment()` directly
-4. **For typed integrations, check if Aspire manages it automatically** — for example, `AddPostgres()` auto-generates a password, so you don't need to model `POSTGRES_PASSWORD` separately. The compose variable was only needed because Compose didn't manage passwords — Aspire does.
+`AddPostgres()`, `AddSqlServer()`, `AddRedis()`, `AddMySql()`, `AddRabbitMQ()`, and other typed integrations **auto-generate secure passwords**. The compose file needed `POSTGRES_PASSWORD` because Compose doesn't manage credentials — Aspire does. If you see a compose password variable that maps to a typed integration, **skip it entirely**. Do not create an `AddParameter` for it.
+
+```csharp
+// ❌ WRONG — don't model passwords that Aspire auto-generates
+var pgPassword = builder.AddParameter("postgres-password", secret: true);
+var postgres = builder.AddPostgres("postgres", password: pgPassword);
+
+// ✅ RIGHT — let Aspire handle the password
+var postgres = builder.AddPostgres("postgres");
+```
+
+Use `aspire docs get <integration-slug>` to check what each typed integration manages automatically. Look for the "Connection properties" section — if it lists `Password`, the integration handles it.
+
+When you see a `${VAR}` pattern in compose:
+
+1. **Check if it maps to a typed integration** — if `POSTGRES_PASSWORD`, `MSSQL_SA_PASSWORD`, `MYSQL_ROOT_PASSWORD`, `RABBITMQ_DEFAULT_PASS`, etc. are used by a typed Aspire integration, **skip them** — Aspire manages these
+2. **Trace non-integration variables** — find them in the `.env` or `.env.example` file
+3. **Classify** — is it a secret (API key, token) or plain config?
+4. **Model it** — secrets become `AddParameter(name, secret: true)`, plain config becomes `AddParameter(name)` with a default or `WithEnvironment()` directly
 
 ## Volume mapping
 

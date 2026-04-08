@@ -220,24 +220,26 @@ It does **not** automatically map onto older patterns such as:
 
 ### What to do when you find legacy hosting
 
-Do **not** silently jam ServiceDefaults into the old shape.
+Do **not** silently jam ServiceDefaults into the old shape. **Do not create adapter extension methods on `IHostBuilder`** — ServiceDefaults is designed for `IHostApplicationBuilder` and should only be used with the modern bootstrap pattern.
+
+There are exactly two options. Present them clearly:
+
+1. **Skip ServiceDefaults for now** (recommended for initial setup)
+   - Model the service in the AppHost with `AddProject<T>()` or `AddCSharpApp()`
+   - The service appears in the dashboard, gets environment wiring, and shows logs
+   - No code changes to the service project needed
+   - Health checks, service discovery, and OTel from ServiceDefaults are deferred
+
+2. **Modernize the service's bootstrap** (larger change, per-service)
+   - Convert `Program.cs` from `Host.CreateDefaultBuilder()` to `WebApplication.CreateBuilder()`
+   - Inline the `Startup.ConfigureServices()` into `builder.Services.*` calls
+   - Inline the `Startup.Configure()` into the `app.*` middleware pipeline
+   - Then add `builder.AddServiceDefaults()` and `app.MapDefaultEndpoints()`
+   - Existing `IHostBuilder` extensions (like custom logging, SDK setup) can be called via `builder.Host.*`
 
 **When multiple services share the same legacy pattern, batch the decision.** If 8 services all use `Host.CreateDefaultBuilder` + `UseStartup<T>`, don't ask 8 times. Ask once:
 
-> *"All 8 of your web services use the legacy IHostBuilder + Startup pattern. I can either (a) model them all in the AppHost without ServiceDefaults for now — they'll appear in the dashboard and get environment wiring but won't have health checks or service discovery — or (b) modernize their bootstrap to the WebApplicationBuilder pattern so ServiceDefaults works fully. Which approach do you prefer? You can also mix — modernize a few key services and leave the rest."*
-
-For individual or mixed-pattern services, present the decision per-service:
-
-1. **Keep the service code unchanged for now**
-   - model the service in the AppHost
-   - skip ServiceDefaults injection for that project
-   - use AppHost-side environment wiring only
-   - note that full Aspire service-defaults behavior is deferred
-
-2. **Modernize the bootstrap**
-   - convert the service to `WebApplication.CreateBuilder(args)` or `Host.CreateApplicationBuilder(args)`
-   - then add `builder.AddServiceDefaults()`
-   - for ASP.NET Core apps, add `app.MapDefaultEndpoints()` before `app.Run()`
+> *"All 8 of your web services use the legacy IHostBuilder + Startup pattern. I can either (a) model them all in the AppHost without ServiceDefaults for now — they'll appear in the dashboard and get environment wiring but won't have health checks or service discovery — or (b) modernize each service's bootstrap to the WebApplicationBuilder pattern so ServiceDefaults works fully. Which approach do you prefer? You can also mix — modernize a few key services and leave the rest."*
 
 If the repo is conservative or large, default to **asking**, not migrating automatically.
 

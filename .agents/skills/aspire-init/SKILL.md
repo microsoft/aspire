@@ -932,6 +932,31 @@ aspire list integrations
 
 Use `aspire docs search` to find the right builder methods, configuration options, and patterns. Use `aspire docs get <slug>` to read the full doc page. Use `aspire list integrations` to discover packages you might not have known about. Do not guess API shapes — Aspire has many resource types with specific overloads.
 
+### Check what integrations auto-manage
+
+Before modeling environment variables, passwords, ports, or volumes for a typed integration, **check the docs to see what the integration handles automatically**. Many typed integrations auto-generate passwords, manage ports dynamically, and handle volumes — duplicating this config causes errors or conflicts.
+
+```bash
+# Check what AddPostgres manages automatically
+aspire docs get "postgresql-hosting-integration" --section "Connection properties"
+
+# Check what AddSqlServer manages
+aspire docs get "sql-server-integration" --section "Hosting integration"
+```
+
+Look for the **"Connection properties"** section — it lists what the integration injects into consuming services. If it lists `Password`, `Host`, `Port` — the integration manages those. Do not create `AddParameter()` for values the integration already handles.
+
+Common auto-managed values (do NOT model these manually):
+
+| Integration | Auto-managed |
+|-------------|-------------|
+| `AddPostgres()` | Password, host, port, connection string |
+| `AddSqlServer()` | SA password, host, port, connection string |
+| `AddRedis()` | Connection string, port |
+| `AddMySql()` | Root password, host, port, connection string |
+| `AddRabbitMQ()` | Username, password, host, port, connection string |
+| `AddMongoDB()` | Connection string, port |
+
 To add an integration package (which unlocks typed builder methods):
 
 ```bash
