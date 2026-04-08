@@ -28,6 +28,7 @@ internal sealed class AddCommand : BaseCommand
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IAppHostProjectFactory _projectFactory;
+    private readonly IConfigurationService _configurationService;
 
     private static readonly Argument<string> s_integrationArgument = new("integration")
     {
@@ -44,7 +45,7 @@ internal sealed class AddCommand : BaseCommand
         Description = AddCommandStrings.SourceArgumentDescription
     };
 
-    public AddCommand(IPackagingService packagingService, IInteractionService interactionService, IProjectLocator projectLocator, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
+    public AddCommand(IPackagingService packagingService, IInteractionService interactionService, IProjectLocator projectLocator, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfigurationService configurationService)
         : base("add", AddCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _packagingService = packagingService;
@@ -53,6 +54,7 @@ internal sealed class AddCommand : BaseCommand
         _sdkInstaller = sdkInstaller;
         _hostEnvironment = hostEnvironment;
         _projectFactory = projectFactory;
+        _configurationService = configurationService;
 
         Arguments.Add(s_integrationArgument);
         Options.Add(s_appHostOption);
@@ -93,9 +95,9 @@ internal sealed class AddCommand : BaseCommand
 
             var source = parseResult.GetValue(s_sourceOption);
 
-            // For non-.NET projects, read the channel from the local Aspire configuration if available.
-            // Unlike .NET projects which have a nuget.config, polyglot apphosts may persist the channel
-            // in the legacy settings.json. Falls back to the embedded channel baked into the binary.
+            // For non-.NET projects, read the channel from the configuration service,
+            // which supports both the global config (aspire config set) and legacy settings.
+            // Falls back to the embedded channel baked into the binary.
             string? configuredChannel = null;
             if (project.LanguageId != KnownLanguageId.CSharp)
             {
@@ -103,11 +105,9 @@ internal sealed class AddCommand : BaseCommand
                 var isProjectReferenceMode = AspireRepositoryDetector.DetectRepositoryRoot(appHostDirectory) is not null;
                 if (!isProjectReferenceMode)
                 {
-                    // TODO: Remove legacy AspireJsonConfiguration fallback once confident most users
-                    // have migrated. Tracked by https://github.com/microsoft/aspire/issues/15239
                     try
                     {
-                        configuredChannel = AspireJsonConfiguration.Load(appHostDirectory)?.Channel
+                        configuredChannel = await _configurationService.GetConfigurationAsync("channel", cancellationToken)
                             ?? PackagingService.GetEmbeddedChannel();
                     }
                     catch (JsonException ex)
