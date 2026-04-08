@@ -73,8 +73,31 @@ public class ScriptFunctionCommand : ToolCommand
         // Write a temp bash script that sources the target and calls the function.
         // Sourcing works cleanly because bash scripts use a BASH_SOURCE guard that
         // skips main() when sourced from another script.
+        //
+        // We save/restore shell options and guard readonly variables so that:
+        //  - The sourced script's `set -euo pipefail` doesn't leak into the wrapper
+        //  - Re-sourcing the script doesn't fail on `readonly` redeclaration
         var tempScript = Path.Combine(_testEnvironment.TempDirectory, $"test-func-{Guid.NewGuid():N}.sh");
-        File.WriteAllText(tempScript, $"#!/bin/bash\nsource \"{fullScriptPath}\"\n{_functionExpression}\n");
+        var wrapperContent =
+            "#!/bin/bash\n" +
+            "# Save current shell options\n" +
+            "_saved_opts=$(set +o)\n" +
+            "_saved_shopt=$(shopt -p 2>/dev/null || true)\n" +
+            "\n" +
+            "# Allow readonly redeclaration to be silently ignored\n" +
+            "readonly() { builtin readonly \"$@\" 2>/dev/null || true; }\n" +
+            "\n" +
+            $"source \"{fullScriptPath}\"\n" +
+            "\n" +
+            "# Remove our readonly override\n" +
+            "unset -f readonly\n" +
+            "\n" +
+            "# Restore original shell options\n" +
+            "eval \"$_saved_opts\" 2>/dev/null || true\n" +
+            "eval \"$_saved_shopt\" 2>/dev/null || true\n" +
+            "\n" +
+            $"{_functionExpression}\n";
+        File.WriteAllText(tempScript, wrapperContent);
 
         // Make executable on Unix
         if (!OperatingSystem.IsWindows())
@@ -101,8 +124,11 @@ public class ScriptFunctionCommand : ToolCommand
         // Each script uses a different marker before its main execution try/catch block
         var mainMarker = isPrScript ? "# Main Execution" : "# Run main function";
 
+        // Escape single quotes in the path for PowerShell single-quoted strings
+        var escapedScriptPath = fullScriptPath.Replace("'", "''");
+
         var scriptContent = $$"""
-            $content = Get-Content '{{fullScriptPath}}' -Raw
+            $content = Get-Content '{{escapedScriptPath}}' -Raw
 
             # Strip the main execution block at the bottom of the script
             $mainIdx = $content.IndexOf('{{mainMarker}}')

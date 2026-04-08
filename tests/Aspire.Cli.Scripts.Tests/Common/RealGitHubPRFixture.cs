@@ -54,9 +54,10 @@ public class RealGitHubPRFixture : IAsyncLifetime
         }
 
         // Query recent merged PRs using gh CLI
+        // Use microsoft/aspire to match the default ASPIRE_REPO in the scripts
         var stdoutJson = await ExecuteGhJsonAsync(
             "pr", "list",
-            "--repo", "dotnet/aspire",
+            "--repo", "microsoft/aspire",
             "--state", "merged",
             "--limit", "20",
             "--json", "number,mergedAt,headRefOid"
@@ -89,7 +90,7 @@ public class RealGitHubPRFixture : IAsyncLifetime
         {
             runsJson = await ExecuteGhJsonAsync(
                 "run", "list",
-                "--repo", "dotnet/aspire",
+                "--repo", "microsoft/aspire",
                 "--commit", commitSha,
                 "--workflow", "ci.yml",
                 "--status", "completed",
@@ -123,7 +124,7 @@ public class RealGitHubPRFixture : IAsyncLifetime
         {
             artifactsJson = await ExecuteGhJsonAsync(
                 "run", "view", successfulRun.DatabaseId.ToString(),
-                "--repo", "dotnet/aspire",
+                "--repo", "microsoft/aspire",
                 "--json", "artifacts"
             );
         }
