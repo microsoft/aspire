@@ -60,6 +60,7 @@ public class PRScriptFunctionTests
         var result = await cmd.ExecuteAsync();
 
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("not supported", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

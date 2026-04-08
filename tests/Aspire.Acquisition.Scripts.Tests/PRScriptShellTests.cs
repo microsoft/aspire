@@ -47,6 +47,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--skip-path");
 
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("PR number", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -59,6 +60,7 @@ public class PRScriptShellTests
 
         result.EnsureSuccessful();
         Assert.Contains("12345", result.Output);
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -71,6 +73,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--install-path", customPath);
 
         result.EnsureSuccessful();
+        Assert.Contains(customPath, result.Output);
     }
 
     [Fact]
@@ -82,6 +85,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--run-id", "987654321");
 
         result.EnsureSuccessful();
+        Assert.Contains("987654321", result.Output);
     }
 
     [Fact]
@@ -93,6 +97,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--os", "linux");
 
         result.EnsureSuccessful();
+        Assert.Contains("linux", result.Output);
     }
 
     [Fact]
@@ -104,6 +109,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--arch", "x64");
 
         result.EnsureSuccessful();
+        Assert.Contains("x64", result.Output);
     }
 
     [Fact]
@@ -115,6 +121,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--hive-only");
 
         result.EnsureSuccessful();
+        Assert.Contains("hive-only", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -126,6 +133,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--skip-extension");
 
         result.EnsureSuccessful();
+        Assert.Contains("skip-extension", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -137,6 +145,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--use-insiders");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -148,6 +157,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path");
 
         result.EnsureSuccessful();
+        Assert.Contains("Skipping PATH", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -159,6 +169,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--verbose");
 
         result.EnsureSuccessful();
+        Assert.True(result.Output.Length > 50, "Verbose mode should produce detailed output");
     }
 
     [Fact]
@@ -170,6 +181,7 @@ public class PRScriptShellTests
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--keep-archive");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -191,5 +203,7 @@ public class PRScriptShellTests
             "--verbose");
 
         result.EnsureSuccessful();
+        Assert.Contains(customPath, result.Output);
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 }

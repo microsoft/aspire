@@ -82,6 +82,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-WhatIf");
 
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("PRNumber", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -106,6 +107,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-InstallPath", customPath, "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains(customPath, result.Output);
     }
 
     [Fact]
@@ -117,6 +119,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-WorkflowRunId", "987654321", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains("987654321", result.Output);
     }
 
     [Fact]
@@ -128,6 +131,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-OS", "win", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains("win", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -139,6 +143,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-Architecture", "x64", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains("x64", result.Output);
     }
 
     [Fact]
@@ -150,6 +155,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-HiveOnly", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains("HiveOnly", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -161,6 +167,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-SkipExtension", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains("SkipExtension", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -172,6 +179,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-UseInsiders", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.True(result.Output.Length > 0, "Output should not be empty");
     }
 
     [Fact]
@@ -183,6 +191,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-SkipPath", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains("SkipPath", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -194,6 +203,7 @@ public class PRScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-PRNumber", "12345", "-KeepArchive", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.True(result.Output.Length > 0, "Output should not be empty");
     }
 
     [Fact]
@@ -214,5 +224,6 @@ public class PRScriptPowerShellTests
             "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains(customPath, result.Output);
     }
 }

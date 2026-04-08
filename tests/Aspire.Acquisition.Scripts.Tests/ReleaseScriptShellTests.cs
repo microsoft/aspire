@@ -52,6 +52,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--quality", "invalid-quality");
 
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Unsupported quality", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -64,6 +65,7 @@ public class ReleaseScriptShellTests
         result.EnsureSuccessful();
         Assert.Contains("download", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("install", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -89,6 +91,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release", "--keep-archive");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -99,6 +102,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release", "-k");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -109,6 +113,8 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release", "--verbose");
 
         result.EnsureSuccessful();
+        // Verbose mode produces more detailed output than non-verbose
+        Assert.True(result.Output.Length > 50, "Verbose mode should produce detailed output");
     }
 
     [Fact]
@@ -119,6 +125,8 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release", "-v");
 
         result.EnsureSuccessful();
+        // Verbose mode produces more detailed output than non-verbose
+        Assert.True(result.Output.Length > 50, "Verbose mode should produce detailed output");
     }
 
     [Fact]
@@ -129,6 +137,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "dev");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -139,6 +148,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "staging");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -149,6 +159,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -159,6 +170,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "-q", "dev");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -191,6 +203,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release", "--skip-path");
 
         result.EnsureSuccessful();
+        Assert.Contains("Skipping PATH", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -202,6 +215,7 @@ public class ReleaseScriptShellTests
 
         // Extension installation should fail when not using dev quality
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("--quality dev", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -212,6 +226,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "dev", "--install-extension");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -222,6 +237,7 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--dry-run", "--quality", "dev", "--install-extension", "--use-insiders");
 
         result.EnsureSuccessful();
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -263,6 +279,8 @@ public class ReleaseScriptShellTests
             "--verbose");
 
         result.EnsureSuccessful();
+        Assert.Contains(customPath, result.Output);
+        Assert.Contains("[DRY RUN]", result.Output);
     }
 
     [Fact]
@@ -284,5 +302,6 @@ public class ReleaseScriptShellTests
         var result = await cmd.ExecuteAsync("--nonexistent-flag");
 
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Unknown option", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 }

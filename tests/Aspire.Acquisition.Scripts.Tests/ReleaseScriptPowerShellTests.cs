@@ -43,6 +43,7 @@ public class ReleaseScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-Quality", "invalid-quality");
 
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Quality", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -53,7 +54,7 @@ public class ReleaseScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-Quality", "release", "-WhatIf");
 
         result.EnsureSuccessful();
-        Assert.True(result.Output.Length > 0, "Output should not be empty");
+        Assert.Contains("What if", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -65,6 +66,7 @@ public class ReleaseScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-Quality", "release", "-InstallPath", customPath, "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains(customPath, result.Output);
     }
 
     [Fact]
@@ -110,6 +112,7 @@ public class ReleaseScriptPowerShellTests
         var result = await cmd.ExecuteAsync("-Version", "9.5.0-preview.1.25366.3", "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains("9.5.0-preview.1.25366.3", result.Output);
     }
 
     [Fact]
@@ -127,6 +130,7 @@ public class ReleaseScriptPowerShellTests
             "-WhatIf");
 
         result.EnsureSuccessful();
+        Assert.Contains(customPath, result.Output);
     }
 
     #region Function-level parity tests (ConvertTo-ChannelName, Get-AspireCliUrl)

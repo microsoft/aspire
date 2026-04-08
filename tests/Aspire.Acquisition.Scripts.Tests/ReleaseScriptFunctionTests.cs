@@ -157,6 +157,7 @@ public class ReleaseScriptFunctionTests
         var result = await cmd.ExecuteAsync();
 
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Unsupported", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     #endregion
