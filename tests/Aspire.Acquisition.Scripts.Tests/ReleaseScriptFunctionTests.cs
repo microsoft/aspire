@@ -379,4 +379,197 @@ public class ReleaseScriptFunctionTests
     }
 
     #endregion
+
+    #region add_to_shell_profile
+
+    [Fact]
+    public async Task AddToShellProfile_Bash_AddsPathToBashrc()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.MockHome, ".aspire", "bin");
+        Directory.CreateDirectory(installPath);
+
+        File.WriteAllText(Path.Combine(env.MockHome, ".bashrc"), "# existing config\n");
+
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            $"VERBOSE=true; DRY_RUN=false; add_to_shell_profile '{installPath}' '$HOME/.aspire/bin'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("SHELL", "/bin/bash");
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var bashrcContent = File.ReadAllText(Path.Combine(env.MockHome, ".bashrc"));
+        Assert.Contains("# Added by get-aspire-cli.sh", bashrcContent);
+        Assert.Contains("export PATH=\"$HOME/.aspire/bin:$PATH\"", bashrcContent);
+    }
+
+    [Fact]
+    public async Task AddToShellProfile_Zsh_AddsPathToZshrc()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.MockHome, ".aspire", "bin");
+        Directory.CreateDirectory(installPath);
+
+        File.WriteAllText(Path.Combine(env.MockHome, ".zshrc"), "# existing config\n");
+
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            $"VERBOSE=true; DRY_RUN=false; add_to_shell_profile '{installPath}' '$HOME/.aspire/bin'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("SHELL", "/bin/zsh");
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var zshrcContent = File.ReadAllText(Path.Combine(env.MockHome, ".zshrc"));
+        Assert.Contains("# Added by get-aspire-cli.sh", zshrcContent);
+        Assert.Contains("export PATH=\"$HOME/.aspire/bin:$PATH\"", zshrcContent);
+    }
+
+    [Fact]
+    public async Task AddToShellProfile_AlreadyInPath_DoesNotDuplicate()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.MockHome, ".aspire", "bin");
+        Directory.CreateDirectory(installPath);
+
+        var exportLine = "export PATH=\"$HOME/.aspire/bin:$PATH\"";
+        File.WriteAllText(
+            Path.Combine(env.MockHome, ".bashrc"),
+            "# existing config\n\n# Added by get-aspire-cli.sh\n" + exportLine + "\n");
+
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            $"VERBOSE=true; DRY_RUN=false; add_to_shell_profile '{installPath}' '$HOME/.aspire/bin'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("SHELL", "/bin/bash");
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var bashrcContent = File.ReadAllText(Path.Combine(env.MockHome, ".bashrc"));
+        var exportCount = bashrcContent.Split("export PATH=").Length - 1;
+        Assert.Equal(1, exportCount);
+    }
+
+    [Fact]
+    public async Task AddToShellProfile_NoConfigFile_DryRunShowsMessage()
+    {
+        using var env = new TestEnvironment();
+        var installPath = Path.Combine(env.MockHome, ".aspire", "bin");
+        Directory.CreateDirectory(installPath);
+
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            $"VERBOSE=true; DRY_RUN=true; add_to_shell_profile '{installPath}' '$HOME/.aspire/bin'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("SHELL", "/bin/bash");
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Contains("Would create config file", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    #endregion
+
+    #region validate_content_type
+
+    [Fact]
+    public async Task ValidateContentType_HtmlResponse_Fails()
+    {
+        using var env = new TestEnvironment();
+        var mockBinDir = Path.Combine(env.TempDirectory, "mock-bin");
+        Directory.CreateDirectory(mockBinDir);
+
+        var mockCurl = Path.Combine(mockBinDir, "curl");
+        await File.WriteAllTextAsync(mockCurl,
+            """
+            #!/bin/bash
+            # Mock curl that returns HTML content-type headers for HEAD requests
+            for arg in "$@"; do
+                if [ "$arg" = "--head" ] || [ "$arg" = "-I" ]; then
+                    echo "HTTP/1.1 200 OK"
+                    echo "content-type: text/html; charset=utf-8"
+                    echo ""
+                    exit 0
+                fi
+            done
+            exit 0
+            """);
+        await MakeExecutableAsync(mockCurl);
+
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            "VERBOSE=true; validate_content_type 'http://example.com/file.tar.gz'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}:{System.Environment.GetEnvironmentVariable("PATH")}");
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("HTML", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ValidateContentType_BinaryResponse_Succeeds()
+    {
+        using var env = new TestEnvironment();
+        var mockBinDir = Path.Combine(env.TempDirectory, "mock-bin");
+        Directory.CreateDirectory(mockBinDir);
+
+        var mockCurl = Path.Combine(mockBinDir, "curl");
+        await File.WriteAllTextAsync(mockCurl,
+            """
+            #!/bin/bash
+            # Mock curl that returns binary content-type headers for HEAD requests
+            for arg in "$@"; do
+                if [ "$arg" = "--head" ] || [ "$arg" = "-I" ]; then
+                    echo "HTTP/1.1 200 OK"
+                    echo "content-type: application/octet-stream"
+                    echo ""
+                    exit 0
+                fi
+            done
+            exit 0
+            """);
+        await MakeExecutableAsync(mockCurl);
+
+        var cmd = new ScriptFunctionCommand(
+            ReleaseScript,
+            "VERBOSE=true; validate_content_type 'http://example.com/file.tar.gz'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}:{System.Environment.GetEnvironmentVariable("PATH")}");
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+    }
+
+    #endregion
+
+    private static async Task MakeExecutableAsync(string path)
+    {
+        using var chmod = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "chmod",
+                Arguments = $"+x \"{path}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            }
+        };
+        chmod.Start();
+        await chmod.WaitForExitAsync();
+    }
 }

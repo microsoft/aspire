@@ -105,6 +105,27 @@ if [ ""$1"" = ""run"" ]; then
         echo '{""artifacts"":[{""name"":""cli-native-linux-x64""},{""name"":""built-nugets""},{""name"":""built-nugets-for-linux-x64""}]}'
         exit 0
     fi
+    if [ ""$2"" = ""download"" ]; then
+        # Parse -D <dir> from args
+        download_dir=""""
+        shift 2
+        while [ $# -gt 0 ]; do
+            case ""$1"" in
+                -D) download_dir=""$2""; shift 2 ;;
+                *) shift ;;
+            esac
+        done
+        if [ -n ""$download_dir"" ]; then
+            mkdir -p ""$download_dir""
+            # Create files listed in MOCK_GH_DOWNLOAD_FILES (newline-separated)
+            if [ -n ""${MOCK_GH_DOWNLOAD_FILES:-}"" ]; then
+                echo ""$MOCK_GH_DOWNLOAD_FILES"" | while IFS= read -r fname; do
+                    [ -n ""$fname"" ] && echo ""fake-archive"" > ""$download_dir/$fname""
+                done
+            fi
+        fi
+        exit 0
+    fi
 fi
 if [ ""$1"" = ""api"" ]; then
     # Mock gh api responses for PR discovery

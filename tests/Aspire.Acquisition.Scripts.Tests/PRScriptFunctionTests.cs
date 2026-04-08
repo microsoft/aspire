@@ -224,4 +224,142 @@ public class PRScriptFunctionTests
     }
 
     #endregion
+
+    #region remove_temp_dir
+
+    [Fact]
+    public async Task RemoveTempDir_KeepArchive_RetainsDirectory()
+    {
+        using var env = new TestEnvironment();
+        var tempDir = Path.Combine(env.TempDirectory, "download-temp");
+        Directory.CreateDirectory(tempDir);
+        File.WriteAllText(Path.Combine(tempDir, "artifact.tar.gz"), "fake");
+
+        var cmd = new ScriptFunctionCommand(
+            PRScript,
+            $"KEEP_ARCHIVE=true; DRY_RUN=false; VERBOSE=true; remove_temp_dir '{tempDir}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.True(Directory.Exists(tempDir), "Directory should be retained when KEEP_ARCHIVE=true");
+    }
+
+    [Fact]
+    public async Task RemoveTempDir_NoKeepArchive_DeletesDirectory()
+    {
+        using var env = new TestEnvironment();
+        var tempDir = Path.Combine(env.TempDirectory, "download-temp");
+        Directory.CreateDirectory(tempDir);
+        File.WriteAllText(Path.Combine(tempDir, "artifact.tar.gz"), "fake");
+
+        var cmd = new ScriptFunctionCommand(
+            PRScript,
+            $"KEEP_ARCHIVE=false; DRY_RUN=false; VERBOSE=true; remove_temp_dir '{tempDir}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.False(Directory.Exists(tempDir), "Directory should be deleted when KEEP_ARCHIVE=false");
+    }
+
+    [Fact]
+    public async Task RemoveTempDir_DryRun_RetainsDirectory()
+    {
+        using var env = new TestEnvironment();
+        var tempDir = Path.Combine(env.TempDirectory, "download-temp");
+        Directory.CreateDirectory(tempDir);
+        File.WriteAllText(Path.Combine(tempDir, "artifact.tar.gz"), "fake");
+
+        var cmd = new ScriptFunctionCommand(
+            PRScript,
+            $"KEEP_ARCHIVE=false; DRY_RUN=true; VERBOSE=true; remove_temp_dir '{tempDir}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.True(Directory.Exists(tempDir), "Directory should be retained during dry run");
+    }
+
+    #endregion
+
+    #region download_aspire_cli archive selection
+
+    [Fact]
+    public async Task DownloadAspireCli_ZeroArchives_Fails()
+    {
+        using var env = new TestEnvironment();
+        var mockBinDir = await env.CreateMockGhScriptAsync(_testOutput);
+        var tempDir = Path.Combine(env.TempDirectory, "work");
+        Directory.CreateDirectory(tempDir);
+
+        var cmd = new ScriptFunctionCommand(
+            PRScript,
+            $"VERBOSE=true; DRY_RUN=false; download_aspire_cli '987654321' 'linux-x64' '{tempDir}'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}:{System.Environment.GetEnvironmentVariable("PATH")}");
+        cmd.WithEnvironmentVariable("ASPIRE_REPO", "dotnet/aspire");
+        // Mock gh creates a non-matching file so the archive search finds nothing
+        cmd.WithEnvironmentVariable("MOCK_GH_DOWNLOAD_FILES", "README.txt");
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("No CLI archive found", result.Output);
+    }
+
+    [Fact]
+    public async Task DownloadAspireCli_MultipleArchives_Fails()
+    {
+        using var env = new TestEnvironment();
+        var mockBinDir = await env.CreateMockGhScriptAsync(_testOutput);
+        var tempDir = Path.Combine(env.TempDirectory, "work");
+        Directory.CreateDirectory(tempDir);
+
+        var cmd = new ScriptFunctionCommand(
+            PRScript,
+            $"VERBOSE=true; DRY_RUN=false; download_aspire_cli '987654321' 'linux-x64' '{tempDir}'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}:{System.Environment.GetEnvironmentVariable("PATH")}");
+        cmd.WithEnvironmentVariable("ASPIRE_REPO", "dotnet/aspire");
+        cmd.WithEnvironmentVariable("MOCK_GH_DOWNLOAD_FILES", "aspire-cli-linux-x64.tar.gz\naspire-cli-osx-arm64.tar.gz");
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Multiple CLI archives found", result.Output);
+    }
+
+    [Fact]
+    public async Task DownloadAspireCli_SingleArchive_ReturnsPath()
+    {
+        using var env = new TestEnvironment();
+        var mockBinDir = await env.CreateMockGhScriptAsync(_testOutput);
+        var tempDir = Path.Combine(env.TempDirectory, "work");
+        Directory.CreateDirectory(tempDir);
+
+        var cmd = new ScriptFunctionCommand(
+            PRScript,
+            $"VERBOSE=true; DRY_RUN=false; download_aspire_cli '987654321' 'linux-x64' '{tempDir}'",
+            env,
+            _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}:{System.Environment.GetEnvironmentVariable("PATH")}");
+        cmd.WithEnvironmentVariable("ASPIRE_REPO", "dotnet/aspire");
+        cmd.WithEnvironmentVariable("MOCK_GH_DOWNLOAD_FILES", "aspire-cli-linux-x64.tar.gz");
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Contains("aspire-cli-linux-x64.tar.gz", result.Output);
+    }
+
+    #endregion
 }
