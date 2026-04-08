@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.DurableTask;
+using Azure.Provisioning;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
@@ -28,7 +30,58 @@ public static class DurableTaskResourceExtensions
     [AspireExport(Description = "Adds a Durable Task scheduler resource to the distributed application.")]
     public static IResourceBuilder<DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
-        var scheduler = new DurableTaskSchedulerResource(name);
+       builder.AddAzureProvisioning();
+
+        var configureInfrastructure = static (AzureResourceInfrastructure infrastructure) =>
+        {
+            var aspireResource = (DurableTaskSchedulerResource)infrastructure.AspireResource;
+
+            // Create the Durable Task Scheduler resource using the custom provisioning resource
+            var scheduler = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(
+                infrastructure,
+                (identifier, name) =>
+                {
+                    var resource = DurableTaskSchedulerProvisioningResource.FromExisting(identifier);
+                    resource.Name = name;
+                    return resource;
+                },
+                (infra) =>
+                {
+                    var skuParameter = new ProvisioningParameter("sku", typeof(string))
+                    {
+                        Value = "Consumption"
+                    };
+                    infra.Add(skuParameter);
+
+                    var resource = new DurableTaskSchedulerProvisioningResource(infra.AspireResource.GetBicepIdentifier())
+                    {
+                        Name = infra.AspireResource.Name,
+                        Location = new ProvisioningParameter(AzureBicepResource.KnownParameters.Location, typeof(string)),
+                        SkuName = skuParameter,
+                        IpAllowlist = ["0.0.0.0/0"]
+                    };
+                    return resource;
+                });
+
+            // Output the scheduler endpoint for connection string construction
+            infrastructure.Add(new ProvisioningOutput("schedulerEndpoint", typeof(string))
+            {
+                Value = scheduler.Endpoint
+            });
+
+            // Output the name for role assignments
+            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = scheduler.Name });
+
+            // Create TaskHub sub-resources
+            foreach (var hub in aspireResource.Hubs)
+            {
+                var taskHub = hub.ToProvisioningEntity();
+                taskHub.Parent = scheduler;
+                infrastructure.Add(taskHub);
+            }
+        };
+
+        var scheduler = new DurableTaskSchedulerResource(name, configureInfrastructure);
 
         scheduler.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
 
@@ -203,6 +256,8 @@ public static class DurableTaskResourceExtensions
     public static IResourceBuilder<DurableTaskHubResource> AddTaskHub(this IResourceBuilder<DurableTaskSchedulerResource> builder, [ResourceName] string name)
     {
         var hub = new DurableTaskHubResource(name, builder.Resource);
+
+        builder.Resource.Hubs.Add(hub);
 
         hub.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
 
