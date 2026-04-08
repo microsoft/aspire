@@ -266,6 +266,28 @@ internal static class Hex1bAutomatorTestHelpers
             description: "output path prompt");
         await auto.EnterAsync();
 
+        // Step 4.5: Handle optional template version selection (dogfood installs add a hive
+        // that causes the CLI to present a version menu). Select the PR-specific version if present.
+        try
+        {
+            await auto.WaitUntilAsync(
+                s => new CellPatternSearcher().Find("Select a template version").Search(s).Count > 0,
+                timeout: TimeSpan.FromSeconds(5),
+                description: "template version prompt (dogfood)");
+
+            // Type "pr-" to filter to the PR-specific hive version and select it
+            await auto.TypeAsync("pr-");
+            await auto.WaitUntilAsync(
+                s => new CellPatternSearcher().Find("> pr-").Search(s).Count > 0,
+                timeout: TimeSpan.FromSeconds(5),
+                description: "PR version selected");
+            await auto.EnterAsync();
+        }
+        catch (Hex1bAutomationException)
+        {
+            // Non-dogfood installs don't show version selection — continue normally
+        }
+
         // Step 5: URLs prompt (all templates have this)
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
