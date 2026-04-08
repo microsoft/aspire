@@ -232,24 +232,25 @@ jobs:
 
           // List-only mode: show available failures + help when no --test was given
           if (process.env.LIST_ONLY === 'true') {
-            let body = '';
+            const resultJson = hasResultFile
+              ? JSON.parse(fs.readFileSync(process.env.RESULT_PATH, 'utf8'))
+              : null;
+            const listResult = helper.formatListResponse(process.env.RESOLVE_OUTCOME, resultJson);
 
-            if (hasResultFile) {
-              const result = JSON.parse(fs.readFileSync(process.env.RESULT_PATH, 'utf8'));
-              const tests = result.allFailures?.tests?.map(t => t.canonicalTestName ?? t.displayTestName)
-                ?? result.diagnostics?.availableFailedTests
-                ?? [];
-
-              if (tests.length > 0) {
-                body = '**Failed tests found on this PR:**\n\n'
-                  + tests.map(name => `- \`/create-issue ${name}\``).join('\n')
-                  + '\n\n';
-              }
+            if (listResult.error) {
+              const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+              const message = `❌ ${listResult.message} See the [workflow run](${runUrl}) for details.`;
+              await postComment(message);
+              core.setFailed(message);
+              return;
             }
 
-            if (!body) {
-              body = 'No test failures were found. Use `--url` to point to a specific workflow run.\n\n';
-            }
+            // Format test names as clickable commands in list mode
+            let body = listResult.tests?.length > 0
+              ? '**Failed tests found on this PR:**\n\n'
+                + listResult.tests.map(name => `- \`/create-issue ${name}\``).join('\n')
+                + '\n\n'
+              : listResult.message + '\n\n';
 
             await postComment(`${body}${helpBlock}`);
             return;

@@ -152,6 +152,68 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task FormatListResponseReturnsErrorWhenResolverFailed()
+    {
+        var result = await InvokeHarnessAsync<FormatListResponseResult>(
+            "formatListResponse",
+            new
+            {
+                resolverOutcome = "failure",
+                resultJson = (object?)null
+            });
+
+        Assert.True(result.Error);
+        Assert.Contains("resolver failed", result.Message);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task FormatListResponseReturnsTestNamesFromResult()
+    {
+        var result = await InvokeHarnessAsync<FormatListResponseResult>(
+            "formatListResponse",
+            new
+            {
+                resolverOutcome = "success",
+                resultJson = new
+                {
+                    allFailures = new
+                    {
+                        tests = new[]
+                        {
+                            new { canonicalTestName = "Namespace.Class.MethodA", displayTestName = "MethodA" },
+                            new { canonicalTestName = "Namespace.Class.MethodB", displayTestName = "MethodB" }
+                        }
+                    }
+                }
+            });
+
+        Assert.False(result.Error);
+        Assert.NotNull(result.Tests);
+        Assert.Equal(2, result.Tests!.Length);
+        Assert.Contains("Namespace.Class.MethodA", result.Tests);
+        Assert.Contains("Namespace.Class.MethodB", result.Tests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task FormatListResponseReturnsNoFailuresWhenResultIsEmpty()
+    {
+        var result = await InvokeHarnessAsync<FormatListResponseResult>(
+            "formatListResponse",
+            new
+            {
+                resolverOutcome = "success",
+                resultJson = new { allFailures = new { tests = Array.Empty<object>() } }
+            });
+
+        Assert.False(result.Error);
+        Assert.Contains("No test failures", result.Message);
+        Assert.Null(result.Tests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task BuildIssueSearchQueryTargetsFailingTestIssuesByMetadataMarker()
     {
         var query = await InvokeHarnessAsync<string>(
@@ -203,4 +265,6 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
     private sealed record HarnessResponse<T>(T Result);
 
     private sealed record ParseCommandResult(bool Success, string TestQuery, string? SourceUrl, string Workflow, bool ForceNew, bool ListOnly, string? ErrorMessage);
+
+    private sealed record FormatListResponseResult(bool Error, string Message, string[]? Tests);
 }
