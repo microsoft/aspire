@@ -252,21 +252,8 @@ internal static class Hex1bAutomatorTestHelpers
             default:
                 throw new ArgumentOutOfRangeException(nameof(template), template, $"Unsupported template: {template}");
         }
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "project name prompt");
-        await auto.TypeAsync(projectName);
-        await auto.EnterAsync();
 
-        // Step 4: Accept default output path
-        await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("Enter the output path").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
-            description: "output path prompt");
-        await auto.EnterAsync();
-
-        // Step 4.5: Handle optional template version selection (dogfood installs add a hive
+        // Handle optional template version selection (dogfood installs add a hive
         // that causes the CLI to present a version menu). Accept the default version.
         try
         {
@@ -281,6 +268,36 @@ internal static class Hex1bAutomatorTestHelpers
         catch (Hex1bAutomationException)
         {
             // Non-dogfood installs don't show version selection — continue normally
+        }
+
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("Enter the project name").Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(10),
+            description: "project name prompt");
+        await auto.TypeAsync(projectName);
+        await auto.EnterAsync();
+
+        // Step 4: Accept default output path
+        await auto.WaitUntilAsync(
+            s => new CellPatternSearcher().Find("Enter the output path").Search(s).Count > 0,
+            timeout: TimeSpan.FromSeconds(10),
+            description: "output path prompt");
+        await auto.EnterAsync();
+
+        // Handle optional template version selection for templates that show
+        // the version prompt after the output path (e.g. Starter). Accept default.
+        try
+        {
+            await auto.WaitUntilAsync(
+                s => new CellPatternSearcher().Find("Select a template version").Search(s).Count > 0,
+                timeout: TimeSpan.FromSeconds(5),
+                description: "template version prompt after output path (dogfood)");
+
+            await auto.EnterAsync();
+        }
+        catch (Hex1bAutomationException)
+        {
+            // No version prompt at this point — continue normally
         }
 
         // Step 5: URLs prompt (all templates have this)
