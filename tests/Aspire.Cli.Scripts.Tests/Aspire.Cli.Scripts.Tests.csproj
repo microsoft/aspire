@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+
+    <XunitRunnerJson>xunit.runner.json</XunitRunnerJson>
+
+    <!--
+      FIXME: https://github.com/dotnet/aspire/issues/8488
+      xUnit1051: Calls to methods which accept CancellationToken should use TestContext.Current.CancellationToken to allow test cancellation to be more responsive
+
+      This is being disabled here in addition to any central location, because this project
+      gets built independently on helix.
+
+      IDE0005: Using directive is unnecessary - false positive with attributes
+    -->
+    <NoWarn>$(NoWarn);xUnit1051;IDE0005</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="$(RepoRoot)tests\Shared\Playwright\TestUtils.cs" Link="TestUtils.cs" />
+    <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ToolCommand.cs" Link="Common\ToolCommand.cs" />
+    <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\CommandResult.cs" Link="Common\CommandResult.cs" />
+    <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ToolCommandException.cs" Link="Common\ToolCommandException.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
+  </ItemGroup>
+
+</Project>

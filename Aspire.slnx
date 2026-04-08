@@ -415,6 +415,7 @@
   </Folder>
   <Folder Name="/tests/Cli/">
     <Project Path="tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj" />
+    <Project Path="tests/Aspire.Cli.Scripts.Tests/Aspire.Cli.Scripts.Tests.csproj" />
     <Project Path="tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Components/">
