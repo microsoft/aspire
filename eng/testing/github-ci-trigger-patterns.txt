@@ -39,6 +39,7 @@ Aspire-Core.slnf
 .github/workflows/apply-test-attributes.yml
 .github/workflows/backmerge-release.yml
 .github/workflows/backport.yml
+.github/workflows/create-failing-test-issue.*
 .github/workflows/dogfood-comment.yml
 .github/workflows/generate-api-diffs.yml
 .github/workflows/generate-ats-diffs.yml
