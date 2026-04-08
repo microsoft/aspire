@@ -23,7 +23,7 @@ public class ModelNameTests
         var exception = Assert.Throws<ArgumentException>(() => ModelName.ValidateName(nameof(Resource), ""));
 
         // Assert
-        Assert.Equal($"Resource name '' is invalid. Name must be between 1 and 64 characters long. (Parameter 'name')", exception.Message);
+        Assert.Equal($"Resource name '' is BROKEN. Name must be between 1 and 64 characters long. (Parameter 'name')", exception.Message); // intentionally broken for /create-issue testing
     }
 
     [Fact]
