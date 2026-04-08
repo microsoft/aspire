@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using System.Web;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Aspire.Dashboard.Model;
 
@@ -79,13 +80,66 @@ internal sealed class ValidateTokenMiddleware
         }
     }
 
-    private static bool IsLocalUrl(string url)
+    // Copied from ASP.NET Core's IsLocalUrl implementation:
+    // https://github.com/dotnet/aspnetcore/blob/7cbda0e023075490b4365a0754ca410ce6eff59a/src/Shared/ResultsHelpers/SharedUrlHelper.cs#L33
+    internal static bool IsLocalUrl([NotNullWhen(true)] string? url)
     {
-        // Only allow local URLs that start with "/" (but not "//" or "/\" which browsers treat as absolute).
-        // This mirrors the logic in ASP.NET Core's IUrlHelper.IsLocalUrl.
-        return url.Length > 0
-            && url[0] == '/'
-            && (url.Length == 1 || (url[1] != '/' && url[1] != '\\'));
+        if (string.IsNullOrEmpty(url))
+        {
+            return false;
+        }
+
+        // Allows "/" or "/foo" but not "//" or "/\".
+        if (url[0] == '/')
+        {
+            // url is exactly "/"
+            if (url.Length == 1)
+            {
+                return true;
+            }
+
+            // url doesn't start with "//" or "/\"
+            if (url[1] != '/' && url[1] != '\\')
+            {
+                return !HasControlCharacter(url.AsSpan(1));
+            }
+
+            return false;
+        }
+
+        // Allows "~/" or "~/foo" but not "~//" or "~/\".
+        if (url[0] == '~' && url.Length > 1 && url[1] == '/')
+        {
+            // url is exactly "~/"
+            if (url.Length == 2)
+            {
+                return true;
+            }
+
+            // url doesn't start with "~//" or "~/\"
+            if (url[2] != '/' && url[2] != '\\')
+            {
+                return !HasControlCharacter(url.AsSpan(2));
+            }
+
+            return false;
+        }
+
+        return false;
+
+        static bool HasControlCharacter(ReadOnlySpan<char> readOnlySpan)
+        {
+            // URLs may not contain ASCII control characters.
+            for (var i = 0; i < readOnlySpan.Length; i++)
+            {
+                if (char.IsControl(readOnlySpan[i]))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     public static async Task<bool> TryAuthenticateAsync(string incomingBrowserToken, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions)
