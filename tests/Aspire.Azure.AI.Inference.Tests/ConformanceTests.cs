@@ -70,7 +70,7 @@ public class ConformanceTests : ConformanceTests<IChatClient, ChatCompletionsCli
     }
 
     protected override void SetHealthCheck(ChatCompletionsClientSettings options, bool enabled)
-        => throw new NotImplementedException();
+        => options.DisableHealthChecks = !enabled;
 
     protected override void SetMetrics(ChatCompletionsClientSettings options, bool enabled)
         => options.DisableMetrics = !enabled;
