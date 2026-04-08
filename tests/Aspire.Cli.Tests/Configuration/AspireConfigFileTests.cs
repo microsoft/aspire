@@ -666,4 +666,121 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         // On Windows, c:\ is rooted and should be left unchanged
         Assert.Equal("c:\\path\\apphost.ts", config.AppHost?.Path);
     }
+
+    [Fact]
+    public void Load_PreservesUnknownProperties_InExtensionData()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "appHost": { "path": "MyApp.csproj" },
+              "channel": "daily",
+              "someCustomProperty": 42
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.Equal("MyApp.csproj", result.AppHost?.Path);
+        Assert.NotNull(result.ExtensionData);
+        Assert.True(result.ExtensionData.ContainsKey("channel"));
+        Assert.Equal("daily", result.ExtensionData["channel"].GetString());
+        Assert.True(result.ExtensionData.ContainsKey("someCustomProperty"));
+        Assert.Equal(42, result.ExtensionData["someCustomProperty"].GetInt32());
+    }
+
+    [Fact]
+    public void Save_Load_RoundTrips_ExtensionData()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "appHost": { "path": "MyApp.csproj" },
+              "channel": "stable",
+              "legacyFlag": true
+            }
+            """);
+
+        // Load, then save, then reload — unknown properties must survive
+        var loaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(loaded);
+        loaded.Save(workspace.WorkspaceRoot.FullName);
+
+        var reloaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal("MyApp.csproj", reloaded.AppHost?.Path);
+        Assert.NotNull(reloaded.ExtensionData);
+        Assert.Equal("stable", reloaded.ExtensionData["channel"].GetString());
+        Assert.True(reloaded.ExtensionData["legacyFlag"].GetBoolean());
+    }
+
+    [Fact]
+    public void Load_ExtensionData_IsNull_WhenNoUnknownProperties()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "appHost": { "path": "MyApp.csproj" }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.Null(result.ExtensionData);
+    }
+
+    [Fact]
+    public void FromLegacy_DoesNotMigrateChannel()
+    {
+        var legacy = new AspireJsonConfiguration
+        {
+            AppHostPath = "../MyApp/MyApp.csproj",
+            Channel = "daily",
+            SdkVersion = "9.2.0"
+        };
+
+        var result = AspireConfigFile.FromLegacy(legacy, null);
+
+        // Channel should NOT be carried over — it's now embedded in the binary
+        Assert.Equal("9.2.0", result.Sdk?.Version);
+        Assert.Null(result.ExtensionData);
+    }
+
+    [Fact]
+    public void FromLegacy_MigratesOtherFieldsWithoutChannel()
+    {
+        var features = new Dictionary<string, bool> { ["polyglotSupportEnabled"] = true };
+        var packages = new Dictionary<string, string> { ["Aspire.Hosting.Redis"] = "9.2.0" };
+        var legacy = new AspireJsonConfiguration
+        {
+            AppHostPath = "../App/apphost.ts",
+            Language = "typescript/nodejs",
+            Channel = "stable",
+            SdkVersion = "9.2.0",
+            Features = features,
+            Packages = packages
+        };
+
+        var result = AspireConfigFile.FromLegacy(legacy, null);
+
+        // All fields except channel should be migrated
+        Assert.NotNull(result.AppHost);
+        Assert.Equal("typescript/nodejs", result.AppHost.Language);
+        Assert.Equal("9.2.0", result.Sdk?.Version);
+        Assert.NotNull(result.Features);
+        Assert.True(result.Features["polyglotSupportEnabled"]);
+        Assert.NotNull(result.Packages);
+        Assert.Equal("9.2.0", result.Packages["Aspire.Hosting.Redis"]);
+        // Channel must not appear anywhere in the migrated config
+        Assert.Null(result.ExtensionData);
+    }
 }

@@ -913,4 +913,14 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
             => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
     }
+
+    [Fact]
+    public void GetEmbeddedChannel_ReturnsNull_ForDevBuilds()
+    {
+        // In test/dev builds, no CliChannel assembly metadata is set,
+        // so GetEmbeddedChannel() should return null.
+        var channel = PackagingService.GetEmbeddedChannel();
+
+        Assert.Null(channel);
+    }
 }
