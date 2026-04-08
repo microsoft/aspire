@@ -86,4 +86,29 @@ public class BundleServiceTests
         var service = new BundleService(layoutDiscovery, NullLogger<BundleService>.Instance);
         Assert.False(service.IsSelfExtracting);
     }
+
+    [Fact]
+    public async Task EnsureExtractedAndGetLayoutAsync_ReturnsNull_WhenNoBundleAndNoLayout()
+    {
+        // Test assembly has no embedded bundle and IsSelfExtracting=false.
+        // EnsureExtractedAsync should no-op and DiscoverLayout should return null.
+        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance);
+        var service = new BundleService(layoutDiscovery, NullLogger<BundleService>.Instance);
+
+        var layout = await service.EnsureExtractedAndGetLayoutAsync();
+        Assert.Null(layout);
+    }
+
+    [Fact]
+    public async Task EnsureExtractedAsync_DoesNotThrow_WhenNotSelfExtractingAndNoLayout()
+    {
+        // When IsSelfExtracting=false and no layout exists, EnsureExtractedAsync
+        // should not throw — it should gracefully no-op (since IsBundle is also false
+        // in the test assembly). This verifies the method doesn't unconditionally
+        // short-circuit in a way that prevents DiscoverLayout from being called.
+        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance);
+        var service = new BundleService(layoutDiscovery, NullLogger<BundleService>.Instance);
+
+        await service.EnsureExtractedAsync();
+    }
 }

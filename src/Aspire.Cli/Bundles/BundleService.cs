@@ -66,8 +66,15 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
 
         if (!IsSelfExtracting)
         {
-            logger.LogDebug("Self-extraction is disabled for this distribution, skipping extraction.");
-            return;
+            // Non-self-extracting distributions (archive/installer) expect the layout
+            // to already be on disk. Only skip extraction if the layout is actually present.
+            if (layoutDiscovery.DiscoverLayout() is not null)
+            {
+                logger.LogDebug("Self-extraction is disabled and layout is already on disk, skipping extraction.");
+                return;
+            }
+
+            logger.LogDebug("Self-extraction is disabled but no layout found on disk, proceeding with extraction as fallback.");
         }
 
         var processPath = Environment.ProcessPath;
