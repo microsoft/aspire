@@ -13,11 +13,8 @@ namespace Microsoft.Extensions.Hosting;
 
 internal sealed class AzureKeyVaultKeysComponent : AbstractAzureKeyVaultComponent<KeyClient, KeyClientOptions>
 {
-    protected override bool GetHealthCheckEnabled(AzureSecurityKeyVaultSettings settings)
-        => false;
-
     protected override IHealthCheck CreateHealthCheck(KeyClient client, AzureSecurityKeyVaultSettings settings)
-        => throw new NotImplementedException();
+        => new AzureKeyVaultKeysHealthCheck(client);
 
     internal override KeyClient CreateComponentClient(Uri vaultUri, KeyClientOptions options, TokenCredential cred)
         => new(vaultUri, cred, options);
