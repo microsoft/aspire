@@ -18,7 +18,7 @@ inputs:
     description: 'The body of the pull request'
     required: true
   labels:
-    description: 'A comma or newline-separated list of labels'
+    description: 'A newline-separated list of labels'
     required: false
     default: ''
   commit-message:
@@ -42,6 +42,14 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Configure git authentication
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        # Use the provided token for both git and gh operations
+        gh auth setup-git
+
     - name: Commit and push changes
       if: inputs.branch-already-exists != 'true'
       id: commit-and-push
@@ -89,7 +97,7 @@ runs:
           echo "Pull request #$PR_NUMBER already exists: $PR_URL"
           echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "pull-request-url=$PR_URL" >> $GITHUB_OUTPUT
-          echo "pull-request-operation=updated" >> $GITHUB_OUTPUT
+          echo "pull-request-operation=none" >> $GITHUB_OUTPUT
         else
           # Build label arguments as a bash array (avoids eval/injection)
           LABEL_ARGS=()
@@ -102,9 +110,10 @@ runs:
             done <<< "$LABELS"
           fi
 
-          # Write body to a temp file to avoid shell quoting issues
+          # Write body to a temp file to avoid shell quoting issues with special characters
           BODY_FILE=$(mktemp)
-          echo "$PR_BODY" > "$BODY_FILE"
+          trap 'rm -f "$BODY_FILE"' EXIT
+          printf '%s\n' "$PR_BODY" > "$BODY_FILE"
 
           # Create the pull request without eval — all args are properly quoted
           PR_URL=$(gh pr create \
@@ -115,6 +124,7 @@ runs:
             "${LABEL_ARGS[@]}")
 
           rm -f "$BODY_FILE"
+          trap - EXIT
 
           PR_NUMBER=$(gh pr view "$BRANCH" --json number --jq '.number')
           echo "Created pull request #$PR_NUMBER: $PR_URL"

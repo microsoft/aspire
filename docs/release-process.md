@@ -150,7 +150,7 @@ The pipeline uses the `Aspire-Release-Secrets` variable group. Note that NuGet p
 The workflow uses only pre-approved actions:
 
 - `actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683` (v4)
-- `.github/actions/create-pull-request` (local composite action)
+- `./.github/actions/create-pull-request` (local composite action)
 
 ## Troubleshooting
 
