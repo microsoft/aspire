@@ -387,17 +387,20 @@ internal static class Hex1bAutomatorTestHelpers
 
         // Dogfood installs may present a version selection prompt for the package.
         // Wait for either the version selection prompt or the package success message.
+        // Use the specific package name to avoid matching stale output from a prior add.
         var versionSelectionShown = false;
+        var shortPackageName = packageName.Split('.')[^1]; // e.g. "SqlServer" from "Aspire.Hosting.SqlServer"
         await auto.WaitUntilAsync(s =>
         {
-            if (new CellPatternSearcher().Find("Select a version of").Search(s).Count > 0)
+            if (new CellPatternSearcher().Find($"Select a version of {packageName}").Search(s).Count > 0)
             {
                 versionSelectionShown = true;
                 return true;
             }
 
-            return new CellPatternSearcher().Find("The package ").Search(s).Count > 0;
-        }, timeout: effectiveTimeout, description: "version selection or package added");
+            // Check for success text with the short package name to avoid stale matches
+            return new CellPatternSearcher().Find($"The package {shortPackageName}").Search(s).Count > 0;
+        }, timeout: effectiveTimeout, description: $"version selection or package added ({shortPackageName})");
 
         if (versionSelectionShown)
         {
