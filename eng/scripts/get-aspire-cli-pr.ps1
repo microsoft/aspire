@@ -720,37 +720,6 @@ function Remove-TempDirectory {
 # END: Shared code
 # =============================================================================
 
-# Function to save global settings using the aspire CLI
-# Uses 'aspire config set -g' to set global configuration values
-# Expected schema of ~/.aspire/globalsettings.json:
-# {
-#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
-# }
-function Save-GlobalSettings {
-    [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$CliPath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Key,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Value
-    )
-
-    if ($PSCmdlet.ShouldProcess("$Key = $Value", "Set global config via aspire CLI")) {
-        Write-Message "Setting global config: $Key = $Value" -Level Verbose
-
-        $output = & $CliPath config set -g $Key $Value 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Message "Failed to set global config via aspire CLI" -Level Warning
-            return
-        }
-        Write-Message "Global config saved: $Key = $Value" -Level Verbose
-    }
-}
-
 # Function to check if gh command is available
 function Test-GitHubCLIDependency {
     [CmdletBinding()]

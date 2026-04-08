@@ -83,6 +83,16 @@ public class BundleServiceTests
     }
 
     [Fact]
+    public void GetDefaultExtractDir_ReturnsNull_WhenProcessIsNotAspireCli()
+    {
+        // Regression: without the filename guard, this would return a path instead of null.
+        // Both resolvers (Program.GetInstallRootDirectory and BundleService.GetDefaultExtractDir)
+        // must agree that non-aspire processes are not valid install roots.
+        var result = BundleService.GetDefaultExtractDir("/usr/local/share/dotnet/dotnet");
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void GetCurrentVersion_ReturnsNonNull()
     {
         var version = BundleService.GetCurrentVersion();

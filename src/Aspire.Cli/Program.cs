@@ -519,8 +519,12 @@ public class Program
 
     internal static DirectoryInfo GetInstallRootDirectory()
     {
+        return GetInstallRootDirectory(Environment.ProcessPath);
+    }
+
+    internal static DirectoryInfo GetInstallRootDirectory(string? processPath)
+    {
         var homeDirectory = GetUsersAspirePath();
-        var processPath = Environment.ProcessPath;
 
         if (string.IsNullOrEmpty(processPath))
         {

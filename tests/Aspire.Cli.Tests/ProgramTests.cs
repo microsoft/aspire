@@ -40,4 +40,52 @@ public class ProgramTests
 
         Assert.Equal(expected, result.FullName);
     }
+
+    [Fact]
+    public void GetInstallRootDirectory_StableLayout_ReturnsParentOfBinDir()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var result = Program.GetInstallRootDirectory(@"C:\Users\test\.aspire\bin\aspire.exe");
+            Assert.Equal(@"C:\Users\test\.aspire", result.FullName);
+        }
+        else
+        {
+            var result = Program.GetInstallRootDirectory("/home/test/.aspire/bin/aspire");
+            Assert.Equal("/home/test/.aspire", result.FullName);
+        }
+    }
+
+    [Fact]
+    public void GetInstallRootDirectory_DogfoodFlatLayout_ReturnsCliDirectory()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var result = Program.GetInstallRootDirectory(@"C:\Users\test\.aspire\dogfood\pr-1234\aspire.exe");
+            Assert.Equal(@"C:\Users\test\.aspire\dogfood\pr-1234", result.FullName);
+        }
+        else
+        {
+            var result = Program.GetInstallRootDirectory("/home/test/.aspire/dogfood/pr-1234/aspire");
+            Assert.Equal("/home/test/.aspire/dogfood/pr-1234", result.FullName);
+        }
+    }
+
+    [Fact]
+    public void GetInstallRootDirectory_NullProcessPath_FallsBackToHome()
+    {
+        var result = Program.GetInstallRootDirectory(null);
+        var expected = CliPathHelper.GetAspireHomeDirectory();
+
+        Assert.Equal(expected, result.FullName);
+    }
+
+    [Fact]
+    public void GetInstallRootDirectory_NonAspireProcess_FallsBackToHome()
+    {
+        var result = Program.GetInstallRootDirectory("/usr/local/share/dotnet/dotnet");
+        var expected = CliPathHelper.GetAspireHomeDirectory();
+
+        Assert.Equal(expected, result.FullName);
+    }
 }

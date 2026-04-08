@@ -167,6 +167,13 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
             return null;
         }
 
+        var fileName = Path.GetFileName(processPath);
+        if (!string.Equals(fileName, "aspire", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(fileName, "aspire.exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
         var cliDirectoryInfo = new DirectoryInfo(cliDir);
         if (string.Equals(cliDirectoryInfo.Name, "bin", StringComparison.OrdinalIgnoreCase) &&
             cliDirectoryInfo.Parent is not null)
