@@ -4,7 +4,7 @@
 using Aspire.TestUtilities;
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Tests for the PowerShell release script (get-aspire-cli.ps1).

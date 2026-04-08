@@ -3,7 +3,7 @@
 
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Provides safe, isolated temporary directory environment for CLI script tests.

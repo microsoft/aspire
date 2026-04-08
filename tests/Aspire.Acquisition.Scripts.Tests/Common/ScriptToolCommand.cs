@@ -4,7 +4,7 @@
 using Aspire.Templates.Tests;
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Extends ToolCommand to execute shell scripts (bash or PowerShell) with proper argument handling.

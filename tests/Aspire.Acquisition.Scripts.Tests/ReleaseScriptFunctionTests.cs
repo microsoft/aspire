@@ -4,7 +4,7 @@
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Tier-1 unit tests for individual functions in the release bash script (get-aspire-cli.sh).

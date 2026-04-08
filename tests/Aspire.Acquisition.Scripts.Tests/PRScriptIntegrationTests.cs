@@ -5,7 +5,7 @@ using Aspire.TestUtilities;
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Integration tests that use real PR builds from GitHub.

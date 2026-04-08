@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Creates minimal tar.gz or zip archives containing a fake aspire binary, plus matching .sha512 checksum files.

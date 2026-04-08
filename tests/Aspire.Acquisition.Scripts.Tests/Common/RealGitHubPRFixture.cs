@@ -6,7 +6,7 @@ using System.Text.Json.Serialization;
 using Aspire.Templates.Tests;
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Fixture that discovers a suitable merged PR with required CLI artifacts for integration testing.

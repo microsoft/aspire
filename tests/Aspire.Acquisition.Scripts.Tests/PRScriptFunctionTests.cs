@@ -4,7 +4,7 @@
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Unit tests for individual functions in the bash PR script (get-aspire-cli-pr.sh).

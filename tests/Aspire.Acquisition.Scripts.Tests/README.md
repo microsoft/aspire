@@ -21,10 +21,10 @@ PR script tests use a mock `gh` CLI that returns canned JSON responses, avoiding
 
 ```bash
 # Unit tests only (default - excludes integration tests)
-dotnet test tests/Aspire.Cli.Scripts.Tests -- --filter-not-trait "Category=integration" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test tests/Aspire.Acquisition.Scripts.Tests -- --filter-not-trait "Category=integration" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 
 # Integration tests (requires GH_TOKEN, on-demand only)
-GH_TOKEN=<token> dotnet test tests/Aspire.Cli.Scripts.Tests -- --filter-trait "Category=integration"
+GH_TOKEN=<token> dotnet test tests/Aspire.Acquisition.Scripts.Tests -- --filter-trait "Category=integration"
 ```
 
 ## Platform Behavior

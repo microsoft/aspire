@@ -4,7 +4,7 @@
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Tests that verify bash scripts can be sourced safely without executing main,

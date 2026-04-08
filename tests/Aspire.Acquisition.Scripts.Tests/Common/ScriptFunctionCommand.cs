@@ -4,7 +4,7 @@
 using Aspire.Templates.Tests;
 using Xunit;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Sources a script and calls an individual function, enabling unit-level testing of script internals.

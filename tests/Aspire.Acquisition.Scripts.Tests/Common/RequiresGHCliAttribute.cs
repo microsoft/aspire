@@ -3,7 +3,7 @@
 
 using Microsoft.DotNet.XUnitExtensions;
 
-namespace Aspire.Cli.Scripts.Tests;
+namespace Aspire.Acquisition.Scripts.Tests;
 
 /// <summary>
 /// Skips tests if the GitHub CLI (gh) is not available.
