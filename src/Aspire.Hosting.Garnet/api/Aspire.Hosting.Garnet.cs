@@ -10,23 +10,29 @@ namespace Aspire.Hosting
 {
     public static partial class GarnetBuilderExtensions
     {
+        [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> AddGarnet(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> AddGarnet(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
+        [AspireExport("withDataBindMount", Description = "Mounts a host directory as the Garnet data directory.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport("withDataVolume", Description = "Adds a persistent data volume to the Garnet resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use the overload without the keysChangedThreshold parameter.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> WithPersistence(this ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> builder, System.TimeSpan? interval, long keysChangedThreshold) { throw null; }
 
+        [AspireExport("withPersistence", Description = "Configures snapshot persistence for the Garnet resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> WithPersistence(this ApplicationModel.IResourceBuilder<ApplicationModel.GarnetResource> builder, System.TimeSpan? interval = null) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
+    [AspireExport(ExposeProperties = true)]
     public partial class GarnetResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
     {
         public GarnetResource(string name, ParameterResource password) : base(default!, default) { }
