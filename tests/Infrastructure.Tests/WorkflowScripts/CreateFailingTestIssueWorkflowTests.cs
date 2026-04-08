@@ -82,6 +82,25 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ParseCommandSupportsPositionalTestNameWithFlags()
+    {
+        var result = await InvokeHarnessAsync<ParseCommandResult>(
+            "parseCommand",
+            new
+            {
+                body = "/create-issue Tests.Namespace.Type.Method --force-new",
+                defaultSourceUrl = "https://github.com/microsoft/aspire/pull/999"
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal("Tests.Namespace.Type.Method", result.TestQuery);
+        Assert.Equal("https://github.com/microsoft/aspire/pull/999", result.SourceUrl);
+        Assert.True(result.ForceNew);
+        Assert.False(result.ListOnly);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ParseCommandRejectsAmbiguousPositionalSyntax()
     {
         var result = await InvokeHarnessAsync<ParseCommandResult>(
