@@ -71,11 +71,17 @@ extends:
       name: NetCore1ESPool-Internal
       image: windows.vs2026preview.scout.amd64
       os: windows
-    # Network isolation policy: match main build pipeline for ES4.2.4 CFS compliance.
-    # releaseJob templateContext provides approved network access for external publishing
-    # (NuGet.org, GitHub API for WinGet/Homebrew, Maestro).
+    # Network isolation policy for ES4.2.4 CFS compliance.
+    # CFSClean is intentionally omitted here because it blocks all NuGet endpoints
+    # (api.nuget.org, www.nuget.org, etc.) via DNS sinkhole and this release pipeline
+    # must push packages to NuGet.org via the 1ES.PublishNuget@1 task. ES4.2.4 requires
+    # pipelines to *consume* packages from internal feeds (which we do — NuGet.config
+    # only uses pkgs.dev.azure.com/dnceng feeds), but does not prohibit *publishing* to
+    # public registries. CFSClean2 is retained to block Docker, PowerShell Gallery, and
+    # other endpoints not needed by this pipeline.
+    # See: https://eng.ms/docs/microsoft-ai/webxt/feed-verticals/start-experiences/fv-live-site/sfi-executor-centric-wiki/skills/security/mdp-cfs-security-change/skill
     settings:
-      networkIsolationPolicy: Permissive,CFSClean,CFSClean2
+      networkIsolationPolicy: Permissive,CFSClean2
 
     stages:
       # ===== STAGE 1: PREPARE ARTIFACTS =====
