@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Aspire.TestTools\Aspire.TestTools.csproj" />
+    <Compile Include="..\Aspire.TestTools\*.cs" LinkBase="Aspire.TestTools" />
   </ItemGroup>
 
 </Project>
