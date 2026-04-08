@@ -267,7 +267,7 @@ internal static class Hex1bAutomatorTestHelpers
         await auto.EnterAsync();
 
         // Step 4.5: Handle optional template version selection (dogfood installs add a hive
-        // that causes the CLI to present a version menu). Select the PR-specific version if present.
+        // that causes the CLI to present a version menu). Accept the default version.
         try
         {
             await auto.WaitUntilAsync(
@@ -275,12 +275,7 @@ internal static class Hex1bAutomatorTestHelpers
                 timeout: TimeSpan.FromSeconds(5),
                 description: "template version prompt (dogfood)");
 
-            // Type "pr-" to filter to the PR-specific hive version and select it
-            await auto.TypeAsync("pr-");
-            await auto.WaitUntilAsync(
-                s => new CellPatternSearcher().Find("> pr-").Search(s).Count > 0,
-                timeout: TimeSpan.FromSeconds(5),
-                description: "PR version selected");
+            // Accept the default version (the PR hive version is typically first)
             await auto.EnterAsync();
         }
         catch (Hex1bAutomationException)
