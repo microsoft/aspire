@@ -121,7 +121,7 @@ exit 1
         if (!isWindows)
         {
             // Make the script executable on Unix
-            var chmod = new System.Diagnostics.Process
+            using var chmod = new System.Diagnostics.Process
             {
                 StartInfo = new System.Diagnostics.ProcessStartInfo
                 {

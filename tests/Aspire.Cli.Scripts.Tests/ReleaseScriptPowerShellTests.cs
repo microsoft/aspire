@@ -128,4 +128,122 @@ public class ReleaseScriptPowerShellTests
 
         result.EnsureSuccessful();
     }
+
+    #region Function-level parity tests (ConvertTo-ChannelName, Get-AspireCliUrl)
+
+    [Theory]
+    [InlineData("release", "stable")]
+    [InlineData("staging", "staging")]
+    [InlineData("dev", "daily")]
+    public async Task ConvertToChannelName_KnownQualities_ReturnsMappedChannel(string quality, string expectedChannel)
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            "eng/scripts/get-aspire-cli.ps1",
+            $"ConvertTo-ChannelName -Quality '{quality}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal(expectedChannel, result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task ConvertToChannelName_UnknownQuality_ReturnsAsIs()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            "eng/scripts/get-aspire-cli.ps1",
+            "ConvertTo-ChannelName -Quality 'custom-channel'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("custom-channel", result.Output.Trim());
+    }
+
+    [Theory]
+    [InlineData("release", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz")]
+    [InlineData("dev", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/daily/aspire-cli-linux-x64.tar.gz")]
+    [InlineData("staging", "linux-x64", "tar.gz", "https://aka.ms/dotnet/9/aspire/rc/daily/aspire-cli-linux-x64.tar.gz")]
+    [InlineData("release", "osx-arm64", "tar.gz", "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-osx-arm64.tar.gz")]
+    [InlineData("release", "win-x64", "zip", "https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-win-x64.zip")]
+    public async Task GetAspireCliUrl_NoVersion_ReturnsAkaMsUrl(
+        string quality, string rid, string ext, string expectedUrl)
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            "eng/scripts/get-aspire-cli.ps1",
+            $"(Get-AspireCliUrl -Quality '{quality}' -RuntimeIdentifier '{rid}' -Extension '{ext}').ArchiveUrl",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal(expectedUrl, result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task GetAspireCliUrl_NoVersion_ReturnsChecksumUrl()
+    {
+        using var env = new TestEnvironment();
+        var cmd = new ScriptFunctionCommand(
+            "eng/scripts/get-aspire-cli.ps1",
+            "(Get-AspireCliUrl -Quality 'release' -RuntimeIdentifier 'linux-x64' -Extension 'tar.gz').ChecksumUrl",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.EndsWith(".sha512", result.Output.Trim());
+        Assert.Contains("aka.ms", result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task GetAspireCliUrl_WithVersion_ReturnsCiDotNetUrl()
+    {
+        using var env = new TestEnvironment();
+        var version = "9.5.0-preview.1.25366.3";
+        var cmd = new ScriptFunctionCommand(
+            "eng/scripts/get-aspire-cli.ps1",
+            $"(Get-AspireCliUrl -Version '{version}' -RuntimeIdentifier 'linux-x64' -Extension 'tar.gz').ArchiveUrl",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var url = result.Output.Trim();
+        Assert.Contains("ci.dot.net", url);
+        Assert.Contains(version, url);
+        Assert.Contains("linux-x64", url);
+    }
+
+    [Fact]
+    public async Task GetAspireCliUrl_WithVersion_ChecksumUrl_UsesPublicChecksums()
+    {
+        using var env = new TestEnvironment();
+        var version = "9.5.0-preview.1.25366.3";
+        var cmd = new ScriptFunctionCommand(
+            "eng/scripts/get-aspire-cli.ps1",
+            $"(Get-AspireCliUrl -Version '{version}' -RuntimeIdentifier 'linux-x64' -Extension 'tar.gz').ChecksumUrl",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var url = result.Output.Trim();
+        Assert.Contains("public-checksums", url);
+        Assert.Contains(version, url);
+        Assert.EndsWith(".sha512", url);
+    }
+
+    #endregion
 }

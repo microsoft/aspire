@@ -16,11 +16,11 @@ namespace Aspire.Cli.Scripts.Tests;
 /// These tests are marked with Trait("Category", "integration") and are excluded from
 /// default test runs. Run them on-demand with: --filter-trait "Category=integration"
 /// 
-/// These tests are disabled in CI (ActiveIssue) and only run on-demand locally.
+/// These tests are marked as outerloop since they require real GitHub API access.
 /// </summary>
 [RequiresGHCli]
 [Trait("Category", "integration")]
-[ActiveIssue("https://github.com/dotnet/aspire/issues/12000", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnCI))]
+[OuterloopTest("Integration tests that require real GitHub API access and gh CLI")]
 public class PRScriptIntegrationTests : IClassFixture<RealGitHubPRFixture>
 {
     private readonly RealGitHubPRFixture _prFixture;
