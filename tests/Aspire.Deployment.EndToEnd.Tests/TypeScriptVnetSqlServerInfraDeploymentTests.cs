@@ -80,7 +80,7 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
                     output.WriteLine($"Step 2: Installing Aspire bundle from PR #{prNumber}...");
                     await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
                 }
-                await auto.SourceAspireBundleEnvironmentAsync(counter);
+                await auto.SourceAspireBundleEnvironmentAsync(counter, prNumber > 0 ? prNumber : null);
             }
 
             // Step 3: Create TypeScript AppHost using aspire init

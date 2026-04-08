@@ -83,7 +83,7 @@ public sealed class TypeScriptExpressDeploymentTests(ITestOutputHelper output)
                     output.WriteLine($"Step 2: Installing Aspire bundle from PR #{prNumber}...");
                     await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
                 }
-                await auto.SourceAspireBundleEnvironmentAsync(counter);
+                await auto.SourceAspireBundleEnvironmentAsync(counter, prNumber > 0 ? prNumber : null);
             }
 
             // Step 3: Create TypeScript Express/React project using aspire new

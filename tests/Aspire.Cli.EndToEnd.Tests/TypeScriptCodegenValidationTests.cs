@@ -117,7 +117,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         if (isCI)
         {
             await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireBundleEnvironmentAsync(counter);
+            await auto.SourceAspireBundleEnvironmentAsync(counter, prNumber);
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 

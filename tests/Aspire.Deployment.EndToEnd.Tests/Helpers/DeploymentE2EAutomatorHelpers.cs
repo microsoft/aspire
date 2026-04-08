@@ -102,12 +102,15 @@ internal static class DeploymentE2EAutomatorHelpers
     /// <summary>
     /// Sources the Aspire Bundle environment after installation.
     /// Adds both the bundle's bin/ and root directories to PATH.
+    /// When <paramref name="prNumber"/> is provided, the self-contained dogfood path is also added.
     /// </summary>
     internal static async Task SourceAspireBundleEnvironmentAsync(
         this Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
+        SequenceCounter counter,
+        int? prNumber = null)
     {
-        await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        var dogfoodPrefix = prNumber.HasValue ? $"~/.aspire/dogfood/pr-{prNumber}:" : "";
+        await auto.TypeAsync($"export PATH={dogfoodPrefix}~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }

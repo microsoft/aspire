@@ -87,7 +87,8 @@ internal static class CliE2EAutomatorHelpers
                 await auto.TypeAsync($"/opt/aspire-scripts/get-aspire-cli-pr.sh {prNumber}");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
-                await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH");
+                // Self-contained dogfood installs go to ~/.aspire/dogfood/pr-<PR>
+                await auto.TypeAsync($"export PATH=~/.aspire/dogfood/pr-{prNumber}:~/.aspire/bin:~/.aspire:$PATH");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
                 break;
@@ -200,12 +201,15 @@ internal static class CliE2EAutomatorHelpers
     /// <summary>
     /// Configures the PATH and environment variables for the Aspire CLI bundle in a non-Docker environment.
     /// Unlike <see cref="SourceAspireCliEnvironmentAsync"/>, this includes <c>~/.aspire</c> in PATH for bundle tools.
+    /// When <paramref name="prNumber"/> is provided, the self-contained dogfood path is also added.
     /// </summary>
     internal static async Task SourceAspireBundleEnvironmentAsync(
         this Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
+        SequenceCounter counter,
+        int? prNumber = null)
     {
-        await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        var dogfoodPrefix = prNumber.HasValue ? $"~/.aspire/dogfood/pr-{prNumber}:" : "";
+        await auto.TypeAsync($"export PATH={dogfoodPrefix}~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }
