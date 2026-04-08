@@ -135,7 +135,7 @@ public class ValueSnapshotTests
     {
         var snapshot = new ValueSnapshot<string>();
 
-        Assert.True(snapshot.IsValueSet); // intentionally broken for /create-issue testing
+        Assert.False(snapshot.IsValueSet);
     }
 
     [Fact]
