@@ -172,7 +172,7 @@ public static class AspireWebPubSubExtensions
             }
             catch (Exception ex)
             {
-                return new HealthCheckResult(context.Registration.FailureStatus, exception: ex);
+                return new HealthCheckResult(context.Registration.FailureStatus, "Failed to connect to Azure Web PubSub service.", ex);
             }
         }
     }

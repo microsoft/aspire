@@ -11,18 +11,38 @@ namespace Aspire.Seq;
 /// <param name="seqUri">The URI of the Seq server to check.</param>
 internal sealed class SeqHealthCheck(string seqUri) : IHealthCheck
 {
-    readonly HttpClient _client = new(new SocketsHttpHandler { ActivityHeadersPropagator = null }) { BaseAddress = new Uri(seqUri) };
+    private readonly HttpClient _client = new(new SocketsHttpHandler { ActivityHeadersPropagator = null }) { BaseAddress = new Uri(seqUri) };
+    private readonly Uri _healthUri = new(new Uri(seqUri), "/health");
 
     /// <summary>
     /// Checks the health of a Seq server by calling its <a href="https://docs.datalust.co/docs/using-the-http-api#checking-health">health</a> endpoint.
     /// </summary>
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext _, CancellationToken cancellationToken = new CancellationToken())
     {
-        using var response = await _client.GetAsync("/health", cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            using var response = await _client.GetAsync("/health", cancellationToken)
+                .ConfigureAwait(false);
 
-        return response.IsSuccessStatusCode
-            ? HealthCheckResult.Healthy()
-            : HealthCheckResult.Unhealthy();
+            return response.IsSuccessStatusCode
+                ? HealthCheckResult.Healthy()
+                : HealthCheckResult.Unhealthy($"Request to {_healthUri} returned {(int)response.StatusCode} {response.StatusCode}");
+        }
+        catch (TaskCanceledException tce) when (!cancellationToken.IsCancellationRequested)
+        {
+            return HealthCheckResult.Unhealthy($"Request to {_healthUri} timed out", tce);
+        }
+        catch (TaskCanceledException tce) when (cancellationToken.IsCancellationRequested)
+        {
+            return HealthCheckResult.Unhealthy($"Health check for {_healthUri} was canceled", tce);
+        }
+        catch (HttpRequestException hre)
+        {
+            return HealthCheckResult.Unhealthy($"Failed to connect to {_healthUri}", hre);
+        }
+        catch (Exception ex)
+        {
+            return HealthCheckResult.Unhealthy($"Health check failed for {_healthUri}", ex);
+        }
     }
 }
