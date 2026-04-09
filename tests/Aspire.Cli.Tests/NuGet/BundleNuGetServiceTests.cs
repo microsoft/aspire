@@ -50,6 +50,73 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(Path.Combine(restoreDirectory, "obj", "project.assets.json"), GetArgumentValue(invocations[1], "--assets"));
     }
 
+    [Fact]
+    public async Task RestorePackagesAsync_UsesDistinctCachePathsForDifferentSources()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var executionFactory = new TestProcessExecutionFactory();
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var libsPathA = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: ["https://example.com/feed-a/index.json"],
+            workingDirectory: appHostDirectory.FullName);
+
+        var libsPathB = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            sources: ["https://example.com/feed-b/index.json"],
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.NotEqual(libsPathA, libsPathB);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_PassesNuGetConfigToRestore()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(nugetConfigPath, "<configuration />");
+
+        List<string[]> invocations = [];
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) => invocations.Add(args.ToArray())
+        };
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            NullLogger<BundleNuGetService>.Instance);
+
+        await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName,
+            nugetConfigPath: nugetConfigPath);
+
+        Assert.Equal(nugetConfigPath, GetArgumentValue(invocations[0], "--nuget-config"));
+    }
+
     private static string GetArgumentValue(string[] arguments, string optionName)
     {
         var optionIndex = Array.IndexOf(arguments, optionName);
