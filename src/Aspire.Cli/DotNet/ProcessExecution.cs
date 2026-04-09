@@ -47,7 +47,7 @@ internal sealed class ProcessExecution : IProcessExecution
 
         if (!started)
         {
-            _logger.LogDebug("{FileName}({ProcessId}) failed to start with args: {Args}", FileName, 0, string.Join(" ", Arguments));
+            _logger.LogDebug("{FileName} failed to start with args: {Args}", FileName, string.Join(" ", Arguments));
             return false;
         }
 
@@ -146,13 +146,16 @@ internal sealed class ProcessExecution : IProcessExecution
             string? line;
             while ((line = await reader.ReadLineAsync()) is not null)
             {
-                _logger.LogTrace(
-                    "{FileName}({ProcessId}) {Identifier}: {Line}",
-                    FileName,
-                    _process.Id,
-                    identifier,
-                    line
-                    );
+                if (_logger.IsEnabled(LogLevel.Trace))
+                {
+                    _logger.LogTrace(
+                        "{FileName}({ProcessId}) {Identifier}: {Line}",
+                        FileName,
+                        _process.Id,
+                        identifier,
+                        line
+                        );
+                }
                 lineCallback?.Invoke(line);
             }
         }
