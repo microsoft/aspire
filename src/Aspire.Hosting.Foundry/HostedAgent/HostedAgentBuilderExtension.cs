@@ -310,5 +310,4 @@ public static class HostedAgentResourceBuilderExtensions
 
         return builder;
     }
-
 }
