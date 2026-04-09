@@ -32,10 +32,13 @@ public partial class ConfigSchemaGenerator
             var emitter = new ConfigSchemaEmitter(spec, compilation);
             var schema = emitter.GenerateSchema();
 
-            if (!schema.EndsWith(Environment.NewLine))
+            // Keep generated schemas stable across platforms and aligned with the checked-in JSON files.
+            schema = schema.ReplaceLineEndings("\n");
+
+            if (schema.Length == 0 || schema[^1] != '\n')
             {
-                // Ensure the file always ends in a newline to stop certain text editors from injecting it
-                schema += Environment.NewLine;
+                // Ensure the file always ends in a newline to stop certain text editors from injecting it.
+                schema += '\n';
             }
 
             File.WriteAllText(outputFile, schema);
