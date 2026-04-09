@@ -315,4 +315,35 @@ public class DurableTaskResourceExtensionsTests
 
         await Verify(manifest.BicepText, extension: "bicep");
     }
+
+    [Fact]
+    public async Task AddDurableTaskScheduler_PublishAsExisting_GeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var existingName = builder.AddParameter("existingSchedulerName");
+        var dts = builder.AddDurableTaskScheduler("dts")
+            .PublishAsExisting(existingName, resourceGroupParameter: default);
+        _ = dts.AddTaskHub("myhub");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(dts.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddDurableTaskScheduler_PublishAsExisting_WithResourceGroup_GeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var existingName = builder.AddParameter("existingSchedulerName");
+        var existingRg = builder.AddParameter("existingResourceGroup");
+        var dts = builder.AddDurableTaskScheduler("dts")
+            .PublishAsExisting(existingName, existingRg);
+        _ = dts.AddTaskHub("myhub");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(dts.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
 }
