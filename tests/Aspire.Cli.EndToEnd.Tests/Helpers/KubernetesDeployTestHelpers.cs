@@ -94,6 +94,17 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
+        // When running inside a Docker container (socket-forwarded), the kubeconfig points at
+        // 127.0.0.1:<port> which is the HOST's loopback — unreachable from inside this container.
+        // Fix: join the 'kind' Docker network and use the internal kubeconfig (DNS-based server address).
+        await auto.TypeAsync(
+            "if [ -f /.dockerenv ]; then " +
+            "docker network connect kind $(hostname) 2>/dev/null || true && " +
+            $"kind get kubeconfig --name={clusterName} --internal > ~/.kube/config; " +
+            "fi");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
         // Connect registry to cluster network
         await auto.TypeAsync($"docker network connect \"kind\" kind-registry 2>/dev/null || true");
         await auto.EnterAsync();
