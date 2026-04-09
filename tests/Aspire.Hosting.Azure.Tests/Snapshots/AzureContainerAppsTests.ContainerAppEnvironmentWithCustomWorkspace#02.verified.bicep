@@ -17,5 +17,3 @@ resource customworkspace 'Microsoft.OperationalInsights/workspaces@2025-02-01' =
 output logAnalyticsWorkspaceId string = customworkspace.id
 
 output name string = customworkspace.name
-
-output id string = customworkspace.id
