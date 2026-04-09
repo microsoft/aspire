@@ -35,7 +35,7 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
         files[".gitignore"] = """
             .java-build/
             .modules/
-            /.aspire/
+            .aspire/
             """;
 
         files["AppHost.java"] = """

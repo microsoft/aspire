@@ -38,7 +38,7 @@ public sealed class JavaEmptyAppHostTemplateTests(ITestOutputHelper output)
 
         GitIgnoreAssertions.AssertContainsEntry(
             Path.Combine(workspace.WorkspaceRoot.FullName, "JavaEmptyApp"),
-            "/.aspire/");
+            ".aspire/");
 
         await auto.TypeAsync("cd JavaEmptyApp");
         await auto.EnterAsync();

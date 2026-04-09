@@ -1,4 +1,4 @@
 node_modules/
 .modules/
 dist/
-/.aspire/
+.aspire/
