@@ -113,6 +113,27 @@ function parseCommand(body, defaultSourceUrl = null) {
     };
 }
 
+function formatListResponse(resolverOutcome, resultJson) {
+    if (resolverOutcome === 'failure' && !resultJson) {
+        return { error: true, message: 'The failing-test resolver failed to run.' };
+    }
+
+    const tests = resultJson?.allFailures?.tests?.map(t => t.canonicalTestName ?? t.displayTestName)
+        ?? resultJson?.diagnostics?.availableFailedTests
+        ?? [];
+
+    if (tests.length > 0) {
+        return {
+            error: false,
+            message: '**Failed tests found on this PR:**\n\n'
+                + tests.map(name => `/create-issue ${name}`).join('\n'),
+            tests,
+        };
+    }
+
+    return { error: false, message: 'No test failures were found. Use `--url` to point to a specific workflow run.' };
+}
+
 function buildIssueSearchQuery(owner, repo, metadataMarker) {
     const escapedMarker = String(metadataMarker ?? '').replaceAll('"', '\\"');
     return `repo:${owner}/${repo} is:issue label:failing-test in:body "${escapedMarker}"`;
@@ -130,6 +151,7 @@ function isSupportedSourceUrl(value) {
 
 module.exports = {
     buildIssueSearchQuery,
+    formatListResponse,
     isSupportedSourceUrl,
     parseCommand,
 };
