@@ -86,7 +86,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             node_modules/
             .modules/
             dist/
-            /.aspire/
+            .aspire/
             """;
         files[PackageJsonFileName] = CreatePackageJson(request);
 

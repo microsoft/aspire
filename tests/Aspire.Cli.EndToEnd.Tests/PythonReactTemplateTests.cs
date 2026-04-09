@@ -37,7 +37,7 @@ public sealed class PythonReactTemplateTests(ITestOutputHelper output)
 
         GitIgnoreAssertions.AssertContainsEntry(
             Path.Combine(workspace.WorkspaceRoot.FullName, "AspirePyReactApp"),
-            "/.aspire/");
+            ".aspire/");
 
         // Step 2: Navigate into the project directory so config resolution finds the
         // project-level aspire.config.json (which has the packages section).

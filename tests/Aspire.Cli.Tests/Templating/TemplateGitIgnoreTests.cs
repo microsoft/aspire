@@ -16,7 +16,7 @@ public class TemplateGitIgnoreTests
         Assert.True(File.Exists(filePath), $"Expected template .gitignore at {filePath}");
 
         var lines = File.ReadAllLines(filePath);
-        Assert.Contains("/.aspire/", lines);
+        Assert.Contains(".aspire/", lines);
     }
 
     private static string GetRepoRoot()
