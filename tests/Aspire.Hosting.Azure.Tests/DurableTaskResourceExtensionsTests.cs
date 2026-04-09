@@ -90,7 +90,7 @@ public class DurableTaskResourceExtensionsTests
     }
 
     [Fact]
-    public void AddDurableTaskScheduler_IsExcludedFromPublishingManifest()
+    public void AddDurableTaskScheduler_HasManifestPublishingCallback()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -98,11 +98,11 @@ public class DurableTaskResourceExtensionsTests
 
         Assert.True(dts.Resource.TryGetAnnotationsOfType<ManifestPublishingCallbackAnnotation>(out var manifestAnnotations));
         var annotation = Assert.Single(manifestAnnotations);
-        Assert.Equal(ManifestPublishingCallbackAnnotation.Ignore, annotation);
+        Assert.NotNull(annotation.Callback);
     }
 
     [Fact]
-    public void AddDurableTaskHub_IsExcludedFromPublishingManifest()
+    public void AddDurableTaskHub_HasManifestPublishingCallback()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -111,7 +111,7 @@ public class DurableTaskResourceExtensionsTests
 
         Assert.True(taskHub.Resource.TryGetAnnotationsOfType<ManifestPublishingCallbackAnnotation>(out var manifestAnnotations));
         var annotation = Assert.Single(manifestAnnotations);
-        Assert.Equal(ManifestPublishingCallbackAnnotation.Ignore, annotation);
+        Assert.NotNull(annotation.Callback);
     }
 
     [Fact]
@@ -125,8 +125,11 @@ public class DurableTaskResourceExtensionsTests
         Assert.False(dts.ApplicationBuilder.ExecutionContext.IsRunMode);
         Assert.True(dts.ApplicationBuilder.ExecutionContext.IsPublishMode);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => _ = dts.Resource.ConnectionStringExpression);
-        Assert.Contains("Unable to resolve the Durable Task Scheduler connection string", ex.Message);
+        // In publish mode, RunAsExisting does not apply the connection string annotation;
+        // instead, the connection string falls through to the provisioned-mode Bicep output reference.
+        var connectionString = dts.Resource.ConnectionStringExpression;
+        Assert.Contains("Endpoint=", connectionString.Format);
+        Assert.Contains("Authentication=DefaultAzure", connectionString.Format);
     }
 
     [Fact]
@@ -140,7 +143,11 @@ public class DurableTaskResourceExtensionsTests
         Assert.False(dts.Resource.IsEmulator);
         Assert.DoesNotContain(dts.Resource.Annotations, a => a is EmulatorResourceAnnotation);
 
-        Assert.Throws<InvalidOperationException>(() => _ = dts.Resource.ConnectionStringExpression);
+        // In publish mode, the emulator is a no-op, but the connection string resolves
+        // to the provisioned-mode Bicep output reference instead of throwing.
+        var connectionString = dts.Resource.ConnectionStringExpression;
+        Assert.Contains("Endpoint=", connectionString.Format);
+        Assert.Contains("Authentication=DefaultAzure", connectionString.Format);
     }
 
     [Fact]
@@ -244,13 +251,68 @@ public class DurableTaskResourceExtensionsTests
     }
 
     [Fact]
-    public void DurableTaskSchedulerResource_WithoutEmulatorOrExistingConnectionString_Throws()
+    public void DurableTaskSchedulerResource_WithoutEmulatorOrExistingConnectionString_ResolvesToBicepOutput()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var dts = builder.AddDurableTaskScheduler("dts");
 
-        var ex = Assert.Throws<InvalidOperationException>(() => _ = dts.Resource.ConnectionStringExpression);
-        Assert.Contains("Unable to resolve the Durable Task Scheduler connection string", ex.Message);
+        // Without emulator or RunAsExisting, connection string resolves to the
+        // provisioned-mode Bicep output reference.
+        var connectionString = dts.Resource.ConnectionStringExpression;
+        Assert.Contains("Endpoint=", connectionString.Format);
+        Assert.Contains("Authentication=DefaultAzure", connectionString.Format);
+    }
+
+    [Fact]
+    public async Task AddDurableTaskScheduler_GeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(dts.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddDurableTaskScheduler_WithTaskHub_GeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        _ = dts.AddTaskHub("myhub");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(dts.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddDurableTaskScheduler_WithNamedTaskHub_GeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        _ = dts.AddTaskHub("myhub").WithTaskHubName("MyCustomTaskHub");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(dts.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task AddDurableTaskScheduler_WithMultipleTaskHubs_GeneratesBicep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        _ = dts.AddTaskHub("hub1");
+        _ = dts.AddTaskHub("hub2").WithTaskHubName("CustomHub2");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(dts.Resource);
+
+        await Verify(manifest.BicepText, extension: "bicep");
     }
 }

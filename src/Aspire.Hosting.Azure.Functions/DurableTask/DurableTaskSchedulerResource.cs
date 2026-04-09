@@ -13,9 +13,14 @@ namespace Aspire.Hosting.Azure.DurableTask;
 /// <param name="name">The unique resource name.</param>
 /// <param name="configureInfrastructure"></param>
 public sealed class DurableTaskSchedulerResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {
     internal List<DurableTaskHubResource> Hubs { get; } = [];
+
+    /// <summary>
+    /// Gets the "schedulerEndpoint" output reference from the bicep template for the Durable Task scheduler resource.
+    /// </summary>
+    public BicepOutputReference SchedulerEndpoint => new("schedulerEndpoint", this);
 
     /// <summary>
     /// Gets the "name" output reference for the resource.
@@ -81,7 +86,8 @@ public sealed class DurableTaskSchedulerResource(string name, Action<AzureResour
             };
         }
 
-        throw new InvalidOperationException($"Unable to resolve the Durable Task Scheduler connection string. Configure the scheduler using {nameof(DurableTaskResourceExtensions.RunAsEmulator)}() or {nameof(DurableTaskResourceExtensions.RunAsExisting)}(connectionString) before accessing {nameof(ConnectionStringExpression)}.");
+        // For Azure deployment, use the scheduler endpoint from Bicep output
+        return ReferenceExpression.Create($"Endpoint={SchedulerEndpoint};Authentication=DefaultAzure");
     }
 
     private ReferenceExpression CreateDashboardEndpoint()
@@ -94,5 +100,19 @@ public sealed class DurableTaskSchedulerResource(string name, Action<AzureResour
         }
 
         throw new InvalidOperationException("Dashboard endpoint is only available when running as an emulator.");
+    }
+
+    void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(IDictionary<string, object> target, string connectionName)
+    {
+        if (IsEmulator)
+        {
+            // For emulator, use the full connection string
+            target[connectionName] = ConnectionStringExpression;
+        }
+        else
+        {
+            // For Azure deployment, use the scheduler endpoint
+            target[$"{connectionName}__endpoint"] = SchedulerEndpoint;
+        }
     }
 }

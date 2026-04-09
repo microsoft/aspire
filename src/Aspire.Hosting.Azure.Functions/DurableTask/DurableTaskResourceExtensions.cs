@@ -83,8 +83,6 @@ public static class DurableTaskResourceExtensions
 
         var scheduler = new DurableTaskSchedulerResource(name, configureInfrastructure);
 
-        scheduler.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
-
         return builder.AddResource(scheduler);
     }
 
@@ -258,8 +256,6 @@ public static class DurableTaskResourceExtensions
         var hub = new DurableTaskHubResource(name, builder.Resource);
 
         builder.Resource.Hubs.Add(hub);
-
-        hub.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
 
         var hubBuilder = builder.ApplicationBuilder.AddResource(hub);
 
