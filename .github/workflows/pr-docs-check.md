@@ -76,6 +76,10 @@ safe-outputs:
     fallback-as-issue: true
   add-comment:
     target-repo: "microsoft/aspire"
+    # Note: The compiler adds 'discussions: write' permission which is not a valid
+    # GitHub Apps API scope and breaks token minting. After any recompile, manually
+    # remove 'discussions: write' and 'permission-discussions: write' from the lock
+    # file. Tracked: https://github.com/github/gh-aw/issues/25467
     hide-older-comments: true
 
 timeout-minutes: 20
