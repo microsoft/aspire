@@ -6,12 +6,12 @@ namespace Aspire.Cli.Tests.Templating;
 public class TemplateGitIgnoreTests
 {
     [Theory]
-    [InlineData("src\\Aspire.Cli\\Templating\\Templates\\ts-starter\\.gitignore")]
-    [InlineData("src\\Aspire.Cli\\Templating\\Templates\\py-starter\\.gitignore")]
-    [InlineData("src\\Aspire.Cli\\Templating\\Templates\\java-starter\\.gitignore")]
-    public void StarterTemplates_IgnoreWorkspaceAspireDirectory(string relativePath)
+    [InlineData("ts-starter")]
+    [InlineData("py-starter")]
+    [InlineData("java-starter")]
+    public void StarterTemplates_IgnoreWorkspaceAspireDirectory(string templateName)
     {
-        var filePath = Path.Combine(GetRepoRoot(), relativePath);
+        var filePath = Path.Combine(GetRepoRoot(), "src", "Aspire.Cli", "Templating", "Templates", templateName, ".gitignore");
 
         Assert.True(File.Exists(filePath), $"Expected template .gitignore at {filePath}");
 
