@@ -122,6 +122,13 @@
     <Project Path="playground/AspireWithBlazorHosted/AspireWithBlazorHosted.WeatherApi/AspireWithBlazorHosted.WeatherApi.csproj" />
     <Project Path="playground/AspireWithBlazorHosted/AspireWithBlazorHosted.ServiceDefaults/AspireWithBlazorHosted.ServiceDefaults.csproj" />
   </Folder>
+  <Folder Name="/playground/AspireWithBlazorStandalone/">
+    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone.AppHost/AspireWithBlazorStandalone.AppHost.csproj" />
+    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone/AspireWithBlazorStandalone.csproj" />
+    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone.ServiceDefaults/AspireWithBlazorStandalone.ServiceDefaults.csproj" />
+    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone.ClientServiceDefaults/AspireWithBlazorStandalone.ClientServiceDefaults.csproj" />
+    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone.WeatherApi/AspireWithBlazorStandalone.WeatherApi.csproj" />
+  </Folder>
   <Folder Name="/playground/AspireWithJavaScript/">
     <Project Path="playground/AspireWithJavaScript/AspireJavaScript.AppHost/AspireJavaScript.AppHost.csproj" />
     <Project Path="playground/AspireWithJavaScript/AspireJavaScript.MinimalApi/AspireJavaScript.MinimalApi.csproj" />
