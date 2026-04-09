@@ -29,6 +29,12 @@ internal static class TelemetryCommandHelpers
     /// </summary>
     internal const string ApiKeyHeaderName = "X-API-Key";
 
+    /// <summary>
+    /// Limit passed to dashboard telemetry APIs. All data is fetched in one API call
+    /// so there shouldn't be a limit on data returned.
+    /// </summary>
+    internal const int MaxTelemetryLimit = int.MaxValue;
+
     #region Shared Command Options
 
     /// <summary>

@@ -193,42 +193,92 @@ internal static class DashboardUrls
     private const string TelemetryApiBasePath = "api/telemetry";
 
     /// <summary>
-    /// Builds the URL for the telemetry logs API with resource filtering.
+    /// Builds the URL for the telemetry logs API.
     /// </summary>
     /// <param name="baseUrl">The dashboard base URL.</param>
     /// <param name="resources">Optional list of resource names to filter by.</param>
-    /// <param name="additionalParams">Additional query parameters.</param>
+    /// <param name="traceId">Optional trace ID to filter logs by.</param>
+    /// <param name="severity">Optional minimum severity level filter.</param>
+    /// <param name="limit">Optional maximum number of results to return.</param>
+    /// <param name="follow">Optional flag to enable streaming mode.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetryLogsApiUrl(string baseUrl, List<string>? resources = null, params (string key, string? value)[] additionalParams)
+    public static string TelemetryLogsApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, string? severity = null, int? limit = null, bool? follow = null)
     {
-        var queryString = BuildResourceQueryString(resources, additionalParams);
-        return CombineUrl(baseUrl, $"{TelemetryApiBasePath}/logs{queryString}");
+        var url = $"/{TelemetryApiBasePath}/logs";
+        url = AddResourceParams(url, resources);
+        if (traceId is not null)
+        {
+            url = AddQueryString(url, "traceId", traceId);
+        }
+        if (severity is not null)
+        {
+            url = AddQueryString(url, "severity", severity);
+        }
+        if (limit is not null)
+        {
+            url = AddQueryString(url, "limit", limit.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        if (follow == true)
+        {
+            url = AddQueryString(url, "follow", "true");
+        }
+        return CombineUrl(baseUrl, url);
     }
 
     /// <summary>
-    /// Builds the URL for the telemetry spans API with resource filtering.
+    /// Builds the URL for the telemetry spans API.
     /// </summary>
     /// <param name="baseUrl">The dashboard base URL.</param>
     /// <param name="resources">Optional list of resource names to filter by.</param>
-    /// <param name="additionalParams">Additional query parameters.</param>
+    /// <param name="traceId">Optional trace ID to filter spans by.</param>
+    /// <param name="hasError">Optional filter for error status.</param>
+    /// <param name="limit">Optional maximum number of results to return.</param>
+    /// <param name="follow">Optional flag to enable streaming mode.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetrySpansApiUrl(string baseUrl, List<string>? resources = null, params (string key, string? value)[] additionalParams)
+    public static string TelemetrySpansApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, bool? hasError = null, int? limit = null, bool? follow = null)
     {
-        var queryString = BuildResourceQueryString(resources, additionalParams);
-        return CombineUrl(baseUrl, $"{TelemetryApiBasePath}/spans{queryString}");
+        var url = $"/{TelemetryApiBasePath}/spans";
+        url = AddResourceParams(url, resources);
+        if (traceId is not null)
+        {
+            url = AddQueryString(url, "traceId", traceId);
+        }
+        if (hasError is not null)
+        {
+            url = AddQueryString(url, "hasError", hasError.Value.ToString().ToLowerInvariant());
+        }
+        if (limit is not null)
+        {
+            url = AddQueryString(url, "limit", limit.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        if (follow == true)
+        {
+            url = AddQueryString(url, "follow", "true");
+        }
+        return CombineUrl(baseUrl, url);
     }
 
     /// <summary>
-    /// Builds the URL for the telemetry traces API with resource filtering.
+    /// Builds the URL for the telemetry traces API.
     /// </summary>
     /// <param name="baseUrl">The dashboard base URL.</param>
     /// <param name="resources">Optional list of resource names to filter by.</param>
-    /// <param name="additionalParams">Additional query parameters.</param>
+    /// <param name="hasError">Optional filter for error status.</param>
+    /// <param name="limit">Optional maximum number of results to return.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetryTracesApiUrl(string baseUrl, List<string>? resources = null, params (string key, string? value)[] additionalParams)
+    public static string TelemetryTracesApiUrl(string baseUrl, List<string>? resources = null, bool? hasError = null, int? limit = null)
     {
-        var queryString = BuildResourceQueryString(resources, additionalParams);
-        return CombineUrl(baseUrl, $"{TelemetryApiBasePath}/traces{queryString}");
+        var url = $"/{TelemetryApiBasePath}/traces";
+        url = AddResourceParams(url, resources);
+        if (hasError is not null)
+        {
+            url = AddQueryString(url, "hasError", hasError.Value.ToString().ToLowerInvariant());
+        }
+        if (limit is not null)
+        {
+            url = AddQueryString(url, "limit", limit.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        return CombineUrl(baseUrl, url);
     }
 
     /// <summary>
@@ -255,33 +305,18 @@ internal static class DashboardUrls
     }
 
     /// <summary>
-    /// Builds a query string with multiple resource parameters and optional additional parameters.
+    /// Appends multiple resource query parameters to a URL.
     /// </summary>
-    internal static string BuildResourceQueryString(
-        List<string>? resources,
-        params (string key, string? value)[] additionalParams)
+    private static string AddResourceParams(string url, List<string>? resources)
     {
-        var parts = new List<string>();
-
-        // Add each resource as a separate query parameter
         if (resources is not null)
         {
             foreach (var resource in resources)
             {
-                parts.Add($"resource={Uri.EscapeDataString(resource)}");
+                url = AddQueryString(url, "resource", resource);
             }
         }
-
-        // Add additional parameters
-        foreach (var (key, value) in additionalParams)
-        {
-            if (!string.IsNullOrEmpty(value))
-            {
-                parts.Add($"{key}={Uri.EscapeDataString(value)}");
-            }
-        }
-
-        return parts.Count > 0 ? "?" + string.Join("&", parts) : "";
+        return url;
     }
 
     #endregion

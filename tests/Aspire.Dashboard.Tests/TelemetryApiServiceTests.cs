@@ -453,6 +453,43 @@ public class TelemetryApiServiceTests
         }
     }
 
+    [Fact]
+    public void GetLogs_LargeLimit_ReturnsAllLogs()
+    {
+        const int totalLogs = 20_000;
+        var repository = CreateRepository(maxLogCount: totalLogs);
+
+        var logRecords = new RepeatedField<LogRecord>();
+        for (var i = 0; i < totalLogs; i++)
+        {
+            logRecords.Add(CreateLogRecord(time: s_testTime.AddMilliseconds(i), message: $"log{i}", severity: SeverityNumber.Info));
+        }
+
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { logRecords }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: 100_000);
+
+        Assert.NotNull(result);
+        Assert.Equal(totalLogs, result.TotalCount);
+        Assert.Equal(totalLogs, result.ReturnedCount);
+    }
+
     /// <summary>
     /// Creates a TelemetryApiService instance for testing with optional custom dependencies.
     /// </summary>

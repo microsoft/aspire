@@ -69,7 +69,7 @@ internal sealed class ListTracesTool(IDashboardInfoProvider dashboardInfoProvide
                 };
             }
 
-            var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources);
+            var url = DashboardUrls.TelemetryTracesApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
 
             logger.LogDebug("Fetching traces from {Url}", url);
 
