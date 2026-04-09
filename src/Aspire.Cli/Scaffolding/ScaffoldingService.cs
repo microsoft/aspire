@@ -98,7 +98,18 @@ internal sealed class ScaffoldingService : IScaffoldingService
             context.ProjectName,
             cancellationToken);
 
-        // Step 4: Write scaffold files to disk, merging package.json with existing content
+        var conflictingFiles = GetConflictingScaffoldFiles(directory.FullName, scaffoldFiles.Keys);
+        if (conflictingFiles.Count > 0)
+        {
+            _logger.LogWarning(
+                "Scaffolding in '{Directory}' would overwrite existing files: {Files}",
+                directory.FullName,
+                string.Join(", ", conflictingFiles));
+            _interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
+            return false;
+        }
+
+        // Step 4: Write scaffold files to disk, merging package.json and .gitignore when they already exist.
         foreach (var (fileName, content) in scaffoldFiles)
         {
             var filePath = Path.Combine(directory.FullName, fileName);
@@ -117,6 +128,11 @@ internal sealed class ScaffoldingService : IScaffoldingService
                     content,
                     _logger,
                     toolchainCommand: GetPackageManagerCommand(directory, language));
+            }
+            else if (IsGitIgnoreFile(fileName) && File.Exists(filePath))
+            {
+                var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+                contentToWrite = MergeGitIgnoreContent(existingContent, content);
             }
 
             await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
@@ -289,5 +305,91 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory);
         return TypeScriptAppHostToolchainResolver.GetCommandName(toolchain);
+    }
+
+    internal static IReadOnlyList<string> GetConflictingScaffoldFiles(string rootDirectory, IEnumerable<string> scaffoldFileNames)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(rootDirectory);
+        ArgumentNullException.ThrowIfNull(scaffoldFileNames);
+
+        var conflicts = new List<string>();
+
+        foreach (var fileName in scaffoldFileNames)
+        {
+            if (IsGitIgnoreFile(fileName))
+            {
+                continue;
+            }
+
+            var filePath = Path.Combine(rootDirectory, fileName);
+            if (File.Exists(filePath) || Directory.Exists(filePath))
+            {
+                conflicts.Add(fileName);
+            }
+        }
+
+        return conflicts;
+    }
+
+    internal static string MergeGitIgnoreContent(string existingContent, string scaffoldContent)
+    {
+        ArgumentNullException.ThrowIfNull(existingContent);
+        ArgumentNullException.ThrowIfNull(scaffoldContent);
+
+        if (string.IsNullOrEmpty(existingContent))
+        {
+            return scaffoldContent;
+        }
+
+        var existingEntries = ReadGitIgnoreEntries(existingContent).ToHashSet(StringComparer.Ordinal);
+        var missingEntries = ReadGitIgnoreEntries(scaffoldContent)
+            .Where(entry => !HasEquivalentGitIgnoreEntry(existingEntries, entry))
+            .ToArray();
+
+        if (missingEntries.Length == 0)
+        {
+            return existingContent;
+        }
+
+        var newline = existingContent.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var mergedContent = existingContent;
+        if (!mergedContent.EndsWith("\n", StringComparison.Ordinal))
+        {
+            mergedContent += newline;
+        }
+
+        return mergedContent + string.Join(newline, missingEntries) + newline;
+    }
+
+    private static bool IsGitIgnoreFile(string fileName)
+        => Path.GetFileName(fileName).Equals(".gitignore", StringComparison.Ordinal);
+
+    private static IEnumerable<string> ReadGitIgnoreEntries(string content)
+    {
+        using var reader = new StringReader(content);
+        string? line;
+
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                yield return line.TrimEnd();
+            }
+        }
+    }
+
+    private static bool HasEquivalentGitIgnoreEntry(HashSet<string> existingEntries, string entry)
+    {
+        if (existingEntries.Contains(entry))
+        {
+            return true;
+        }
+
+        return entry switch
+        {
+            "/.aspire/" => existingEntries.Contains(".aspire/"),
+            ".aspire/" => existingEntries.Contains("/.aspire/"),
+            _ => false
+        };
     }
 }
