@@ -69,6 +69,7 @@ internal sealed class ListStructuredLogsTool(IDashboardInfoProvider dashboardInf
                 };
             }
 
+            // Fetch all logs from the API. Limiting of returned telemetry to the MCP caller happens later.
             var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
 
             logger.LogDebug("Fetching structured logs from {Url}", url);
