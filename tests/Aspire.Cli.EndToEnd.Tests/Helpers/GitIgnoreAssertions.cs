@@ -12,7 +12,7 @@ internal static class GitIgnoreAssertions
         var gitIgnorePath = Path.Combine(projectRoot, ".gitignore");
         Assert.True(File.Exists(gitIgnorePath), $"Expected generated .gitignore at {gitIgnorePath}");
 
-        var gitIgnoreContent = File.ReadAllText(gitIgnorePath);
-        Assert.Contains(entry, gitIgnoreContent, StringComparison.Ordinal);
+        var gitIgnoreLines = File.ReadAllLines(gitIgnorePath);
+        Assert.Contains(entry, gitIgnoreLines);
     }
 }
