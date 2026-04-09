@@ -187,4 +187,19 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
         Assert.Contains("allow-my-ip", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void AssociateWith_DuplicateAssociationName_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
+        var storage = builder.AddAzureStorage("storage");
+
+        storage.AssociateWith(nsp);
+
+        var exception = Assert.Throws<ArgumentException>(() => storage.AssociateWith(nsp));
+
+        Assert.Contains("storage-assoc", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
 }
