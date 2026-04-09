@@ -12,6 +12,8 @@ using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Kubernetes;
@@ -30,6 +32,48 @@ internal static partial class HelmDeploymentEngine
     /// Gets the environment-specific values file name, mirroring Docker Compose's .env.{envName} pattern.
     /// </summary>
     internal static string GetDeployValuesFileName(string environmentName) => $"values.{environmentName}.yaml";
+
+    /// <summary>
+    /// Resolves the Helm release name. Uses the explicit annotation if set,
+    /// otherwise falls back to the deployment environment name (<c>aspire deploy -e name</c>)
+    /// lowercased for Helm compatibility.
+    /// </summary>
+    private static async Task<string> ResolveReleaseNameAsync(
+        PipelineStepContext context,
+        KubernetesEnvironmentResource environment)
+    {
+        if (environment.TryGetLastAnnotation<HelmReleaseNameAnnotation>(out var releaseAnnotation))
+        {
+            var resolvedRelease = await releaseAnnotation.ReleaseName.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(resolvedRelease))
+            {
+                return resolvedRelease;
+            }
+        }
+
+        // Default to the deployment environment name (aspire deploy -e <name>), not the resource name.
+        var hostEnvironment = context.Services.GetRequiredService<IHostEnvironment>();
+        return hostEnvironment.EnvironmentName.ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Resolves the target Kubernetes namespace from the annotation, defaulting to "default".
+    /// </summary>
+    private static async Task<string> ResolveNamespaceAsync(
+        PipelineStepContext context,
+        KubernetesEnvironmentResource environment)
+    {
+        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
+        {
+            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(resolvedNs))
+            {
+                return resolvedNs;
+            }
+        }
+
+        return "default";
+    }
 
     /// <summary>
     /// Creates the deployment pipeline steps for the Helm engine.
@@ -293,27 +337,8 @@ internal static partial class HelmDeploymentEngine
     {
         var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, environment);
 
-        // Resolve namespace from annotation or use default
-        var @namespace = "default";
-        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
-        {
-            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(resolvedNs))
-            {
-                @namespace = resolvedNs;
-            }
-        }
-
-        // Resolve release name from annotation or derive from environment name
-        var releaseName = environment.Name;
-        if (environment.TryGetLastAnnotation<HelmReleaseNameAnnotation>(out var releaseAnnotation))
-        {
-            var resolvedRelease = await releaseAnnotation.ReleaseName.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(resolvedRelease))
-            {
-                releaseName = resolvedRelease;
-            }
-        }
+        var @namespace = await ResolveNamespaceAsync(context, environment).ConfigureAwait(false);
+        var releaseName = await ResolveReleaseNameAsync(context, environment).ConfigureAwait(false);
 
         var deployTask = await context.ReportingStep.CreateTaskAsync(
             new MarkdownString($"Deploying **{environment.Name}** to Kubernetes namespace **{@namespace}** as Helm release **{releaseName}**"),
@@ -418,16 +443,7 @@ internal static partial class HelmDeploymentEngine
             return;
         }
 
-        // Resolve namespace
-        var @namespace = "default";
-        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
-        {
-            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(resolvedNs))
-            {
-                @namespace = resolvedNs;
-            }
-        }
+        var @namespace = await ResolveNamespaceAsync(context, environment).ConfigureAwait(false);
 
         try
         {
@@ -454,89 +470,37 @@ internal static partial class HelmDeploymentEngine
         PipelineStepContext context,
         KubernetesEnvironmentResource environment)
     {
-        // Resolve namespace and release name for the instructions
-        var @namespace = "default";
-        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
-        {
-            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(resolvedNs))
-            {
-                @namespace = resolvedNs;
-            }
-        }
+        var @namespace = await ResolveNamespaceAsync(context, environment).ConfigureAwait(false);
+        var releaseName = await ResolveReleaseNameAsync(context, environment).ConfigureAwait(false);
 
-        var releaseName = environment.Name;
-        if (environment.TryGetLastAnnotation<HelmReleaseNameAnnotation>(out var releaseAnnotation))
-        {
-            var resolvedRelease = await releaseAnnotation.ReleaseName.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(resolvedRelease))
-            {
-                releaseName = resolvedRelease;
-            }
-        }
-
-        var sb = new StringBuilder();
-
-        // Dashboard instructions
+        // Dashboard port-forward instructions
         if (environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource)
         {
             var dashboardServiceName = environment.Dashboard.Resource.Name.ToKubernetesResourceName() + "-service";
-            sb.AppendLine("**Aspire Dashboard**");
-            sb.AppendLine();
-            sb.AppendLine("Access the dashboard by port-forwarding:");
-            sb.AppendLine();
-            sb.AppendLine("```bash");
-            sb.Append(CultureInfo.InvariantCulture, $"kubectl port-forward -n {@namespace} svc/{dashboardServiceName} 18888:18888");
-            sb.AppendLine();
-            sb.AppendLine("```");
-            sb.AppendLine();
-            sb.AppendLine("Then open http://localhost:18888 in your browser.");
-            sb.AppendLine();
+            context.Summary.Add(
+                "📊 Dashboard",
+                new MarkdownString($"`kubectl port-forward -n {@namespace} svc/{dashboardServiceName} 18888:18888` then open [http://localhost:18888](http://localhost:18888)"));
         }
 
-        // Helm management commands
-        sb.AppendLine("**Manage your deployment**");
-        sb.AppendLine();
-        sb.AppendLine("View release status and resources:");
-        sb.AppendLine();
-        sb.AppendLine("```bash");
-        sb.Append(CultureInfo.InvariantCulture, $"helm status {releaseName} -n {@namespace}");
-        sb.AppendLine();
-        sb.Append(CultureInfo.InvariantCulture, $"kubectl get all -n {@namespace} -l app.kubernetes.io/instance={releaseName}");
-        sb.AppendLine();
-        sb.AppendLine("```");
-        sb.AppendLine();
-        sb.AppendLine("Uninstall the deployment:");
-        sb.AppendLine();
-        sb.AppendLine("```bash");
-        sb.Append(CultureInfo.InvariantCulture, $"helm uninstall {releaseName} -n {@namespace}");
-        sb.AppendLine();
-        sb.AppendLine("```");
+        // Helm status and resource inspection
+        context.Summary.Add(
+            "📋 Release status",
+            new MarkdownString($"`helm status {releaseName} -n {@namespace}`"));
 
-        context.Summary.Add("instructions", sb.ToString());
+        context.Summary.Add(
+            "📦 View resources",
+            new MarkdownString($"`kubectl get all -n {@namespace} -l app.kubernetes.io/instance={releaseName}`"));
+
+        // Helm uninstall
+        context.Summary.Add(
+            "🗑️ Uninstall",
+            new MarkdownString($"`helm uninstall {releaseName} -n {@namespace}`"));
     }
 
     private static async Task HelmUninstallAsync(PipelineStepContext context, KubernetesEnvironmentResource environment)
     {
-        var @namespace = "default";
-        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
-        {
-            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(resolvedNs))
-            {
-                @namespace = resolvedNs;
-            }
-        }
-
-        var releaseName = environment.Name;
-        if (environment.TryGetLastAnnotation<HelmReleaseNameAnnotation>(out var releaseAnnotation))
-        {
-            var resolvedRelease = await releaseAnnotation.ReleaseName.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrEmpty(resolvedRelease))
-            {
-                releaseName = resolvedRelease;
-            }
-        }
+        var @namespace = await ResolveNamespaceAsync(context, environment).ConfigureAwait(false);
+        var releaseName = await ResolveReleaseNameAsync(context, environment).ConfigureAwait(false);
 
         var uninstallTask = await context.ReportingStep.CreateTaskAsync(
             new MarkdownString($"Uninstalling Helm release **{releaseName}** from namespace **{@namespace}**"),
