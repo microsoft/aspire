@@ -82,6 +82,25 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ParseCommandSupportsPositionalTestNameWithFlags()
+    {
+        var result = await InvokeHarnessAsync<ParseCommandResult>(
+            "parseCommand",
+            new
+            {
+                body = "/create-issue Tests.Namespace.Type.Method --force-new",
+                defaultSourceUrl = "https://github.com/microsoft/aspire/pull/999"
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal("Tests.Namespace.Type.Method", result.TestQuery);
+        Assert.Equal("https://github.com/microsoft/aspire/pull/999", result.SourceUrl);
+        Assert.True(result.ForceNew);
+        Assert.False(result.ListOnly);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ParseCommandRejectsAmbiguousPositionalSyntax()
     {
         var result = await InvokeHarnessAsync<ParseCommandResult>(
@@ -89,6 +108,21 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
             new
             {
                 body = "/create-issue Tests Namespace Type Method"
+            });
+
+        Assert.False(result.Success);
+        Assert.Contains("ambiguous", result.ErrorMessage);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ParseCommandRejectsPositionalBeforeTestFlag()
+    {
+        var result = await InvokeHarnessAsync<ParseCommandResult>(
+            "parseCommand",
+            new
+            {
+                body = "/create-issue MyTest --test OtherTest"
             });
 
         Assert.False(result.Success);
@@ -129,6 +163,68 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
         Assert.Equal(string.Empty, result.TestQuery);
         Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123", result.SourceUrl);
         Assert.Equal("custom.yml", result.Workflow);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task FormatListResponseReturnsErrorWhenResolverFailed()
+    {
+        var result = await InvokeHarnessAsync<FormatListResponseResult>(
+            "formatListResponse",
+            new
+            {
+                resolverOutcome = "failure",
+                resultJson = (object?)null
+            });
+
+        Assert.True(result.Error);
+        Assert.Contains("resolver failed", result.Message);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task FormatListResponseReturnsTestNamesFromResult()
+    {
+        var result = await InvokeHarnessAsync<FormatListResponseResult>(
+            "formatListResponse",
+            new
+            {
+                resolverOutcome = "success",
+                resultJson = new
+                {
+                    allFailures = new
+                    {
+                        tests = new[]
+                        {
+                            new { canonicalTestName = "Namespace.Class.MethodA", displayTestName = "MethodA" },
+                            new { canonicalTestName = "Namespace.Class.MethodB", displayTestName = "MethodB" }
+                        }
+                    }
+                }
+            });
+
+        Assert.False(result.Error);
+        Assert.NotNull(result.Tests);
+        Assert.Equal(2, result.Tests!.Length);
+        Assert.Contains("Namespace.Class.MethodA", result.Tests);
+        Assert.Contains("Namespace.Class.MethodB", result.Tests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task FormatListResponseReturnsNoFailuresWhenResultIsEmpty()
+    {
+        var result = await InvokeHarnessAsync<FormatListResponseResult>(
+            "formatListResponse",
+            new
+            {
+                resolverOutcome = "success",
+                resultJson = new { allFailures = new { tests = Array.Empty<object>() } }
+            });
+
+        Assert.False(result.Error);
+        Assert.Contains("No test failures", result.Message);
+        Assert.Null(result.Tests);
     }
 
     [Fact]
@@ -184,4 +280,6 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
     private sealed record HarnessResponse<T>(T Result);
 
     private sealed record ParseCommandResult(bool Success, string TestQuery, string? SourceUrl, string Workflow, bool ForceNew, bool ListOnly, string? ErrorMessage);
+
+    private sealed record FormatListResponseResult(bool Error, string Message, string[]? Tests);
 }

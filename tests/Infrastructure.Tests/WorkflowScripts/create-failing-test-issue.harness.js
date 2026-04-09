@@ -20,6 +20,9 @@ async function dispatch(operation, payload) {
         case 'buildIssueSearchQuery':
             return helper.buildIssueSearchQuery(payload.owner ?? 'microsoft', payload.repo ?? 'aspire', payload.metadataMarker);
 
+        case 'formatListResponse':
+            return helper.formatListResponse(payload.resolverOutcome, payload.resultJson ?? null);
+
         default:
             throw new Error(`Unsupported operation '${operation}'.`);
     }
