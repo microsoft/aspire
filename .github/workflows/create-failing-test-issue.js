@@ -131,6 +131,13 @@ function formatListResponse(resolverOutcome, resultJson) {
         };
     }
 
+    // The C# tool writes JSON even on failure (exits non-zero). Surface
+    // the error instead of a misleading "no failures found" message.
+    if (resolverOutcome === 'failure' || resultJson?.success === false) {
+        const detail = resultJson?.errorMessage;
+        return { error: true, message: detail ?? 'The failing-test resolver failed to run.' };
+    }
+
     return { error: false, message: 'No test failures were found. Use `--url` to point to a specific workflow run.' };
 }
 

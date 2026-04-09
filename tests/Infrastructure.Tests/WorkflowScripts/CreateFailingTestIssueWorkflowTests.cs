@@ -229,6 +229,27 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task FormatListResponseReturnsErrorWhenResolverFailedWithResult()
+    {
+        var result = await InvokeHarnessAsync<FormatListResponseResult>(
+            "formatListResponse",
+            new
+            {
+                resolverOutcome = "failure",
+                resultJson = new
+                {
+                    success = false,
+                    errorMessage = "Could not find any TRX files.",
+                    allFailures = new { tests = Array.Empty<object>() }
+                }
+            });
+
+        Assert.True(result.Error);
+        Assert.Contains("Could not find any TRX files", result.Message);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task BuildIssueSearchQueryTargetsFailingTestIssuesByMetadataMarker()
     {
         var query = await InvokeHarnessAsync<string>(
