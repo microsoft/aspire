@@ -960,7 +960,7 @@ internal class NuGetConfigMerger
         AddGlobalPackagesFolderConfiguration(configContext.Configuration);
     }
 
-    private static void AddGlobalPackagesFolderConfiguration(XElement configuration)
+    internal static void AddGlobalPackagesFolderConfiguration(XElement configuration)
     {
         // Check if config section already exists
         var config = configuration.Element("config");

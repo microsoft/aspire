@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Xml;
+using System.Xml.Linq;
 
 namespace Aspire.Cli.Packaging;
 
@@ -17,12 +18,16 @@ internal sealed class TemporaryNuGetConfig : IDisposable
 
     public FileInfo ConfigFile => _configFile;
 
-    public static async Task<TemporaryNuGetConfig> CreateAsync(PackageMapping[] mappings)
+    public static async Task<TemporaryNuGetConfig> CreateAsync(PackageMapping[] mappings, bool configureGlobalPackagesFolder = false)
     {
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
         var tempFilePath = Path.Combine(tempDirectory, "nuget.config");
         var configFile = new FileInfo(tempFilePath);
         await GenerateNuGetConfigAsync(mappings, configFile);
+        if (configureGlobalPackagesFolder)
+        {
+            await AddGlobalPackagesFolderToConfigAsync(configFile);
+        }
         return new TemporaryNuGetConfig(configFile);
     }
 
@@ -103,6 +108,28 @@ internal sealed class TemporaryNuGetConfig : IDisposable
 
         await xmlWriter.WriteEndElementAsync(); // configuration
         await xmlWriter.WriteEndDocumentAsync();
+    }
+
+    private static async Task AddGlobalPackagesFolderToConfigAsync(FileInfo configFile)
+    {
+        XDocument document;
+        await using (var stream = configFile.OpenRead())
+        {
+            document = XDocument.Load(stream);
+        }
+
+        var configuration = document.Root ?? new XElement("configuration");
+        if (document.Root is null)
+        {
+            document.Add(configuration);
+        }
+
+        NuGetConfigMerger.AddGlobalPackagesFolderConfiguration(configuration);
+
+        var content = document.Declaration is null
+            ? document.ToString()
+            : $"{document.Declaration}{Environment.NewLine}{document}";
+        await File.WriteAllTextAsync(configFile.FullName, content);
     }
 
     public void Dispose()

@@ -171,6 +171,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         _logger.LogDebug("Restoring {Count} integration packages via bundled NuGet", packageRefs.Count);
 
         var packages = packageRefs.Select(r => (r.Name, r.Version!)).ToList();
+        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(channelName, cancellationToken);
         var sources = await GetNuGetSourcesAsync(channelName, cancellationToken);
 
         return await _nugetService.RestorePackagesAsync(
@@ -179,6 +180,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             workingDirectory: _appDirectoryPath,
+            nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
             ct: cancellationToken);
     }
 
@@ -399,6 +401,35 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         }
 
         return sources.Count > 0 ? sources : null;
+    }
+
+    private async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? channelName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(channelName))
+        {
+            return null;
+        }
+
+        try
+        {
+            var channels = await _packagingService.GetChannelsAsync(cancellationToken);
+            var channel = channels.FirstOrDefault(c =>
+                c.Type == PackageChannelType.Explicit &&
+                c.Mappings is { Length: > 0 } &&
+                string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+
+            if (channel?.Mappings is null)
+            {
+                return null;
+            }
+
+            return await TemporaryNuGetConfig.CreateAsync(channel.Mappings, channel.ConfigureGlobalPackagesFolder);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create a temporary NuGet config for channel '{Channel}'", channelName);
+            return null;
+        }
     }
 
     /// <inheritdoc />
