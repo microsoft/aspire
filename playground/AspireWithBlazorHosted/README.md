@@ -196,7 +196,7 @@ await host.RunAsync();
 
 ## Project Structure
 
-```
+```text
 AspireWithBlazorHosted/
 ├── AspireWithBlazorHosted.AppHost/               # Aspire orchestrator
 │   └── Program.cs                                # ProxyService + ProxyTelemetry

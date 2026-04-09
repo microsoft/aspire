@@ -1,4 +1,4 @@
-## Summary
+# Summary
 
 Adds `Aspire.Hosting.Blazor` — a hosting integration that brings Blazor WebAssembly apps into Aspire orchestration with service discovery, YARP-based API proxying, and OpenTelemetry forwarding.
 

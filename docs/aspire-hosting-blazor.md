@@ -215,7 +215,7 @@ The proxy then routes `/{prefix}/api-proxy/weatherapi/*` (standalone) or `/api-p
 
 ### Client identity in the dashboard
 
-In the hosted model, the server and WASM client share the same resource name (`blazorapp`). To distinguish their telemetry in the dashboard, the hosting layer appends ` (client)` to the `OTEL_SERVICE_NAME` for the WASM client:
+In the hosted model, the server and WASM client share the same resource name (`blazorapp`). To distinguish their telemetry in the dashboard, the hosting layer appends the suffix `(client)` to the `OTEL_SERVICE_NAME` for the WASM client:
 
 - `blazorapp` → server-side traces and logs
 - `blazorapp (client)` → browser-side traces and logs
@@ -291,7 +291,7 @@ All YARP configuration is emitted as environment variables at orchestration time
 
 ### Standalone (per-app, with prefix)
 
-```
+```text
 # API route — proxies /app/_api/weatherapi/* → weatherapi service
 ReverseProxy__Routes__route-app-weatherapi__ClusterId=cluster-weatherapi
 ReverseProxy__Routes__route-app-weatherapi__Match__Path=/app/_api/weatherapi/{**catch-all}
@@ -307,7 +307,7 @@ ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address={OTLP_
 
 ### Hosted (no prefix)
 
-```
+```text
 # API route — proxies /_api/weatherapi/* → weatherapi service
 ReverseProxy__Routes__route-weatherapi__ClusterId=cluster-weatherapi
 ReverseProxy__Routes__route-weatherapi__Match__Path=/_api/weatherapi/{**catch-all}
