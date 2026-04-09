@@ -3,7 +3,6 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <PackageTags>aspire hosting docker docker-compose</PackageTags>
     <Description>Docker Compose publishing for Aspire.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
