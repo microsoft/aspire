@@ -83,7 +83,10 @@ public static class DurableTaskResourceExtensions
 
         var scheduler = new DurableTaskSchedulerResource(name, configureInfrastructure);
 
-        return builder.AddResource(scheduler);
+        return builder.AddResource(scheduler)
+            .WithDefaultRoleAssignments(
+                DurableTaskSchedulerBuiltInRole.GetBuiltInRoleName,
+                DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor);
     }
 
     /// <summary>
