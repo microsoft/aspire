@@ -62,3 +62,16 @@
 *.h linguist-language=C
 
 .github/workflows/*.lock.yml linguist-generated=true merge=ours
+
+# Verify
+*.verified.bicep text eol=lf working-tree-encoding=UTF-8
+*.verified.env text eol=lf working-tree-encoding=UTF-8
+*.verified.go text eol=lf working-tree-encoding=UTF-8
+*.verified.java text eol=lf working-tree-encoding=UTF-8
+*.verified.json text eol=lf working-tree-encoding=UTF-8
+*.verified.py text eol=lf working-tree-encoding=UTF-8
+*.verified.rs text eol=lf working-tree-encoding=UTF-8
+*.verified.ts text eol=lf working-tree-encoding=UTF-8
+*.verified.txt text eol=lf working-tree-encoding=UTF-8
+*.verified.xml text eol=lf working-tree-encoding=UTF-8
+*.verified.yaml text eol=lf working-tree-encoding=UTF-8
