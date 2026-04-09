@@ -133,7 +133,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
         var storage = builder.AddAzureStorage("storage");
 
-        storage.AssociateWith(nsp);
+        storage.WithNetworkSecurityPerimeter(nsp);
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(nsp.Resource);
 
@@ -156,8 +156,8 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
         var storage = builder.AddAzureStorage("storage");
         var keyVault = builder.AddAzureKeyVault("kv");
 
-        storage.AssociateWith(nsp);
-        keyVault.AssociateWith(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
+        storage.WithNetworkSecurityPerimeter(nsp);
+        keyVault.WithNetworkSecurityPerimeter(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
 
         var manifest = await AzureManifestUtils.GetManifestWithBicep(nsp.Resource);
 
@@ -195,9 +195,9 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
         var storage = builder.AddAzureStorage("storage");
 
-        storage.AssociateWith(nsp);
+        storage.WithNetworkSecurityPerimeter(nsp);
 
-        var exception = Assert.Throws<ArgumentException>(() => storage.AssociateWith(nsp));
+        var exception = Assert.Throws<ArgumentException>(() => storage.WithNetworkSecurityPerimeter(nsp));
 
         Assert.Contains("storage-assoc", exception.Message, StringComparison.OrdinalIgnoreCase);
     }

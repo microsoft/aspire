@@ -26,7 +26,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// <code>
     /// var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
     /// var storage = builder.AddAzureStorage("storage");
-    /// storage.AssociateWith(nsp);
+    /// storage.WithNetworkSecurityPerimeter(nsp);
     /// </code>
     /// </example>
     [AspireExport(Description = "Adds an Azure Network Security Perimeter resource to the application model.")]
@@ -125,12 +125,12 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// var storage = builder.AddAzureStorage("storage");
     /// var keyVault = builder.AddAzureKeyVault("kv");
     ///
-    /// storage.AssociateWith(nsp);
-    /// keyVault.AssociateWith(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
+    /// storage.WithNetworkSecurityPerimeter(nsp);
+    /// keyVault.WithNetworkSecurityPerimeter(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
     /// </code>
     /// </example>
-    [AspireExport("associateWithNsp", Description = "Associates an Azure PaaS resource with a Network Security Perimeter.")]
-    public static IResourceBuilder<T> AssociateWith<T>(
+    [AspireExport("associateWithNetworkSecurityPerimeter", Description = "Associates an Azure PaaS resource with a Network Security Perimeter.")]
+    public static IResourceBuilder<T> WithNetworkSecurityPerimeter<T>(
         this IResourceBuilder<T> target,
         IResourceBuilder<AzureNetworkSecurityPerimeterResource> nsp,
         NetworkSecurityPerimeterAssociationAccessMode accessMode = NetworkSecurityPerimeterAssociationAccessMode.Enforced,

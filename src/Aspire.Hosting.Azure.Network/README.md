@@ -132,15 +132,15 @@ var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
 var storage = builder.AddAzureStorage("storage");
 var keyVault = builder.AddAzureKeyVault("kv");
 
-storage.AssociateWith(nsp);
-keyVault.AssociateWith(nsp);
+storage.WithNetworkSecurityPerimeter(nsp);
+keyVault.WithNetworkSecurityPerimeter(nsp);
 ```
 
 Associations use `Enforced` access mode by default, which blocks non-compliant public traffic. Use `Learning` mode to log violations without blocking, which is useful when onboarding resources to identify required access rules:
 
 ```csharp
 // Learning mode — logs violations without blocking traffic
-storage.AssociateWith(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
+storage.WithNetworkSecurityPerimeter(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
 ```
 
 ### Adding Private Endpoints

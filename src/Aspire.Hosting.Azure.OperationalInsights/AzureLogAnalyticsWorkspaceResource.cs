@@ -22,9 +22,9 @@ public class AzureLogAnalyticsWorkspaceResource(string name, Action<AzureResourc
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
-    /// Gets the "id" output reference for the resource.
+    /// The identifier associated with the Azure Log Analytics Workspace resource.
     /// </summary>
-    public BicepOutputReference Id => new("id", this);
+    public BicepOutputReference Id => new("logAnalyticsWorkspaceId", this);
 
     /// <summary>
     /// Gets the "logAnalyticsWorkspaceId" output reference for the Azure Log Analytics Workspace resource.
