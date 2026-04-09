@@ -78,10 +78,10 @@ public class DurableTaskResourceExtensionsTests
             .RunAsExisting(dtsConnectionString);
 
         var taskHub = dts.AddTaskHub("mytaskhub");
-        
+
         if (taskHubName is not null)
         {
-            taskHub = taskHub.WithTaskHubName(taskHubName);   
+            taskHub = taskHub.WithTaskHubName(taskHubName);
         }
 
         var connectionString = await taskHub.Resource.ConnectionStringExpression.GetValueAsync(default);
