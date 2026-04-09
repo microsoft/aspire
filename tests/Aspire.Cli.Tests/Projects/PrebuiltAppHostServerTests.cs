@@ -9,7 +9,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -152,13 +151,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void Constructor_UsesUserAspireDirectoryForWorkingDirectory()
+    public void Constructor_UsesWorkspaceAspireDirectoryForWorkingDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = workspace.CreateDirectory("apphost");
 
         var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
         var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
+            appHostDirectory.FullName,
             "test.sock",
             new LayoutConfiguration(),
             nugetService,
@@ -173,7 +173,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
 
-        var rootDirectory = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "bundle-hosts");
+        var rootDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bundle-hosts");
         var isUnderRoot = workingDirectory.StartsWith(rootDirectory, StringComparison.OrdinalIgnoreCase);
         var parentDirectory = Path.GetDirectoryName(workingDirectory);
         var isDirectChildOfRoot = parentDirectory is not null &&

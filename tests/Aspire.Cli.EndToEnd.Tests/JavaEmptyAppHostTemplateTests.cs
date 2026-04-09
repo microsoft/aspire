@@ -36,6 +36,10 @@ public sealed class JavaEmptyAppHostTemplateTests(ITestOutputHelper output)
 
         await auto.AspireNewAsync("JavaEmptyApp", counter, template: AspireTemplate.JavaEmptyAppHost);
 
+        GitIgnoreAssertions.AssertContainsEntry(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "JavaEmptyApp"),
+            ".aspire/");
+
         await auto.TypeAsync("cd JavaEmptyApp");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);

@@ -82,6 +82,12 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             await builder.build().run();
             """;
 
+        files[".gitignore"] = """
+            node_modules/
+            .modules/
+            dist/
+            .aspire/
+            """;
         files[PackageJsonFileName] = CreatePackageJson(request);
 
         // Create eslint.config.mjs for catching unawaited promises in apphost.ts

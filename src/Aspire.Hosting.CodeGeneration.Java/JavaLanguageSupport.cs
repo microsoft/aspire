@@ -32,6 +32,12 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
     {
         var files = new Dictionary<string, string>();
 
+        files[".gitignore"] = """
+            .java-build/
+            .modules/
+            .aspire/
+            """;
+
         files["AppHost.java"] = """
             // Aspire Java AppHost
             // For more information, see: https://aspire.dev

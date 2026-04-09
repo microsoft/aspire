@@ -35,6 +35,10 @@ public sealed class TypeScriptEmptyAppHostTemplateTests(ITestOutputHelper output
 
         await auto.AspireNewAsync("TsEmptyApp", counter, template: AspireTemplate.TypeScriptEmptyAppHost);
 
+        GitIgnoreAssertions.AssertContainsEntry(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "TsEmptyApp"),
+            ".aspire/");
+
         // Start the empty TypeScript AppHost to verify the scaffolded project works
         await auto.TypeAsync("cd TsEmptyApp");
         await auto.EnterAsync();

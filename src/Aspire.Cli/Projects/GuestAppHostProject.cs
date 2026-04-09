@@ -166,27 +166,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Falls back to <paramref name="appHostDirectory"/> when no config file is found.
     /// </summary>
     private static DirectoryInfo GetConfigDirectory(DirectoryInfo appHostDirectory)
-    {
-        // Search from the apphost's directory upward to find the nearest config file.
-        var nearAppHost = ConfigurationHelper.FindNearestConfigFilePath(appHostDirectory);
-        if (nearAppHost is not null)
-        {
-            var configFile = new FileInfo(nearAppHost);
-            if (configFile.Directory is { Exists: true })
-            {
-                // For legacy .aspire/settings.json, the config directory is the parent of .aspire/
-                if (string.Equals(configFile.Directory.Name, ".aspire", StringComparison.OrdinalIgnoreCase)
-                    && configFile.Directory.Parent is not null)
-                {
-                    return configFile.Directory.Parent;
-                }
-
-                return configFile.Directory;
-            }
-        }
-
-        return appHostDirectory;
-    }
+        => ConfigurationHelper.GetConfigRootDirectory(appHostDirectory);
 
     private AspireConfigFile LoadConfiguration(DirectoryInfo directory)
     {

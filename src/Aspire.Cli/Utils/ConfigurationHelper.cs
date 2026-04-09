@@ -85,6 +85,37 @@ internal static class ConfigurationHelper
         return settingsDirectory.Parent;
     }
 
+    internal static DirectoryInfo GetConfigRootDirectory(DirectoryInfo startDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(startDirectory);
+
+        var configPath = FindNearestConfigFilePath(startDirectory);
+        if (configPath is null)
+        {
+            return startDirectory;
+        }
+
+        var configFile = new FileInfo(configPath);
+
+        // Legacy layout: <root>/.aspire/settings.json -> <root>
+        var legacyRoot = GetLegacySettingsRootDirectory(configFile);
+        if (legacyRoot is not null)
+        {
+            return legacyRoot;
+        }
+
+        // Modern layout: <root>/aspire.config.json -> <root>
+        return configFile.Directory is { Exists: true } configDirectory
+            ? configDirectory
+            : startDirectory;
+    }
+
+    internal static DirectoryInfo GetWorkspaceAspireDirectory(DirectoryInfo startDirectory)
+    {
+        var configRoot = GetConfigRootDirectory(startDirectory);
+        return new DirectoryInfo(Path.Combine(configRoot.FullName, AspireJsonConfiguration.SettingsFolder));
+    }
+
     /// <summary>
     /// Searches upward from <paramref name="startDirectory"/> for the nearest
     /// <c>aspire.config.json</c> or legacy <c>.aspire/settings.json</c>.

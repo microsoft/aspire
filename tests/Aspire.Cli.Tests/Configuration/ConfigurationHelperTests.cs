@@ -141,4 +141,34 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         Assert.True(config.Features["polyglotSupportEnabled"]);
         Assert.False(config.Features["showAllTemplates"]);
     }
+
+    [Fact]
+    public void GetConfigRootDirectory_UsesNearestAspireConfigDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configRoot = workspace.CreateDirectory("project");
+        Directory.CreateDirectory(Path.Combine(configRoot.FullName, "nested", "apphost"));
+        File.WriteAllText(Path.Combine(configRoot.FullName, AspireConfigFile.FileName), "{}");
+
+        var resolvedRoot = ConfigurationHelper.GetConfigRootDirectory(
+            new DirectoryInfo(Path.Combine(configRoot.FullName, "nested", "apphost")));
+
+        Assert.Equal(configRoot.FullName, resolvedRoot.FullName);
+    }
+
+    [Fact]
+    public void GetWorkspaceAspireDirectory_UsesLegacySettingsParentDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "nested", "apphost"));
+        appHostDirectory.Create();
+
+        var aspireDirectory = ConfigurationHelper.GetWorkspaceAspireDirectory(appHostDirectory);
+
+        Assert.Equal(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireJsonConfiguration.SettingsFolder),
+            aspireDirectory.FullName);
+    }
 }
