@@ -7,12 +7,12 @@ using Aspire.Hosting.Kubernetes;
 namespace Aspire.Hosting;
 
 /// <summary>
-/// Provides extension methods for creating Aspire Dashboard resources in a Kubernetes environment.
+/// Provides extension methods for creating Aspire Dashboard resources in the application model.
 /// </summary>
 public static class KubernetesAspireDashboardResourceBuilderExtensions
 {
     /// <summary>
-    /// Creates a new Aspire Dashboard resource builder for use in a Kubernetes environment.
+    /// Creates a new Aspire Dashboard resource builder with the specified name.
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/> instance.</param>
     /// <param name="name">The name of the Aspire Dashboard resource.</param>
@@ -20,8 +20,11 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// <remarks>
     /// This method initializes a new Aspire Dashboard resource with HTTP (port 18888),
     /// OTLP gRPC (port 18889), and OTLP HTTP (port 18890) endpoints. The dashboard is
-    /// configured in unsecured mode suitable for cluster-internal access.
+    /// configured for unsecured cluster-internal access by default so it can be used behind
+    /// an ingress controller or other Kubernetes networking layer.
     /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <c>null</c>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is <c>null</c> or empty.</exception>
     internal static IResourceBuilder<KubernetesAspireDashboardResource> CreateDashboard(
         this IDistributedApplicationBuilder builder,
         string name)
@@ -34,6 +37,7 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
         return builder.CreateResourceBuilder(resource)
                       .WithImage("mcr.microsoft.com/dotnet/nightly/aspire-dashboard")
                       .WithHttpEndpoint(targetPort: 18888)
+                      // Expose the HTTP endpoint so ingress or explicit host port mapping can route browser traffic to the dashboard.
                       .WithEndpoint("http", e => e.IsExternal = true)
                       .WithHttpEndpoint(name: "otlp-grpc", targetPort: 18889)
                       .WithHttpEndpoint(name: "otlp-http", targetPort: 18890)

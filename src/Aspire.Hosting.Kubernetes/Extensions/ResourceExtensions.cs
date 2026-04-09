@@ -79,10 +79,12 @@ internal static class ResourceExtensions
         {
             // If the value itself contains Helm expressions, use it directly in the template
             // Otherwise use the expression to reference values.yaml
-            secret.StringData[kvp.Key] = kvp.Value.ValueContainsHelmExpression
-                                       ? kvp.Value.ValueString! // If it contains an expression, its not null
-                                       : kvp.Value.Expression   // All secret values are strings
-                                         ?? string.Empty;
+            var expression = kvp.Value.ValueContainsHelmExpression
+                ? kvp.Value.ValueString! // If it contains an expression, its not null
+                : kvp.Value.Expression   // All secret values are strings
+                  ?? string.Empty;
+
+            secret.StringData[kvp.Key] = expression.EnsureStringOutput();
             processedKeys.Add(kvp.Key);
         }
 
@@ -114,13 +116,7 @@ internal static class ResourceExtensions
                              : kvp.Value.Expression   // All configmap values are strings
                                ?? string.Empty;
 
-            // ConfigMap data values must be strings. Helm expressions with type
-            // conversion pipes (| int, | float64) render as numbers, which K8s
-            // rejects. Convert them to use | toString so the value stays a string.
-            configMap.Data[kvp.Key] = HelmExtensions.EndWithNonStringTypePattern().IsMatch(expression)
-                ? HelmExtensions.EndWithNonStringTypePattern().Replace(expression, m =>
-                    m.Value.Replace("| int", "| toString").Replace("| int64", "| toString").Replace("| float64", "| toString"))
-                : expression;
+            configMap.Data[kvp.Key] = expression.EnsureStringOutput();
             processedKeys.Add(kvp.Key);
         }
 

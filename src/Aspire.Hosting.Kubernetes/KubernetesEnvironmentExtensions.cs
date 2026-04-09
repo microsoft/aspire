@@ -82,7 +82,7 @@ public static class KubernetesEnvironmentExtensions
     [AspireExport(Description = "Configures Helm chart deployment settings", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithHelm(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
-        Action<HelmChartConfiguration>? configure = null)
+        Action<HelmChartOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
@@ -93,8 +93,8 @@ public static class KubernetesEnvironmentExtensions
 
         if (configure is not null)
         {
-            var configuration = new HelmChartConfiguration(builder);
-            configure(configuration);
+            var options = new HelmChartOptions(builder);
+            configure(options);
         }
 
         return builder;

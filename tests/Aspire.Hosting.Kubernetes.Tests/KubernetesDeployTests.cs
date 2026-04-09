@@ -442,7 +442,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void HelmChartConfiguration_WithNamespace_ThrowsOnEmpty()
+    public void HelmChartOptions_WithNamespace_ThrowsOnEmpty()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddKubernetesEnvironment("env")
@@ -453,7 +453,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void HelmChartConfiguration_WithReleaseName_ThrowsOnEmpty()
+    public void HelmChartOptions_WithReleaseName_ThrowsOnEmpty()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddKubernetesEnvironment("env")
@@ -464,13 +464,57 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void HelmChartConfiguration_WithChartVersion_ThrowsOnEmpty()
+    public void HelmChartOptions_WithChartVersion_ThrowsOnEmpty()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddKubernetesEnvironment("env")
             .WithHelm(helm =>
             {
                 Assert.Throws<ArgumentException>(() => helm.WithChartVersion(string.Empty));
+            });
+    }
+
+    [Theory]
+    [InlineData("Production")]
+    [InlineData("my_namespace")]
+    [InlineData("-staging")]
+    [InlineData("staging-")]
+    public void HelmChartOptions_WithNamespace_ThrowsOnInvalidName(string value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                Assert.Throws<ArgumentException>(() => helm.WithNamespace(value));
+            });
+    }
+
+    [Theory]
+    [InlineData("MyRelease")]
+    [InlineData("release_name")]
+    [InlineData("-release")]
+    [InlineData("release-")]
+    public void HelmChartOptions_WithReleaseName_ThrowsOnInvalidName(string value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                Assert.Throws<ArgumentException>(() => helm.WithReleaseName(value));
+            });
+    }
+
+    [Theory]
+    [InlineData("latest")]
+    [InlineData("release-candidate")]
+    [InlineData("1.0")]
+    public void HelmChartOptions_WithChartVersion_ThrowsOnInvalidVersion(string value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                Assert.Throws<ArgumentException>(() => helm.WithChartVersion(value));
             });
     }
 
