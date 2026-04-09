@@ -154,20 +154,20 @@ Once the user has selected which findings to include:
 
 ### Auto-merge safety check
 
-If the user asks to **approve with comments** (i.e., submit with `event: "APPROVE"` while also posting review comments), check whether the PR has auto-merge enabled **before** creating the review:
+Before submitting a review with `event: "APPROVE"`, check whether the PR has auto-merge enabled:
 
 ```bash
 gh pr view <number> --repo microsoft/aspire --json autoMergeRequest --jq '.autoMergeRequest'
 ```
 
-If auto-merge is enabled (the field is non-null), warn the user:
+If the result is **non-null** (auto-merge is enabled) **and** the review includes comments, warn the user:
 
 > **Warning:** This PR has auto-merge enabled. Approving it will likely trigger an automatic merge before the author has a chance to address your review comments. Would you like to:
 >
-> 1. **Approve with comments anyway** — submit the review as APPROVE (auto-merge may proceed immediately).
-> 2. **Add comments only** — submit the review as COMMENT instead, so the author can address feedback before someone approves.
+> 1. **Approve anyway** — submit as APPROVE (auto-merge may proceed immediately).
+> 2. **Downgrade to comment** — submit as COMMENT instead so the author can address feedback first.
 
-Wait for the user's response before proceeding. If they choose option 2, submit with `event: "COMMENT"` instead of `"APPROVE"`.
+Wait for the user's response before proceeding. If they choose option 2, use `event: "COMMENT"` instead of `"APPROVE"`.
 
 ### Posting the review
 
@@ -184,7 +184,9 @@ Wait for the user's response before proceeding. If they choose option 2, submit 
 
 3. **Submit the review**:
    Use `mcp_github_pull_request_review_write` with method `submit_pending`:
-   - If any comments were posted: `event: "COMMENT"`, with a summary body listing the number of issues found by category. Do not use `"REQUEST_CHANGES"` unless the user explicitly asks for it. Do not use `"APPROVE"` unless the user explicitly asks for it **and** the auto-merge safety check above has passed or been acknowledged.
+   - If any comments were posted and the user explicitly asked to approve: use `event: "APPROVE"` only if auto-merge is not enabled on the PR, or the user confirmed they want to approve after seeing the auto-merge warning.
+   - If any comments were posted and the user did not ask to approve: use `event: "COMMENT"`.
+   - In either case, include a summary body listing the number of issues found by category. Do not use `"REQUEST_CHANGES"` unless the user explicitly asks for it.
    - If the user chose to add none: do not create or submit a review. Confirm to the user that no review was posted.
 
 ## Review Quality Rules
