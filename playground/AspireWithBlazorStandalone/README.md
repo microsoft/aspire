@@ -169,7 +169,7 @@ await host.RunAsync();
 
 ## Project Structure
 
-```
+```text
 AspireWithBlazorStandalone/
 ├── AspireWithBlazorStandalone.AppHost/           # Aspire orchestrator
 │   └── Program.cs                                # AddBlazorWasmProject + AddBlazorGateway
