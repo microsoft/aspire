@@ -155,9 +155,15 @@ if ($bundle) {
     "/p:TargetRid=$rid"
   )
   
-  # Pass through SkipNativeBuild if set
-  if ($properties -contains "/p:SkipNativeBuild=true") {
-    $bundleArgs += "/p:SkipNativeBuild=true"
+  foreach ($property in $properties) {
+    if ($property -eq "-sign") {
+      $bundleArgs += "/p:Sign=true"
+      continue
+    }
+
+    if ($property.StartsWith("/p:", [System.StringComparison]::OrdinalIgnoreCase)) {
+      $bundleArgs += $property
+    }
   }
   
   # CI flag is passed to Bundle.proj which handles version computation via Versions.props

@@ -52,8 +52,27 @@ steps:
                 /p:BundleVersion=ci-bundlepayload
                 /p:SkipNativeBuild=true
                 /p:ContinuousIntegrationBuild=true
+                $(_SignArgs)
+                $(_OfficialBuildIdArgs)
                 /bl:${{ parameters.repoLogPath }}/BundlePayload-${{ targetRid }}.binlog
         displayName: 🟣Build bundle payload (${{ targetRid }})
+
+      - pwsh: |
+          $managedPath = Join-Path '${{ parameters.repoArtifactsPath }}/bin/Aspire.Managed/${{ parameters.buildConfig }}/net10.0/${{ targetRid }}/publish' 'aspire-managed.exe'
+          if (-not (Test-Path $managedPath)) {
+            Write-Host "##[error]aspire-managed.exe not found at $managedPath"
+            exit 1
+          }
+
+          $signature = Get-AuthenticodeSignature $managedPath
+          if ($signature.Status -eq [System.Management.Automation.SignatureStatus]::NotSigned) {
+            Write-Host "##[error]aspire-managed.exe is not signed: $managedPath"
+            exit 1
+          }
+
+          Write-Host "✅ aspire-managed.exe signature status: $($signature.Status)"
+        displayName: 🟣Verify managed bundle signature (${{ targetRid }})
+        condition: and(succeeded(), eq(variables['Agent.OS'], 'Windows_NT'), in(variables['_SignType'], 'real', 'test'), startsWith('${{ targetRid }}', 'win-'))
 
     - script: ${{ parameters.buildScript }}
               -restore -build

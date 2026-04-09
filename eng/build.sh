@@ -58,6 +58,7 @@ usage()
 
 arguments=''
 extraargs=''
+bundle_passthrough_args=()
 build_bundle=false
 runtime_version=""
 config="Debug"
@@ -169,6 +170,11 @@ while [[ $# > 0 ]]; do
       ;;
 
      *)
+      if [[ "$opt" == "-sign" ]]; then
+        bundle_passthrough_args+=("/p:Sign=true")
+      elif [[ "$1" == "/p:"* || "$1" == "-p:"* ]]; then
+        bundle_passthrough_args+=("$1")
+      fi
       extraargs="$extraargs $1"
       shift 1
       ;;
@@ -246,13 +252,9 @@ if [ "$build_bundle" = true ]; then
         "/p:TargetRid=$rid"
     )
     
-    # Pass through SkipNativeBuild if set
-    for arg in "$@"; do
-        if [[ "$arg" == *"SkipNativeBuild=true"* ]]; then
-            bundle_args+=("/p:SkipNativeBuild=true")
-            break
-        fi
-    done
+    if [ ${#bundle_passthrough_args[@]} -gt 0 ]; then
+        bundle_args+=("${bundle_passthrough_args[@]}")
+    fi
     
     # CI flag is passed to Bundle.proj which handles version computation via Versions.props
     if [ "${CI:-}" = "true" ]; then

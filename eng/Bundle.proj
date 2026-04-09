@@ -46,8 +46,15 @@
     <BundleVersion Condition="'$(BundleVersion)' == '' and '$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</BundleVersion>
     <BundleVersion Condition="'$(BundleVersion)' == ''">$(VersionPrefix)-dev</BundleVersion>
 
-    <!-- Forward VersionSuffix to Exec-invoked dotnet commands (MSBuild properties don't flow to child processes) -->
+    <!-- Forward CI/signing/version properties to Exec-invoked dotnet commands (MSBuild properties don't flow to child processes) -->
+    <_ContinuousIntegrationBuildArg Condition="'$(ContinuousIntegrationBuild)' != ''">/p:ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)</_ContinuousIntegrationBuildArg>
     <_VersionSuffixArg Condition="'$(VersionSuffix)' != ''">/p:VersionSuffix=$(VersionSuffix)</_VersionSuffixArg>
+    <_OfficialBuildIdArg Condition="'$(OfficialBuildId)' != ''">/p:OfficialBuildId=$(OfficialBuildId)</_OfficialBuildIdArg>
+    <_SignArg Condition="'$(Sign)' != ''">/p:Sign=$(Sign)</_SignArg>
+    <_DotNetSignTypeArg Condition="'$(DotNetSignType)' != ''">/p:DotNetSignType=$(DotNetSignType)</_DotNetSignTypeArg>
+    <_DotNetPublishUsingPipelinesArg Condition="'$(DotNetPublishUsingPipelines)' != ''">/p:DotNetPublishUsingPipelines=$(DotNetPublishUsingPipelines)</_DotNetPublishUsingPipelinesArg>
+    <_TeamNameArg Condition="'$(TeamName)' != ''">/p:TeamName=$(TeamName)</_TeamNameArg>
+    <_PostBuildSignArg Condition="'$(PostBuildSign)' != ''">/p:PostBuildSign=$(PostBuildSign)</_PostBuildSignArg>
 
     <!-- Binlog arguments for dotnet commands -->
     <_BinlogArg Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)</_BinlogArg>
@@ -91,7 +98,7 @@
       <_BundleArchivePath>$(ArtifactsDir)bundle\aspire-$(BundleVersion)-$(TargetRid).tar.gz</_BundleArchivePath>
     </PropertyGroup>
     <Message Importance="high" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
-    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_CliBinlog)" />
+    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_ContinuousIntegrationBuildArg) $(_VersionSuffixArg) $(_OfficialBuildIdArg) $(_SignArg) $(_DotNetSignTypeArg) $(_DotNetPublishUsingPipelinesArg) $(_TeamNameArg) $(_PostBuildSignArg) $(_CliBinlog)" />
   </Target>
 
   <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">
@@ -100,7 +107,7 @@
     </PropertyGroup>
     <Message Importance="high" Text="Publishing aspire-managed (self-contained)..." />
     <!-- Publish as self-contained single-file for the target RID -->
-    <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_ManagedBinlog)" />
+    <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_ContinuousIntegrationBuildArg) $(_VersionSuffixArg) $(_OfficialBuildIdArg) $(_SignArg) $(_DotNetSignTypeArg) $(_DotNetPublishUsingPipelinesArg) $(_TeamNameArg) $(_PostBuildSignArg) $(_ManagedBinlog)" />
   </Target>
 
   <Target Name="_RestoreDcpPackage">

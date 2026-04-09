@@ -73,6 +73,7 @@ jobs:
               /p:BundleVersion=ci-bundlepayload
               /p:SkipNativeBuild=true
               /p:ContinuousIntegrationBuild=true
+              ${{ parameters.extraBuildArgs }}
               /bl:$(Build.Arcade.LogsPath)BundlePayload.binlog
             displayName: 🟣Build bundle payload
 
