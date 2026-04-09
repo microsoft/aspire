@@ -33,6 +33,13 @@ function parseCommand(body, defaultSourceUrl = null) {
                         return { success: false, errorMessage: 'Missing value for --test.' };
                     }
 
+                    if (result.testQuery) {
+                        return {
+                            success: false,
+                            errorMessage: 'Positional input is ambiguous. Use /create-issue --test "<test-name>" [--url <pr|run|job-url>] [--workflow <selector>] [--force-new].',
+                        };
+                    }
+
                     result.testQuery = tokens[++index];
                     break;
 
@@ -57,10 +64,22 @@ function parseCommand(body, defaultSourceUrl = null) {
                     break;
 
                 default:
-                    return {
-                        success: false,
-                        errorMessage: `Unknown argument '${token}'. Supported arguments are --test, --url, --workflow, and --force-new.`,
-                    };
+                    if (token.startsWith('--')) {
+                        return {
+                            success: false,
+                            errorMessage: `Unknown argument '${token}'. Supported arguments are --test, --url, --workflow, and --force-new.`,
+                        };
+                    }
+
+                    if (result.testQuery) {
+                        return {
+                            success: false,
+                            errorMessage: 'Positional input is ambiguous. Use /create-issue --test "<test-name>" [--url <pr|run|job-url>] [--workflow <selector>] [--force-new].',
+                        };
+                    }
+
+                    result.testQuery = token;
+                    break;
             }
         }
 
