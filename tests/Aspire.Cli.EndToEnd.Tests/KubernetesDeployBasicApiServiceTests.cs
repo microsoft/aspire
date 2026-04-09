@@ -21,25 +21,32 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
     {
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
+        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
+        var isCI = CliE2ETestHelpers.IsRunningInCI;
         var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
         var k8sNamespace = $"test-{clusterName[..16]}";
 
         output.WriteLine($"Cluster name: {clusterName}");
         output.WriteLine($"Namespace: {k8sNamespace}");
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        // Prepare Docker environment and install CLI from the container image
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        // Prepare environment
+        await auto.PrepareEnvironmentAsync(workspace, counter);
 
-        // Assert CLI version has a prerelease suffix
+        if (isCI)
+        {
+            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
+            await auto.SourceAspireCliEnvironmentAsync(counter);
+            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
+        }
+
+        // Assert CLI version has a prerelease suffix (runs in both CI and local)
         await auto.AssertAspireVersionAsync(counter, output);
 
         try

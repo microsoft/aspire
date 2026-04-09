@@ -77,20 +77,6 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends openjdk-21-jdk && \
     rm -rf /var/lib/apt/lists/*
 
-# --- Kubernetes tooling (needed for K8s deploy E2E tests) ---
-
-ARG KIND_VERSION=v0.31.0
-ARG HELM_VERSION=v3.17.3
-ARG KUBECTL_VERSION=v1.34.3
-
-RUN mkdir -p /root/.local/bin && \
-    curl -sSLo /root/.local/bin/kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64" && \
-    chmod +x /root/.local/bin/kind && \
-    curl -sSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | tar xz -C /tmp && \
-    mv /tmp/linux-amd64/helm /root/.local/bin/helm && rm -rf /tmp/linux-amd64 && \
-    curl -sSLo /root/.local/bin/kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
-    chmod +x /root/.local/bin/kubectl
-
 # --- Aspire CLI setup ---
 
 # Copy the install scripts.
@@ -113,7 +99,7 @@ RUN if ls /tmp/bundle/aspire-*-linux-x64.tar.gz 1>/dev/null 2>&1; then \
 RUN mkdir -p /workspace
 WORKDIR /workspace
 
-ENV PATH="/root/.aspire/bin:/root/.aspire:/root/.local/bin:${PATH}"
+ENV PATH="/root/.aspire/bin:/root/.aspire:${PATH}"
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
 ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
