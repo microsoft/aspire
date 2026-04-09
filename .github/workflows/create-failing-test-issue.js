@@ -126,7 +126,8 @@ function formatListResponse(resolverOutcome, resultJson) {
         return {
             error: false,
             message: '**Failed tests found on this PR:**\n\n'
-                + tests.map(name => `/create-issue ${name}`).join('\n'),
+                + tests.map(name => `- \`/create-issue ${name}\``).join('\n')
+                + '\n\n',
             tests,
         };
     }
@@ -138,7 +139,7 @@ function formatListResponse(resolverOutcome, resultJson) {
         return { error: true, message: detail ?? 'The failing-test resolver failed to run.' };
     }
 
-    return { error: false, message: 'No test failures were found. Use `--url` to point to a specific workflow run.' };
+    return { error: false, message: 'No test failures were found. Use `--url` to point to a specific workflow run.\n\n' };
 }
 
 function buildIssueSearchQuery(owner, repo, metadataMarker) {

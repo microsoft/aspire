@@ -149,7 +149,7 @@ jobs:
 
     - name: Setup .NET SDK
       if: success()
-      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
       with:
         global-json-file: global.json
 
@@ -247,14 +247,7 @@ jobs:
               return;
             }
 
-            // Format test names as clickable commands in list mode
-            let body = listResult.tests?.length > 0
-              ? '**Failed tests found on this PR:**\n\n'
-                + listResult.tests.map(name => `- \`/create-issue ${name}\``).join('\n')
-                + '\n\n'
-              : listResult.message + '\n\n';
-
-            await postComment(`${body}${helpBlock}`);
+            await postComment(`${listResult.message}${helpBlock}`);
             return;
           }
 
