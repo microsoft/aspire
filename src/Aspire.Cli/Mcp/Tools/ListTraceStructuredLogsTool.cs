@@ -70,7 +70,7 @@ internal sealed class ListTraceStructuredLogsTool(IAuxiliaryBackchannelMonitor a
             var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken).ConfigureAwait(false);
 
             // Build the logs API URL with traceId filter
-            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resources: null, ("traceId", traceId));
+            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, traceId: traceId, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
 
             logger.LogDebug("Fetching structured logs from {Url}", url);
 

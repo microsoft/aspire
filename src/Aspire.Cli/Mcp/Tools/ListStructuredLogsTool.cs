@@ -70,7 +70,7 @@ internal sealed class ListStructuredLogsTool(IAuxiliaryBackchannelMonitor auxili
                 };
             }
 
-            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resolvedResources);
+            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
 
             logger.LogDebug("Fetching structured logs from {Url}", url);
 

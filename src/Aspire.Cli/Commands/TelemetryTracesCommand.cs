@@ -188,18 +188,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         // Pre-resolve colors so assignment is deterministic regardless of data order
         TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
 
-        // Build query string with multiple resource parameters
-        var additionalParams = new List<(string key, string? value)>();
-        if (hasError.HasValue)
-        {
-            additionalParams.Add(("hasError", hasError.Value.ToString().ToLowerInvariant()));
-        }
-        if (limit.HasValue)
-        {
-            additionalParams.Add(("limit", limit.Value.ToString(CultureInfo.InvariantCulture)));
-        }
-
-        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, [.. additionalParams]);
+        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit);
 
         _logger.LogDebug("Fetching traces from {Url}", url);
 
