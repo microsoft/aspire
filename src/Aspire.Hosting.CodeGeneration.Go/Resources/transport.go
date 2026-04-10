@@ -364,6 +364,16 @@ func (c *AspireClient) closeConnection(readErr error) {
 // It does NOT hold any lock while waiting, so callbacks invoked by the server
 // can freely call sendRequest (InvokeCapability) without deadlocking.
 func (c *AspireClient) sendRequest(method string, params []any) (any, error) {
+	// Fail fast if the connection is already gone. This also closes the race
+	// window where readLoop could drain pending and exit between our pending
+	// registration and write, leaving the new entry stranded forever.
+	c.mu.Lock()
+	if !c.connected || c.conn == nil {
+		c.mu.Unlock()
+		return nil, errors.New("not connected to AppHost")
+	}
+	c.mu.Unlock()
+
 	requestID := c.nextID.Add(1)
 	ch := make(chan map[string]any, 1)
 
@@ -406,9 +416,10 @@ func (c *AspireClient) readLoop() {
 	for {
 		response, err := c.readMessage()
 		if err != nil {
-			// Connection closed or error – unblock pending callers then run teardown.
-			c.drainPendingWithError(err)
+			// Mark the connection closed first so new sendRequest calls fail fast
+			// and cannot add to pending after we drain it.
 			c.closeConnection(err)
+			c.drainPendingWithError(err)
 			return
 		}
 
