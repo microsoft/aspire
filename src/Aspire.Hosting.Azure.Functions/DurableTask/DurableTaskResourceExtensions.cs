@@ -194,6 +194,16 @@ public static class DurableTaskResourceExtensions
         // Mark this resource as an emulator for consistent resource identification and tooling support
         builder.WithAnnotation(new EmulatorResourceAnnotation());
 
+        // Propagate emulator annotation to any hubs already registered with this scheduler,
+        // so the Azure provisioner skips them.
+        foreach (var hub in builder.Resource.Hubs)
+        {
+            if (!hub.IsEmulator())
+            {
+                hub.Annotations.Add(new EmulatorResourceAnnotation());
+            }
+        }
+
         builder.WithHttpEndpoint(name: "grpc", targetPort: 8080)
                .WithEndpoint("grpc", endpoint => endpoint.Transport = "http2")
                .WithHttpEndpoint(name: "http", targetPort: 8081)
@@ -264,6 +274,13 @@ public static class DurableTaskResourceExtensions
     public static IResourceBuilder<DurableTaskHubResource> AddTaskHub(this IResourceBuilder<DurableTaskSchedulerResource> builder, [ResourceName] string name)
     {
         var hub = new DurableTaskHubResource(name, builder.Resource);
+
+        // If the scheduler is already in emulator mode, propagate the annotation so the
+        // Azure provisioner skips this hub resource.
+        if (builder.Resource.IsEmulator())
+        {
+            hub.Annotations.Add(new EmulatorResourceAnnotation());
+        }
 
         builder.Resource.Hubs.Add(hub);
 
