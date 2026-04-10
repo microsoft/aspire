@@ -87,7 +87,19 @@ internal sealed partial class DocsGetCommand : BaseCommand
         }
         else
         {
-            InteractionService.DisplayRawText(WrapMarkdownForConsole(doc.Content));
+            var markdown = WrapMarkdownForConsole(doc.Content);
+            var wroteBlock = false;
+
+            foreach (var block in SplitMarkdownBlocks(markdown))
+            {
+                if (wroteBlock)
+                {
+                    InteractionService.DisplayEmptyLine();
+                }
+
+                InteractionService.DisplayMarkdown(block);
+                wroteBlock = true;
+            }
         }
 
         return ExitCodeConstants.Success;
@@ -119,6 +131,34 @@ internal sealed partial class DocsGetCommand : BaseCommand
         }
 
         return string.Join("\n", wrappedLines);
+    }
+
+    internal static IReadOnlyList<string> SplitMarkdownBlocks(string markdown)
+    {
+        var blocks = new List<string>();
+        var currentBlock = new List<string>();
+        var inCodeFence = false;
+
+        foreach (var line in markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            var trimmedLine = line.TrimEnd();
+
+            if (!inCodeFence && string.IsNullOrWhiteSpace(trimmedLine))
+            {
+                AppendBlock(blocks, currentBlock);
+                continue;
+            }
+
+            currentBlock.Add(trimmedLine);
+
+            if (trimmedLine.StartsWith("```", StringComparison.Ordinal))
+            {
+                inCodeFence = !inCodeFence;
+            }
+        }
+
+        AppendBlock(blocks, currentBlock);
+        return blocks;
     }
 
     private static void WrapLine(string line, int width, List<string> wrappedLines)
@@ -186,6 +226,17 @@ internal sealed partial class DocsGetCommand : BaseCommand
     private static bool IsTrailingPunctuation(string value)
     {
         return value.All(static character => character is ',' or '.' or ':' or ';' or '!' or '?' or ')' or ']');
+    }
+
+    private static void AppendBlock(List<string> blocks, List<string> currentBlock)
+    {
+        if (currentBlock.Count == 0)
+        {
+            return;
+        }
+
+        blocks.Add(string.Join("\n", currentBlock));
+        currentBlock.Clear();
     }
 
     [GeneratedRegex(@"(\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\S+)")]
