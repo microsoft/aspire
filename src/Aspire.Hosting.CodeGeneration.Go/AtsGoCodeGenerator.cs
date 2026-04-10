@@ -25,8 +25,6 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     private readonly Dictionary<string, string> _structNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _dtoNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _enumNames = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _resourceBuilderTypeIds = new(StringComparer.Ordinal);
-
     /// <inheritdoc />
     public string Language => "Go";
 
@@ -208,17 +206,6 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("// Handle Wrappers");
         WriteLine("// ============================================================================");
         WriteLine();
-
-        // Build the set of resource-builder type IDs so GenerateCapabilityMethod
-        // can decide whether a return type is also a builder (and thus fluent).
-        _resourceBuilderTypeIds.Clear();
-        foreach (var handleType in handleTypes)
-        {
-            if (handleType.IsResourceBuilder)
-            {
-                _resourceBuilderTypeIds.Add(handleType.TypeId);
-            }
-        }
 
         foreach (var handleType in handleTypes.OrderBy(t => t.StructName, StringComparer.Ordinal))
         {
