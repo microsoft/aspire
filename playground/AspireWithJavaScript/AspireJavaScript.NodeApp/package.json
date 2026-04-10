@@ -17,7 +17,8 @@
   "license": "MIT",
   "dependencies": {
     "express": "^5.2.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "express-rate-limit": "^8.3.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
