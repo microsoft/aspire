@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
@@ -340,7 +341,10 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
     private readonly ILogger<ApiDocsIndexService> _logger = logger;
     private volatile List<IndexedApiReferenceItem>? _indexedItems;
     private volatile Dictionary<string, ApiReferenceItem>? _itemsById;
+    private volatile string? _indexSourceFingerprint;
+    private volatile bool _csharpMemberIndexLoaded;
     private readonly SemaphoreSlim _indexLock = new(1, 1);
+    private readonly SemaphoreSlim _memberIndexLock = new(1, 1);
 
     /// <summary>
     /// Gets a value indicating whether the API index is available in memory.
@@ -378,6 +382,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 if (cachedItems is not null)
                 {
                     SetIndex(cachedItems);
+                    _indexSourceFingerprint = cachedFingerprint;
                     _logger.LogWarning("Failed to refresh Aspire API sitemap. Using cached index with {Count} items.", cachedItems.Length);
                     return;
                 }
@@ -390,6 +395,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
             if (cachedItems is not null && string.Equals(cachedFingerprint, currentFingerprint, StringComparison.Ordinal))
             {
                 SetIndex(cachedItems);
+                _indexSourceFingerprint = currentFingerprint;
                 _logger.LogInformation("Loaded {Count} API reference items from cache in {ElapsedTime:ss\\.fff} seconds.", cachedItems.Length, Stopwatch.GetElapsedTime(startTimestamp));
                 return;
             }
@@ -402,6 +408,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 .ToArray();
 
             SetIndex(itemArray);
+            _indexSourceFingerprint = currentFingerprint;
             await _cache.SetIndexAsync(itemArray, cancellationToken).ConfigureAwait(false);
             await _cache.SetIndexSourceFingerprintAsync(currentFingerprint, cancellationToken).ConfigureAwait(false);
 
@@ -429,6 +436,10 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         }
 
         var normalizedScope = NormalizeId(scope);
+        if (ShouldLoadCSharpMemberIndexForScope(normalizedScope))
+        {
+            await EnsureCSharpMemberIndexAsync(cancellationToken).ConfigureAwait(false);
+        }
 
         return
         [
@@ -478,6 +489,183 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         }
 
         var normalizedQuery = NormalizeId(query).ToLowerInvariant();
+        var results = SearchIndexedItems(queryTokens, normalizedQuery, normalizedLanguage, topK);
+        if (results.Count is 0 && ShouldSearchCSharpMembers(normalizedLanguage))
+        {
+            await EnsureCSharpMemberIndexAsync(cancellationToken).ConfigureAwait(false);
+            results = SearchIndexedItems(queryTokens, normalizedQuery, normalizedLanguage, topK);
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Gets the content for the specified API item.
+    /// </summary>
+    /// <param name="id">The API item identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The API content, or <c>null</c> if the item is not found.</returns>
+    public async ValueTask<ApiContent?> GetAsync(string id, CancellationToken cancellationToken = default)
+    {
+        await EnsureIndexedAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_itemsById is null)
+        {
+            return null;
+        }
+
+        var normalizedId = NormalizeId(id);
+        if (!_itemsById.TryGetValue(normalizedId, out var item))
+        {
+            if (ShouldLoadCSharpMemberIndexForId(normalizedId))
+            {
+                await EnsureCSharpMemberIndexAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (_itemsById is null || !_itemsById.TryGetValue(normalizedId, out item))
+            {
+                return null;
+            }
+        }
+
+        var content = await _fetcher.FetchPageAsync(item.PageUrl, cancellationToken).ConfigureAwait(false);
+        if (content is null)
+        {
+            return null;
+        }
+
+        return new ApiContent
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Language = item.Language,
+            Kind = item.Kind,
+            Url = item.PageUrl,
+            ParentId = item.ParentId,
+            MemberGroup = item.MemberGroup,
+            Content = content
+        };
+    }
+
+    private void SetIndex(ApiReferenceItem[] items)
+    {
+        _indexedItems = [.. items.Select(static item => new IndexedApiReferenceItem(item))];
+        _itemsById = items.ToDictionary(static item => item.Id, StringComparer.OrdinalIgnoreCase);
+        _csharpMemberIndexLoaded = false;
+    }
+
+    private async ValueTask EnsureCSharpMemberIndexAsync(CancellationToken cancellationToken)
+    {
+        await EnsureIndexedAsync(cancellationToken).ConfigureAwait(false);
+
+        if (_csharpMemberIndexLoaded || _indexedItems is null || _itemsById is null)
+        {
+            return;
+        }
+
+        await _memberIndexLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            if (_csharpMemberIndexLoaded || _indexedItems is null || _itemsById is null)
+            {
+                return;
+            }
+
+            var currentFingerprint = _indexSourceFingerprint ?? await _cache.GetIndexSourceFingerprintAsync(cancellationToken).ConfigureAwait(false);
+            var cachedMemberItems = await _cache.GetMemberIndexAsync(cancellationToken).ConfigureAwait(false);
+            var cachedMemberFingerprint = await _cache.GetMemberIndexSourceFingerprintAsync(cancellationToken).ConfigureAwait(false);
+
+            if (cachedMemberItems is not null &&
+                currentFingerprint is not null &&
+                string.Equals(cachedMemberFingerprint, currentFingerprint, StringComparison.Ordinal))
+            {
+                MergeIndexItems(cachedMemberItems);
+                _csharpMemberIndexLoaded = true;
+                return;
+            }
+
+            var memberGroupsByPageUrl = _itemsById.Values
+                .Where(static item =>
+                    string.Equals(item.Language, ApiReferenceLanguages.CSharp, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.Kind, ApiReferenceKinds.MemberGroup, StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(static item => item.PageUrl, StringComparer.OrdinalIgnoreCase);
+
+            var typeItems = _itemsById.Values
+                .Where(static item =>
+                    string.Equals(item.Language, ApiReferenceLanguages.CSharp, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(item.Kind, ApiReferenceKinds.Type, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(static item => item.Id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var memberItems = new ConcurrentBag<ApiReferenceItem>();
+            var isComplete = 1;
+
+            await Parallel.ForEachAsync(
+                typeItems,
+                new ParallelOptions
+                {
+                    CancellationToken = cancellationToken,
+                    MaxDegreeOfParallelism = 8
+                },
+                async (typeItem, ct) =>
+                {
+                    var content = await _fetcher.FetchPageAsync(typeItem.PageUrl, ct).ConfigureAwait(false);
+                    if (content is null)
+                    {
+                        Interlocked.Exchange(ref isComplete, 0);
+                        return;
+                    }
+
+                    foreach (var memberItem in ApiMemberMarkdownParser.Parse(typeItem, content, _sitemapUrl, memberGroupsByPageUrl))
+                    {
+                        memberItems.Add(memberItem);
+                    }
+                }).ConfigureAwait(false);
+
+            var itemArray = memberItems
+                .OrderBy(static item => item.Id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            MergeIndexItems(itemArray);
+            _csharpMemberIndexLoaded = true;
+
+            if (isComplete is 1 && currentFingerprint is not null)
+            {
+                await _cache.SetMemberIndexAsync(itemArray, cancellationToken).ConfigureAwait(false);
+                await _cache.SetMemberIndexSourceFingerprintAsync(currentFingerprint, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            _memberIndexLock.Release();
+        }
+    }
+
+    private void MergeIndexItems(ApiReferenceItem[] items)
+    {
+        if (_indexedItems is null || _itemsById is null || items.Length is 0)
+        {
+            return;
+        }
+
+        var mergedItems = new Dictionary<string, ApiReferenceItem>(_itemsById, StringComparer.OrdinalIgnoreCase);
+        foreach (var item in items)
+        {
+            mergedItems[item.Id] = item;
+        }
+
+        _itemsById = mergedItems;
+        _indexedItems = [.. mergedItems.Values.Select(static item => new IndexedApiReferenceItem(item))];
+    }
+
+    private IReadOnlyList<ApiSearchResult> SearchIndexedItems(string[] queryTokens, string normalizedQuery, string? normalizedLanguage, int topK)
+    {
+        if (_indexedItems is null)
+        {
+            return [];
+        }
+
         var results = new List<ApiSearchResult>();
 
         foreach (var item in _indexedItems)
@@ -515,51 +703,18 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         ];
     }
 
-    /// <summary>
-    /// Gets the content for the specified API item.
-    /// </summary>
-    /// <param name="id">The API item identifier.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The API content, or <c>null</c> if the item is not found.</returns>
-    public async ValueTask<ApiContent?> GetAsync(string id, CancellationToken cancellationToken = default)
-    {
-        await EnsureIndexedAsync(cancellationToken).ConfigureAwait(false);
+    private bool ShouldLoadCSharpMemberIndexForScope(string normalizedScope)
+        => _itemsById is not null &&
+            _itemsById.TryGetValue(normalizedScope, out var scopeItem) &&
+            string.Equals(scopeItem.Language, ApiReferenceLanguages.CSharp, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(scopeItem.Kind, ApiReferenceKinds.MemberGroup, StringComparison.OrdinalIgnoreCase);
 
-        if (_itemsById is null)
-        {
-            return null;
-        }
+    private static bool ShouldLoadCSharpMemberIndexForId(string normalizedId)
+        => normalizedId.Contains('#', StringComparison.Ordinal) &&
+            normalizedId.StartsWith($"{ApiReferenceLanguages.CSharp}/", StringComparison.OrdinalIgnoreCase);
 
-        var normalizedId = NormalizeId(id);
-        if (!_itemsById.TryGetValue(normalizedId, out var item))
-        {
-            return null;
-        }
-
-        var content = await _fetcher.FetchPageAsync(item.PageUrl, cancellationToken).ConfigureAwait(false);
-        if (content is null)
-        {
-            return null;
-        }
-
-        return new ApiContent
-        {
-            Id = item.Id,
-            Name = item.Name,
-            Language = item.Language,
-            Kind = item.Kind,
-            Url = item.PageUrl,
-            ParentId = item.ParentId,
-            MemberGroup = item.MemberGroup,
-            Content = content
-        };
-    }
-
-    private void SetIndex(ApiReferenceItem[] items)
-    {
-        _indexedItems = [.. items.Select(static item => new IndexedApiReferenceItem(item))];
-        _itemsById = items.ToDictionary(static item => item.Id, StringComparer.OrdinalIgnoreCase);
-    }
+    private static bool ShouldSearchCSharpMembers(string? normalizedLanguage)
+        => normalizedLanguage is null || string.Equals(normalizedLanguage, ApiReferenceLanguages.CSharp, StringComparison.OrdinalIgnoreCase);
 
     private static List<ApiReferenceItem> BuildBaseItems(IReadOnlyList<ApiSitemapEntry> entries, string sitemapUrl)
     {

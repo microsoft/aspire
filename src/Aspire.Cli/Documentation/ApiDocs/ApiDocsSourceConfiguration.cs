@@ -11,6 +11,7 @@ namespace Aspire.Cli.Documentation.ApiDocs;
 internal static class ApiDocsSourceConfiguration
 {
     private const string IndexCacheKeyPrefix = "index:";
+    private const string MemberIndexCacheKeyPrefix = "member-index:";
 
     /// <summary>
     /// Configuration key for overriding the API sitemap URL.
@@ -37,6 +38,14 @@ internal static class ApiDocsSourceConfiguration
     /// <returns>The cache key used for the parsed API index.</returns>
     public static string GetIndexCacheKey(string sitemapUrl)
         => $"{IndexCacheKeyPrefix}{GetSitemapContentCacheKey(sitemapUrl)}";
+
+    /// <summary>
+    /// Gets a source-specific cache key for the parsed C# member index.
+    /// </summary>
+    /// <param name="sitemapUrl">The configured sitemap URL.</param>
+    /// <returns>The cache key used for the parsed C# member index.</returns>
+    public static string GetMemberIndexCacheKey(string sitemapUrl)
+        => $"{MemberIndexCacheKeyPrefix}{GetSitemapContentCacheKey(sitemapUrl)}";
 
     /// <summary>
     /// Gets the legacy raw-URL cache key for the parsed API index.
@@ -91,6 +100,7 @@ internal static class ApiDocsSourceConfiguration
     /// <returns>The markdown URL for the page.</returns>
     public static string BuildMarkdownUrl(string pageUrl, string sitemapUrl)
     {
+        pageUrl = StripFragment(pageUrl);
         pageUrl = RebasePageUrl(pageUrl, sitemapUrl);
 
         if (pageUrl.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
@@ -109,4 +119,39 @@ internal static class ApiDocsSourceConfiguration
     /// <returns>The cache key used for page content and ETag persistence.</returns>
     public static string GetPageContentCacheKey(string pageUrl, string sitemapUrl)
         => DocumentationCacheKey.FromUrl(BuildMarkdownUrl(pageUrl, sitemapUrl), "page");
+
+    /// <summary>
+    /// Resolves a markdown link from an API markdown page to its canonical non-markdown page URL.
+    /// </summary>
+    /// <param name="href">The markdown link target.</param>
+    /// <param name="sitemapUrl">The configured sitemap URL.</param>
+    /// <returns>The resolved canonical page URL, or <c>null</c> if the link cannot be resolved.</returns>
+    public static string? ResolveLinkedPageUrl(string href, string sitemapUrl)
+    {
+        if (string.IsNullOrWhiteSpace(href) || !Uri.TryCreate(sitemapUrl, UriKind.Absolute, out var sitemapUri))
+        {
+            return null;
+        }
+
+        if (!Uri.TryCreate(href, UriKind.Absolute, out var resolvedUri))
+        {
+            resolvedUri = new Uri(sitemapUri, href);
+        }
+
+        var pageUrl = StripFragment(resolvedUri.GetLeftPart(UriPartial.Path));
+        if (pageUrl.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
+        {
+            pageUrl = pageUrl[..^3];
+        }
+
+        return RebasePageUrl(pageUrl, sitemapUrl);
+    }
+
+    private static string StripFragment(string pageUrl)
+    {
+        var fragmentSeparatorIndex = pageUrl.IndexOf('#');
+        return fragmentSeparatorIndex >= 0
+            ? pageUrl[..fragmentSeparatorIndex]
+            : pageUrl;
+    }
 }

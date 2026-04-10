@@ -10,6 +10,7 @@ namespace Aspire.Cli.Tests.Documentation.ApiDocs;
 public class ApiDocsIndexServiceTests
 {
     private const string CSharpMethodsUrl = "https://aspire.dev/reference/api/csharp/aspire.test.package/testtype/methods";
+    private const string CSharpTypeUrl = "https://aspire.dev/reference/api/csharp/aspire.test.package/testtype";
 
     [Fact]
     public async Task ListAsync_BuildsHierarchyForBothLanguages()
@@ -103,6 +104,20 @@ public class ApiDocsIndexServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_FindsCSharpMembersParsedFromMemberGroupMarkdown()
+    {
+        var service = CreateService();
+
+        var results = await service.SearchAsync("DoThing", ApiReferenceLanguages.CSharp, 10);
+
+        var result = Assert.Single(results);
+        Assert.Equal("csharp/aspire.test.package/testtype/methods#dothing-string", result.Id);
+        Assert.Equal("DoThing(string)", result.Name);
+        Assert.Equal(ApiReferenceKinds.Member, result.Kind);
+        Assert.Equal("Does the thing.", result.Summary);
+    }
+
+    [Fact]
     public async Task SearchAsync_FindsGenericItemsForModeledFutureLanguages()
     {
         var service = CreateService();
@@ -112,6 +127,31 @@ public class ApiDocsIndexServiceTests
         var result = Assert.Single(results);
         Assert.Equal("python/aspire.python.test/testresource/runemulator", result.Id);
         Assert.Equal(ApiReferenceKinds.Member, result.Kind);
+    }
+
+    [Fact]
+    public async Task ListAsync_ForCSharpMemberGroupScope_ReturnsParsedMembers()
+    {
+        var service = CreateService();
+
+        var items = await service.ListAsync("csharp/aspire.test.package/testtype/methods");
+
+        Assert.Collection(
+            items,
+            item =>
+            {
+                Assert.Equal("csharp/aspire.test.package/testtype/methods#doother", item.Id);
+                Assert.Equal("DoOther()", item.Name);
+                Assert.Equal(ApiReferenceKinds.Member, item.Kind);
+                Assert.Equal("csharp/aspire.test.package/testtype/methods", item.ParentId);
+            },
+            item =>
+            {
+                Assert.Equal("csharp/aspire.test.package/testtype/methods#dothing-string", item.Id);
+                Assert.Equal("DoThing(string)", item.Name);
+                Assert.Equal(ApiReferenceKinds.Member, item.Kind);
+                Assert.Equal("csharp/aspire.test.package/testtype/methods", item.ParentId);
+            });
     }
 
     [Fact]
@@ -126,6 +166,20 @@ public class ApiDocsIndexServiceTests
         Assert.Equal(ApiReferenceKinds.MemberGroup, item.Kind);
         Assert.Contains("## DoThing(string) {#dothing-string}", item.Content, StringComparison.Ordinal);
         Assert.Contains("## DoOther() {#doother}", item.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetAsync_ForParsedCSharpMember_ReturnsAnchoredUrlAndRawMarkdown()
+    {
+        var service = CreateService();
+
+        var item = await service.GetAsync("csharp/aspire.test.package/testtype/methods#dothing-string");
+
+        Assert.NotNull(item);
+        Assert.Equal("DoThing(string)", item.Name);
+        Assert.Equal(ApiReferenceKinds.Member, item.Kind);
+        Assert.Equal($"{CSharpMethodsUrl}#dothing-string", item.Url);
+        Assert.Contains("## DoThing(string) {#dothing-string}", item.Content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -286,14 +340,35 @@ public class ApiDocsIndexServiceTests
             {
                 [CSharpMethodsUrl] = """
                     # Methods
-
+                    
                     ## DoThing(string) {#dothing-string}
+
+                    - Name: `DoThing(string)`
+                    - Returns: `void`
 
                     Does the thing.
 
+                    ## Parameters
+
+                    - `value` (`string`)
+                      The value to process.
+
                     ## DoOther() {#doother}
 
+                    - Name: `DoOther()`
+                    - Returns: `void`
+
                     Does something else.
+                    """,
+                [CSharpTypeUrl] = """
+                    # TestType
+
+                    Provides a test type.
+
+                    ## Methods
+
+                    - [DoThing(string)](/reference/api/csharp/aspire.test.package/testtype/methods.md#dothing-string) : `void` `extension` -- Does the thing.
+                    - [DoOther()](/reference/api/csharp/aspire.test.package/testtype/methods.md#doother) : `void` `extension` -- Does something else.
                     """,
             });
 
@@ -312,9 +387,10 @@ public class ApiDocsIndexServiceTests
         public Task<string?> FetchPageAsync(string pageUrl, CancellationToken cancellationToken = default)
         {
             RequestedPageUrls.Add(pageUrl);
-            var markdownUrl = pageUrl.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? pageUrl : $"{pageUrl}.md";
+            var cachePageUrl = pageUrl.Split('#', 2)[0];
+            var markdownUrl = cachePageUrl.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? cachePageUrl : $"{cachePageUrl}.md";
             RequestedMarkdownUrls.Add(markdownUrl);
-            return Task.FromResult(pageContent.TryGetValue(pageUrl, out var content) ? content : pageContent.TryGetValue(markdownUrl, out content) ? content : null);
+            return Task.FromResult(pageContent.TryGetValue(cachePageUrl, out var content) ? content : pageContent.TryGetValue(markdownUrl, out content) ? content : null);
         }
     }
 
@@ -334,8 +410,10 @@ public class ApiDocsIndexServiceTests
         private readonly Dictionary<string, string> _content = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string?> _etags = new(StringComparer.OrdinalIgnoreCase);
         private string? _indexSourceFingerprint;
+        private string? _memberIndexSourceFingerprint;
 
         public ApiReferenceItem[]? Index { get; private set; }
+        public ApiReferenceItem[]? MemberIndex { get; private set; }
 
         public Task<string?> GetAsync(string key, CancellationToken cancellationToken = default)
             => Task.FromResult(_content.TryGetValue(key, out var value) ? value : null);
@@ -384,6 +462,24 @@ public class ApiDocsIndexServiceTests
         public Task SetIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default)
         {
             _indexSourceFingerprint = fingerprint;
+            return Task.CompletedTask;
+        }
+
+        public Task<ApiReferenceItem[]?> GetMemberIndexAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(MemberIndex);
+
+        public Task SetMemberIndexAsync(ApiReferenceItem[] documents, CancellationToken cancellationToken = default)
+        {
+            MemberIndex = documents;
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetMemberIndexSourceFingerprintAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(_memberIndexSourceFingerprint);
+
+        public Task SetMemberIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default)
+        {
+            _memberIndexSourceFingerprint = fingerprint;
             return Task.CompletedTask;
         }
     }

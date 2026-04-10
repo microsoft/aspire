@@ -73,6 +73,33 @@ public class ApiDocsFetcherTests
     }
 
     [Fact]
+    public async Task FetchPageAsync_StripsMemberAnchorFromMarkdownFetchAndCacheKey()
+    {
+        const string expectedContent = "# Methods";
+        const string anchoredPageUrl = $"{DefaultPageUrl}#withcommand-iresourcebuilder-t-string";
+
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(expectedContent)
+        };
+        response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"etag\"");
+
+        using var handler = new MockHttpMessageHandler(response, request =>
+        {
+            Assert.Equal($"{DefaultPageUrl}.md", request.RequestUri?.ToString());
+        });
+        using var httpClient = new HttpClient(handler);
+        var cache = new MockApiDocsCache();
+        var fetcher = CreateFetcher(httpClient, cache);
+
+        _ = await fetcher.FetchPageAsync(anchoredPageUrl);
+
+        var cacheKey = ApiDocsSourceConfiguration.GetPageContentCacheKey(anchoredPageUrl, DefaultSitemapUrl);
+        Assert.Equal(expectedContent, await cache.GetAsync(cacheKey));
+        Assert.Equal("\"etag\"", await cache.GetETagAsync(cacheKey));
+    }
+
+    [Fact]
     public async Task FetchSitemapAsync_MigratesLegacyUrlCacheEntries()
     {
         const string cachedContent = "<urlset></urlset>";
@@ -125,6 +152,8 @@ public class ApiDocsFetcherTests
         private readonly Dictionary<string, string?> _etags = new(StringComparer.OrdinalIgnoreCase);
         private ApiReferenceItem[]? _index;
         private string? _indexFingerprint;
+        private ApiReferenceItem[]? _memberIndex;
+        private string? _memberIndexFingerprint;
 
         public Task<string?> GetAsync(string key, CancellationToken cancellationToken = default)
             => Task.FromResult(_content.TryGetValue(key, out var value) ? value : null);
@@ -173,6 +202,24 @@ public class ApiDocsFetcherTests
         public Task SetIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default)
         {
             _indexFingerprint = fingerprint;
+            return Task.CompletedTask;
+        }
+
+        public Task<ApiReferenceItem[]?> GetMemberIndexAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(_memberIndex);
+
+        public Task SetMemberIndexAsync(ApiReferenceItem[] documents, CancellationToken cancellationToken = default)
+        {
+            _memberIndex = documents;
+            return Task.CompletedTask;
+        }
+
+        public Task<string?> GetMemberIndexSourceFingerprintAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(_memberIndexFingerprint);
+
+        public Task SetMemberIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default)
+        {
+            _memberIndexFingerprint = fingerprint;
             return Task.CompletedTask;
         }
     }

@@ -28,6 +28,8 @@ internal sealed class ApiDocsCache(
     private readonly FileBackedDocumentContentCache _contentCache = new(memoryCache, executionContext, ApiDocsCacheSubdirectory, logger);
     private readonly string _indexCacheKey = ApiDocsSourceConfiguration.GetIndexCacheKey(ApiDocsSourceConfiguration.GetSitemapUrl(configuration));
     private readonly string _indexSourceFingerprintCacheKey = $"{ApiDocsSourceConfiguration.GetIndexCacheKey(ApiDocsSourceConfiguration.GetSitemapUrl(configuration))}:fingerprint";
+    private readonly string _memberIndexCacheKey = ApiDocsSourceConfiguration.GetMemberIndexCacheKey(ApiDocsSourceConfiguration.GetSitemapUrl(configuration));
+    private readonly string _memberIndexSourceFingerprintCacheKey = $"{ApiDocsSourceConfiguration.GetMemberIndexCacheKey(ApiDocsSourceConfiguration.GetSitemapUrl(configuration))}:fingerprint";
     private readonly string _legacyIndexCacheKey = ApiDocsSourceConfiguration.GetLegacyIndexCacheKey(ApiDocsSourceConfiguration.GetSitemapUrl(configuration));
     private readonly string _legacyIndexSourceFingerprintCacheKey = $"{ApiDocsSourceConfiguration.GetLegacyIndexCacheKey(ApiDocsSourceConfiguration.GetSitemapUrl(configuration))}:fingerprint";
 
@@ -158,6 +160,38 @@ internal sealed class ApiDocsCache(
         await _contentCache.SetAsync(_indexSourceFingerprintCacheKey, fingerprint, cancellationToken).ConfigureAwait(false);
         await ClearLegacyIndexCacheAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Gets the cached C# member index.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The cached member index, or <c>null</c> if it is not available.</returns>
+    public Task<ApiReferenceItem[]?> GetMemberIndexAsync(CancellationToken cancellationToken = default)
+        => _contentCache.GetJsonAsync(_memberIndexCacheKey, JsonSourceGenerationContext.Default.ApiReferenceItemArray, cancellationToken: cancellationToken);
+
+    /// <summary>
+    /// Stores the C# member index in the cache.
+    /// </summary>
+    /// <param name="documents">The items to cache.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public Task SetMemberIndexAsync(ApiReferenceItem[] documents, CancellationToken cancellationToken = default)
+        => _contentCache.SetJsonAsync(_memberIndexCacheKey, documents, JsonSourceGenerationContext.Default.ApiReferenceItemArray, cancellationToken);
+
+    /// <summary>
+    /// Gets the fingerprint for the sitemap content used to build the cached member index.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The cached sitemap fingerprint, or <c>null</c> if it is not available.</returns>
+    public Task<string?> GetMemberIndexSourceFingerprintAsync(CancellationToken cancellationToken = default)
+        => _contentCache.GetAsync(_memberIndexSourceFingerprintCacheKey, cancellationToken);
+
+    /// <summary>
+    /// Stores the fingerprint for the sitemap content used to build the cached member index.
+    /// </summary>
+    /// <param name="fingerprint">The sitemap fingerprint.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public Task SetMemberIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default)
+        => _contentCache.SetAsync(_memberIndexSourceFingerprintCacheKey, fingerprint, cancellationToken);
 
     private bool HasLegacyIndexCacheKey => !string.Equals(_legacyIndexCacheKey, _indexCacheKey, StringComparison.Ordinal);
 
