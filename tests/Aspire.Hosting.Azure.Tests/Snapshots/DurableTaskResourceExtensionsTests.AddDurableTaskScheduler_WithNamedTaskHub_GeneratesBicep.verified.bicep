@@ -24,3 +24,7 @@ resource myhub 'Microsoft.DurableTask/schedulers/taskhubs@2025-11-01' = {
 output schedulerEndpoint string = dts.properties.endpoint
 
 output name string = 'dts'
+
+output subscriptionId string = subscription().subscriptionId
+
+output tenantId string = subscription().tenantId

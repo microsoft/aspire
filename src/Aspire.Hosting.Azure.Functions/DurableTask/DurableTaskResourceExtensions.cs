@@ -5,7 +5,9 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.DurableTask;
 using Azure.Provisioning;
+using Azure.Provisioning.Expressions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -71,6 +73,10 @@ public static class DurableTaskResourceExtensions
 
             // Output the name for role assignments
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = scheduler.Name });
+
+            // Output subscription and tenant IDs for dashboard URL construction
+            infrastructure.Add(new ProvisioningOutput("subscriptionId", typeof(string)) { Value = BicepFunction.GetSubscription().SubscriptionId });
+            infrastructure.Add(new ProvisioningOutput("tenantId", typeof(string)) { Value = BicepFunction.GetSubscription().TenantId });
 
             // Create TaskHub sub-resources
             foreach (var hub in aspireResource.Hubs)
@@ -266,18 +272,45 @@ public static class DurableTaskResourceExtensions
             async (r, e, ct) =>
             {
                 var notifications = e.Services.GetRequiredService<ResourceNotificationService>();
+                var logger = e.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Aspire.Hosting.Azure.DurableTask");
 
-                var url = builder.Resource.IsEmulator
-                    ? await ReferenceExpression.Create($"{r.Parent.EmulatorDashboardEndpoint}/subscriptions/default/schedulers/default/taskhubs/{r.TaskHubName}").GetValueAsync(ct).ConfigureAwait(false)
-                    : null;
+                logger.LogWarning("OnResourceReady fired for hub '{Hub}', IsEmulator={IsEmulator}", r.Name, builder.Resource.IsEmulator);
 
-                await notifications.PublishUpdateAsync(r, snapshot => snapshot with
+                ReferenceExpression dashboardUrl;
+                if (builder.Resource.IsEmulator)
                 {
-                    State = KnownResourceStates.Running,
-                    Urls = url is not null
-                        ? [new("dashboard", url, false) { DisplayProperties = new() { DisplayName = "Task Hub Dashboard" } }]
-                        : []
-                }).ConfigureAwait(false);
+                    dashboardUrl = ReferenceExpression.Create($"{r.Parent.EmulatorDashboardEndpoint}/subscriptions/default/schedulers/default/taskhubs/{r.TaskHubName}");
+                }
+                else
+                {
+                    var s = r.Parent;
+                    dashboardUrl = ReferenceExpression.Create($"https://dashboard.durabletask.io/subscriptions/{s.SubscriptionId}/schedulers/{s.NameOutputReference}/taskhubs/{r.TaskHubName}?endpoint={s.SchedulerEndpoint}&tenantId={s.TenantId}");
+                    logger.LogWarning("Azure dashboard ReferenceExpression format: {Format}", dashboardUrl.Format);
+                }
+
+                try
+                {
+                    var url = await dashboardUrl.GetValueAsync(ct).ConfigureAwait(false);
+                    logger.LogWarning("Dashboard URL resolved to: {Url}", url ?? "(null)");
+
+                    await notifications.PublishUpdateAsync(r, snapshot =>
+                    {
+                        logger.LogWarning("PublishUpdateAsync callback for hub '{Hub}': current Urls count={Count}, current State={State}", r.Name, snapshot.Urls.Length, snapshot.State?.Text);
+
+                        return snapshot with
+                        {
+                            Urls = url is not null
+                                ? [.. snapshot.Urls, new("dashboard", url, false) { DisplayProperties = new() { DisplayName = "Task Hub Dashboard" } }]
+                                : snapshot.Urls
+                        };
+                    }).ConfigureAwait(false);
+
+                    logger.LogWarning("PublishUpdateAsync completed for hub '{Hub}'", r.Name);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to resolve dashboard URL for hub '{Hub}'", r.Name);
+                }
             });
 
         return hubBuilder;
@@ -335,4 +368,5 @@ public static class DurableTaskResourceExtensions
             IResourceBuilder<ParameterResource> parameter => builder.WithTaskHubName(parameter),
             _ => throw new ArgumentException($"Unexpected task hub name type: {taskHubName.GetType().Name}", nameof(taskHubName))
         };
+
 }

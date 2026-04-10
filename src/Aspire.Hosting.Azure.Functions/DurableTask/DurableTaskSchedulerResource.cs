@@ -28,6 +28,16 @@ public sealed class DurableTaskSchedulerResource(string name, Action<AzureResour
     public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
+    /// Gets the "subscriptionId" output reference for the resource.
+    /// </summary>
+    internal BicepOutputReference SubscriptionId => new("subscriptionId", this);
+
+    /// <summary>
+    /// Gets the "tenantId" output reference for the resource.
+    /// </summary>
+    internal BicepOutputReference TenantId => new("tenantId", this);
+
+    /// <summary>
     /// Gets the expression that resolves to the connection string for the Durable Task scheduler.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => CreateConnectionString();
