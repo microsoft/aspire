@@ -217,13 +217,11 @@ func RegisterCancellation(token *CancellationToken, client *AspireClient) string
 type AspireClient struct {
 	socketPath string
 
-	// mu guards conn, reader, connected, and disconnectCallbacks.
+	// mu guards conn, connected, and disconnectCallbacks.
 	mu                  sync.Mutex
 	conn                io.ReadWriteCloser
-	reader              *bufio.Reader
 	connected           bool
 	disconnectCallbacks []func()
-	closeOnce           sync.Once
 
 	nextID atomic.Int64
 
@@ -258,13 +256,12 @@ func (c *AspireClient) Connect() error {
 		return fmt.Errorf("failed to connect to AppHost: %w", err)
 	}
 
+	reader := bufio.NewReader(conn)
 	c.conn = conn
-	c.reader = bufio.NewReader(conn)
 	c.connected = true
-	c.closeOnce = sync.Once{} // reset in case of reconnect
 	c.mu.Unlock()
 
-	go c.readLoop()
+	go c.readLoop(conn, reader)
 	return nil
 }
 
@@ -318,46 +315,59 @@ func (c *AspireClient) CancelToken(tokenID string) bool {
 	return b
 }
 
-// Disconnect closes the connection. Safe to call multiple times; callbacks run
-// exactly once. If the background readLoop is running, closing conn will cause
-// it to return an error and invoke closeConnection itself — closeOnce ensures
-// the callbacks are still only invoked once.
+// Disconnect closes the connection. Safe to call multiple times and to race
+// with the background readLoop — only the first caller for a given connection
+// runs the teardown.
 func (c *AspireClient) Disconnect() {
-	c.closeConnection(nil)
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	c.closeConnection(conn, nil)
 }
 
-// closeConnection is the single teardown path. It is safe to call from both
-// Disconnect and readLoop; sync.Once guarantees the body runs exactly once.
+// closeConnection tears down the connection identified by conn.
+// It is a no-op if conn is no longer the active connection (guards against an
+// old readLoop goroutine racing with a reconnect).
 //
 // Teardown order:
-//  1. Snapshot and nil-out conn/reader under mu so no new writes can start.
+//  1. Claim ownership: check conn == c.conn under mu, then nil-out c.conn so
+//     no new writes can start and any concurrent closeConnection call returns.
 //  2. Acquire writeMu to wait for any in-flight write to finish, then close
-//     the snapshot — this prevents a nil dereference in writeMessage and
-//     ensures the socket is not leaked on readLoop error paths.
-//  3. Run disconnect callbacks outside all locks.
-func (c *AspireClient) closeConnection(readErr error) {
-	c.closeOnce.Do(func() {
-		// 1. Atomically detach conn so concurrent writeMessage calls see nil.
-		c.mu.Lock()
-		c.connected = false
-		conn := c.conn
-		c.conn = nil
-		c.reader = nil
-		callbacks := c.disconnectCallbacks
+//     the socket — prevents a nil dereference in writeMessage.
+//  3. Drain pending requests so blocked sendRequest callers are unblocked
+//     before any reconnect can register new pending entries.
+//  4. Run disconnect callbacks outside all locks.
+func (c *AspireClient) closeConnection(conn io.ReadWriteCloser, err error) {
+	if conn == nil {
+		return
+	}
+
+	// 1. Only the first caller for this specific conn proceeds.
+	c.mu.Lock()
+	if c.conn != conn {
 		c.mu.Unlock()
+		return
+	}
+	c.connected = false
+	c.conn = nil
+	callbacks := c.disconnectCallbacks
+	c.mu.Unlock()
 
-		// 2. Wait for any in-flight write to finish, then close the socket.
-		if conn != nil {
-			c.writeMu.Lock()
-			conn.Close()
-			c.writeMu.Unlock()
-		}
+	// 2. Wait for any in-flight write to finish, then close the socket.
+	c.writeMu.Lock()
+	conn.Close()
+	c.writeMu.Unlock()
 
-		// 3. Notify callers outside all locks.
-		for _, cb := range callbacks {
-			cb()
-		}
-	})
+	// 3. Unblock any waiting sendRequest callers.
+	if err == nil {
+		err = errors.New("connection closed")
+	}
+	c.drainPendingWithError(err)
+
+	// 4. Notify callers outside all locks.
+	for _, cb := range callbacks {
+		cb()
+	}
 }
 
 // sendRequest sends a JSON-RPC request and waits for the matching response.
@@ -412,14 +422,17 @@ func (c *AspireClient) sendRequest(method string, params []any) (any, error) {
 // and dispatching them: responses go to pending channels, server-initiated
 // requests (e.g. invokeCallback) are handled in their own goroutines so they
 // can make nested capability calls.
-func (c *AspireClient) readLoop() {
+//
+// conn and reader are captured per-connection so that a stale readLoop goroutine
+// from a previous connection cannot interfere with a new connection's state.
+func (c *AspireClient) readLoop(conn io.ReadWriteCloser, reader *bufio.Reader) {
 	for {
-		response, err := c.readMessage()
+		response, err := c.readMessage(reader)
 		if err != nil {
-			// Mark the connection closed first so new sendRequest calls fail fast
-			// and cannot add to pending after we drain it.
-			c.closeConnection(err)
-			c.drainPendingWithError(err)
+			// closeConnection is scoped to conn: an old goroutine racing with a
+			// reconnect will find c.conn != conn and return without touching the
+			// new connection. Pending drain happens inside closeConnection.
+			c.closeConnection(conn, err)
 			return
 		}
 
@@ -556,14 +569,14 @@ func (c *AspireClient) handleCallbackRequest(message map[string]any) {
 	c.writeMu.Unlock()
 }
 
-func (c *AspireClient) readMessage() (map[string]any, error) {
-	if c.reader == nil {
+func (c *AspireClient) readMessage(reader *bufio.Reader) (map[string]any, error) {
+	if reader == nil {
 		return nil, errors.New("not connected")
 	}
 
 	headers := make(map[string]string)
 	for {
-		line, err := c.reader.ReadString('\n')
+		line, err := reader.ReadString('\n')
 		if err != nil {
 			return nil, err
 		}
@@ -584,7 +597,7 @@ func (c *AspireClient) readMessage() (map[string]any, error) {
 	}
 
 	body := make([]byte, length)
-	_, err = io.ReadFull(c.reader, body)
+	_, err = io.ReadFull(reader, body)
 	if err != nil {
 		return nil, err
 	}

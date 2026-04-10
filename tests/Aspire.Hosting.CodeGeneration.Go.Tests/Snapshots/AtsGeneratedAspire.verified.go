@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // GENERATED CODE - DO NOT EDIT
 
 package aspire
@@ -16,9 +16,9 @@ import (
 type TestPersistenceMode string
 
 const (
-	TestPersistenceModeNone TestPersistenceMode = "None"
+	TestPersistenceModeNone   TestPersistenceMode = "None"
 	TestPersistenceModeVolume TestPersistenceMode = "Volume"
-	TestPersistenceModeBind TestPersistenceMode = "Bind"
+	TestPersistenceModeBind   TestPersistenceMode = "Bind"
 )
 
 // TestResourceStatus represents TestResourceStatus.
@@ -28,7 +28,7 @@ const (
 	TestResourceStatusPending TestResourceStatus = "Pending"
 	TestResourceStatusRunning TestResourceStatus = "Running"
 	TestResourceStatusStopped TestResourceStatus = "Stopped"
-	TestResourceStatusFailed TestResourceStatus = "Failed"
+	TestResourceStatusFailed  TestResourceStatus = "Failed"
 )
 
 // ============================================================================
@@ -37,50 +37,50 @@ const (
 
 // TestConfigDto represents TestConfigDto.
 type TestConfigDto struct {
-	Name string `json:"Name,omitempty"`
-	Port float64 `json:"Port,omitempty"`
-	Enabled bool `json:"Enabled,omitempty"`
-	OptionalField string `json:"OptionalField,omitempty"`
+	Name          string  `json:"Name,omitempty"`
+	Port          float64 `json:"Port,omitempty"`
+	Enabled       bool    `json:"Enabled,omitempty"`
+	OptionalField string  `json:"OptionalField,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestConfigDto) ToMap() map[string]any {
 	return map[string]any{
-		"Name": SerializeValue(d.Name),
-		"Port": SerializeValue(d.Port),
-		"Enabled": SerializeValue(d.Enabled),
+		"Name":          SerializeValue(d.Name),
+		"Port":          SerializeValue(d.Port),
+		"Enabled":       SerializeValue(d.Enabled),
 		"OptionalField": SerializeValue(d.OptionalField),
 	}
 }
 
 // TestNestedDto represents TestNestedDto.
 type TestNestedDto struct {
-	Id string `json:"Id,omitempty"`
-	Config *TestConfigDto `json:"Config,omitempty"`
-	Tags *AspireList[string] `json:"Tags,omitempty"`
+	Id     string                       `json:"Id,omitempty"`
+	Config *TestConfigDto               `json:"Config,omitempty"`
+	Tags   *AspireList[string]          `json:"Tags,omitempty"`
 	Counts *AspireDict[string, float64] `json:"Counts,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestNestedDto) ToMap() map[string]any {
 	return map[string]any{
-		"Id": SerializeValue(d.Id),
+		"Id":     SerializeValue(d.Id),
 		"Config": SerializeValue(d.Config),
-		"Tags": SerializeValue(d.Tags),
+		"Tags":   SerializeValue(d.Tags),
 		"Counts": SerializeValue(d.Counts),
 	}
 }
 
 // TestDeeplyNestedDto represents TestDeeplyNestedDto.
 type TestDeeplyNestedDto struct {
-	NestedData *AspireDict[string, *AspireList[*TestConfigDto]] `json:"NestedData,omitempty"`
-	MetadataArray []*AspireDict[string, string] `json:"MetadataArray,omitempty"`
+	NestedData    *AspireDict[string, *AspireList[*TestConfigDto]] `json:"NestedData,omitempty"`
+	MetadataArray []*AspireDict[string, string]                    `json:"MetadataArray,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 	return map[string]any{
-		"NestedData": SerializeValue(d.NestedData),
+		"NestedData":    SerializeValue(d.NestedData),
 		"MetadataArray": SerializeValue(d.MetadataArray),
 	}
 }
@@ -270,7 +270,7 @@ func (s *TestCallbackContext) SetCancellationToken(value *CancellationToken) (*T
 // TestCollectionContext wraps a handle for Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext.
 type TestCollectionContext struct {
 	HandleWrapperBase
-	items *AspireList[string]
+	items    *AspireList[string]
 	metadata *AspireDict[string, string]
 }
 
@@ -531,18 +531,18 @@ func (s *TestDatabaseResource) WithCancellableOperation(operation func(...any) a
 }
 
 // WithDataVolume adds a data volume
-func (s *TestDatabaseResource) WithDataVolume(name *string) (*TestDatabaseResource, error) {
+func (s *TestDatabaseResource) WithDataVolume(name *string) *TestDatabaseResource {
+	if s.err != nil {
+		return s
+	}
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if name != nil {
 		reqArgs["name"] = SerializeValue(name)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*TestDatabaseResource), nil
+	_, s.err = s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
+	return s
 }
 
 // WithMergeLabel adds a label to the resource
@@ -763,7 +763,7 @@ func (s *TestEnvironmentContext) SetPriority(value float64) (*TestEnvironmentCon
 // TestRedisResource wraps a handle for Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource.
 type TestRedisResource struct {
 	ResourceBuilderBase
-	getTags *AspireList[string]
+	getTags     *AspireList[string]
 	getMetadata *AspireDict[string, string]
 }
 
@@ -791,18 +791,18 @@ func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName *stri
 }
 
 // WithPersistence configures the Redis resource with persistence
-func (s *TestRedisResource) WithPersistence(mode *TestPersistenceMode) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithPersistence(mode *TestPersistenceMode) *TestRedisResource {
+	if s.err != nil {
+		return s
+	}
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if mode != nil {
 		reqArgs["mode"] = SerializeValue(mode)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*TestRedisResource), nil
+	_, s.err = s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs)
+	return s
 }
 
 // WithOptionalString adds an optional string parameter
@@ -1014,16 +1014,16 @@ func (s *TestRedisResource) WithConnectionStringDirect(connectionString string) 
 }
 
 // WithRedisSpecific redis-specific configuration
-func (s *TestRedisResource) WithRedisSpecific(option string) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithRedisSpecific(option string) *TestRedisResource {
+	if s.err != nil {
+		return s
+	}
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["option"] = SerializeValue(option)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withRedisSpecific", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*TestRedisResource), nil
+	_, s.err = s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withRedisSpecific", reqArgs)
+	return s
 }
 
 // WithDependency adds a dependency on another resource
@@ -1125,22 +1125,25 @@ func (s *TestRedisResource) WaitForReadyAsync(timeout float64, cancellationToken
 }
 
 // WithMultiParamHandleCallback tests multi-param callback destructuring
-func (s *TestRedisResource) WithMultiParamHandleCallback(callback func(...any) any) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithMultiParamHandleCallback(callback func(...any) any) *TestRedisResource {
+	if s.err != nil {
+		return s
+	}
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if callback != nil {
 		reqArgs["callback"] = RegisterCallback(callback)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMultiParamHandleCallback", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*TestRedisResource), nil
+	_, s.err = s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withMultiParamHandleCallback", reqArgs)
+	return s
 }
 
 // WithDataVolume adds a data volume with persistence
-func (s *TestRedisResource) WithDataVolume(name *string, isReadOnly *bool) (*TestRedisResource, error) {
+func (s *TestRedisResource) WithDataVolume(name *string, isReadOnly *bool) *TestRedisResource {
+	if s.err != nil {
+		return s
+	}
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
@@ -1150,11 +1153,8 @@ func (s *TestRedisResource) WithDataVolume(name *string, isReadOnly *bool) (*Tes
 	if isReadOnly != nil {
 		reqArgs["isReadOnly"] = SerializeValue(isReadOnly)
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*TestRedisResource), nil
+	_, s.err = s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.Go.Tests/withDataVolume", reqArgs)
+	return s
 }
 
 // WithMergeLabel adds a label to the resource
@@ -1855,4 +1855,3 @@ func CreateBuilder(options *CreateBuilderOptions) (*IDistributedApplicationBuild
 	}
 	return result.(*IDistributedApplicationBuilder), nil
 }
-

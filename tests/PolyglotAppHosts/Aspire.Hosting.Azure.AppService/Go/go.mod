@@ -1,6 +1,6 @@
 module apphost
 
-go 1.23
+go 1.26
 
 require apphost/modules/aspire v0.0.0
 

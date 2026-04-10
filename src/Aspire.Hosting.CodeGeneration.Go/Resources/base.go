@@ -27,13 +27,22 @@ func (h *HandleWrapperBase) Client() *AspireClient {
 }
 
 // ResourceBuilderBase extends HandleWrapperBase for resource builders.
+// It carries an error field so that fluent With* methods can propagate errors
+// through a method chain without forcing callers to check each call individually.
+// Check the accumulated error with Err() after chaining.
 type ResourceBuilderBase struct {
 	HandleWrapperBase
+	err error
 }
 
 // NewResourceBuilderBase creates a new resource builder base.
 func NewResourceBuilderBase(handle *Handle, client *AspireClient) ResourceBuilderBase {
 	return ResourceBuilderBase{HandleWrapperBase: NewHandleWrapperBase(handle, client)}
+}
+
+// Err returns the first error encountered during fluent method chaining.
+func (b *ResourceBuilderBase) Err() error {
+	return b.err
 }
 
 // ReferenceExpression represents a reference expression.

@@ -67,15 +67,15 @@ func main() {
 	}
 
 	// ===================================================================
-	// Container-specific methods on ContainerResource
+	// Container-specific methods on ContainerResource (fluent)
 	// ===================================================================
 
-	// withImageRegistry
-	if _, err = container.WithImageRegistry("docker.io"); err != nil {
+	// withImageRegistry — fluent, chains on ContainerResource
+	if err := container.WithImageRegistry("docker.io").Err(); err != nil {
 		log.Fatalf("WithImageRegistry: %v", err)
 	}
 
-	// withDockerfileBaseImage
+	// withDockerfileBaseImage — non-fluent (returns *IResource)
 	if _, err = container.WithDockerfileBaseImage(nil, nil); err != nil {
 		log.Fatalf("WithDockerfileBaseImage: %v", err)
 	}
@@ -108,7 +108,7 @@ func main() {
 	}
 
 	// ===================================================================
-	// ResourceBuilderExtensions on ContainerResource
+	// ResourceBuilderExtensions on ContainerResource (non-fluent)
 	// ===================================================================
 
 	// withEnvironment - EndpointReference
@@ -142,7 +142,7 @@ func main() {
 	}
 
 	// waitForCompletion (pre-existing)
-	if _, err = container.WaitForCompletion(exe); err != nil {
+	if _, err = container.WaitForCompletion(exe, nil); err != nil {
 		log.Fatalf("WaitForCompletion: %v", err)
 	}
 
@@ -172,27 +172,21 @@ func main() {
 	}
 
 	// ===================================================================
-	// DotnetToolResourceExtensions
+	// DotnetToolResourceExtensions — all With-tool methods are fluent
 	// ===================================================================
 
-	if _, err = tool.WithToolIgnoreExistingFeeds(); err != nil {
-		log.Fatalf("WithToolIgnoreExistingFeeds: %v", err)
+	if err := tool.
+		WithToolIgnoreExistingFeeds().
+		WithToolIgnoreFailedSources().
+		WithToolPackage("dotnet-ef").
+		WithToolPrerelease().
+		WithToolSource("https://api.nuget.org/v3/index.json").
+		WithToolVersion("8.0.0").
+		Err(); err != nil {
+		log.Fatalf("tool setup: %v", err)
 	}
-	if _, err = tool.WithToolIgnoreFailedSources(); err != nil {
-		log.Fatalf("WithToolIgnoreFailedSources: %v", err)
-	}
-	if _, err = tool.WithToolPackage("dotnet-ef"); err != nil {
-		log.Fatalf("WithToolPackage: %v", err)
-	}
-	if _, err = tool.WithToolPrerelease(); err != nil {
-		log.Fatalf("WithToolPrerelease: %v", err)
-	}
-	if _, err = tool.WithToolSource("https://api.nuget.org/v3/index.json"); err != nil {
-		log.Fatalf("WithToolSource: %v", err)
-	}
-	if _, err = tool.WithToolVersion("8.0.0"); err != nil {
-		log.Fatalf("WithToolVersion: %v", err)
-	}
+
+	// PublishAsDockerFile — non-fluent (returns *ExecutableResource)
 	if _, err = tool.PublishAsDockerFile(); err != nil {
 		log.Fatalf("PublishAsDockerFile: %v", err)
 	}
@@ -203,7 +197,7 @@ func main() {
 
 	if _, err = container.WithPipelineStepFactory("custom-build-step", func(args ...any) any {
 		return nil
-	}, nil); err != nil {
+	}, nil, nil, nil, nil); err != nil {
 		log.Fatalf("WithPipelineStepFactory: %v", err)
 	}
 
@@ -303,18 +297,18 @@ func main() {
 	if _, err = container.WithExplicitStart(); err != nil {
 		log.Fatalf("WithExplicitStart: %v", err)
 	}
-	if _, err = container.WithUrl("http://localhost:8080"); err != nil {
+	if _, err = container.WithUrl("http://localhost:8080", nil); err != nil {
 		log.Fatalf("WithUrl: %v", err)
 	}
-	if _, err = container.WithUrlExpression(expr); err != nil {
+	if _, err = container.WithUrlExpression(expr, nil); err != nil {
 		log.Fatalf("WithUrlExpression: %v", err)
 	}
-	if _, err = container.WithHttpHealthCheck(nil); err != nil {
+	if _, err = container.WithHttpHealthCheck(nil, nil, nil); err != nil {
 		log.Fatalf("WithHttpHealthCheck: %v", err)
 	}
 	if _, err = container.WithCommand("restart", "Restart", func(args ...any) any {
 		return &aspire.ExecuteCommandResult{Success: true}
-	}); err != nil {
+	}, nil); err != nil {
 		log.Fatalf("WithCommand: %v", err)
 	}
 

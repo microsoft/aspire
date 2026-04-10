@@ -78,7 +78,7 @@ for app_dir in "${APP_DIRS[@]}"; do
     fi
 
     echo "  → go build ./..."
-    if ! go build ./... 2>&1; then
+    if ! go build -buildvcs=false ./... 2>&1; then
         echo "  ❌ go build failed for $integration_name"
         FAILED+=("$integration_name (go build)")
         echo ""

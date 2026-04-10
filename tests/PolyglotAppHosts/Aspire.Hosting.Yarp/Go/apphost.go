@@ -15,10 +15,10 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameterFromConfiguration("buildVersion", "MyConfig:BuildVersion", false)
-	_, _ = builder.AddParameterFromConfiguration("buildSecret", "MyConfig:Secret", true)
+	buildVersionParam, _ := builder.AddParameterFromConfiguration("buildVersion", "MyConfig:BuildVersion", false)
+	buildSecretParam, _ := builder.AddParameterFromConfiguration("buildSecret", "MyConfig:Secret", true)
 
-	_, err = builder.AddContainer("static-files-source", "nginx")
+	staticFilesSource, err := builder.AddContainer("static-files-source", "nginx")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
@@ -45,9 +45,9 @@ func main() {
 	_, _ = proxy.WithHostPort(8080)
 	_, _ = proxy.WithHostHttpsPort(8443)
 	_, _ = proxy.WithVolume()
-	_, _ = proxy.WithBuildArg("BUILD_VERSION", "resource")
-	_, _ = proxy.WithBuildSecret("MY_SECRET", "resource")
-	_, _ = proxy.PublishWithStaticFiles(nil)
+	_, _ = proxy.WithBuildArg("BUILD_VERSION", buildVersionParam)
+	_, _ = proxy.WithBuildSecret("MY_SECRET", buildSecretParam)
+	_, _ = proxy.PublishWithStaticFiles(staticFilesSource)
 	_, _ = proxy.WithConfig(func(args ...any) any { return nil })
 	_, _ = proxy.PublishAsConnectionString()
 

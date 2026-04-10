@@ -15,7 +15,7 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddConnectionString("connection-string")
+	_, _ = builder.AddConnectionString("connection-string", nil)
 
 	orleans, err := builder.AddOrleans("resource")
 	if err != nil {

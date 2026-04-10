@@ -25,6 +25,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     private readonly Dictionary<string, string> _structNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _dtoNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _enumNames = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _resourceBuilderTypeIds = new(StringComparer.Ordinal);
 
     /// <inheritdoc />
     public string Language => "Go";
@@ -37,7 +38,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             ["go.mod"] = """
                 module apphost/modules/aspire
 
-                go 1.23
+                go 1.26
                 """,
             ["transport.go"] = GetEmbeddedResource("transport.go"),
             ["base.go"] = GetEmbeddedResource("base.go"),
@@ -208,6 +209,17 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("// ============================================================================");
         WriteLine();
 
+        // Build the set of resource-builder type IDs so GenerateCapabilityMethod
+        // can decide whether a return type is also a builder (and thus fluent).
+        _resourceBuilderTypeIds.Clear();
+        foreach (var handleType in handleTypes)
+        {
+            if (handleType.IsResourceBuilder)
+            {
+                _resourceBuilderTypeIds.Add(handleType.TypeId);
+            }
+        }
+
         foreach (var handleType in handleTypes.OrderBy(t => t.StructName, StringComparer.Ordinal))
         {
             var baseStruct = handleType.IsResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
@@ -270,13 +282,13 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 foreach (var method in allMethods)
                 {
-                    GenerateCapabilityMethod(handleType.StructName, method);
+                    GenerateCapabilityMethod(handleType.StructName, handleType.IsResourceBuilder, method);
                 }
             }
         }
     }
 
-    private void GenerateCapabilityMethod(string structName, AtsCapabilityInfo capability)
+    private void GenerateCapabilityMethod(string structName, bool isResourceBuilder, AtsCapabilityInfo capability)
     {
         var targetParamName = capability.TargetParameterName ?? "builder";
         var methodName = ToPascalCase(capability.MethodName);
@@ -291,14 +303,37 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             return;
         }
 
+        // A method is "fluent" when it is on a resource builder AND its return value is either:
+        //   - void (no useful return), OR
+        //   - the same type as the receiver (self-return, i.e. the IResourceBuilder<T>.With* pattern).
+        //
+        // Methods that return a *different* type (e.g. Add* producing a child resource) are kept as
+        // (*ChildType, error) so callers can capture and configure the child.
+        var returnTypeId = capability.ReturnType?.TypeId;
+        var isVoid = returnTypeId == AtsConstants.Void;
+        var returnsSameType = _structNames.TryGetValue(returnTypeId ?? "", out var retStructName)
+            && retStructName == structName;
+        var isFluent = isResourceBuilder && (isVoid || returnsSameType);
+
         var returnType = MapTypeRefToGo(capability.ReturnType, false);
-        var hasReturn = capability.ReturnType.TypeId != AtsConstants.Void;
-        // Don't add extra * if return type already starts with *
-        var returnSignature = hasReturn
-            ? returnType.StartsWith("*", StringComparison.Ordinal) || returnType == "any"
+        var hasReturn = !isVoid;
+
+        string returnSignature;
+        if (isFluent)
+        {
+            returnSignature = $"*{structName}";
+        }
+        else if (hasReturn)
+        {
+            // Don't add extra * if return type already starts with *
+            returnSignature = returnType.StartsWith("*", StringComparison.Ordinal) || returnType == "any"
                 ? $"({returnType}, error)"
-                : $"(*{returnType}, error)"
-            : "error";
+                : $"(*{returnType}, error)";
+        }
+        else
+        {
+            returnSignature = "error";
+        }
 
         // Build parameter list
         var paramList = new StringBuilder();
@@ -325,6 +360,15 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         // Use 'reqArgs' as local variable name to avoid conflict with parameters named 'args'
         WriteLine($"func (s *{structName}) {methodName}({paramList}) {returnSignature} {{");
+
+        if (isFluent)
+        {
+            // Short-circuit: if a previous call in the chain already failed, skip and return self.
+            WriteLine("\tif s.err != nil {");
+            WriteLine("\t\treturn s");
+            WriteLine("\t}");
+        }
+
         WriteLine("\treqArgs := map[string]any{");
         WriteLine($"\t\t\"{targetParamName}\": SerializeValue(s.Handle()),");
         WriteLine("\t}");
@@ -363,7 +407,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             }
         }
 
-        if (hasReturn)
+        if (isFluent)
+        {
+            // Discard the returned handle: in .NET the same builder is always returned,
+            // so we continue chaining on s and store any error in s.err.
+            WriteLine($"\t_, s.err = s.Client().InvokeCapability(\"{capability.CapabilityId}\", reqArgs)");
+            WriteLine("\treturn s");
+        }
+        else if (hasReturn)
         {
             WriteLine($"\tresult, err := s.Client().InvokeCapability(\"{capability.CapabilityId}\", reqArgs)");
             WriteLine("\tif err != nil {");

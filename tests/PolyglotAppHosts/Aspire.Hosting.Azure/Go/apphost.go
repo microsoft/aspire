@@ -22,7 +22,7 @@ func main() {
 	_, _ = builder.AddParameter("parameter")
 	_, _ = builder.AddParameter("parameter")
 
-	_, _ = builder.AddConnectionString("connection-string")
+	_, _ = builder.AddConnectionString("connection-string", nil)
 
 	azureEnv, err := builder.AddAzureEnvironment("resource")
 	if err != nil {

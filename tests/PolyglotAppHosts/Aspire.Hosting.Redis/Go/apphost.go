@@ -35,39 +35,30 @@ func main() {
 	}
 
 	// withDataVolume + withPersistence — fluent chaining on RedisResource
-	if _, err = cache.WithDataVolume(nil, nil); err != nil {
-		log.Fatalf("WithDataVolume: %v", err)
+	if err := cache.WithDataVolume(nil, nil).WithPersistence(nil, nil).Err(); err != nil {
+		log.Fatalf("cache setup: %v", err)
 	}
 
-	if _, err = cache.WithPersistence(nil, nil); err != nil {
-		log.Fatalf("WithPersistence: %v", err)
-	}
-
-	// withDataBindMount on RedisResource
-	if _, err = cache2.WithDataBindMount("/tmp/redis-data", nil); err != nil {
-		log.Fatalf("WithDataBindMount: %v", err)
-	}
-
-	// withHostPort on RedisResource
-	if _, err = cache.WithHostPort(6379); err != nil {
-		log.Fatalf("WithHostPort: %v", err)
-	}
-
-	// withPassword on RedisResource
+	// withDataBindMount + withHostPort on cache2 — fluent chain
 	secret2 := true
 	newPassword, err := builder.AddParameter("new-redis-password", &secret2)
 	if err != nil {
 		log.Fatalf("AddParameter: %v", err)
 	}
-	if _, err = cache2.WithPassword(newPassword); err != nil {
-		log.Fatalf("WithPassword: %v", err)
+	if err := cache2.WithDataBindMount("/tmp/redis-data", nil).WithHostPort(6380).WithPassword(newPassword).Err(); err != nil {
+		log.Fatalf("cache2 setup: %v", err)
 	}
 
-	// withRedisCommander — with configureContainer callback exercising withHostPort
+	// withHostPort on cache — stand-alone (after the first chain)
+	if err := cache.WithHostPort(6379).Err(); err != nil {
+		log.Fatalf("WithHostPort: %v", err)
+	}
+
+	// withRedisCommander — with configureContainer callback exercising WithHostPort
 	_, err = cache.WithRedisCommander(func(args ...any) any {
 		if len(args) > 0 {
 			if commander, ok := args[0].(interface {
-				WithHostPort(float64) (any, error)
+				WithHostPort(float64) *aspire.ContainerResource
 			}); ok {
 				commander.WithHostPort(8081)
 			}
@@ -82,7 +73,7 @@ func main() {
 	_, err = cache.WithRedisInsight(func(args ...any) any {
 		if len(args) > 0 {
 			if insight, ok := args[0].(interface {
-				WithHostPort(float64) (any, error)
+				WithHostPort(float64) *aspire.ContainerResource
 			}); ok {
 				insight.WithHostPort(5540)
 			}
@@ -94,13 +85,12 @@ func main() {
 	}
 
 	// ---- Property access on RedisResource (ExposeProperties = true) ----
-	redis := cache
-	_, _ = redis.PrimaryEndpoint()
-	_, _ = redis.Host()
-	_, _ = redis.Port()
-	_, _ = redis.TlsEnabled()
-	_, _ = redis.UriExpression()
-	_, _ = redis.ConnectionStringExpression()
+	_, _ = cache.PrimaryEndpoint()
+	_, _ = cache.Host()
+	_, _ = cache.Port()
+	_, _ = cache.TlsEnabled()
+	_, _ = cache.UriExpression()
+	_, _ = cache.ConnectionStringExpression()
 
 	app, err := builder.Build()
 	if err != nil {
