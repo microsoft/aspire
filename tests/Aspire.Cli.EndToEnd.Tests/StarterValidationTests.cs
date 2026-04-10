@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class StarterValidationTests(ITestOutputHelper output)
 {
-    [Fact(Skip = "aspire new hangs on Windows certificate trust step — needs DOTNET_GENERATE_ASPNET_CERTIFICATE=false to be respected by the CLI")]
+    [Fact]
     public async Task CSharpStarter_NewStartStop()
     {
         var workspace = TemporaryWorkspace.Create(output);
@@ -36,6 +36,10 @@ public sealed class StarterValidationTests(ITestOutputHelper output)
             await auto.SourceAspireBundleEnvironmentAsync(counter);
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
+
+        // Pre-trust the dev certificate so aspire new doesn't hang on the Windows cert trust dialog.
+        // On CI runners this succeeds silently (admin context). Locally, it may show a UAC prompt.
+        await auto.EnsureDevCertsTrustedAsync(counter);
 
         output.WriteLine("Creating C# starter app...");
 

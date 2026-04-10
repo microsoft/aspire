@@ -313,6 +313,29 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Pre-trusts the ASP.NET Core HTTPS development certificate so that <c>aspire new</c>
+    /// and <c>aspire start</c> don't hang on the Windows certificate trust dialog.
+    /// On CI runners (admin context), this succeeds silently. On Linux, this is a no-op
+    /// because cert trust is handled differently (SSL_CERT_DIR).
+    /// </summary>
+    internal static async Task EnsureDevCertsTrustedAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            await auto.TypeAsync("dotnet dev-certs https --trust");
+        }
+        else
+        {
+            await auto.TypeAsync("dotnet dev-certs https --trust 2>/dev/null || true");
+        }
+
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>
     /// Clears the terminal screen by running the <c>clear</c> command and waiting for the prompt.
     /// </summary>
     internal static async Task ClearScreenAsync(
