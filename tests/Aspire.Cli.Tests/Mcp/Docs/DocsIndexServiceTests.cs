@@ -436,7 +436,7 @@ public class DocsIndexServiceTests
     }
 
     [Fact]
-    public async Task GetDocumentAsync_FormatsMinifiedSingleLineCodeBlocks()
+    public async Task GetDocumentAsync_KeepsMinifiedSingleLineCodeBlocksOnSingleLine()
     {
         var content = """
             # Certificate configuration
@@ -450,34 +450,14 @@ public class DocsIndexServiceTests
         var doc = await service.GetDocumentAsync("certificate-configuration");
 
         Assert.NotNull(doc);
-        Assert.Contains("```csharp", doc.Content, StringComparison.Ordinal);
-        Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", doc.Content, StringComparison.Ordinal);
-        Assert.Contains("// Disable all automatic certificate configuration\nbuilder.AddPythonModule(\"api\", \"./api\", \"uvicorn\")", doc.Content, StringComparison.Ordinal);
-        Assert.Contains(".WithoutHttpsCertificate()\n// No server cert config\n.WithCertificateTrustScope(CertificateTrustScope.None);", doc.Content, StringComparison.Ordinal);
-        Assert.Contains("// No client trust config\nbuilder.Build().Run();", doc.Content, StringComparison.Ordinal);
-        Assert.Contains("```", doc.Content, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("go")]
-    [InlineData("rust")]
-    [InlineData("python")]
-    [InlineData("java")]
-    public async Task GetDocumentAsync_FormatsAdditionalMinifiedSingleLineCodeBlockLanguages(string language)
-    {
-        var content = $$"""
-            # Sample
-
-            Example:
-            ```{{language}} first(); second(); ```
-            """;
-
-        var service = CreateService(CreateMockFetcher(content));
-
-        var doc = await service.GetDocumentAsync("sample");
-
-        Assert.NotNull(doc);
-        Assert.Contains($"```{language}\nfirst();\nsecond();\n```", doc.Content, StringComparison.Ordinal);
+        Assert.Contains(
+            """
+            ```csharp
+            var builder = DistributedApplication.CreateBuilder(args); // Disable all automatic certificate configuration builder.AddPythonModule("api", "./api", "uvicorn") .WithoutHttpsCertificate() // No server cert config .WithCertificateTrustScope(CertificateTrustScope.None); // No client trust config builder.Build().Run();
+            ```
+            """.Replace("\r\n", "\n"),
+            doc.Content,
+            StringComparison.Ordinal);
     }
 
     [Fact]
