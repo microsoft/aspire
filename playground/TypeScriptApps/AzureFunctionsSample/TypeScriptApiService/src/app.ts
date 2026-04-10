@@ -9,9 +9,7 @@ const port = parseInt(process.env["PORT"] || "3000");
 
 function randomString(length: number): string {
     const chars = "abcdefghijklmnopqrstuvwxyz";
-    return Array.from(crypto.randomBytes(length))
-        .map((b) => chars[b % chars.length])
-        .join("");
+    return Array.from({ length }, () => chars[crypto.randomInt(chars.length)]).join("");
 }
 
 app.get("/publish/asq", async (_req, res) => {
