@@ -45,7 +45,7 @@ suite('End-to-end RPC server auth tests', () => {
 		const client = tls.connect({
 			port,
 			host: 'localhost',
-			rejectUnauthorized: false,
+			rejectUnauthorized: true,
 		});
 		await new Promise<void>((resolve) => client.once('secureConnect', resolve));
 
