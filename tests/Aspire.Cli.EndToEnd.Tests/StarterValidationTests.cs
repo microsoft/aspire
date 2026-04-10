@@ -9,19 +9,13 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests that validate Aspire CLI starter templates can be created and started.
-/// These tests run natively on the host (no Docker) using the Hex1b PTY proxy on Windows
-/// and bare bash on Linux. They replace the PowerShell-based cli-starter-validation.ps1 script.
+/// End-to-end tests that validate Aspire CLI starter templates can be created and started
+/// on Windows. Uses the interactive <c>aspire new</c> flow (same as the Docker-based tests)
+/// so no <c>--channel</c> flag or pre-installed CLI is needed.
 /// </summary>
-/// <remarks>
-/// These tests require:
-/// - The Aspire CLI to be installed (from PR build in CI, or GA release locally)
-/// - NuGet packages to be available for the starter templates (via --channel in CI)
-/// - Node.js for TypeScript templates
-/// </remarks>
 public sealed class StarterValidationTests(ITestOutputHelper output)
 {
-    [Fact(Skip = "Requires dedicated CI job with pre-installed CLI and NuGet packages — not yet wired into the test matrix")]
+    [Fact]
     public async Task CSharpStarter_NewStartStop()
     {
         var workspace = TemporaryWorkspace.Create(output);
@@ -34,25 +28,21 @@ public sealed class StarterValidationTests(ITestOutputHelper output)
 
         await auto.PrepareEnvironmentAsync(workspace, counter);
 
-        // Install CLI (GA release for local, PR build for CI)
         if (CliE2ETestHelpers.IsRunningInCI)
         {
             var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
+            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
+            await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
+            await auto.SourceAspireBundleEnvironmentAsync(counter);
+            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
-
-        await auto.SourceAspireCliEnvironmentAsync(counter);
 
         output.WriteLine("Creating C# starter app...");
 
-        // aspire new with non-interactive mode
-        // In CI, use --channel to pick up NuGet packages from the PR dogfood feed
-        var channelArg = CliE2ETestHelpers.IsRunningInCI
-            ? $"--channel pr-{CliE2ETestHelpers.GetRequiredPrNumber()}"
-            : "";
-        await auto.TypeAsync($"aspire new aspire-starter --name StarterCsSmoke {channelArg} --non-interactive --nologo");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
+        // Use the interactive aspire new flow (same approach as Docker-based E2E tests)
+        await auto.AspireNewAsync("StarterCsSmoke", counter, useRedisCache: false);
+
+        output.WriteLine("Created. Navigating into project...");
 
         // Navigate into the project
         var cdCommand = OperatingSystem.IsWindows()
@@ -64,112 +54,29 @@ public sealed class StarterValidationTests(ITestOutputHelper output)
 
         output.WriteLine("Starting app...");
 
-        // Start the app
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
 
-        // Wait for successful startup indication
         await auto.WaitUntilAsync(
             snapshot => snapshot.GetScreenText().Contains("Apphost started successfully"),
             timeout: TimeSpan.FromMinutes(3),
             description: "aspire start to complete (Apphost started successfully)");
         await auto.WaitForSuccessPromptAsync(counter);
 
-        output.WriteLine("App started. Waiting for resources...");
+        output.WriteLine("App started. Waiting for apiservice...");
 
-        // Wait for the apiservice resource to be up
         await auto.TypeAsync("aspire wait apiservice --status up --timeout 120");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
 
         output.WriteLine("Resources are up. Stopping...");
 
-        // Stop the app
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         output.WriteLine("C# starter validation complete.");
 
-        // Exit cleanly
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
-    }
-
-    [Fact(Skip = "Requires dedicated CI job with pre-installed CLI and NuGet packages — not yet wired into the test matrix")]
-    public async Task TypeScriptStarter_NewStartStop()
-    {
-        var workspace = TemporaryWorkspace.Create(output);
-
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        var counter = new SequenceCounter();
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(300));
-
-        await auto.PrepareEnvironmentAsync(workspace, counter);
-
-        // Install CLI (GA release for local, PR build for CI)
-        if (CliE2ETestHelpers.IsRunningInCI)
-        {
-            var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-        }
-
-        await auto.SourceAspireCliEnvironmentAsync(counter);
-
-        output.WriteLine("Creating TypeScript starter app...");
-
-        // aspire new with non-interactive mode
-        var channelArg = CliE2ETestHelpers.IsRunningInCI
-            ? $"--channel pr-{CliE2ETestHelpers.GetRequiredPrNumber()}"
-            : "";
-        await auto.TypeAsync($"aspire new aspire-ts-starter --name StarterTsSmoke {channelArg} --non-interactive --nologo");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
-
-        // Navigate into the project
-        var cdCommand = OperatingSystem.IsWindows()
-            ? "Set-Location StarterTsSmoke"
-            : "cd StarterTsSmoke";
-        await auto.TypeAsync(cdCommand);
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        output.WriteLine("Starting app...");
-
-        // Start the app
-        await auto.TypeAsync("aspire start");
-        await auto.EnterAsync();
-
-        await auto.WaitUntilAsync(
-            snapshot => snapshot.GetScreenText().Contains("Apphost started successfully"),
-            timeout: TimeSpan.FromMinutes(3),
-            description: "aspire start to complete (Apphost started successfully)");
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        output.WriteLine("App started. Waiting for resources...");
-
-        // Wait for resources to be up
-        await auto.TypeAsync("aspire wait app --status up --timeout 120");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
-
-        await auto.TypeAsync("aspire wait frontend --status up --timeout 120");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
-
-        output.WriteLine("Resources are up. Stopping...");
-
-        // Stop the app
-        await auto.TypeAsync("aspire stop");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
-
-        output.WriteLine("TypeScript starter validation complete.");
-
-        // Exit cleanly
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
         await pendingRun;
