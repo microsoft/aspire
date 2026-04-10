@@ -19,15 +19,11 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
     private const string ProjectName = "AspireDockerDeployTest";
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15882")]
     public async Task CreateAndDeployToDockerCompose()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
         using var terminal = CliE2ETestHelpers.CreateTestTerminal();
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
@@ -38,11 +34,11 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
         // PrepareEnvironment
         await auto.PrepareEnvironmentAsync(workspace, counter);
 
-        if (isCI)
+        if (CliE2ETestHelpers.PreInstalledCliDir is not null)
         {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
+            // CI: CLI was pre-installed by the workflow — just configure env vars and verify.
             await auto.SourceAspireCliEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
+            await auto.VerifyAspireCliVersionAsync(counter);
         }
 
         // Step 1: Create a new Aspire Starter App (no Redis cache)
@@ -58,11 +54,12 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
         await auto.EnterAsync();
 
-        // In CI, aspire add shows a version selection prompt (unlike aspire new which auto-selects when channel is set)
-        if (isCI)
+        // In CI, aspire add shows a version selection prompt
+        // (unlike aspire new which auto-selects when channel is set)
+        if (CliE2ETestHelpers.PreInstalledCliDir is not null)
         {
             await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync(); // select first version (PR build)
+            await auto.EnterAsync(); // select first version
         }
 
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
@@ -142,15 +139,11 @@ builder.Build().Run();
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15871")]
     public async Task CreateAndDeployToDockerComposeInteractive()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
         using var terminal = CliE2ETestHelpers.CreateTestTerminal();
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
@@ -161,11 +154,11 @@ builder.Build().Run();
         // PrepareEnvironment
         await auto.PrepareEnvironmentAsync(workspace, counter);
 
-        if (isCI)
+        if (CliE2ETestHelpers.PreInstalledCliDir is not null)
         {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
+            // CI: CLI was pre-installed by the workflow — just configure env vars and verify.
             await auto.SourceAspireCliEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
+            await auto.VerifyAspireCliVersionAsync(counter);
         }
 
         // Step 1: Create a new Aspire Starter App (no Redis cache)
@@ -181,11 +174,12 @@ builder.Build().Run();
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
         await auto.EnterAsync();
 
-        // In CI, aspire add shows a version selection prompt (unlike aspire new which auto-selects when channel is set)
-        if (isCI)
+        // In CI, aspire add shows a version selection prompt
+        // (unlike aspire new which auto-selects when channel is set)
+        if (CliE2ETestHelpers.PreInstalledCliDir is not null)
         {
             await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync(); // select first version (PR build)
+            await auto.EnterAsync(); // select first version
         }
 
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));

@@ -37,6 +37,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.VerifyAspireCliVersionAsync(counter);
 
         // Step 1: Create a TypeScript AppHost (so we get the SDK version in aspire.config.json)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
@@ -170,9 +171,11 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 5: Wait for the custom resource to be up
-        await auto.TypeAsync("aspire wait my-svc --timeout 60");
+        // Use a longer timeout for Docker-in-Docker where container image pull and startup
+        // can take considerably more than a minute.
+        await auto.TypeAsync("aspire wait my-svc --timeout 120");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(150));
 
         // Step 6: Verify the resource appears in describe
         await auto.TypeAsync("aspire describe my-svc --format json > /tmp/my-svc-describe.json");

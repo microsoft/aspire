@@ -103,10 +103,6 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
     {
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-
         using var terminal = CliE2ETestHelpers.CreateTestTerminal();
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -116,11 +112,10 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         // PrepareEnvironment
         await auto.PrepareEnvironmentAsync(workspace, counter);
 
-        if (isCI)
+        if (CliE2ETestHelpers.PreInstalledCliDir is not null)
         {
-            await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireBundleEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
+            await auto.SourceAspireCliEnvironmentAsync(counter);
+            await auto.VerifyAspireCliVersionAsync(counter);
         }
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");

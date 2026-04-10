@@ -37,6 +37,7 @@ public sealed class WaitCommandTests(ITestOutputHelper output)
 
         // Install the Aspire CLI
         await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.VerifyAspireCliVersionAsync(counter);
 
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireWaitApp", counter);
@@ -46,8 +47,15 @@ public sealed class WaitCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Start the AppHost in the background using aspire start
-        await auto.TypeAsync("aspire start");
+        // Pre-build the project so that 'aspire start --no-build' can establish the backchannel
+        // quickly. In Docker-in-Docker environments the NuGet restore + build can exceed the
+        // 120-second backchannel timeout inside 'aspire start', causing a spurious timeout failure.
+        await auto.TypeAsync("dotnet build");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+
+        // Start the AppHost in the background using aspire start (skip build since we just built)
+        await auto.TypeAsync("aspire start --no-build");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);

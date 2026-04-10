@@ -64,13 +64,22 @@ internal static class CliE2EAutomatorHelpers
     {
         switch (installMode)
         {
-            case CliE2ETestHelpers.DockerInstallMode.SourceBuild:
+            case CliE2ETestHelpers.DockerInstallMode.PreInstalled:
                 await auto.TypeAsync("mkdir -p ~/.aspire/bin && cp /opt/aspire-cli/aspire ~/.aspire/bin/aspire && chmod +x ~/.aspire/bin/aspire");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
                 await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
+
+                // If the CI workflow mounted built NuGet packages, configure a local hive so that
+                // 'aspire new' and 'aspire add' can resolve CI packages without going to nuget.org.
+                await auto.TypeAsync("if [ -d /built-nugets ]; then mkdir -p ~/.aspire/hives/ci/packages && cp /built-nugets/*.nupkg ~/.aspire/hives/ci/packages/ 2>/dev/null; fi");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+                await auto.TypeAsync("if [ -d ~/.aspire/hives/ci/packages ] && ls ~/.aspire/hives/ci/packages/*.nupkg 1>/dev/null 2>&1; then aspire config set channel ci --global --non-interactive; fi");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
                 break;
 
             case CliE2ETestHelpers.DockerInstallMode.GaRelease:
@@ -82,19 +91,43 @@ internal static class CliE2EAutomatorHelpers
                 await auto.WaitForSuccessPromptAsync(counter);
                 break;
 
-            case CliE2ETestHelpers.DockerInstallMode.PullRequest:
-                var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-                await auto.TypeAsync($"/opt/aspire-scripts/get-aspire-cli-pr.sh {prNumber}");
-                await auto.EnterAsync();
-                await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
-                await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH");
-                await auto.EnterAsync();
-                await auto.WaitForSuccessPromptAsync(counter);
-                break;
-
             default:
                 throw new ArgumentOutOfRangeException(nameof(installMode));
         }
+    }
+
+    /// <summary>
+    /// Configures the PATH and environment variables for the Aspire CLI in a non-Docker environment.
+    /// </summary>
+    internal static async Task SourceAspireCliEnvironmentAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Verifies the installed Aspire CLI version matches the expected version from the
+    /// <c>ASPIRE_CLI_VERSION</c> environment variable. If the env var is not set (local dev),
+    /// this is a no-op.
+    /// </summary>
+    internal static async Task VerifyAspireCliVersionAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        var expectedVersion = CliE2ETestHelpers.ExpectedCliVersion;
+        if (expectedVersion is null)
+        {
+            // Local dev — skip version check.
+            return;
+        }
+
+        await auto.TypeAsync("aspire --version");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(expectedVersion, timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -121,91 +154,6 @@ internal static class CliE2EAutomatorHelpers
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync($"cd {workspace.WorkspaceRoot.FullName}");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-    }
-
-    /// <summary>
-    /// Installs the Aspire CLI from PR build artifacts in a non-Docker environment.
-    /// </summary>
-    internal static async Task InstallAspireCliFromPullRequestAsync(
-        this Hex1bTerminalAutomator auto,
-        int prNumber,
-        SequenceCounter counter)
-    {
-        var command = $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
-        await auto.TypeAsync(command);
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
-    }
-
-    /// <summary>
-    /// Configures the PATH and environment variables for the Aspire CLI in a non-Docker environment.
-    /// </summary>
-    internal static async Task SourceAspireCliEnvironmentAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
-    {
-        await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-    }
-
-    /// <summary>
-    /// Verifies the installed Aspire CLI version matches the expected build.
-    /// Always checks the dynamic version prefix from eng/Versions.props.
-    /// For non-stabilized builds (all normal PR builds), also verifies the commit SHA suffix.
-    /// </summary>
-    internal static async Task VerifyAspireCliVersionAsync(
-        this Hex1bTerminalAutomator auto,
-        string commitSha,
-        SequenceCounter counter)
-    {
-        var versionPrefix = CliE2ETestHelpers.GetVersionPrefix();
-        var isStabilized = CliE2ETestHelpers.IsStabilizedBuild();
-
-        await auto.TypeAsync("aspire --version");
-        await auto.EnterAsync();
-
-        // Always verify the version prefix matches the branch's version (e.g., "13.3.0").
-        await auto.WaitUntilTextAsync(versionPrefix, timeout: TimeSpan.FromSeconds(10));
-
-        // For non-stabilized builds (all PR CI builds), also verify the commit SHA suffix
-        // to uniquely identify the exact build. Stabilized builds (official releases only)
-        // produce versions without SHA suffixes, so we skip this check.
-        if (!isStabilized && commitSha.Length == 40)
-        {
-            var shortCommitSha = commitSha[..8];
-            var expectedVersionSuffix = $"g{shortCommitSha}";
-            await auto.WaitUntilTextAsync(expectedVersionSuffix, timeout: TimeSpan.FromSeconds(10));
-        }
-
-        await auto.WaitForSuccessPromptAsync(counter);
-    }
-
-    /// <summary>
-    /// Installs the Aspire CLI and bundle from PR build artifacts, using the PR head SHA to fetch the install script.
-    /// </summary>
-    internal static async Task InstallAspireBundleFromPullRequestAsync(
-        this Hex1bTerminalAutomator auto,
-        int prNumber,
-        SequenceCounter counter)
-    {
-        var command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
-        await auto.TypeAsync(command);
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
-    }
-
-    /// <summary>
-    /// Configures the PATH and environment variables for the Aspire CLI bundle in a non-Docker environment.
-    /// Unlike <see cref="SourceAspireCliEnvironmentAsync"/>, this includes <c>~/.aspire</c> in PATH for bundle tools.
-    /// </summary>
-    internal static async Task SourceAspireBundleEnvironmentAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
-    {
-        await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }

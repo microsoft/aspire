@@ -25,9 +25,6 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
     {
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
         using var terminal = CliE2ETestHelpers.CreateTestTerminal();
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
@@ -36,11 +33,10 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
         await auto.PrepareEnvironmentAsync(workspace, counter);
 
-        if (isCI)
+        if (CliE2ETestHelpers.PreInstalledCliDir is not null)
         {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
             await auto.SourceAspireCliEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
+            await auto.VerifyAspireCliVersionAsync(counter);
         }
 
         // Create TS AppHost and add packages

@@ -27,15 +27,11 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
         $"{ClusterNamePrefix}-{Guid.NewGuid():N}"[..32]; // KinD cluster names max 32 chars
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15870")]
     public async Task CreateAndPublishToKubernetes()
     {
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
         var clusterName = GenerateUniqueClusterName();
 
         output.WriteLine($"Using KinD version: {KindVersion}");
@@ -52,11 +48,11 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
         // Prepare environment
         await auto.PrepareEnvironmentAsync(workspace, counter);
 
-        if (isCI)
+        if (CliE2ETestHelpers.PreInstalledCliDir is not null)
         {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
+            // CI: CLI was pre-installed by the workflow — just configure env vars and verify.
             await auto.SourceAspireCliEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
+            await auto.VerifyAspireCliVersionAsync(counter);
         }
 
         try

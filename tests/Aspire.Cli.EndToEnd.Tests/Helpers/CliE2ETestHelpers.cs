@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Xml.Linq;
 using Aspire.Cli.Tests.Utils;
 using Hex1b;
 using Xunit;
@@ -16,50 +15,21 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal static class CliE2ETestHelpers
 {
     /// <summary>
-    /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
-    /// When running locally, some commands are replaced with echo stubs.
+    /// Gets the expected version string from the <c>ASPIRE_CLI_VERSION</c> environment variable,
+    /// or <see langword="null"/> when running locally (version check is skipped).
     /// </summary>
-    internal static bool IsRunningInCI =>
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")) &&
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA"));
+    internal static string? ExpectedCliVersion =>
+        Environment.GetEnvironmentVariable("ASPIRE_CLI_VERSION") is { Length: > 0 } v ? v : null;
 
     /// <summary>
-    /// Gets the PR number from the GITHUB_PR_NUMBER environment variable.
-    /// When running locally (not in CI), returns a dummy value (0) for testing.
+    /// Gets the directory that contains the pre-installed Aspire CLI binary, or
+    /// <see langword="null"/> if the CLI was not pre-installed by the workflow.
+    /// Set by the "Install CLI from archive" step in <c>run-tests.yml</c> when
+    /// <c>requiresCliArchive</c> is <see langword="true"/> and there is no pull-request context
+    /// (e.g., scheduled quarantine runs).
     /// </summary>
-    /// <returns>The PR number, or 0 when running locally.</returns>
-    internal static int GetRequiredPrNumber()
-    {
-        var prNumberStr = Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER");
-
-        if (string.IsNullOrEmpty(prNumberStr))
-        {
-            // Running locally - return dummy value
-            return 0;
-        }
-
-        Assert.True(int.TryParse(prNumberStr, out var prNumber), $"GITHUB_PR_NUMBER must be a valid integer, got: {prNumberStr}");
-        return prNumber;
-    }
-
-    /// <summary>
-    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable.
-    /// This is the actual PR head commit, not the merge commit (GITHUB_SHA).
-    /// When running locally (not in CI), returns a dummy value for testing.
-    /// </summary>
-    /// <returns>The commit SHA, or a dummy value when running locally.</returns>
-    internal static string GetRequiredCommitSha()
-    {
-        var commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA");
-
-        if (string.IsNullOrEmpty(commitSha))
-        {
-            // Running locally - return dummy value
-            return "local0000";
-        }
-
-        return commitSha;
-    }
+    internal static string? PreInstalledCliDir =>
+        Environment.GetEnvironmentVariable("ASPIRE_CLI_PATH_DIR") is { Length: > 0 } v ? v : null;
 
     /// <summary>
     /// Gets the path for storing asciinema recordings that will be uploaded as CI artifacts.
@@ -92,19 +62,15 @@ internal static class CliE2ETestHelpers
     internal enum DockerInstallMode
     {
         /// <summary>
-        /// The CLI was built from source by the Dockerfile and is already on PATH.
+        /// The CLI binary is pre-installed on the host and mounted into the container.
+        /// Used for both local dev (./build.sh --bundle) and CI (PR, quarantine, outerloop).
         /// </summary>
-        SourceBuild,
+        PreInstalled,
 
         /// <summary>
         /// Install the latest GA release from aspire.dev.
         /// </summary>
         GaRelease,
-
-        /// <summary>
-        /// Install from PR artifacts using the get-aspire-cli-pr.sh script.
-        /// </summary>
-        PullRequest,
     }
 
     /// <summary>
@@ -139,28 +105,38 @@ internal static class CliE2ETestHelpers
     /// <returns>The detected <see cref="DockerInstallMode"/>.</returns>
     internal static DockerInstallMode DetectDockerInstallMode(string repoRoot)
     {
-        if (IsRunningInCI)
-        {
-            return DockerInstallMode.PullRequest;
-        }
-
-        // Check if a locally-built native AOT CLI binary exists (developer has run ./build.sh --bundle).
+        // Check if a pre-installed or locally-built CLI binary exists.
         var cliPublishDir = FindLocalCliBinary(repoRoot);
         if (cliPublishDir is not null)
         {
-            return DockerInstallMode.SourceBuild;
+            return DockerInstallMode.PreInstalled;
         }
 
         return DockerInstallMode.GaRelease;
     }
 
     /// <summary>
-    /// Finds the locally-built native AOT CLI publish directory.
-    /// Searches for the aspire binary under artifacts/bin/Aspire.Cli/*/net*/linux-x64/publish/.
+    /// Finds the CLI binary directory to use for Docker PreInstalled mode.
+    /// Checks, in order:
+    /// <list type="number">
+    /// <item>The <c>ASPIRE_CLI_PATH_DIR</c> env var set by the "Install CLI from archive" workflow step.</item>
+    /// <item>The locally-built native AOT publish directory under <c>artifacts/bin/Aspire.Cli/</c>.</item>
+    /// </list>
+    /// Only Linux is supported (Docker-based E2E tests run on Linux only).
     /// </summary>
-    /// <returns>The publish directory path, or null if not found.</returns>
+    /// <returns>The directory containing the <c>aspire</c> binary, or <see langword="null"/> if not found.</returns>
     internal static string? FindLocalCliBinary(string repoRoot)
     {
+        // Docker E2E tests only run on Linux; the binary is named 'aspire' (no .exe).
+        const string binaryName = "aspire";
+
+        // Prefer the pre-installed CLI binary dir set by the CI workflow.
+        var preInstalled = PreInstalledCliDir;
+        if (preInstalled is not null && File.Exists(Path.Combine(preInstalled, binaryName)))
+        {
+            return preInstalled;
+        }
+
         var cliBaseDir = Path.Combine(repoRoot, "artifacts", "bin", "Aspire.Cli");
         if (!Directory.Exists(cliBaseDir))
         {
@@ -168,7 +144,7 @@ internal static class CliE2ETestHelpers
         }
 
         // Search for the native AOT binary under any config/TFM combination.
-        var matches = Directory.GetFiles(cliBaseDir, "aspire", SearchOption.AllDirectories)
+        var matches = Directory.GetFiles(cliBaseDir, binaryName, SearchOption.AllDirectories)
             .Where(f => f.Contains("linux-x64") && f.Contains("publish"))
             .ToArray();
 
@@ -257,33 +233,26 @@ internal static class CliE2ETestHelpers
                 }
 
                 // Always skip the expensive source build inside Docker.
-                // For SourceBuild mode, the CLI is installed from a mounted local bundle.
-                // For PullRequest/GaRelease, it's installed via scripts after container start.
+                // For PreInstalled mode, the CLI is installed from a mounted local binary.
+                // For GaRelease, it's installed via scripts after container start.
                 c.BuildArgs["SKIP_SOURCE_BUILD"] = "true";
 
-                if (installMode == DockerInstallMode.SourceBuild)
+                if (installMode == DockerInstallMode.PreInstalled)
                 {
-                    // Mount the locally-built native AOT CLI binary into the container.
+                    // Mount the locally-built or CI-installed CLI binary into the container.
                     var cliPublishDir = FindLocalCliBinary(repoRoot)
-                        ?? throw new InvalidOperationException("SourceBuild mode detected but CLI binary not found");
+                        ?? throw new InvalidOperationException("PreInstalled mode detected but CLI binary not found");
                     c.Volumes.Add($"{cliPublishDir}:/opt/aspire-cli:ro");
                     output.WriteLine($"  CLI binary:     {cliPublishDir}");
-                }
 
-                if (installMode == DockerInstallMode.PullRequest)
-                {
-                    var ghToken = Environment.GetEnvironmentVariable("GH_TOKEN");
-                    if (!string.IsNullOrEmpty(ghToken))
+                    // Also mount the built NuGet packages so 'aspire new' / 'aspire add' / restore
+                    // can resolve CI-built packages without going to nuget.org.
+                    var builtNugetsPath = Environment.GetEnvironmentVariable("BUILT_NUGETS_PATH");
+                    if (!string.IsNullOrEmpty(builtNugetsPath) && Directory.Exists(builtNugetsPath))
                     {
-                        c.Environment["GH_TOKEN"] = ghToken;
+                        c.Volumes.Add($"{builtNugetsPath}:/built-nugets:ro");
+                        output.WriteLine($"  Built NuGets:   {builtNugetsPath}");
                     }
-
-                    var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER") ?? "";
-                    var prSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA") ?? "";
-                    c.Environment["GITHUB_PR_NUMBER"] = prNumber;
-                    c.Environment["GITHUB_PR_HEAD_SHA"] = prSha;
-                    output.WriteLine($"  PR number:      {prNumber}");
-                    output.WriteLine($"  PR head SHA:    {prSha}");
                 }
             });
 
@@ -376,53 +345,6 @@ internal static class CliE2ETestHelpers
     {
         var relativePath = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, hostPath);
         return $"/workspace/{workspace.WorkspaceRoot.Name}/" + relativePath.Replace('\\', '/');
-    }
-
-    /// <summary>
-    /// Reads the VersionPrefix (e.g., "13.3.0") from eng/Versions.props by parsing
-    /// the MajorVersion, MinorVersion, and PatchVersion MSBuild properties.
-    /// </summary>
-    internal static string GetVersionPrefix()
-    {
-        var repoRoot = GetRepoRoot();
-        var versionsPropsPath = Path.Combine(repoRoot, "eng", "Versions.props");
-
-        var doc = XDocument.Load(versionsPropsPath);
-        var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
-
-        string? GetProperty(string name) =>
-            doc.Descendants(ns + name).FirstOrDefault()?.Value;
-
-        var major = GetProperty("MajorVersion")
-            ?? throw new InvalidOperationException("MajorVersion not found in eng/Versions.props");
-        var minor = GetProperty("MinorVersion")
-            ?? throw new InvalidOperationException("MinorVersion not found in eng/Versions.props");
-        var patch = GetProperty("PatchVersion")
-            ?? throw new InvalidOperationException("PatchVersion not found in eng/Versions.props");
-
-        return $"{major}.{minor}.{patch}";
-    }
-
-    /// <summary>
-    /// Checks whether the build is stabilized (StabilizePackageVersion=true in eng/Versions.props).
-    /// Stabilized builds produce version strings without commit SHA suffixes (e.g., "13.2.0" instead
-    /// of "13.2.0-preview.1.25175.1+g{sha}"). This is only true for official release builds,
-    /// never for normal PR CI builds.
-    /// </summary>
-    internal static bool IsStabilizedBuild()
-    {
-        var repoRoot = GetRepoRoot();
-        var versionsPropsPath = Path.Combine(repoRoot, "eng", "Versions.props");
-
-        var doc = XDocument.Load(versionsPropsPath);
-        var ns = doc.Root?.Name.Namespace ?? XNamespace.None;
-
-        // The default value in Versions.props uses a Condition to default to "false",
-        // so we read the element's text directly.
-        var stabilize = doc.Descendants(ns + "StabilizePackageVersion")
-            .FirstOrDefault()?.Value;
-
-        return string.Equals(stabilize, "true", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
