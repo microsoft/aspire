@@ -19,21 +19,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureEventHubs: %v", err)
 	}
-	_, _ = eventHubs.WithEventHubsRoleAssignments()
+	_, _ = eventHubs.WithEventHubsRoleAssignments(eventHubs, nil)
 
-	hub, err := eventHubs.AddHub("resource")
+	hub, err := eventHubs.AddHub("resource", nil)
 	if err != nil {
 		log.Fatalf("AddHub: %v", err)
 	}
-	_, _ = hub.WithProperties()
+	hub.WithProperties(nil)
 
-	consumerGroup, err := hub.AddConsumerGroup("resource")
+	consumerGroup, err := hub.AddConsumerGroup("resource", nil)
 	if err != nil {
 		log.Fatalf("AddConsumerGroup: %v", err)
 	}
-	_, _ = consumerGroup.WithEventHubsRoleAssignments()
+	_, _ = consumerGroup.WithEventHubsRoleAssignments(eventHubs, nil)
 
-	_, _ = eventHubs.RunAsEmulator()
+	eventHubs.RunAsEmulator(nil)
 
 	app, err := builder.Build()
 	if err != nil {

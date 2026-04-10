@@ -19,13 +19,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureStorage: %v", err)
 	}
-	_, _ = storage.RunAsEmulator()
-	_, _ = storage.WithStorageRoleAssignments()
+	storage.RunAsEmulator(nil)
+	_, _ = storage.WithStorageRoleAssignments(storage, nil)
 	_, _ = storage.AddBlobs("resource")
 	_, _ = storage.AddTables("resource")
 	_, _ = storage.AddQueues("resource")
-	_, _ = storage.AddQueue("resource")
-	_, _ = storage.AddBlobContainer("resource")
+	_, _ = storage.AddQueue("resource", nil)
+	_, _ = storage.AddBlobContainer("resource", nil)
 
 	app, err := builder.Build()
 	if err != nil {

@@ -15,15 +15,15 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
+	_, _ = builder.AddParameter("parameter", nil)
 
-	seq, err := builder.AddSeq("resource")
+	seq, err := builder.AddSeq("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddSeq: %v", err)
 	}
-	_, _ = seq.WithDataVolume()
-	_, _ = seq.WithDataVolume()
-	_, _ = seq.WithDataBindMount()
+	seq.WithDataVolume(nil, nil)
+	seq.WithDataVolume(nil, nil)
+	seq.WithDataBindMount("/tmp", nil)
 
 	_, _ = seq.PrimaryEndpoint()
 	_, _ = seq.Host()

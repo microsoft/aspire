@@ -25,11 +25,11 @@ func main() {
 		log.Fatalf("AddContainer: %v", err)
 	}
 
-	_, _ = compose.WithProperties()
-	_, _ = compose.WithDashboard()
-	_, _ = compose.WithDashboard()
-	_, _ = compose.ConfigureDashboard()
-	_, _ = api.PublishAsDockerComposeService()
+	compose.WithProperties(nil)
+	compose.WithDashboard(nil)
+	compose.WithDashboard(nil)
+	compose.ConfigureDashboard(nil)
+	_, _ = api.PublishAsDockerComposeService(nil)
 	_, _ = compose.DefaultNetworkName()
 	_, _ = compose.DashboardEnabled()
 	_, _ = compose.Name()

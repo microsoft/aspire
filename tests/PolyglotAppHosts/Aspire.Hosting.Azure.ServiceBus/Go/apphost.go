@@ -20,29 +20,29 @@ func main() {
 		log.Fatalf("AddAzureServiceBus: %v", err)
 	}
 
-	queue, err := serviceBus.AddServiceBusQueue("resource")
+	queue, err := serviceBus.AddServiceBusQueue("resource", nil)
 	if err != nil {
 		log.Fatalf("AddServiceBusQueue: %v", err)
 	}
 
-	topic, err := serviceBus.AddServiceBusTopic("resource")
+	topic, err := serviceBus.AddServiceBusTopic("resource", nil)
 	if err != nil {
 		log.Fatalf("AddServiceBusTopic: %v", err)
 	}
 
-	subscription, err := topic.AddServiceBusSubscription("resource")
+	subscription, err := topic.AddServiceBusSubscription("resource", nil)
 	if err != nil {
 		log.Fatalf("AddServiceBusSubscription: %v", err)
 	}
 
-	_, _ = queue.WithProperties()
-	_, _ = topic.WithProperties()
-	_, _ = subscription.WithProperties()
+	queue.WithProperties(nil)
+	topic.WithProperties(nil)
+	subscription.WithProperties(nil)
 
-	_, _ = serviceBus.WithServiceBusRoleAssignments()
-	_, _ = queue.WithServiceBusRoleAssignments()
-	_, _ = topic.WithServiceBusRoleAssignments()
-	_, _ = subscription.WithServiceBusRoleAssignments()
+	_, _ = serviceBus.WithServiceBusRoleAssignments(serviceBus, nil)
+	_, _ = queue.WithServiceBusRoleAssignments(serviceBus, nil)
+	_, _ = topic.WithServiceBusRoleAssignments(serviceBus, nil)
+	_, _ = subscription.WithServiceBusRoleAssignments(serviceBus, nil)
 
 	app, err := builder.Build()
 	if err != nil {

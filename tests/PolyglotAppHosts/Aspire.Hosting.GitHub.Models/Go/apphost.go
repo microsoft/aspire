@@ -15,32 +15,35 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	githubModel, err := builder.AddGitHubModel("resource")
+	githubModel, err := builder.AddGitHubModel("resource", aspire.GitHubModelName("gpt-4o"), nil)
 	if err != nil {
 		log.Fatalf("AddGitHubModel: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
-	_, err = builder.AddGitHubModel("resource")
+	param, err := builder.AddParameter("parameter", nil)
+	if err != nil {
+		log.Fatalf("AddParameter: %v", err)
+	}
+	_, err = builder.AddGitHubModel("resource", aspire.GitHubModelName("gpt-4o"), nil)
 	if err != nil {
 		log.Fatalf("AddGitHubModel: %v", err)
 	}
 
-	_, err = builder.AddGitHubModelById("resource")
+	_, err = builder.AddGitHubModelById("resource", "model-id", nil)
 	if err != nil {
 		log.Fatalf("AddGitHubModelById: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
-	_, _ = githubModel.WithApiKey()
-	_, _ = githubModel.EnableHealthCheck()
+	_, _ = builder.AddParameter("parameter", nil)
+	githubModel.WithApiKey(param)
+	githubModel.EnableHealthCheck()
 
 	container, err := builder.AddContainer("resource", "image")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = container.WithReference()
-	_, _ = container.WithReference()
+	_, _ = container.WithReference(nil, nil, nil, nil)
+	_, _ = container.WithReference(nil, nil, nil, nil)
 
 	app, err := builder.Build()
 	if err != nil {

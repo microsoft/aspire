@@ -15,28 +15,31 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddAzureStorage("resource")
+	azStorage, err := builder.AddAzureStorage("resource")
+	if err != nil {
+		log.Fatalf("AddAzureStorage: %v", err)
+	}
 
 	sqlServer, err := builder.AddAzureSqlServer("resource")
 	if err != nil {
 		log.Fatalf("AddAzureSqlServer: %v", err)
 	}
 
-	db, err := sqlServer.AddDatabase("resource")
+	db, err := sqlServer.AddDatabase("resource", nil)
 	if err != nil {
 		log.Fatalf("AddDatabase: %v", err)
 	}
 	_ = db
 
-	db2, err := sqlServer.AddDatabase("resource")
+	db2, err := sqlServer.AddDatabase("resource", nil)
 	if err != nil {
 		log.Fatalf("AddDatabase: %v", err)
 	}
-	_, _ = db2.WithDefaultAzureSku()
+	db2.WithDefaultAzureSku()
 
-	_, _ = sqlServer.RunAsContainer()
-	_, _ = sqlServer.WithAdminDeploymentScriptStorage()
-	_, _ = sqlServer.AddDatabase("resource")
+	sqlServer.RunAsContainer(nil)
+	sqlServer.WithAdminDeploymentScriptStorage(azStorage)
+	_, _ = sqlServer.AddDatabase("resource", nil)
 
 	_, _ = sqlServer.HostName()
 	_, _ = sqlServer.Port()

@@ -15,12 +15,12 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	rabbitmq, err := builder.AddRabbitMQ("resource")
+	rabbitmq, err := builder.AddRabbitMQ("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddRabbitMQ: %v", err)
 	}
-	_, _ = rabbitmq.WithDataVolume()
-	_, _ = rabbitmq.WithManagementPlugin()
+	rabbitmq.WithDataVolume(nil, nil)
+	rabbitmq.WithManagementPlugin()
 
 	_, _ = rabbitmq.PrimaryEndpoint()
 	_, _ = rabbitmq.ManagementEndpoint()

@@ -19,20 +19,20 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzurePostgresFlexibleServer: %v", err)
 	}
-	_, _ = pg.AddDatabase("resource")
+	_, _ = pg.AddDatabase("resource", nil)
 
 	pgAuth, err := builder.AddAzurePostgresFlexibleServer("resource")
 	if err != nil {
 		log.Fatalf("AddAzurePostgresFlexibleServer: %v", err)
 	}
-	_, _ = pgAuth.WithPasswordAuthentication()
+	pgAuth.WithPasswordAuthentication(nil, nil)
 
 	pgContainer, err := builder.AddAzurePostgresFlexibleServer("resource")
 	if err != nil {
 		log.Fatalf("AddAzurePostgresFlexibleServer: %v", err)
 	}
-	_, _ = pgContainer.RunAsContainer()
-	_, _ = pgContainer.AddDatabase("resource")
+	pgContainer.RunAsContainer(nil)
+	_, _ = pgContainer.AddDatabase("resource", nil)
 
 	app, err := builder.Build()
 	if err != nil {

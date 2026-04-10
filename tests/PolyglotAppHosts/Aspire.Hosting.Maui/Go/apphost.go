@@ -15,16 +15,16 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	maui, err := builder.AddMauiProject("resource")
+	maui, err := builder.AddMauiProject("resource", ".")
 	if err != nil {
 		log.Fatalf("AddMauiProject: %v", err)
 	}
 	_, _ = maui.AddWindowsDevice("resource")
 	_, _ = maui.AddMacCatalystDevice("resource")
-	_, _ = maui.AddAndroidDevice("resource")
-	_, _ = maui.AddAndroidEmulator("resource")
-	_, _ = maui.AddiOsDevice()
-	_, _ = maui.AddiOsSimulator()
+	_, _ = maui.AddAndroidDevice("resource", nil)
+	_, _ = maui.AddAndroidEmulator("resource", nil)
+	_, _ = maui.AddiOSDevice("device-id", nil)
+	_, _ = maui.AddiOSSimulator("simulator-id", nil)
 
 	app, err := builder.Build()
 	if err != nil {

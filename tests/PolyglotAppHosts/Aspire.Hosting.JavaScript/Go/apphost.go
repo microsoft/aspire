@@ -15,31 +15,31 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	nodeApp, err := builder.AddNodeApp("resource")
+	nodeApp, err := builder.AddNodeApp("resource", "node", ".")
 	if err != nil {
 		log.Fatalf("AddNodeApp: %v", err)
 	}
-	_, _ = nodeApp.WithNpm()
-	_, _ = nodeApp.WithBun()
-	_, _ = nodeApp.WithYarn()
-	_, _ = nodeApp.WithPnpm()
-	_, _ = nodeApp.WithBuildScript()
-	_, _ = nodeApp.WithRunScript()
+	_, _ = nodeApp.WithNpm(nil, nil, nil)
+	_, _ = nodeApp.WithBun(nil, nil)
+	_, _ = nodeApp.WithYarn(nil, nil)
+	_, _ = nodeApp.WithPnpm(nil, nil)
+	_, _ = nodeApp.WithBuildScript("build", nil)
+	_, _ = nodeApp.WithRunScript("start", nil)
 
-	javaScriptApp, err := builder.AddJavaScriptApp("resource")
+	javaScriptApp, err := builder.AddJavaScriptApp("resource", "node", nil)
 	if err != nil {
 		log.Fatalf("AddJavaScriptApp: %v", err)
 	}
 	_, _ = javaScriptApp.WithEnvironment("KEY", "value")
 
-	viteApp, err := builder.AddViteApp("resource")
+	viteApp, err := builder.AddViteApp("resource", "node", nil)
 	if err != nil {
 		log.Fatalf("AddViteApp: %v", err)
 	}
-	_, _ = viteApp.WithViteConfig()
-	_, _ = viteApp.WithPnpm()
-	_, _ = viteApp.WithBuildScript()
-	_, _ = viteApp.WithRunScript()
+	viteApp.WithViteConfig("vite.config.ts")
+	_, _ = viteApp.WithPnpm(nil, nil)
+	_, _ = viteApp.WithBuildScript("build", nil)
+	_, _ = viteApp.WithRunScript("start", nil)
 
 	app, err := builder.Build()
 	if err != nil {

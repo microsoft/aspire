@@ -19,13 +19,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureOpenAI: %v", err)
 	}
-	_, _ = openai.AddDeployment("resource")
+	_, _ = openai.AddDeployment("resource", "model", "version")
 
 	api, err := builder.AddContainer("resource", "image")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = api.WithCognitiveServicesRoleAssignments()
+	_, _ = api.WithCognitiveServicesRoleAssignments(openai, nil)
 
 	app, err := builder.Build()
 	if err != nil {

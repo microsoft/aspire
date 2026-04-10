@@ -15,9 +15,9 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
+	_, _ = builder.AddParameter("parameter", nil)
 
-	valkey, err := builder.AddValkey("resource")
+	valkey, err := builder.AddValkey("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddValkey: %v", err)
 	}

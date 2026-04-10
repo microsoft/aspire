@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureSignalR: %v", err)
 	}
-	_, _ = signalr.RunAsEmulator()
+	signalr.RunAsEmulator(nil)
 
 	app, err := builder.Build()
 	if err != nil {

@@ -54,8 +54,8 @@ func main() {
 		log.Fatalf("WithHostPort: %v", err)
 	}
 
-	// withRedisCommander — with configureContainer callback exercising WithHostPort
-	_, err = cache.WithRedisCommander(func(args ...any) any {
+	// withRedisCommander — fluent (1 return value)
+	cache.WithRedisCommander(func(args ...any) any {
 		if len(args) > 0 {
 			if commander, ok := args[0].(interface {
 				WithHostPort(float64) *aspire.ContainerResource
@@ -65,12 +65,9 @@ func main() {
 		}
 		return nil
 	}, nil)
-	if err != nil {
-		log.Fatalf("WithRedisCommander: %v", err)
-	}
 
-	// withRedisInsight — with configureContainer callback
-	_, err = cache.WithRedisInsight(func(args ...any) any {
+	// withRedisInsight — fluent (1 return value)
+	cache.WithRedisInsight(func(args ...any) any {
 		if len(args) > 0 {
 			if insight, ok := args[0].(interface {
 				WithHostPort(float64) *aspire.ContainerResource
@@ -80,9 +77,6 @@ func main() {
 		}
 		return nil
 	}, nil)
-	if err != nil {
-		log.Fatalf("WithRedisInsight: %v", err)
-	}
 
 	// ---- Property access on RedisResource (ExposeProperties = true) ----
 	_, _ = cache.PrimaryEndpoint()

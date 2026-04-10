@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddKubernetesEnvironment: %v", err)
 	}
-	_, _ = kubernetes.WithProperties()
+	kubernetes.WithProperties(nil)
 	_, _ = kubernetes.HelmChartName()
 	_, _ = kubernetes.DefaultStorageClassName()
 	_, _ = kubernetes.DefaultServiceType()
@@ -28,7 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = serviceContainer.PublishAsKubernetesService()
+	_, _ = serviceContainer.PublishAsKubernetesService(nil)
 
 	app, err := builder.Build()
 	if err != nil {

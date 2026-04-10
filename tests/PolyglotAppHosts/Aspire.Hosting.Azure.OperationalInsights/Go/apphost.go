@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureLogAnalyticsWorkspace: %v", err)
 	}
-	_, _ = logAnalytics.WithUrl("http://localhost")
+	_, _ = logAnalytics.WithUrl("http://localhost", nil)
 
 	app, err := builder.Build()
 	if err != nil {

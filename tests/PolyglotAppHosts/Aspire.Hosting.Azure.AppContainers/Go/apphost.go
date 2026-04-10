@@ -24,8 +24,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureContainerAppEnvironment: %v", err)
 	}
-	_, _ = env2.WithDashboard()
-	_, _ = env2.WithHttpsUpgrade()
+	_, _ = env2.WithDashboard(nil)
+	_, _ = env2.WithHttpsUpgrade(nil)
 
 	laws, err := builder.AddAzureLogAnalyticsWorkspace("resource")
 	if err != nil {
@@ -37,8 +37,8 @@ func main() {
 	}
 	_, _ = env3.WithAzureLogAnalyticsWorkspace(laws)
 
-	_, _ = builder.AddParameter("parameter")
-	_, _ = builder.AddParameter("parameter")
+	_, _ = builder.AddParameter("parameter", nil)
+	_, _ = builder.AddParameter("parameter", nil)
 
 	web, err := builder.AddContainer("resource", "image")
 	if err != nil {
@@ -62,19 +62,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = processor.PublishAsConfiguredAzureContainerAppJob()
+	_, _ = processor.PublishAsConfiguredAzureContainerAppJob(nil)
 
 	scheduler, err := builder.AddContainer("resource", "image")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = scheduler.PublishAsScheduledAzureContainerAppJob()
+	_, _ = scheduler.PublishAsScheduledAzureContainerAppJob("0 * * * *")
 
 	reporter, err := builder.AddContainer("resource", "image")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = reporter.PublishAsConfiguredScheduledAzureContainerAppJob()
+	_, _ = reporter.PublishAsConfiguredScheduledAzureContainerAppJob("0 * * * *", nil)
 
 	app, err := builder.Build()
 	if err != nil {

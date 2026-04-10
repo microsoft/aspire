@@ -15,7 +15,10 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddAzureKeyVault("resource")
+	_, err = builder.AddAzureKeyVault("resource")
+	if err != nil {
+		log.Fatalf("AddAzureKeyVault: %v", err)
+	}
 
 	cache, err := builder.AddAzureManagedRedis("resource")
 	if err != nil {
@@ -32,9 +35,9 @@ func main() {
 		log.Fatalf("AddAzureManagedRedis: %v", err)
 	}
 
-	_, _ = accessKeyCache.WithAccessKeyAuthentication()
-	_, _ = accessKeyCache.WithAccessKeyAuthenticationWithKeyVault()
-	_, _ = containerCache.RunAsContainer()
+	accessKeyCache.WithAccessKeyAuthentication()
+	accessKeyCache.WithAccessKeyAuthenticationWithKeyVault(nil)
+	containerCache.RunAsContainer(nil)
 
 	_, _ = cache.ConnectionStringExpression()
 	_, _ = cache.HostName()

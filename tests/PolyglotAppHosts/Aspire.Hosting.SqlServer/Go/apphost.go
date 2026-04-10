@@ -15,34 +15,34 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	sqlServer, err := builder.AddSqlServer("resource")
+	sqlServer, err := builder.AddSqlServer("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddSqlServer: %v", err)
 	}
-	_, _ = sqlServer.AddDatabase("resource")
+	_, _ = sqlServer.AddDatabase("resource", nil)
 
-	_, err = builder.AddSqlServer("resource")
-	if err != nil {
-		log.Fatalf("AddSqlServer: %v", err)
-	}
-
-	_, err = builder.AddSqlServer("resource")
+	_, err = builder.AddSqlServer("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddSqlServer: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
-	_, err = builder.AddSqlServer("resource")
+	_, err = builder.AddSqlServer("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddSqlServer: %v", err)
 	}
 
-	sqlChained, err := builder.AddSqlServer("resource")
+	_, _ = builder.AddParameter("parameter", nil)
+	_, err = builder.AddSqlServer("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddSqlServer: %v", err)
 	}
-	_, _ = sqlChained.AddDatabase("resource")
-	_, _ = sqlChained.AddDatabase("resource")
+
+	sqlChained, err := builder.AddSqlServer("resource", nil, nil)
+	if err != nil {
+		log.Fatalf("AddSqlServer: %v", err)
+	}
+	_, _ = sqlChained.AddDatabase("resource", nil)
+	_, _ = sqlChained.AddDatabase("resource", nil)
 
 	_, _ = sqlServer.PrimaryEndpoint()
 	_, _ = sqlServer.Host()

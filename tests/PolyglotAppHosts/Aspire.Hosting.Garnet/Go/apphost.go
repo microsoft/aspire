@@ -15,7 +15,7 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	garnet, err := builder.AddGarnet("resource")
+	garnet, err := builder.AddGarnet("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddGarnet: %v", err)
 	}

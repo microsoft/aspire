@@ -15,8 +15,8 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
-	_, _ = builder.AddParameter("parameter")
+	_, _ = builder.AddParameter("parameter", nil)
+	_, _ = builder.AddParameter("parameter", nil)
 	_, _ = builder.AddAzureApplicationInsights("resource")
 
 	env, err := builder.AddAzureAppServiceEnvironment("resource")

@@ -20,18 +20,18 @@ func main() {
 		log.Fatalf("AddAzureKustoCluster: %v", err)
 	}
 
-	defaultDatabase, err := kusto.AddReadWriteDatabase("resource")
+	defaultDatabase, err := kusto.AddReadWriteDatabase("resource", nil)
 	if err != nil {
 		log.Fatalf("AddReadWriteDatabase: %v", err)
 	}
 
-	customDatabase, err := kusto.AddReadWriteDatabase("resource")
+	customDatabase, err := kusto.AddReadWriteDatabase("resource", nil)
 	if err != nil {
 		log.Fatalf("AddReadWriteDatabase: %v", err)
 	}
 
-	_, _ = defaultDatabase.WithCreationScript()
-	_, _ = customDatabase.WithCreationScript()
+	defaultDatabase.WithCreationScript("./script.kql")
+	customDatabase.WithCreationScript("./script.kql")
 
 	_, _ = kusto.IsEmulator()
 	_, _ = kusto.UriExpression()

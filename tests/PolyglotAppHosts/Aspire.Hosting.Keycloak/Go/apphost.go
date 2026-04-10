@@ -15,15 +15,15 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
-	_, _ = builder.AddParameter("parameter")
+	_, _ = builder.AddParameter("parameter", nil)
+	_, _ = builder.AddParameter("parameter", nil)
 
-	keycloak, err := builder.AddKeycloak("resource")
+	keycloak, err := builder.AddKeycloak("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddKeycloak: %v", err)
 	}
 
-	_, err = builder.AddKeycloak("resource")
+	_, err = builder.AddKeycloak("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddKeycloak: %v", err)
 	}

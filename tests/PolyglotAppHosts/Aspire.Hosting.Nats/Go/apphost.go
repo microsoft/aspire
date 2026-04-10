@@ -15,27 +15,27 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	nats, err := builder.AddNats("resource")
+	nats, err := builder.AddNats("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddNats: %v", err)
 	}
-	_, _ = nats.WithJetStream()
-	_, _ = nats.WithDataVolume()
+	nats.WithJetStream()
+	nats.WithDataVolume(nil, nil)
 
-	_, err = builder.AddNats("resource")
+	_, err = builder.AddNats("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddNats: %v", err)
 	}
 
-	nats3, err := builder.AddNats("resource")
+	nats3, err := builder.AddNats("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddNats: %v", err)
 	}
-	_, _ = nats3.WithDataBindMount()
+	nats3.WithDataBindMount("/tmp", nil)
 
-	_, _ = builder.AddParameter("parameter")
-	_, _ = builder.AddParameter("parameter")
-	_, err = builder.AddNats("resource")
+	_, _ = builder.AddParameter("parameter", nil)
+	_, _ = builder.AddParameter("parameter", nil)
+	_, err = builder.AddNats("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddNats: %v", err)
 	}
@@ -44,8 +44,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = consumer.WithReference()
-	_, _ = consumer.WithReference()
+	_, _ = consumer.WithReference(nil, nil, nil, nil)
+	_, _ = consumer.WithReference(nil, nil, nil, nil)
 
 	_, _ = nats.PrimaryEndpoint()
 	_, _ = nats.Host()

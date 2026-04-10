@@ -15,22 +15,22 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	funcApp, err := builder.AddAzureFunctionsProject("resource")
+	funcApp, err := builder.AddAzureFunctionsProject("resource", ".")
 	if err != nil {
 		log.Fatalf("AddAzureFunctionsProject: %v", err)
 	}
 
-	_, err = builder.AddAzureStorage("resource")
+	storage1, err := builder.AddAzureStorage("resource")
 	if err != nil {
 		log.Fatalf("AddAzureStorage: %v", err)
 	}
-	_, _ = funcApp.WithHostStorage()
+	funcApp.WithHostStorage(storage1)
 
 	_, err = builder.AddAzureStorage("resource")
 	if err != nil {
 		log.Fatalf("AddAzureStorage: %v", err)
 	}
-	_, _ = funcApp.WithReference()
+	_, _ = funcApp.WithReference(nil, nil, nil, nil)
 
 	app, err := builder.Build()
 	if err != nil {

@@ -15,60 +15,63 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	milvus, err := builder.AddMilvus("resource")
+	milvus, err := builder.AddMilvus("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
-	milvus2, err := builder.AddMilvus("resource")
+	param, err := builder.AddParameter("parameter", nil)
+	if err != nil {
+		log.Fatalf("AddParameter: %v", err)
+	}
+	milvus2, err := builder.AddMilvus("resource", param, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
 
-	_, err = builder.AddMilvus("resource")
+	_, err = builder.AddMilvus("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
 
-	_, err = milvus.AddDatabase("resource")
+	_, err = milvus.AddDatabase("resource", nil)
 	if err != nil {
 		log.Fatalf("AddDatabase: %v", err)
 	}
 
-	_, _ = milvus.AddDatabase("resource")
-	_, _ = milvus.WithAttu()
-	_, _ = milvus2.WithAttu()
+	_, _ = milvus.AddDatabase("resource", nil)
+	milvus.WithAttu(nil, nil)
+	milvus2.WithAttu(nil, nil)
 
-	_, err = builder.AddMilvus("resource")
+	_, err = builder.AddMilvus("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
 
-	_, _ = milvus.WithDataVolume()
-	_, _ = milvus2.WithDataVolume()
+	milvus.WithDataVolume(nil, nil)
+	milvus2.WithDataVolume(nil, nil)
 
-	_, err = builder.AddMilvus("resource")
+	_, err = builder.AddMilvus("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
 
-	_, err = builder.AddMilvus("resource")
+	_, err = builder.AddMilvus("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
 
-	_, err = builder.AddMilvus("resource")
+	_, err = builder.AddMilvus("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
 
-	_, err = builder.AddMilvus("resource")
+	_, err = builder.AddMilvus("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
 
-	_, err = builder.AddMilvus("resource")
+	_, err = builder.AddMilvus("resource", nil, nil)
 	if err != nil {
 		log.Fatalf("AddMilvus: %v", err)
 	}
@@ -77,8 +80,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = api.WithReference()
-	_, _ = api.WithReference()
+	_, _ = api.WithReference(nil, nil, nil, nil)
+	_, _ = api.WithReference(nil, nil, nil, nil)
 
 	_, _ = milvus.PrimaryEndpoint()
 	_, _ = milvus.Host()

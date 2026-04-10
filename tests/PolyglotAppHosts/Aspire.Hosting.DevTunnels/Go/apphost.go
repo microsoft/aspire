@@ -15,17 +15,17 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	tunnel, err := builder.AddDevTunnel("resource")
+	tunnel, err := builder.AddDevTunnel("resource", nil, nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddDevTunnel: %v", err)
 	}
 
-	tunnel2, err := builder.AddDevTunnel("resource")
+	tunnel2, err := builder.AddDevTunnel("resource", nil, nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddDevTunnel: %v", err)
 	}
 
-	_, err = builder.AddDevTunnel("resource")
+	_, err = builder.AddDevTunnel("resource", nil, nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddDevTunnel: %v", err)
 	}
@@ -34,17 +34,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = web.GetEndpoint("default")
-	_, _ = tunnel.WithTunnelReference()
+	endpoint, err := web.GetEndpoint("default")
+	if err != nil {
+		log.Fatalf("GetEndpoint: %v", err)
+	}
+	tunnel.WithTunnelReference(endpoint)
 
 	web2, err := builder.AddContainer("resource", "image")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = web2.GetEndpoint("default")
-	_, _ = tunnel2.WithTunnelReferenceAnonymous()
+	endpoint2, err := web2.GetEndpoint("default")
+	if err != nil {
+		log.Fatalf("GetEndpoint: %v", err)
+	}
+	tunnel2.WithTunnelReferenceAnonymous(endpoint2, false)
 
-	tunnel3, err := builder.AddDevTunnel("resource")
+	tunnel3, err := builder.AddDevTunnel("resource", nil, nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddDevTunnel: %v", err)
 	}
@@ -52,14 +58,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = tunnel3.WithTunnelReferenceAll()
+	tunnel3.WithTunnelReferenceAll(nil, false)
 
-	_, err = builder.AddDevTunnel("resource")
+	_, err = builder.AddDevTunnel("resource", nil, nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddDevTunnel: %v", err)
 	}
 
-	_, err = builder.AddDevTunnel("resource")
+	_, err = builder.AddDevTunnel("resource", nil, nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddDevTunnel: %v", err)
 	}

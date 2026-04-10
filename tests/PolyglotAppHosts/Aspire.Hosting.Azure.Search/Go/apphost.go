@@ -19,7 +19,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureSearch: %v", err)
 	}
-	_, _ = search.WithSearchRoleAssignments()
+	_, _ = search.WithSearchRoleAssignments(search, nil)
 
 	app, err := builder.Build()
 	if err != nil {

@@ -15,45 +15,45 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	mongo, err := builder.AddMongoDB("resource")
+	mongo, err := builder.AddMongoDB("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddMongoDB: %v", err)
 	}
-	_, _ = mongo.AddDatabase("resource")
-	_, _ = mongo.AddDatabase("resource")
+	_, _ = mongo.AddDatabase("resource", nil)
+	_, _ = mongo.AddDatabase("resource", nil)
 
-	_, err = builder.AddMongoDB("resource")
-	if err != nil {
-		log.Fatalf("AddMongoDB: %v", err)
-	}
-
-	_, err = builder.AddMongoDB("resource")
+	_, err = builder.AddMongoDB("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddMongoDB: %v", err)
 	}
 
-	_, err = builder.AddMongoDB("resource")
+	_, err = builder.AddMongoDB("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddMongoDB: %v", err)
 	}
 
-	_, err = builder.AddMongoDB("resource")
+	_, err = builder.AddMongoDB("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddMongoDB: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
-	_, err = builder.AddMongoDB("resource")
+	_, err = builder.AddMongoDB("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddMongoDB: %v", err)
 	}
 
-	mongoChained, err := builder.AddMongoDB("resource")
+	_, _ = builder.AddParameter("parameter", nil)
+	_, err = builder.AddMongoDB("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddMongoDB: %v", err)
 	}
-	_, _ = mongoChained.AddDatabase("resource")
-	_, _ = mongoChained.AddDatabase("resource")
+
+	mongoChained, err := builder.AddMongoDB("resource", nil, nil, nil)
+	if err != nil {
+		log.Fatalf("AddMongoDB: %v", err)
+	}
+	_, _ = mongoChained.AddDatabase("resource", nil)
+	_, _ = mongoChained.AddDatabase("resource", nil)
 
 	_, _ = mongo.PrimaryEndpoint()
 	_, _ = mongo.Host()

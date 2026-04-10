@@ -15,36 +15,36 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	postgres, err := builder.AddPostgres("resource")
+	postgres, err := builder.AddPostgres("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddPostgres: %v", err)
 	}
 
-	db, err := postgres.AddDatabase("resource")
+	db, err := postgres.AddDatabase("resource", nil)
 	if err != nil {
 		log.Fatalf("AddDatabase: %v", err)
 	}
 
-	_, _ = postgres.WithPgAdmin()
-	_, _ = postgres.WithPgAdmin()
-	_, _ = postgres.WithPgWeb()
-	_, _ = postgres.WithPgWeb()
-	_, _ = postgres.WithDataVolume()
-	_, _ = postgres.WithDataVolume()
-	_, _ = postgres.WithDataBindMount()
-	_, _ = postgres.WithDataBindMount()
-	_, _ = postgres.WithInitFiles()
-	_, _ = postgres.WithHostPort()
-	_, _ = db.WithCreationScript()
+	postgres.WithPgAdmin(nil, nil)
+	postgres.WithPgAdmin(nil, nil)
+	postgres.WithPgWeb(nil, nil)
+	postgres.WithPgWeb(nil, nil)
+	postgres.WithDataVolume(nil, nil)
+	postgres.WithDataVolume(nil, nil)
+	postgres.WithDataBindMount("/tmp", nil)
+	postgres.WithDataBindMount("/tmp", nil)
+	postgres.WithInitFiles("./init")
+	postgres.WithHostPort(5432)
+	db.WithCreationScript("script.sql")
 
-	_, _ = builder.AddParameter("parameter")
-	_, _ = builder.AddParameter("parameter")
-	pg2, err := builder.AddPostgres("resource")
+	_, _ = builder.AddParameter("parameter", nil)
+	_, _ = builder.AddParameter("parameter", nil)
+	pg2, err := builder.AddPostgres("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddPostgres: %v", err)
 	}
-	_, _ = pg2.WithPassword()
-	_, _ = pg2.WithUserName()
+	pg2.WithPassword(nil)
+	pg2.WithUserName(nil)
 
 	_, _ = postgres.PrimaryEndpoint()
 	_, _ = postgres.UserNameReference()

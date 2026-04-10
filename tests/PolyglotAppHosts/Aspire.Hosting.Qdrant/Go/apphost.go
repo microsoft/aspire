@@ -15,23 +15,23 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
-	_, err = builder.AddQdrant("resource")
+	_, _ = builder.AddParameter("parameter", nil)
+	_, err = builder.AddQdrant("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddQdrant: %v", err)
 	}
 
-	qdrant, err := builder.AddQdrant("resource")
+	qdrant, err := builder.AddQdrant("resource", nil, nil, nil)
 	if err != nil {
 		log.Fatalf("AddQdrant: %v", err)
 	}
-	_, _ = qdrant.WithDataVolume()
+	qdrant.WithDataVolume(nil, nil)
 
 	consumer, err := builder.AddContainer("resource", "image")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = consumer.WithReference()
+	_, _ = consumer.WithReference(nil, nil, nil, nil)
 
 	_, _ = qdrant.PrimaryEndpoint()
 	_, _ = qdrant.GrpcHost()

@@ -15,25 +15,28 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddAzureProvisioning("resource")
+	_, _ = builder.AddAzureProvisioning()
 
-	_, _ = builder.AddParameter("parameter")
-	_, _ = builder.AddParameter("parameter")
-	_, _ = builder.AddParameter("parameter")
-	_, _ = builder.AddParameter("parameter")
+	param, err := builder.AddParameter("parameter", nil)
+	if err != nil {
+		log.Fatalf("AddParameter: %v", err)
+	}
+	_, _ = builder.AddParameter("parameter", nil)
+	_, _ = builder.AddParameter("parameter", nil)
+	_, _ = builder.AddParameter("parameter", nil)
 
 	_, _ = builder.AddConnectionString("connection-string", nil)
 
-	azureEnv, err := builder.AddAzureEnvironment("resource")
+	azureEnv, err := builder.AddAzureEnvironment()
 	if err != nil {
 		log.Fatalf("AddAzureEnvironment: %v", err)
 	}
-	_, _ = azureEnv.WithLocation()
+	azureEnv.WithLocation(param)
 
 	_, _ = builder.AddContainer("resource", "image")
 	_, _ = builder.AddExecutable("resource", "echo", ".", nil)
 
-	fileBicep, err := builder.AddBicepTemplate("resource")
+	fileBicep, err := builder.AddBicepTemplate("resource", "main.bicep")
 	if err != nil {
 		log.Fatalf("AddBicepTemplate: %v", err)
 	}
@@ -41,13 +44,11 @@ func main() {
 	_, _ = fileBicep.ClearDefaultRoleAssignments()
 	_, _ = fileBicep.GetBicepIdentifier()
 	_, _ = fileBicep.IsExisting()
-	_, _ = fileBicep.RunAsExisting()
-	_, _ = fileBicep.RunAsExistingFromParameters()
-	_, _ = fileBicep.PublishAsExisting()
-	_, _ = fileBicep.PublishAsExistingFromParameters()
-	_, _ = fileBicep.AsExisting()
+	_, _ = fileBicep.RunAsExisting(nil, nil)
+	_, _ = fileBicep.PublishAsExisting(nil, nil)
+	_, _ = fileBicep.AsExisting(nil, nil)
 
-	inlineBicep, err := builder.AddBicepTemplateString("resource")
+	inlineBicep, err := builder.AddBicepTemplateString("resource", "")
 	if err != nil {
 		log.Fatalf("AddBicepTemplateString: %v", err)
 	}
@@ -56,51 +57,47 @@ func main() {
 	_, _ = inlineBicep.GetBicepIdentifier()
 	_, _ = inlineBicep.IsExisting()
 
-	infra, err := builder.AddAzureInfrastructure("resource")
+	infra, err := builder.AddAzureInfrastructure("resource", nil)
 	if err != nil {
 		log.Fatalf("AddAzureInfrastructure: %v", err)
 	}
-	_, _ = infra.GetOutput()
-	_, _ = infra.WithParameter()
-	_, _ = infra.WithParameterStringValue()
-	_, _ = infra.WithParameterStringValues()
-	_, _ = infra.WithParameterFromParameter()
-	_, _ = infra.WithParameterFromConnectionString()
-	_, _ = infra.WithParameterFromOutput()
-	_, _ = infra.WithParameterFromReferenceExpression()
-	_, _ = infra.WithParameterFromEndpoint()
+	_, _ = infra.GetOutput("outputName")
+	infra.WithParameter("name")
+	infra.WithParameterStringValue("name", "")
+	infra.WithParameterStringValues("name", nil)
+	infra.WithParameterFromParameter("name", nil)
+	infra.WithParameterFromConnectionString("name", nil)
+	infra.WithParameterFromOutput("name", nil)
+	infra.WithParameterFromReferenceExpression("name", nil)
+	infra.WithParameterFromEndpoint("name", nil)
 	_, _ = infra.PublishAsConnectionString()
 	_, _ = infra.ClearDefaultRoleAssignments()
 	_, _ = infra.GetBicepIdentifier()
 	_, _ = infra.IsExisting()
-	_, _ = infra.RunAsExisting()
-	_, _ = infra.RunAsExistingFromParameters()
-	_, _ = infra.PublishAsExisting()
-	_, _ = infra.PublishAsExistingFromParameters()
-	_, _ = infra.AsExisting()
+	_, _ = infra.RunAsExisting(nil, nil)
+	_, _ = infra.PublishAsExisting(nil, nil)
+	_, _ = infra.AsExisting(nil, nil)
 
 	identity, err := builder.AddAzureUserAssignedIdentity("resource")
 	if err != nil {
 		log.Fatalf("AddAzureUserAssignedIdentity: %v", err)
 	}
-	_, _ = identity.ConfigureInfrastructure()
-	_, _ = identity.WithParameter()
-	_, _ = identity.WithParameterStringValue()
-	_, _ = identity.WithParameterStringValues()
-	_, _ = identity.WithParameterFromParameter()
-	_, _ = identity.WithParameterFromConnectionString()
-	_, _ = identity.WithParameterFromOutput()
-	_, _ = identity.WithParameterFromReferenceExpression()
-	_, _ = identity.WithParameterFromEndpoint()
+	_, _ = identity.ConfigureInfrastructure(nil)
+	identity.WithParameter("name")
+	identity.WithParameterStringValue("name", "")
+	identity.WithParameterStringValues("name", nil)
+	identity.WithParameterFromParameter("name", nil)
+	identity.WithParameterFromConnectionString("name", nil)
+	identity.WithParameterFromOutput("name", nil)
+	identity.WithParameterFromReferenceExpression("name", nil)
+	identity.WithParameterFromEndpoint("name", nil)
 	_, _ = identity.PublishAsConnectionString()
 	_, _ = identity.ClearDefaultRoleAssignments()
 	_, _ = identity.GetBicepIdentifier()
 	_, _ = identity.IsExisting()
-	_, _ = identity.RunAsExisting()
-	_, _ = identity.RunAsExistingFromParameters()
-	_, _ = identity.PublishAsExisting()
-	_, _ = identity.PublishAsExistingFromParameters()
-	_, _ = identity.AsExisting()
+	_, _ = identity.RunAsExisting(nil, nil)
+	_, _ = identity.PublishAsExisting(nil, nil)
+	_, _ = identity.AsExisting(nil, nil)
 
 	app, err := builder.Build()
 	if err != nil {

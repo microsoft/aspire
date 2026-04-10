@@ -15,13 +15,13 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter")
+	_, _ = builder.AddParameter("parameter", nil)
 
 	openai, err := builder.AddOpenAI("resource")
 	if err != nil {
 		log.Fatalf("AddOpenAI: %v", err)
 	}
-	_, _ = openai.AddModel("resource")
+	_, _ = openai.AddModel("resource", "deployment")
 
 	app, err := builder.Build()
 	if err != nil {

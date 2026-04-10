@@ -21,19 +21,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddOrleans: %v", err)
 	}
-	_, _ = orleans.AsClient()
+	orService, err := orleans.AsClient()
+	if err != nil {
+		log.Fatalf("AsClient: %v", err)
+	}
+	_ = orService
 
 	silo, err := builder.AddContainer("resource", "image")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = silo.WithOrleansReference()
+	_, _ = silo.WithOrleansReference(orleans)
 
 	client, err := builder.AddContainer("resource", "image")
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = client.WithOrleansClientReference()
+	_, _ = client.WithOrleansClientReference(orService)
 
 	app, err := builder.Build()
 	if err != nil {

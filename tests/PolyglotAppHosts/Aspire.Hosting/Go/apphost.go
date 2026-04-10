@@ -32,7 +32,7 @@ func main() {
 	}
 
 	// addExecutable (pre-existing)
-	exe, err := builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
+	_, err = builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
 	if err != nil {
 		log.Fatalf("AddExecutable: %v", err)
 	}
@@ -142,12 +142,12 @@ func main() {
 	}
 
 	// waitForCompletion (pre-existing)
-	if _, err = container.WaitForCompletion(exe, nil); err != nil {
+	if _, err = container.WaitForCompletion(nil, nil); err != nil {
 		log.Fatalf("WaitForCompletion: %v", err)
 	}
 
 	// withChildRelationship
-	if _, err = container.WithChildRelationship(exe); err != nil {
+	if _, err = container.WithChildRelationship(nil); err != nil {
 		log.Fatalf("WithChildRelationship: %v", err)
 	}
 
@@ -245,8 +245,8 @@ func main() {
 
 	builderEventing, err := builder.Eventing()
 	if err == nil && builderEventing != nil {
-		_, _ = builderEventing.Unsubscribe(beforeStartSub)
-		_, _ = builderEventing.Unsubscribe(afterResourcesSub)
+		builderEventing.Unsubscribe(beforeStartSub)
+		builderEventing.Unsubscribe(afterResourcesSub)
 	}
 
 	// Resource events
@@ -291,7 +291,7 @@ func main() {
 	if _, err = container.WithArgs([]string{"--verbose"}); err != nil {
 		log.Fatalf("WithArgs: %v", err)
 	}
-	if _, err = container.WithParentRelationship(exe); err != nil {
+	if _, err = container.WithParentRelationship(nil); err != nil {
 		log.Fatalf("WithParentRelationship: %v", err)
 	}
 	if _, err = container.WithExplicitStart(); err != nil {
