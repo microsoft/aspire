@@ -79,7 +79,7 @@ internal static partial class ProcessSignaler
             return true;
         }
 
-        tolerance ??= TimeSpan.FromMilliseconds(1);
+        tolerance ??= TimeSpan.FromSeconds(1);
         return ((DateTimeOffset)expectedStartTime - new DateTimeOffset(processStartTime)).Duration() <= tolerance;
     }
 
