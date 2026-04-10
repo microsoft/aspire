@@ -230,27 +230,6 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void FromLegacy_CopiesDocsSourceConfiguration()
-    {
-        var legacySettings = new AspireJsonConfiguration
-        {
-            Docs = new AspireConfigDocs
-            {
-                LlmsTxtUrl = "http://localhost:4321/llms-small.txt",
-                Api = new AspireConfigApiDocs
-                {
-                    SitemapUrl = "http://localhost:4321/sitemap-0.xml"
-                }
-            }
-        };
-
-        var config = AspireConfigFile.FromLegacy(legacySettings, profiles: null);
-
-        Assert.Equal("http://localhost:4321/llms-small.txt", config.Docs?.LlmsTxtUrl);
-        Assert.Equal("http://localhost:4321/sitemap-0.xml", config.Docs?.Api?.SitemapUrl);
-    }
-
-    [Fact]
     public void GetEffectiveSdkVersion_ReturnsConfigValue_WhenSet()
     {
         var config = new AspireConfigFile

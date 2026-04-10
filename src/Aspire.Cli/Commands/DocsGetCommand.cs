@@ -86,9 +86,85 @@ internal sealed partial class DocsGetCommand : BaseCommand
         }
         else
         {
-            InteractionService.DisplayMarkdown(doc.Content);
+            var content = MarkdownToSpectreConverter.ConvertToPlainText(doc.Content)
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace("\r", "\n", StringComparison.Ordinal);
+
+            InteractionService.DisplayRawText(WrapForConsole(content));
         }
 
         return ExitCodeConstants.Success;
+    }
+
+    private static string WrapForConsole(string text, int width = 100)
+    {
+        var wrappedLines = new List<string>();
+
+        foreach (var line in text.Split('\n'))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                wrappedLines.Add(string.Empty);
+                continue;
+            }
+
+            WrapLine(line.TrimEnd(), width, wrappedLines);
+        }
+
+        return string.Join("\n", wrappedLines);
+    }
+
+    private static void WrapLine(string line, int width, List<string> wrappedLines)
+    {
+        var prefixLength = GetPrefixLength(line);
+        var prefix = line[..prefixLength];
+        var remaining = line[prefixLength..].TrimStart();
+        var continuationPrefix = new string(' ', prefixLength);
+        var currentPrefix = prefix;
+
+        while (!string.IsNullOrEmpty(remaining))
+        {
+            var availableWidth = Math.Max(1, width - currentPrefix.Length);
+
+            if (remaining.Length <= availableWidth)
+            {
+                wrappedLines.Add(currentPrefix + remaining);
+                return;
+            }
+
+            var splitIndex = remaining.LastIndexOf(' ', availableWidth);
+            if (splitIndex <= 0)
+            {
+                splitIndex = availableWidth;
+            }
+
+            wrappedLines.Add(currentPrefix + remaining[..splitIndex].TrimEnd());
+            remaining = remaining[splitIndex..].TrimStart();
+            currentPrefix = continuationPrefix;
+        }
+    }
+
+    private static int GetPrefixLength(string line)
+    {
+        if (line.StartsWith("* ", StringComparison.Ordinal))
+        {
+            return 2;
+        }
+
+        var index = 0;
+        while (index < line.Length && char.IsDigit(line[index]))
+        {
+            index++;
+        }
+
+        if (index > 0 &&
+            index + 1 < line.Length &&
+            line[index] == '.' &&
+            line[index + 1] == ' ')
+        {
+            return index + 2;
+        }
+
+        return 0;
     }
 }

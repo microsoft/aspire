@@ -125,6 +125,40 @@ public class MarkdownToSpectreConverterTests
     }
 
     [Fact]
+    public void ConvertToPlainText_WithStructuredMarkdown_PreservesReadableSpacing()
+    {
+        var markdown = """
+            # Certificate configuration
+
+            > Learn how to configure HTTPS endpoints.
+
+            ### Using the Aspire CLI (recommended)
+
+            Use the [Aspire CLI](https://aspire.dev/get-started/install-cli/) and run `aspire certs trust`.
+
+            ```bash
+            aspire certs trust
+            ```
+            """;
+
+        var result = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
+
+        var expected = """
+            Certificate configuration
+
+            Learn how to configure HTTPS endpoints.
+
+            Using the Aspire CLI (recommended)
+
+            Use the Aspire CLI (https://aspire.dev/get-started/install-cli/) and run aspire certs trust.
+
+            aspire certs trust
+            """;
+
+        Assert.Equal(expected.Replace("\r\n", "\n"), result);
+    }
+
+    [Fact]
     public void ConvertToSpectre_WithComplexMarkdown_ConvertsAllElements()
     {
         // Arrange

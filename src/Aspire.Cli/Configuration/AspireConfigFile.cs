@@ -5,6 +5,8 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
@@ -99,7 +101,7 @@ internal sealed class AspireConfigFile
     /// Documentation source configuration for aspire docs and aspire docs api.
     /// </summary>
     [JsonPropertyName("docs")]
-    [Description("Documentation source configuration for aspire docs and aspire docs api.")]
+    [Description("Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.")]
     public AspireConfigDocs? Docs { get; set; }
 
     /// <summary>
@@ -409,7 +411,6 @@ internal sealed class AspireConfigFile
 
             config.Channel = settings.Channel;
             config.Features = settings.Features;
-            config.Docs = settings.Docs;
             config.Packages = settings.Packages;
         }
 
@@ -458,17 +459,17 @@ internal sealed class AspireConfigSdk
 internal sealed class AspireConfigDocs
 {
     /// <summary>
-    /// URL for the llms.txt documentation source consumed by aspire docs.
+    /// Optional override for the llms.txt documentation source consumed by aspire docs.
     /// </summary>
     [JsonPropertyName("llmsTxtUrl")]
-    [Description("URL for the llms.txt documentation source consumed by aspire docs.")]
+    [Description("Optional override for the llms.txt documentation source consumed by aspire docs. Defaults to " + DocsSourceConfiguration.DefaultLlmsTxtUrl + ".")]
     public string? LlmsTxtUrl { get; set; }
 
     /// <summary>
-    /// API reference source configuration consumed by aspire docs api.
+    /// Optional API reference source overrides consumed by aspire docs api.
     /// </summary>
     [JsonPropertyName("api")]
-    [Description("API reference source configuration consumed by aspire docs api.")]
+    [Description("Optional API reference source overrides consumed by aspire docs api. Leave these unset to use the built-in aspire.dev API sources.")]
     public AspireConfigApiDocs? Api { get; set; }
 }
 
@@ -478,10 +479,10 @@ internal sealed class AspireConfigDocs
 internal sealed class AspireConfigApiDocs
 {
     /// <summary>
-    /// URL for the API sitemap consumed by aspire docs api.
+    /// Optional override for the API sitemap consumed by aspire docs api.
     /// </summary>
     [JsonPropertyName("sitemapUrl")]
-    [Description("URL for the API sitemap consumed by aspire docs api.")]
+    [Description("Optional override for the API sitemap consumed by aspire docs api. Defaults to " + ApiDocsSourceConfiguration.DefaultSitemapUrl + ".")]
     public string? SitemapUrl { get; set; }
 }
 

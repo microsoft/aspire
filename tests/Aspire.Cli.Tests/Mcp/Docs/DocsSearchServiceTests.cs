@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Documentation.Docs;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Documentation.Docs;
@@ -18,6 +19,7 @@ public class DocsSearchServiceTests
         return new DocsIndexService(
             fetcher ?? new MockDocsFetcher(null),
             cache ?? new NullDocsCache(),
+            new ConfigurationBuilder().Build(),
             NullLogger<DocsIndexService>.Instance);
     }
 

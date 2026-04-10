@@ -14,8 +14,7 @@ public class DocsSourceConfigurationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["docs:llmsTxtUrl"] = "http://localhost:4321/llms-small.txt",
-                [DocsSourceConfiguration.LlmsTxtUrlConfigKey] = "http://legacy.example/llms-small.txt"
+                [DocsSourceConfiguration.LlmsTxtUrlConfigPath] = "http://localhost:4321/llms-small.txt"
             })
             .Build();
 
@@ -25,18 +24,25 @@ public class DocsSourceConfigurationTests
     }
 
     [Fact]
-    public void GetLlmsTxtUrl_FallsBackToLegacyConfigKey()
+    public void GetLlmsTxtUrl_DefaultsToBuiltInSource()
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [DocsSourceConfiguration.LlmsTxtUrlConfigKey] = "http://legacy.example/llms-small.txt"
-            })
-            .Build();
+        var configuration = new ConfigurationBuilder().Build();
 
         var llmsTxtUrl = DocsSourceConfiguration.GetLlmsTxtUrl(configuration);
 
-        Assert.Equal("http://legacy.example/llms-small.txt", llmsTxtUrl);
+        Assert.Equal(DocsSourceConfiguration.DefaultLlmsTxtUrl, llmsTxtUrl);
+    }
+
+    [Fact]
+    public void RewriteMarkdownLinks_RebasesConfiguredHostAndRemovesInPageBookmarks()
+    {
+        var rewritten = DocsSourceConfiguration.RewriteMarkdownLinks(
+            "See [Aspire CLI](/get-started/install-cli/) and [Why HTTPS matters](#why-https-matters).",
+            "http://localhost:4321/llms-small.txt");
+
+        Assert.Equal(
+            "See [Aspire CLI](http://localhost:4321/get-started/install-cli/) and Why HTTPS matters.",
+            rewritten);
     }
 
     [Fact]

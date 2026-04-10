@@ -69,16 +69,13 @@ public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetIndexAsync_MigratesLegacyUrlBackedIndexFiles()
+    public async Task SetIndexAsync_PersistsFriendlyIndexFiles()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var memoryCache = new MemoryCache(new MemoryCacheOptions());
         var configuration = new ConfigurationBuilder().Build();
-        var executionContext = CreateExecutionContext(workspace);
-        var cache = new ApiDocsCache(memoryCache, executionContext, configuration, NullLogger<ApiDocsCache>.Instance);
-        var contentCache = new Aspire.Cli.Documentation.FileBackedDocumentContentCache(memoryCache, executionContext, "api-docs", NullLogger<ApiDocsCache>.Instance);
+        var cache = CreateCache(workspace, memoryCache, configuration);
 
-        var legacyIndexKey = ApiDocsSourceConfiguration.GetLegacyIndexCacheKey(DefaultSitemapUrl);
         ApiReferenceItem[] items =
         [
             new ApiReferenceItem
@@ -91,21 +88,19 @@ public class ApiDocsCacheTests(ITestOutputHelper outputHelper)
             }
         ];
 
-        await contentCache.SetJsonAsync(legacyIndexKey, items, Aspire.Cli.JsonSourceGenerationContext.Default.ApiReferenceItemArray).DefaultTimeout();
-        await contentCache.SetAsync($"{legacyIndexKey}:fingerprint", "legacy-fingerprint").DefaultTimeout();
+        await cache.SetIndexAsync(items).DefaultTimeout();
+        await cache.SetIndexSourceFingerprintAsync("fingerprint").DefaultTimeout();
 
         var cachedItems = await cache.GetIndexAsync().DefaultTimeout();
         var fingerprint = await cache.GetIndexSourceFingerprintAsync().DefaultTimeout();
 
         var item = Assert.Single(cachedItems!);
         Assert.Equal("csharp/aspire.test.package", item.Id);
-        Assert.Equal("legacy-fingerprint", fingerprint);
+        Assert.Equal("fingerprint", fingerprint);
 
         var cacheFiles = GetCacheFiles(workspace, "api-docs");
         Assert.Contains("index_sitemap-0.json", cacheFiles);
         Assert.Contains("index_sitemap-0_fingerprint.txt", cacheFiles);
-        Assert.DoesNotContain("index_https___aspire.dev_sitemap-0.xml.json", cacheFiles);
-        Assert.DoesNotContain("index_https___aspire.dev_sitemap-0.xml_fingerprint.txt", cacheFiles);
     }
 
     private static ApiDocsCache CreateCache(TemporaryWorkspace workspace, IMemoryCache memoryCache, IConfiguration configuration)

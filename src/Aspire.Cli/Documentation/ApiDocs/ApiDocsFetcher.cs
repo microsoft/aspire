@@ -39,7 +39,7 @@ internal sealed class ApiDocsFetcher(HttpClient httpClient, IApiDocsCache cache,
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The sitemap content, or <c>null</c> when it cannot be retrieved.</returns>
     public Task<string?> FetchSitemapAsync(CancellationToken cancellationToken = default)
-        => FetchWithCacheKeyAsync(_sitemapUrl, _sitemapCacheKey, cancellationToken);
+        => CachedHttpDocumentFetcher.FetchAsync(_httpClient, _cache, _sitemapUrl, _sitemapCacheKey, _logger, cancellationToken);
 
     /// <summary>
     /// Fetches markdown content for the specified API page.
@@ -51,52 +51,6 @@ internal sealed class ApiDocsFetcher(HttpClient httpClient, IApiDocsCache cache,
     {
         var markdownUrl = ApiDocsSourceConfiguration.BuildMarkdownUrl(pageUrl, _sitemapUrl);
         var cacheKey = ApiDocsSourceConfiguration.GetPageContentCacheKey(pageUrl, _sitemapUrl);
-        return FetchWithCacheKeyAsync(markdownUrl, cacheKey, cancellationToken);
-    }
-
-    private async Task<string?> FetchWithCacheKeyAsync(string url, string cacheKey, CancellationToken cancellationToken)
-    {
-        await MigrateLegacyCacheAsync(url, cacheKey, cancellationToken).ConfigureAwait(false);
-        return await CachedHttpDocumentFetcher.FetchAsync(_httpClient, _cache, url, cacheKey, _logger, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task MigrateLegacyCacheAsync(string legacyKey, string cacheKey, CancellationToken cancellationToken)
-    {
-        if (string.Equals(legacyKey, cacheKey, StringComparison.Ordinal))
-        {
-            return;
-        }
-
-        var currentContent = await _cache.GetAsync(cacheKey, cancellationToken).ConfigureAwait(false);
-        var currentETag = await _cache.GetETagAsync(cacheKey, cancellationToken).ConfigureAwait(false);
-        if (currentContent is not null || currentETag is not null)
-        {
-            await ClearLegacyCacheAsync(legacyKey, cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        var legacyContent = await _cache.GetAsync(legacyKey, cancellationToken).ConfigureAwait(false);
-        var legacyETag = await _cache.GetETagAsync(legacyKey, cancellationToken).ConfigureAwait(false);
-
-        if (legacyContent is not null)
-        {
-            await _cache.SetAsync(cacheKey, legacyContent, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (!string.IsNullOrEmpty(legacyETag))
-        {
-            await _cache.SetETagAsync(cacheKey, legacyETag, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (legacyContent is not null || !string.IsNullOrEmpty(legacyETag))
-        {
-            await ClearLegacyCacheAsync(legacyKey, cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    private async Task ClearLegacyCacheAsync(string legacyKey, CancellationToken cancellationToken)
-    {
-        await _cache.InvalidateAsync(legacyKey, cancellationToken).ConfigureAwait(false);
-        await _cache.SetETagAsync(legacyKey, null, cancellationToken).ConfigureAwait(false);
+        return CachedHttpDocumentFetcher.FetchAsync(_httpClient, _cache, markdownUrl, cacheKey, _logger, cancellationToken);
     }
 }

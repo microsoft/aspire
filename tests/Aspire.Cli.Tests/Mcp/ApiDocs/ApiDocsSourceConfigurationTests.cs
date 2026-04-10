@@ -14,8 +14,7 @@ public class ApiDocsSourceConfigurationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["docs:api:sitemapUrl"] = "http://localhost:4321/sitemap-0.xml",
-                [ApiDocsSourceConfiguration.SitemapUrlConfigKey] = "http://legacy.example/sitemap-0.xml"
+                [ApiDocsSourceConfiguration.SitemapUrlConfigPath] = "http://localhost:4321/sitemap-0.xml"
             })
             .Build();
 
@@ -25,18 +24,13 @@ public class ApiDocsSourceConfigurationTests
     }
 
     [Fact]
-    public void GetSitemapUrl_FallsBackToLegacyConfigKey()
+    public void GetSitemapUrl_DefaultsToBuiltInSource()
     {
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [ApiDocsSourceConfiguration.SitemapUrlConfigKey] = "http://legacy.example/sitemap-0.xml"
-            })
-            .Build();
+        var configuration = new ConfigurationBuilder().Build();
 
         var sitemapUrl = ApiDocsSourceConfiguration.GetSitemapUrl(configuration);
 
-        Assert.Equal("http://legacy.example/sitemap-0.xml", sitemapUrl);
+        Assert.Equal(ApiDocsSourceConfiguration.DefaultSitemapUrl, sitemapUrl);
     }
 
     [Fact]

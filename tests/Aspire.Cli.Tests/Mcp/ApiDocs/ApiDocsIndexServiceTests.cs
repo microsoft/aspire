@@ -280,7 +280,7 @@ public class ApiDocsIndexServiceTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [ApiDocsSourceConfiguration.SitemapUrlConfigKey] = "http://localhost:4321/sitemap-0.xml"
+                [ApiDocsSourceConfiguration.SitemapUrlConfigPath] = "http://localhost:4321/sitemap-0.xml"
             })
             .Build();
 
@@ -324,7 +324,7 @@ public class ApiDocsIndexServiceTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [ApiDocsSourceConfiguration.SitemapUrlConfigKey] = "http://localhost:4321/sitemap-0.xml"
+                [ApiDocsSourceConfiguration.SitemapUrlConfigPath] = "http://localhost:4321/sitemap-0.xml"
             })
             .Build();
 
@@ -364,7 +364,7 @@ public class ApiDocsIndexServiceTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [ApiDocsSourceConfiguration.SitemapUrlConfigKey] = "http://localhost:4321/sitemap-0.xml"
+                [ApiDocsSourceConfiguration.SitemapUrlConfigPath] = "http://localhost:4321/sitemap-0.xml"
             })
             .Build();
 

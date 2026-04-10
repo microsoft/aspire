@@ -75,13 +75,6 @@ internal sealed class AspireJsonConfiguration
     public Dictionary<string, bool>? Features { get; set; }
 
     /// <summary>
-    /// Documentation source configuration for aspire docs and aspire docs api.
-    /// </summary>
-    [JsonPropertyName("docs")]
-    [Description("Documentation source configuration for aspire docs and aspire docs api.")]
-    public AspireConfigDocs? Docs { get; set; }
-
-    /// <summary>
     /// Captures any additional properties not explicitly defined in this class.
     /// This ensures settings like "features" are preserved when saving.
     /// </summary>

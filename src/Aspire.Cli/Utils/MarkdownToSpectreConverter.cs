@@ -71,6 +71,36 @@ internal static partial class MarkdownToSpectreConverter
         return LinkRegex().Replace(markdown, "$1 ($2)");
     }
 
+    /// <summary>
+    /// Converts markdown text to plain text while preserving readable structure.
+    /// </summary>
+    /// <param name="markdown">The markdown text to convert.</param>
+    /// <returns>The converted plain text.</returns>
+    public static string ConvertToPlainText(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return markdown;
+        }
+
+        var result = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
+
+        result = ConvertLinksToPlainText(result);
+        result = ImageRegex().Replace(result, "");
+        result = CodeFenceLineRegex().Replace(result, "");
+        result = HeaderPrefixRegex().Replace(result, "");
+        result = QuotePrefixRegex().Replace(result, "");
+        result = BoldDoubleAsterisksRegex().Replace(result, "$1");
+        result = BoldDoubleUnderscoresRegex().Replace(result, "$1");
+        result = ItalicSingleAsteriskRegex().Replace(result, "$1");
+        result = ItalicSingleUnderscoreRegex().Replace(result, "$1");
+        result = StrikethroughRegex().Replace(result, "$1");
+        result = InlineCodeRegex().Replace(result, "$1");
+        result = ExcessBlankLinesRegex().Replace(result, "\n\n");
+
+        return result.Trim();
+    }
+
     private static string ConvertHeaders(string text)
     {
         // Convert ###### Header 6 (most specific first)
@@ -251,6 +281,9 @@ internal static partial class MarkdownToSpectreConverter
     [GeneratedRegex(@"^# (.+?)\s*$", RegexOptions.Multiline)]
     private static partial Regex HeaderLevel1Regex();
 
+    [GeneratedRegex(@"(?m)^#{1,6}\s+")]
+    private static partial Regex HeaderPrefixRegex();
+
     [GeneratedRegex(@"\*\*([^*]+)\*\*")]
     private static partial Regex BoldDoubleAsterisksRegex();
 
@@ -269,6 +302,9 @@ internal static partial class MarkdownToSpectreConverter
     [GeneratedRegex(@"```\s*(.*?)\s*```", RegexOptions.Singleline)]
     private static partial Regex CodeBlockRegex();
 
+    [GeneratedRegex(@"(?m)^```[^\n]*$")]
+    private static partial Regex CodeFenceLineRegex();
+
     [GeneratedRegex(@"`([^`]+)`")]
     private static partial Regex InlineCodeRegex();
 
@@ -278,6 +314,12 @@ internal static partial class MarkdownToSpectreConverter
     [GeneratedRegex(@"\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\(([^)]+)\)")]
     private static partial Regex LinkRegex();
 
-    [GeneratedRegex(@"^>\s*(.*)$")]
+    [GeneratedRegex(@"^>\s*(.*)$", RegexOptions.Multiline)]
     private static partial Regex QuotedTextRegex();
+
+    [GeneratedRegex(@"(?m)^>\s?")]
+    private static partial Regex QuotePrefixRegex();
+
+    [GeneratedRegex(@"\n{3,}")]
+    private static partial Regex ExcessBlankLinesRegex();
 }

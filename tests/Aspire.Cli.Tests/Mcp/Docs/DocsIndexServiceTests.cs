@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Documentation.Docs;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Documentation.Docs;
@@ -13,11 +14,12 @@ public class DocsIndexServiceTests
         return new MockDocsFetcher(content);
     }
 
-    private static DocsIndexService CreateService(IDocsFetcher? fetcher = null, IDocsCache? cache = null)
+    private static DocsIndexService CreateService(IDocsFetcher? fetcher = null, IDocsCache? cache = null, IConfiguration? configuration = null)
     {
         return new DocsIndexService(
             fetcher ?? new MockDocsFetcher(null),
             cache ?? new NullDocsCache(),
+            configuration ?? new ConfigurationBuilder().Build(),
             NullLogger<DocsIndexService>.Instance);
     }
 
@@ -399,6 +401,38 @@ public class DocsIndexServiceTests
         Assert.Contains("Installation", doc.Sections);
         Assert.Contains("Configuration", doc.Sections);
         Assert.Contains("Usage", doc.Sections);
+    }
+
+    [Fact]
+    public async Task GetDocumentAsync_NormalizesInlineMarkdownAndRewritesLinks()
+    {
+        var content = """
+            # Certificate configuration
+            > Learn how to configure HTTPS endpoints and certificate trust for resources in Aspire to enable secure communication.
+
+            Aspire provides two complementary sets of certificate APIs: 1. **HTTPS endpoint APIs**: Configure the certificates that resources use for their own HTTPS endpoints. 2. **Certificate trust APIs**: Configure which certificates resources trust when making outbound HTTPS connections. ### Why HTTPS matters [Section titled "Why HTTPS matters"](#why-https-matters) HTTPS is essential for protecting the security and privacy of data transmitted between services. See [Aspire CLI](/get-started/install-cli/) and [Why HTTPS matters](#why-https-matters). Trust the development certificate ```bash aspire certs trust ``` ## Next steps [Section titled "Next steps"](#next-steps) Continue here.
+            """;
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DocsSourceConfiguration.LlmsTxtUrlConfigPath] = "http://localhost:4321/llms-small.txt"
+            })
+            .Build();
+
+        var service = CreateService(CreateMockFetcher(content), configuration: configuration);
+
+        var doc = await service.GetDocumentAsync("certificate-configuration");
+
+        Assert.NotNull(doc);
+        Assert.Contains("\n1. **HTTPS endpoint APIs**", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("\n2. **Certificate trust APIs**", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("### Why HTTPS matters\n\nHTTPS is essential", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("```bash\naspire certs trust\n```", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("[Aspire CLI](http://localhost:4321/get-started/install-cli/)", doc.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Section titled", doc.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("](#why-https-matters)", doc.Content, StringComparison.Ordinal);
+        Assert.Contains("See [Aspire CLI](http://localhost:4321/get-started/install-cli/) and Why HTTPS matters.", doc.Content, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Documentation.Docs;
@@ -92,7 +94,7 @@ internal sealed class DocsContent
 /// - Section-oriented ("configuration", "examples")
 /// - Name-exact ("Redis resource", "AddServiceDefaults")
 /// </remarks>
-internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCache docsCache, ILogger<DocsIndexService> logger) : IDocsIndexService
+internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCache docsCache, IConfiguration configuration, ILogger<DocsIndexService> logger) : IDocsIndexService
 {
     // Field weights for relevance scoring
     private const float TitleWeight = 10.0f;      // H1 (page title)
@@ -119,6 +121,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
     private readonly IDocsFetcher _docsFetcher = docsFetcher;
     private readonly IDocsCache _docsCache = docsCache;
+    private readonly string _llmsTxtUrl = DocsSourceConfiguration.GetLlmsTxtUrl(configuration);
     private readonly ILogger<DocsIndexService> _logger = logger;
 
     // Volatile ensures the double-checked locking pattern works correctly by preventing
@@ -282,6 +285,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
                 content = matchedSection.Content;
             }
         }
+
+        content = NormalizeContent(content);
+        content = DocsSourceConfiguration.RewriteMarkdownLinks(content, _llmsTxtUrl);
 
         return new DocsContent
         {
@@ -503,6 +509,84 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         return score;
     }
 
+    private static string NormalizeContent(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return content;
+        }
+
+        content = content.Replace("\r\n", "\n").Replace("\r", "\n");
+
+        var builder = new StringBuilder(content.Length + 64);
+        var position = 0;
+
+        foreach (Match match in MarkdownFenceBlockRegex().Matches(content))
+        {
+            builder.Append(NormalizeMarkdownSegment(content[position..match.Index]));
+            builder.Append(NormalizeCodeBlock(match.Value));
+            position = match.Index + match.Length;
+        }
+
+        builder.Append(NormalizeMarkdownSegment(content[position..]));
+
+        var normalized = TrailingWhitespaceBeforeNewlineRegex().Replace(builder.ToString(), "\n");
+        normalized = ExcessBlankLinesRegex().Replace(normalized, "\n\n");
+
+        return normalized.Trim();
+    }
+
+    private static string NormalizeMarkdownSegment(string content)
+    {
+        if (string.IsNullOrEmpty(content))
+        {
+            return content;
+        }
+
+        content = InlineHeadingRegex().Replace(content, "\n\n$1");
+        content = SectionTitledBookmarkRegex().Replace(content, "\n\n");
+        content = InlineOrderedListRegex().Replace(content, "\n$1");
+        content = InlineUnorderedListRegex().Replace(content, "\n* ");
+        content = LeadingWhitespaceRegex().Replace(content, "");
+
+        return content;
+    }
+
+    private static string NormalizeCodeBlock(string codeBlock)
+    {
+        var trimmed = codeBlock.Trim();
+        if (trimmed.Length is 0)
+        {
+            return codeBlock;
+        }
+
+        var content = trimmed[3..^3].Trim();
+        if (!content.Contains('\n'))
+        {
+            var firstWhitespace = content.IndexOfAny([' ', '\t']);
+            if (firstWhitespace > 0)
+            {
+                var language = content[..firstWhitespace];
+                var code = content[(firstWhitespace + 1)..].Trim();
+                if (code.Length > 0 && IsLikelyCodeFenceLanguage(language))
+                {
+                    return $"\n```{language}\n{code}\n```\n";
+                }
+            }
+
+            return $"\n```\n{content}\n```\n";
+        }
+
+        return $"\n{trimmed}\n";
+    }
+
+    private static bool IsLikelyCodeFenceLanguage(string language)
+        => language.ToLowerInvariant() is
+            "bash" or "sh" or "shell" or "cmd" or "powershell" or "ps1" or
+            "javascript" or "js" or "typescript" or "ts" or "jsx" or "tsx" or
+            "python" or "py" or "csharp" or "cs" or "json" or "yaml" or "yml" or
+            "xml" or "html" or "css" or "sql" or "typescript/nodejs";
+
     // Split on whitespace and punctuation, keeping dotted/hyphenated tokens together
     [GeneratedRegex(@"[\s,;:!?\(\)\[\]{}""']+")]
     private static partial Regex TokenSplitRegex();
@@ -514,6 +598,30 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
     // Match PascalCase/camelCase identifiers
     [GeneratedRegex(@"\b[A-Z][a-zA-Z0-9]+\b")]
     private static partial Regex IdentifierRegex();
+
+    [GeneratedRegex(@"```.*?```", RegexOptions.Singleline)]
+    private static partial Regex MarkdownFenceBlockRegex();
+
+    [GeneratedRegex(@"(?<=\S)\s+(#{2,6}\s)")]
+    private static partial Regex InlineHeadingRegex();
+
+    [GeneratedRegex(@"\s*\[Section titled[^\]]*\]\(#(?:[^)]+)\)\s*")]
+    private static partial Regex SectionTitledBookmarkRegex();
+
+    [GeneratedRegex(@"(?<=\S)\s+(\d+\.\s+)")]
+    private static partial Regex InlineOrderedListRegex();
+
+    [GeneratedRegex(@"(?<=\S)\s+\*\s+")]
+    private static partial Regex InlineUnorderedListRegex();
+
+    [GeneratedRegex(@"[ \t]+\n")]
+    private static partial Regex TrailingWhitespaceBeforeNewlineRegex();
+
+    [GeneratedRegex(@"\n{3,}")]
+    private static partial Regex ExcessBlankLinesRegex();
+
+    [GeneratedRegex(@"(?m)^[ \t]+")]
+    private static partial Regex LeadingWhitespaceRegex();
 
     /// <summary>
     /// Pre-indexed document with lowercase text for faster searching.

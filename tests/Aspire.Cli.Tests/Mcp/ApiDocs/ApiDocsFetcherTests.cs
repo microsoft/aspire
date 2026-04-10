@@ -99,53 +99,6 @@ public class ApiDocsFetcherTests
         Assert.Equal("\"etag\"", await cache.GetETagAsync(cacheKey));
     }
 
-    [Fact]
-    public async Task FetchSitemapAsync_MigratesLegacyUrlCacheEntries()
-    {
-        const string cachedContent = "<urlset></urlset>";
-
-        using var handler = new MockHttpMessageHandler(new HttpRequestException("Network error"));
-        using var httpClient = new HttpClient(handler);
-        var cache = new MockApiDocsCache();
-        await cache.SetAsync(DefaultSitemapUrl, cachedContent);
-        await cache.SetETagAsync(DefaultSitemapUrl, "\"legacy-etag\"");
-
-        var fetcher = CreateFetcher(httpClient, cache);
-
-        var content = await fetcher.FetchSitemapAsync();
-
-        var cacheKey = ApiDocsSourceConfiguration.GetSitemapContentCacheKey(DefaultSitemapUrl);
-        Assert.Equal(cachedContent, content);
-        Assert.Equal(cachedContent, await cache.GetAsync(cacheKey));
-        Assert.Equal("\"legacy-etag\"", await cache.GetETagAsync(cacheKey));
-        Assert.Null(await cache.GetAsync(DefaultSitemapUrl));
-        Assert.Null(await cache.GetETagAsync(DefaultSitemapUrl));
-    }
-
-    [Fact]
-    public async Task FetchPageAsync_MigratesLegacyMarkdownUrlCacheEntries()
-    {
-        const string cachedContent = "# Methods";
-        var markdownUrl = ApiDocsSourceConfiguration.BuildMarkdownUrl(DefaultPageUrl, DefaultSitemapUrl);
-
-        using var handler = new MockHttpMessageHandler(new HttpRequestException("Network error"));
-        using var httpClient = new HttpClient(handler);
-        var cache = new MockApiDocsCache();
-        await cache.SetAsync(markdownUrl, cachedContent);
-        await cache.SetETagAsync(markdownUrl, "\"legacy-etag\"");
-
-        var fetcher = CreateFetcher(httpClient, cache);
-
-        var content = await fetcher.FetchPageAsync(DefaultPageUrl);
-
-        var cacheKey = ApiDocsSourceConfiguration.GetPageContentCacheKey(DefaultPageUrl, DefaultSitemapUrl);
-        Assert.Equal(cachedContent, content);
-        Assert.Equal(cachedContent, await cache.GetAsync(cacheKey));
-        Assert.Equal("\"legacy-etag\"", await cache.GetETagAsync(cacheKey));
-        Assert.Null(await cache.GetAsync(markdownUrl));
-        Assert.Null(await cache.GetETagAsync(markdownUrl));
-    }
-
     private sealed class MockApiDocsCache : IApiDocsCache
     {
         private readonly Dictionary<string, string> _content = new(StringComparer.OrdinalIgnoreCase);
