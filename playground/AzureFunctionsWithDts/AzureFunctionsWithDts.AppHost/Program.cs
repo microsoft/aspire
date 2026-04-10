@@ -1,8 +1,8 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var storage = builder.AddAzureStorage("storage");//.RunAsEmulator();
+var storage = builder.AddAzureStorage("storage").RunAsEmulator();
 
-var scheduler = builder.AddDurableTaskScheduler("scheduler");//.RunAsEmulator();
+var scheduler = builder.AddDurableTaskScheduler("scheduler").RunAsEmulator();
 
 var taskHub = scheduler.AddTaskHub("taskhub");
 

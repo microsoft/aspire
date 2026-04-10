@@ -7,6 +7,8 @@ using Aspire.Hosting.Azure.DurableTask;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Aspire.Hosting;
 
@@ -267,77 +269,10 @@ public static class DurableTaskResourceExtensions
 
         var hubBuilder = builder.ApplicationBuilder.AddResource(hub);
 
-        // Subscribe to the hub's ConnectionStringAvailableEvent to set the Azure dashboard URL.
-        // We add a ResourceUrlAnnotation so it persists across state updates from the
-        // ApplicationOrchestrator and BicepProvisioner, which replace snapshot URLs.
-        builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(hub, (@event, ct) =>
-        {
-            if (builder.Resource.IsEmulator)
-            {
-                return Task.CompletedTask;
-            }
-
-            var scheduler = hub.Parent;
-
-            if (!scheduler.Outputs.TryGetValue("subscriptionId", out var subObj) ||
-                !scheduler.Outputs.TryGetValue("schedulerEndpoint", out var endpointObj) ||
-                !scheduler.Outputs.TryGetValue("name", out var nameObj))
-            {
-                return Task.CompletedTask;
-            }
-
-            var subscriptionId = subObj?.ToString();
-            var endpoint = endpointObj?.ToString();
-            var schedulerName = nameObj?.ToString();
-            scheduler.Outputs.TryGetValue("tenantId", out var tenantObj);
-            var tenantId = tenantObj?.ToString();
-            var taskHubName = hub.HubName;
-
-            if (subscriptionId is null || endpoint is null || schedulerName is null)
-            {
-                return Task.CompletedTask;
-            }
-
-            // Only add the annotation once (the event may fire multiple times).
-            if (hub.Annotations.OfType<ResourceUrlAnnotation>().Any(a => a.DisplayText == "Task Hub Dashboard"))
-            {
-                return Task.CompletedTask;
-            }
-
-            var encodedEndpoint = Uri.EscapeDataString(endpoint);
-            var url = $"https://dashboard.durabletask.io/subscriptions/{subscriptionId}/schedulers/{schedulerName}/taskhubs/{taskHubName}?endpoint={encodedEndpoint}";
-            if (tenantId is not null)
-            {
-                url += $"&tenantId={tenantId}";
-            }
-
-            hub.Annotations.Add(new ResourceUrlAnnotation { Url = url, DisplayText = "Task Hub Dashboard" });
-
-            return Task.CompletedTask;
-        });
-
-        hubBuilder.OnResourceReady(
-            async (r, e, ct) =>
-            {
-                if (!builder.Resource.IsEmulator)
-                {
-                    // Azure dashboard URLs are published via the scheduler's
-                    // ConnectionStringAvailableEvent subscription.
-                    return;
-                }
-
-                var notifications = e.Services.GetRequiredService<ResourceNotificationService>();
-
-                var url = await ReferenceExpression.Create($"{r.Parent.EmulatorDashboardEndpoint}/subscriptions/default/schedulers/default/taskhubs/{r.TaskHubName}").GetValueAsync(ct).ConfigureAwait(false);
-
-                await notifications.PublishUpdateAsync(r, snapshot => snapshot with
-                {
-                    State = KnownResourceStates.Running,
-                    Urls = url is not null
-                        ? [new("dashboard", url, false) { DisplayProperties = new() { DisplayName = "Task Hub Dashboard" } }]
-                        : []
-                }).ConfigureAwait(false);
-            });
+        // Register the background service that watches resource state updates and adds
+        // dashboard URL annotations to hub resources when provisioning data becomes available.
+        // TryAddEnumerable ensures it is only registered once even if AddTaskHub is called multiple times.
+        builder.ApplicationBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DurableTaskDashboardUrlService>());
 
         return hubBuilder;
     }
