@@ -215,12 +215,17 @@ func RegisterCancellation(token *CancellationToken, client *AspireClient) string
 // It uses a background reader goroutine so that server-initiated callbacks
 // (invokeCallback) can freely call InvokeCapability without deadlocking.
 type AspireClient struct {
-	socketPath          string
+	socketPath string
+
+	// mu guards conn, reader, connected, and disconnectCallbacks.
+	mu                  sync.Mutex
 	conn                io.ReadWriteCloser
 	reader              *bufio.Reader
-	nextID              atomic.Int64
-	disconnectCallbacks []func()
 	connected           bool
+	disconnectCallbacks []func()
+	closeOnce           sync.Once
+
+	nextID atomic.Int64
 
 	// writeMu protects all writes to conn; separate from read path.
 	writeMu sync.Mutex
@@ -241,26 +246,34 @@ func NewAspireClient(socketPath string) *AspireClient {
 // Connect establishes the connection to the AppHost server and starts the
 // background reader goroutine.
 func (c *AspireClient) Connect() error {
+	c.mu.Lock()
 	if c.connected {
+		c.mu.Unlock()
 		return nil
 	}
 
 	conn, err := openConnection(c.socketPath)
 	if err != nil {
+		c.mu.Unlock()
 		return fmt.Errorf("failed to connect to AppHost: %w", err)
 	}
 
 	c.conn = conn
 	c.reader = bufio.NewReader(conn)
 	c.connected = true
+	c.closeOnce = sync.Once{} // reset in case of reconnect
+	c.mu.Unlock()
 
 	go c.readLoop()
 	return nil
 }
 
-// OnDisconnect registers a callback for disconnection.
+// OnDisconnect registers a callback to be invoked exactly once when the
+// connection is closed, whether by Disconnect or by a read error.
 func (c *AspireClient) OnDisconnect(callback func()) {
+	c.mu.Lock()
 	c.disconnectCallbacks = append(c.disconnectCallbacks, callback)
+	c.mu.Unlock()
 }
 
 // InvokeCapability invokes a capability on the server.
@@ -305,16 +318,34 @@ func (c *AspireClient) CancelToken(tokenID string) bool {
 	return b
 }
 
-// Disconnect closes the connection.
+// Disconnect closes the connection. Safe to call multiple times; callbacks run
+// exactly once. If the background readLoop is running, closing conn will cause
+// it to return an error and invoke closeConnection itself — closeOnce ensures
+// the callbacks are still only invoked once.
 func (c *AspireClient) Disconnect() {
-	c.connected = false
-	if c.conn != nil {
-		c.conn.Close()
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn != nil {
+		conn.Close() // causes readLoop to exit and call closeConnection
+	}
+	c.closeConnection(nil)
+}
+
+// closeConnection is the single teardown path. It is safe to call from both
+// Disconnect and readLoop; sync.Once guarantees the body runs exactly once.
+func (c *AspireClient) closeConnection(readErr error) {
+	c.closeOnce.Do(func() {
+		c.mu.Lock()
+		c.connected = false
 		c.conn = nil
-	}
-	for _, cb := range c.disconnectCallbacks {
-		cb()
-	}
+		callbacks := c.disconnectCallbacks
+		c.mu.Unlock()
+
+		for _, cb := range callbacks {
+			cb()
+		}
+	})
 }
 
 // sendRequest sends a JSON-RPC request and waits for the matching response.
@@ -363,12 +394,9 @@ func (c *AspireClient) readLoop() {
 	for {
 		response, err := c.readMessage()
 		if err != nil {
-			// Connection closed or error – notify pending waiters and disconnect handlers.
+			// Connection closed or error – unblock pending callers then run teardown.
 			c.drainPendingWithError(err)
-			c.connected = false
-			for _, cb := range c.disconnectCallbacks {
-				cb()
-			}
+			c.closeConnection(err)
 			return
 		}
 
@@ -379,19 +407,38 @@ func (c *AspireClient) readLoop() {
 			continue
 		}
 
-		// Response to one of our requests.
+		// Response to one of our requests. JSON numbers decode as float64, but
+		// the spec also allows string IDs — handle both safely.
 		if id, ok := response["id"]; ok {
-			reqID := int64(id.(float64))
-			c.pendingMu.Lock()
-			ch, ok := c.pending[reqID]
-			if ok {
-				delete(c.pending, reqID)
+			if reqID, ok := jsonRPCID(id); ok {
+				c.pendingMu.Lock()
+				ch, exists := c.pending[reqID]
+				if exists {
+					delete(c.pending, reqID)
+				}
+				c.pendingMu.Unlock()
+				if exists {
+					ch <- response
+				}
 			}
-			c.pendingMu.Unlock()
-			if ok {
-				ch <- response
-			}
+			// Unknown id type: ignore rather than panic.
 		}
+	}
+}
+
+// jsonRPCID converts a JSON-RPC id value (float64 or string) to an int64 key.
+// Returns false for any type that cannot be mapped to a pending request.
+func jsonRPCID(id any) (int64, bool) {
+	switch v := id.(type) {
+	case float64:
+		return int64(v), true
+	case int64:
+		return v, true
+	case json.Number:
+		n, err := v.Int64()
+		return n, err == nil
+	default:
+		return 0, false
 	}
 }
 
