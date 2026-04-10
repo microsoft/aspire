@@ -1,0 +1,7 @@
+{
+  "appHost": {
+    "path": "apphost.go",
+    "language": "go"
+  },
+  "packages": {}
+}

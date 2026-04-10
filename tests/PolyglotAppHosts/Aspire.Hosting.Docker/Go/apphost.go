@@ -1,0 +1,44 @@
+// Aspire Go validation AppHost - Aspire.Hosting.Docker
+// Mirrors the TypeScript/Python/Java fixture for API surface validation.
+// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
+package main
+
+import (
+	"log"
+
+	"apphost/modules/aspire"
+)
+
+func main() {
+	builder, err := aspire.CreateBuilder(nil)
+	if err != nil {
+		log.Fatalf("CreateBuilder: %v", err)
+	}
+
+	compose, err := builder.AddDockerComposeEnvironment("resource")
+	if err != nil {
+		log.Fatalf("AddDockerComposeEnvironment: %v", err)
+	}
+
+	api, err := builder.AddContainer("resource", "image")
+	if err != nil {
+		log.Fatalf("AddContainer: %v", err)
+	}
+
+	_, _ = compose.WithProperties()
+	_, _ = compose.WithDashboard()
+	_, _ = compose.WithDashboard()
+	_, _ = compose.ConfigureDashboard()
+	_, _ = api.PublishAsDockerComposeService()
+	_, _ = compose.DefaultNetworkName()
+	_, _ = compose.DashboardEnabled()
+	_, _ = compose.Name()
+
+	app, err := builder.Build()
+	if err != nil {
+		log.Fatalf("Build: %v", err)
+	}
+	if err := app.Run(nil); err != nil {
+		log.Fatalf("Run: %v", err)
+	}
+}

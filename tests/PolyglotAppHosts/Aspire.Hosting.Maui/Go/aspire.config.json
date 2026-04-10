@@ -1,0 +1,9 @@
+{
+  "appHost": {
+    "path": "apphost.go",
+    "language": "go"
+  },
+  "packages": {
+    "Aspire.Hosting.Maui": ""
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "appHost": {
+    "path": "apphost.go",
+    "language": "go"
+  },
+  "packages": {
+    "Aspire.Hosting.Azure.AppContainers": "",
+    "Aspire.Hosting.Azure.OperationalInsights": ""
+  }
+}
