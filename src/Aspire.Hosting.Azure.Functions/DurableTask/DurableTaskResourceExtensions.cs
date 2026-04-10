@@ -33,7 +33,7 @@ public static class DurableTaskResourceExtensions
     [AspireExport(Description = "Adds a Durable Task scheduler resource to the distributed application.")]
     public static IResourceBuilder<DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
-       builder.AddAzureProvisioning();
+        builder.AddAzureProvisioning();
 
         var configureInfrastructure = static (AzureResourceInfrastructure infrastructure) =>
         {
@@ -346,5 +346,4 @@ public static class DurableTaskResourceExtensions
             IResourceBuilder<ParameterResource> parameter => builder.WithTaskHubName(parameter),
             _ => throw new ArgumentException($"Unexpected task hub name type: {taskHubName.GetType().Name}", nameof(taskHubName))
         };
-
 }

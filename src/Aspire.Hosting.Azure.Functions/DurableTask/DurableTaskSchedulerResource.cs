@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Azure.DurableTask;
 /// and a connection string for Durable Task orchestration scheduling.
 /// </summary>
 /// <param name="name">The unique resource name.</param>
-/// <param name="configureInfrastructure"></param>
+/// <param name="configureInfrastructure">Callback to configure the Azure infrastructure for this resource.</param>
 public sealed class DurableTaskSchedulerResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IResourceWithAzureFunctionsConfig
 {

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure.DurableTask;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 
@@ -345,5 +346,134 @@ public class DurableTaskResourceExtensionsTests
         var manifest = await AzureManifestUtils.GetManifestWithBicep(dts.Resource);
 
         await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task DashboardUrlService_AzureMode_AddsDashboardUrlAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        var hub = dts.AddTaskHub("myhub");
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var appModel = new DistributedApplicationModel([dts.Resource, hub.Resource]);
+        var service = new DurableTaskDashboardUrlService(appModel, notificationService);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        // Set Azure outputs on the scheduler
+        dts.Resource.Outputs["subscriptionId"] = "sub-123";
+        dts.Resource.Outputs["schedulerEndpoint"] = "https://myscheduler.durabletask.io";
+        dts.Resource.Outputs["name"] = "myscheduler";
+        dts.Resource.Outputs["tenantId"] = "tenant-456";
+
+        // Publish update before starting so WatchAsync replays the snapshot
+        await notificationService.PublishUpdateAsync(hub.Resource, snapshot => snapshot with { State = KnownResourceStates.Running });
+
+        await service.StartAsync(cts.Token);
+        await service.ExecuteTask!.WaitAsync(cts.Token);
+
+        var urlAnnotation = hub.Resource.Annotations.OfType<ResourceUrlAnnotation>().SingleOrDefault();
+        Assert.NotNull(urlAnnotation);
+        Assert.Contains("https://dashboard.durabletask.io/subscriptions/sub-123/schedulers/myscheduler/taskhubs/myhub", urlAnnotation.Url);
+        Assert.Contains("endpoint=" + Uri.EscapeDataString("https://myscheduler.durabletask.io"), urlAnnotation.Url);
+        Assert.Contains("tenantId=tenant-456", urlAnnotation.Url);
+    }
+
+    [Fact]
+    public async Task DashboardUrlService_AzureMode_WithoutTenantId_OmitsTenantIdFromUrl()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        var hub = dts.AddTaskHub("myhub");
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var appModel = new DistributedApplicationModel([dts.Resource, hub.Resource]);
+        var service = new DurableTaskDashboardUrlService(appModel, notificationService);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        // Set Azure outputs on the scheduler without tenantId
+        dts.Resource.Outputs["subscriptionId"] = "sub-123";
+        dts.Resource.Outputs["schedulerEndpoint"] = "https://myscheduler.durabletask.io";
+        dts.Resource.Outputs["name"] = "myscheduler";
+
+        await notificationService.PublishUpdateAsync(hub.Resource, snapshot => snapshot with { State = KnownResourceStates.Running });
+
+        await service.StartAsync(cts.Token);
+        await service.ExecuteTask!.WaitAsync(cts.Token);
+
+        var urlAnnotation = hub.Resource.Annotations.OfType<ResourceUrlAnnotation>().SingleOrDefault();
+        Assert.NotNull(urlAnnotation);
+        Assert.Contains("https://dashboard.durabletask.io/subscriptions/sub-123/schedulers/myscheduler/taskhubs/myhub", urlAnnotation.Url);
+        Assert.DoesNotContain("tenantId", urlAnnotation.Url);
+    }
+
+    [Fact]
+    public async Task DashboardUrlService_EmulatorMode_AddsDashboardUrlAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts")
+            .RunAsEmulator(e =>
+            {
+                e.WithEndpoint("grpc", e => e.AllocatedEndpoint = new(e, "localhost", 8080));
+                e.WithEndpoint("http", e => e.AllocatedEndpoint = new(e, "localhost", 8081));
+                e.WithEndpoint("dashboard", e => e.AllocatedEndpoint = new(e, "localhost", 8082));
+            });
+        var hub = dts.AddTaskHub("myhub");
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var appModel = new DistributedApplicationModel([dts.Resource, hub.Resource]);
+        var service = new DurableTaskDashboardUrlService(appModel, notificationService);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        await notificationService.PublishUpdateAsync(hub.Resource, snapshot => snapshot with { State = KnownResourceStates.Running });
+
+        await service.StartAsync(cts.Token);
+        await service.ExecuteTask!.WaitAsync(cts.Token);
+
+        var urlAnnotation = hub.Resource.Annotations.OfType<ResourceUrlAnnotation>().SingleOrDefault();
+        Assert.NotNull(urlAnnotation);
+        Assert.Equal("http://localhost:8082/subscriptions/default/schedulers/default/taskhubs/myhub", urlAnnotation.Url);
+    }
+
+    [Fact]
+    public async Task DashboardUrlService_AzureMode_MissingOutputs_DoesNotAddUrl()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        var hub = dts.AddTaskHub("myhub");
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var appModel = new DistributedApplicationModel([dts.Resource, hub.Resource]);
+        var service = new DurableTaskDashboardUrlService(appModel, notificationService);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        // Only set partial outputs - missing schedulerEndpoint and name
+        dts.Resource.Outputs["subscriptionId"] = "sub-123";
+
+        await notificationService.PublishUpdateAsync(hub.Resource, snapshot => snapshot with { State = KnownResourceStates.Running });
+
+        await service.StartAsync(cts.Token);
+
+        // The service should keep watching since it can't build a URL. Cancel to unblock.
+        cts.Cancel();
+
+        try
+        {
+            await service.ExecuteTask!;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        var urlAnnotation = hub.Resource.Annotations.OfType<ResourceUrlAnnotation>().SingleOrDefault();
+        Assert.Null(urlAnnotation);
     }
 }
