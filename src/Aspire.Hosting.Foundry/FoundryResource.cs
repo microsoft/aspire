@@ -24,11 +24,6 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
     private readonly List<FoundryDeploymentResource> _deployments = [];
 
     /// <summary>
-    /// Gets the "id" output reference for the resource.
-    /// </summary>
-    public BicepOutputReference Id => new("id", this);
-
-    /// <summary>
     /// Gets the "aiFoundryApiEndpoint" output reference from the Microsoft Foundry resource.
     /// </summary>
     public BicepOutputReference AIFoundryApiEndpoint => new("aiFoundryApiEndpoint", this);
@@ -42,6 +37,11 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
     /// Gets the "name" output reference for the resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
+
+    /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
 
     /// <summary>
     /// Gets the connection URI expression for the Microsoft Foundry endpoint.

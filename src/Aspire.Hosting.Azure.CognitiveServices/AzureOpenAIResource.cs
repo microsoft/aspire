@@ -24,11 +24,6 @@ public class AzureOpenAIResource(string name, Action<AzureResourceInfrastructure
     private readonly List<AzureOpenAIDeploymentResource> _deploymentResources = [];
 
     /// <summary>
-    /// Gets the "id" output reference for the resource.
-    /// </summary>
-    public BicepOutputReference Id => new("id", this);
-
-    /// <summary>
     /// Gets the "connectionString" output reference from the Azure OpenAI resource.
     /// </summary>
     public BicepOutputReference ConnectionString => new("connectionString", this);
@@ -42,6 +37,11 @@ public class AzureOpenAIResource(string name, Action<AzureResourceInfrastructure
     /// Gets the "name" output reference for the resource.
     /// </summary>
     public BicepOutputReference NameOutputReference => new("name", this);
+
+    /// <summary>
+    /// Gets the "id" output reference for the resource.
+    /// </summary>
+    public BicepOutputReference Id => new("id", this);
 
     /// <summary>
     /// Gets the connection URI expression for the Azure OpenAI endpoint.
