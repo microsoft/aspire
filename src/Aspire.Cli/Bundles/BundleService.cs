@@ -29,6 +29,9 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     /// <inheritdoc/>
     public bool IsBundle => s_isBundle;
 
+    /// <inheritdoc/>
+    public bool IsSelfExtracting => false;
+
     /// <summary>
     /// Opens a read-only stream over the embedded bundle payload.
     /// Returns <see langword="null"/> if no payload is embedded.
@@ -53,6 +56,9 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
             logger.LogDebug("No embedded bundle payload, skipping extraction.");
             return;
         }
+
+        // TODO: When IsSelfExtracting is wired to the MSBuild property (future PR),
+        // non-self-extracting distributions can skip extraction when the layout is on disk.
 
         var processPath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(processPath))

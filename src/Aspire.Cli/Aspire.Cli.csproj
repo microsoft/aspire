@@ -24,6 +24,9 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- Controls whether the CLI binary should perform self-extraction of embedded bundle at runtime.
+         Defaults to false; set to true only for dotnet-tool distribution (Aspire.Cli.Tool.csproj). -->
+    <SelfExtractingBundle Condition="'$(SelfExtractingBundle)' == ''">false</SelfExtractingBundle>
   </PropertyGroup>
 
   <!-- Set the nuget properties when building as a global tool. -->
@@ -39,6 +42,8 @@
          To do this we make sure it doesn't PublishAOT, and ensure that it doesn't publish for any RIDs at all. -->
     <PublishAot>false</PublishAot>
     <RuntimeIdentifiers></RuntimeIdentifiers>
+    <!-- dotnet-tool distribution needs self-extraction because NuGet enforces a fixed package layout. -->
+    <SelfExtractingBundle>true</SelfExtractingBundle>
   </PropertyGroup>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
