@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class JavaEmptyAppHostTemplateTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CreateAndRunJavaEmptyAppHostProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class DescribeCommandTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task DescribeCommandShowsRunningResources()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -85,7 +85,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task DescribeCommandResolvesReplicaNames()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

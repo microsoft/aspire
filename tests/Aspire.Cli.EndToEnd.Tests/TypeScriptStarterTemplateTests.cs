@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CreateAndRunTypeScriptStarterProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

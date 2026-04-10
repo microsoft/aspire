@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class BundleSmokeTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CreateAndRunAspireStarterProjectWithBundle()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

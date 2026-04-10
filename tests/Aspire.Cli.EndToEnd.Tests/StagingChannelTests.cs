@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class StagingChannelTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task StagingChannel_ConfigureAndVerifySettings_ThenSwitchChannels()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

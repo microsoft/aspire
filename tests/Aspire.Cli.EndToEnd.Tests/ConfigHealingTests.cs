@@ -21,7 +21,7 @@ public sealed class ConfigHealingTests(ITestOutputHelper output)
     /// the CLI auto-detects the correct apphost, runs it successfully, and updates ("heals")
     /// the config file with the correct path.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task InvalidAppHostPathWithComments_IsHealedOnRun()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

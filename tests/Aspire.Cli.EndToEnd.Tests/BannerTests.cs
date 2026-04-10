@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class BannerTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task Banner_DisplayedOnFirstRun()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -56,7 +56,7 @@ public sealed class BannerTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task Banner_DisplayedWithExplicitFlag()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -88,7 +88,7 @@ public sealed class BannerTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task Banner_NotDisplayedWithNoLogoFlag()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

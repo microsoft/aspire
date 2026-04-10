@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     [CaptureWorkspaceOnFailure]
     public async Task DashboardRunWithOtelTracesReturnsNoTraces()
     {

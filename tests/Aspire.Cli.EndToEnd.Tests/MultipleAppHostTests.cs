@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class MultipleAppHostTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task DetachFormatJsonProducesValidJson()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

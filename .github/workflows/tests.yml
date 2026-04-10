@@ -176,7 +176,7 @@ jobs:
   tests_requires_cli_archive:
     name: ${{ matrix.shortname }}
     uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows]
     if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null }}
     strategy:
       fail-fast: false

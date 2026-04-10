@@ -17,7 +17,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class CentralPackageManagementTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AspireUpdateRemovesAppHostPackageVersionFromDirectoryPackagesProps()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -120,7 +120,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AspireAddPackageVersionToDirectoryPackagesProps()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

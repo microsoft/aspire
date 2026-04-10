@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class JavaPolyglotTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CreateJavaAppHostWithViteApp()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
