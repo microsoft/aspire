@@ -25,7 +25,8 @@
     "express": "^5.2.1",
     "node-fetch": "^3.3.2",
     "pug": "^3.0.3",
-    "redis": "^5.7.0"
+    "redis": "^5.7.0",
+    "express-rate-limit": "^8.3.2"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
