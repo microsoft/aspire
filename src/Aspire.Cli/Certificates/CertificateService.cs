@@ -33,11 +33,9 @@ internal sealed class CertificateService(
     ICertificateToolRunner certificateToolRunner,
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
-    ICliHostEnvironment hostEnvironment,
-    Func<bool>? isWindows = null) : ICertificateService
+    ICliHostEnvironment hostEnvironment) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private readonly Func<bool> _isWindows = isWindows ?? OperatingSystem.IsWindows;
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
@@ -78,8 +76,11 @@ internal sealed class CertificateService(
         // If not trusted at all, run the trust operation
         if (trustResult.IsNotTrusted)
         {
-            if (_isWindows() && !hostEnvironment.SupportsInteractiveInput)
+            if (!hostEnvironment.SupportsInteractiveInput)
             {
+                // In non-interactive mode (e.g. CI), skip the trust operation which may
+                // require user interaction (e.g. macOS Keychain password prompt, Windows
+                // certificate trust dialog). Just ensure a certificate exists if needed.
                 if (!trustResult.HasCertificates)
                 {
                     var ensureResultCode = await interactionService.ShowStatusAsync(
