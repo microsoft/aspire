@@ -46,8 +46,16 @@ public static class ResourcesSelectHelpers
             return MultipleMatches(allowedMatches, logger, name, instanceIdMatches);
         }
 
+        static string SanitizeForLog(string value)
+        {
+            return value.Replace("\r", string.Empty, StringComparison.Ordinal)
+                .Replace("\n", string.Empty, StringComparison.Ordinal);
+        }
+
         static SelectViewModel<ResourceTypeDetails> SingleMatch(ICollection<SelectViewModel<ResourceTypeDetails>> resources, ILogger logger, string name, SelectViewModel<ResourceTypeDetails> match, bool fallback = false)
         {
+            var sanitizedName = SanitizeForLog(name);
+
             // There is a single match. Log as much information as possible about resources.
             logger.LogDebug(
                 """
@@ -56,13 +64,15 @@ public static class ResourcesSelectHelpers
                 {AvailableResources}
                 Matched resource:
                 {MatchedResource}
-                """, name, fallback, string.Join(Environment.NewLine, resources), match);
+                """, sanitizedName, fallback, string.Join(Environment.NewLine, resources), match);
 
             return match;
         }
 
         static SelectViewModel<ResourceTypeDetails> MultipleMatches(ICollection<SelectViewModel<ResourceTypeDetails>> resources, ILogger logger, string name, List<SelectViewModel<ResourceTypeDetails>> matches)
         {
+            var sanitizedName = SanitizeForLog(name);
+
             // There are multiple matches. Log as much information as possible about resources.
             logger.LogWarning(
                 """
@@ -71,7 +81,7 @@ public static class ResourcesSelectHelpers
                 {AvailableResources}
                 Matched resources:
                 {MatchedResources}
-                """, name, string.Join(Environment.NewLine, resources), string.Join(Environment.NewLine, matches));
+                """, sanitizedName, string.Join(Environment.NewLine, resources), string.Join(Environment.NewLine, matches));
 
             // Return first match to not break app. Make the UI resilient to unexpectedly bad data.
             return matches[0];
