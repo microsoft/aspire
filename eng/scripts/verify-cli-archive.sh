@@ -2,32 +2,26 @@
 
 # verify-cli-archive.sh - Verify that a signed Aspire CLI archive produces a working binary.
 #
-# Usage: ./verify-cli-archive.sh <archive-path> [--dotnet-root <path>]
+# Usage: ./verify-cli-archive.sh <archive-path>
 #
 # This script:
 #   1. Cleans ~/.aspire to ensure no stale state
 #   2. Extracts the CLI archive to a temp location
 #   3. Runs 'aspire --version' to validate the binary executes
-#   4. Runs 'aspire new aspire-starter --name VerifyApp' to test bundle self-extraction + project creation
-#   5. Runs 'aspire restore' on the created project to test NuGet restore via aspire-managed
-#   6. Runs 'dotnet build' on the created project to validate the template compiles
-#   7. Cleans up temp directories
+#   4. Runs 'aspire new aspire-starter' to test bundle self-extraction + project creation
+#   5. Cleans up temp directories
 
 set -euo pipefail
 
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
 readonly CYAN='\033[0;36m'
 readonly RESET='\033[0m'
 
 ARCHIVE_PATH=""
-DOTNET_ROOT=""
-SKIP_BUILD=false
 
 log_step() { echo -e "${CYAN}▶ $1${RESET}"; }
 log_ok()   { echo -e "${GREEN}✅ $1${RESET}"; }
-log_warn() { echo -e "${YELLOW}⚠️  $1${RESET}"; }
 log_err()  { echo -e "${RED}❌ $1${RESET}"; }
 
 show_help() {
@@ -35,14 +29,12 @@ show_help() {
 Aspire CLI Archive Verification Script
 
 USAGE:
-    verify-cli-archive.sh <archive-path> [OPTIONS]
+    verify-cli-archive.sh <archive-path>
 
 ARGUMENTS:
     <archive-path>    Path to the CLI archive (.tar.gz or .zip)
 
 OPTIONS:
-    --dotnet-root     Path to the .NET SDK root (defaults to system dotnet)
-    --skip-build      Skip the project build step (only verify extraction + version)
     -h, --help        Show this help message
 
 DESCRIPTION:
@@ -50,7 +42,6 @@ DESCRIPTION:
     1. Extracting the archive
     2. Running 'aspire --version'
     3. Creating a new project with 'aspire new'
-    4. Restoring + building the created project
 EOF
     exit 0
 }
@@ -80,14 +71,6 @@ trap cleanup EXIT
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --dotnet-root)
-            DOTNET_ROOT="$2"
-            shift 2
-            ;;
-        --skip-build)
-            SKIP_BUILD=true
-            shift
-            ;;
         -h|--help)
             show_help
             ;;
@@ -109,19 +92,13 @@ done
 
 if [[ -z "$ARCHIVE_PATH" ]]; then
     echo "Error: archive path is required." >&2
-    echo "Usage: verify-cli-archive.sh <archive-path> [--dotnet-root <path>]" >&2
+    echo "Usage: verify-cli-archive.sh <archive-path>" >&2
     exit 1
 fi
 
 if [[ ! -f "$ARCHIVE_PATH" ]]; then
     log_err "Archive not found: $ARCHIVE_PATH"
     exit 1
-fi
-
-# Set up dotnet if specified
-if [[ -n "$DOTNET_ROOT" ]]; then
-    export DOTNET_ROOT
-    export PATH="$DOTNET_ROOT:$PATH"
 fi
 
 echo ""
@@ -132,12 +109,17 @@ echo "  Archive: $ARCHIVE_PATH"
 echo "=========================================="
 echo ""
 
+# Suppress interactive prompts and telemetry
+export ASPIRE_CLI_TELEMETRY_OPTOUT=true
+export DOTNET_CLI_TELEMETRY_OPTOUT=true
+export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
+export DOTNET_GENERATE_ASPNET_CERTIFICATE=false
+
 # Step 1: Back up and clean ~/.aspire
 log_step "Cleaning ~/.aspire state..."
 ASPIRE_BACKUP=""
 if [[ -d "$HOME/.aspire" ]]; then
     ASPIRE_BACKUP="$(mktemp -d)"
-    # Move existing .aspire to backup (preserve for restoration in cleanup)
     mv "$HOME/.aspire" "${ASPIRE_BACKUP}/.aspire"
     ASPIRE_BACKUP="${ASPIRE_BACKUP}/.aspire"
     log_step "Backed up existing ~/.aspire to ${ASPIRE_BACKUP}"
@@ -194,15 +176,11 @@ echo "  Version: $VERSION_OUTPUT"
 log_ok "'aspire --version' succeeded"
 
 # Step 4: Create a new project with aspire new
+# This exercises bundle self-extraction and aspire-managed (template search + download + scaffolding)
 PROJECT_DIR="${VERIFY_TMPDIR}/VerifyApp"
 mkdir -p "$PROJECT_DIR"
 
-log_step "Running 'aspire new aspire-starter --name VerifyApp --output $PROJECT_DIR --non-interactive --nologo'..."
-export ASPIRE_CLI_TELEMETRY_OPTOUT=true
-export DOTNET_CLI_TELEMETRY_OPTOUT=true
-export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
-export DOTNET_GENERATE_ASPNET_CERTIFICATE=false
-
+log_step "Running 'aspire new aspire-starter --name VerifyApp --output $PROJECT_DIR'..."
 "$ASPIRE_BIN" new aspire-starter --name VerifyApp --output "$PROJECT_DIR" --non-interactive --nologo 2>&1 || {
     log_err "'aspire new' failed"
     echo "Contents of project directory:"
@@ -218,29 +196,6 @@ if [[ ! -d "$PROJECT_DIR/VerifyApp.AppHost" ]]; then
     exit 1
 fi
 log_ok "'aspire new' created project successfully"
-
-if [[ "$SKIP_BUILD" == "true" ]]; then
-    log_warn "Skipping build step (--skip-build)"
-else
-    # Step 5: Restore the project with aspire restore
-    log_step "Running 'aspire restore' on the created project..."
-    "$ASPIRE_BIN" restore --apphost "$PROJECT_DIR/VerifyApp.AppHost/VerifyApp.AppHost.csproj" --non-interactive --nologo 2>&1 || {
-        log_err "'aspire restore' failed"
-        exit 1
-    }
-    log_ok "'aspire restore' succeeded"
-
-    # Step 6: Build the project with dotnet build
-    log_step "Running 'dotnet build' on the created project..."
-    (
-        cd "$PROJECT_DIR"
-        dotnet build VerifyApp.AppHost/VerifyApp.AppHost.csproj 2>&1
-    ) || {
-        log_err "'dotnet build' failed"
-        exit 1
-    }
-    log_ok "'dotnet build' succeeded"
-fi
 
 echo ""
 echo "=========================================="

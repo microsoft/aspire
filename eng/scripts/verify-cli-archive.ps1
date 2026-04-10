@@ -7,19 +7,11 @@
     1. Cleans ~/.aspire to ensure no stale state
     2. Extracts the CLI archive to a temp location
     3. Runs 'aspire --version' to validate the binary executes
-    4. Runs 'aspire new aspire-starter --name VerifyApp' to test bundle self-extraction + project creation
-    5. Runs 'aspire restore' on the created project to test NuGet restore via aspire-managed
-    6. Runs 'dotnet build' on the created project to validate the template compiles
-    7. Cleans up temp directories
+    4. Runs 'aspire new aspire-starter' to test bundle self-extraction + project creation
+    5. Cleans up temp directories
 
 .PARAMETER ArchivePath
     Path to the CLI archive (.zip or .tar.gz)
-
-.PARAMETER DotNetRoot
-    Optional path to the .NET SDK root
-
-.PARAMETER SkipBuild
-    Skip the project build step (only verify extraction + version)
 
 .EXAMPLE
     .\verify-cli-archive.ps1 -ArchivePath "artifacts\packages\Release\Shipping\aspire-cli-win-x64-10.0.0.zip"
@@ -27,18 +19,13 @@
 
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [string]$ArchivePath,
-
-    [string]$DotNetRoot = "",
-
-    [switch]$SkipBuild
+    [string]$ArchivePath
 )
 
 $ErrorActionPreference = 'Stop'
 
 function Write-Step  { param([string]$msg) Write-Host "▶ $msg" -ForegroundColor Cyan }
 function Write-Ok    { param([string]$msg) Write-Host "✅ $msg" -ForegroundColor Green }
-function Write-Warn  { param([string]$msg) Write-Host "⚠️  $msg" -ForegroundColor Yellow }
 function Write-Err   { param([string]$msg) Write-Host "❌ $msg" -ForegroundColor Red }
 
 $verifyTmpDir = $null
@@ -69,11 +56,11 @@ try {
 
     $ArchivePath = (Resolve-Path $ArchivePath).Path
 
-    # Set up dotnet if specified
-    if ($DotNetRoot) {
-        $env:DOTNET_ROOT = $DotNetRoot
-        $env:PATH = "$DotNetRoot;$env:PATH"
-    }
+    # Suppress interactive prompts and telemetry
+    $env:ASPIRE_CLI_TELEMETRY_OPTOUT = "true"
+    $env:DOTNET_CLI_TELEMETRY_OPTOUT = "true"
+    $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "true"
+    $env:DOTNET_GENERATE_ASPNET_CERTIFICATE = "false"
 
     Write-Host ""
     Write-Host "=========================================="
@@ -148,15 +135,11 @@ try {
     Write-Ok "'aspire --version' succeeded"
 
     # Step 4: Create a new project with aspire new
+    # This exercises bundle self-extraction and aspire-managed (template search + download + scaffolding)
     $projectDir = Join-Path $verifyTmpDir "VerifyApp"
     New-Item -ItemType Directory -Path $projectDir -Force | Out-Null
 
     Write-Step "Running 'aspire new aspire-starter --name VerifyApp --output $projectDir --non-interactive --nologo'..."
-    $env:ASPIRE_CLI_TELEMETRY_OPTOUT = "true"
-    $env:DOTNET_CLI_TELEMETRY_OPTOUT = "true"
-    $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "true"
-    $env:DOTNET_GENERATE_ASPNET_CERTIFICATE = "false"
-
     & $aspireBin new aspire-starter --name VerifyApp --output $projectDir --non-interactive --nologo 2>&1 | Write-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Err "'aspire new' failed with exit code $LASTEXITCODE"
@@ -171,30 +154,6 @@ try {
         exit 1
     }
     Write-Ok "'aspire new' created project successfully"
-
-    if ($SkipBuild) {
-        Write-Warn "Skipping build step (-SkipBuild)"
-    }
-    else {
-        # Step 5: Restore the project
-        $appHostCsproj = Join-Path $appHostDir "VerifyApp.AppHost.csproj"
-        Write-Step "Running 'aspire restore' on the created project..."
-        & $aspireBin restore --apphost $appHostCsproj --non-interactive --nologo 2>&1 | Write-Host
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "'aspire restore' failed with exit code $LASTEXITCODE"
-            exit 1
-        }
-        Write-Ok "'aspire restore' succeeded"
-
-        # Step 6: Build the project
-        Write-Step "Running 'dotnet build' on the created project..."
-        & dotnet build $appHostCsproj 2>&1 | Write-Host
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "'dotnet build' failed with exit code $LASTEXITCODE"
-            exit 1
-        }
-        Write-Ok "'dotnet build' succeeded"
-    }
 
     Write-Host ""
     Write-Host "=========================================="

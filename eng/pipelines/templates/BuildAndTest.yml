@@ -102,7 +102,7 @@ steps:
           exit 0
         }
         Write-Host "Found archive: $($archive.FullName)"
-        & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.ps1" -ArchivePath $archive.FullName -DotNetRoot "$(Build.SourcesDirectory)/.dotnet"
+        & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.ps1" -ArchivePath $archive.FullName
         if ($LASTEXITCODE -ne 0) {
           Write-Host "##[error]CLI archive verification failed"
           exit 1
