@@ -15,24 +15,18 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter", nil)
-	_, _ = builder.AddParameter("parameter", nil)
-	_, _ = builder.AddAzureApplicationInsights("resource")
+	builder.AddParameter("parameter", nil)
+	builder.AddParameter("parameter", nil)
+	_ = builder.AddAzureApplicationInsights("resource")
 
-	env, err := builder.AddAzureAppServiceEnvironment("resource")
-	if err != nil {
-		log.Fatalf("AddAzureAppServiceEnvironment: %v", err)
-	}
+	env := builder.AddAzureAppServiceEnvironment("resource")
 	_, _ = env.GetResourceName()
 
-	website, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
+	website := builder.AddContainer("resource", "image")
 	_, _ = website.GetResourceName()
 
-	_, _ = builder.AddExecutable("resource", "echo", ".", nil)
-	_, _ = builder.AddProject("resource", ".", "default")
+	_ = builder.AddExecutable("resource", "echo", ".", nil)
+	_ = builder.AddProject("resource", ".", "default")
 
 	app, err := builder.Build()
 	if err != nil {

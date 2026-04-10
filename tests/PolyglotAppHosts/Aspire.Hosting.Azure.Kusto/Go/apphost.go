@@ -15,20 +15,11 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	kusto, err := builder.AddAzureKustoCluster("resource")
-	if err != nil {
-		log.Fatalf("AddAzureKustoCluster: %v", err)
-	}
+	kusto := builder.AddAzureKustoCluster("resource")
 
-	defaultDatabase, err := kusto.AddReadWriteDatabase("resource", nil)
-	if err != nil {
-		log.Fatalf("AddReadWriteDatabase: %v", err)
-	}
+	defaultDatabase := kusto.AddReadWriteDatabase("resource", nil)
 
-	customDatabase, err := kusto.AddReadWriteDatabase("resource", nil)
-	if err != nil {
-		log.Fatalf("AddReadWriteDatabase: %v", err)
-	}
+	customDatabase := kusto.AddReadWriteDatabase("resource", nil)
 
 	defaultDatabase.WithCreationScript("./script.kql")
 	customDatabase.WithCreationScript("./script.kql")

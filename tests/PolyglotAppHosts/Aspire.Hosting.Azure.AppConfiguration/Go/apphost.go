@@ -15,13 +15,11 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	appConfig, err := builder.AddAzureAppConfiguration("resource")
-	if err != nil {
-		log.Fatalf("AddAzureAppConfiguration: %v", err)
-	}
+	appConfig := builder.AddAzureAppConfiguration("resource")
 	_, _ = appConfig.WithAppConfigurationRoleAssignments(appConfig, nil)
-	if err := appConfig.RunAsEmulator(nil).Err(); err != nil {
-		log.Fatalf("RunAsEmulator: %v", err)
+	appConfig.RunAsEmulator(nil)
+	if err = appConfig.Err(); err != nil {
+		log.Fatalf("appConfig: %v", err)
 	}
 
 	app, err := builder.Build()

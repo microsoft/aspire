@@ -15,10 +15,7 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	logAnalytics, err := builder.AddAzureLogAnalyticsWorkspace("resource")
-	if err != nil {
-		log.Fatalf("AddAzureLogAnalyticsWorkspace: %v", err)
-	}
+	logAnalytics := builder.AddAzureLogAnalyticsWorkspace("resource")
 	_, _ = logAnalytics.WithUrl("http://localhost", nil)
 
 	app, err := builder.Build()

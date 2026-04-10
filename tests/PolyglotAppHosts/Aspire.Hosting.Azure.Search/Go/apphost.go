@@ -15,11 +15,11 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	search, err := builder.AddAzureSearch("resource")
-	if err != nil {
-		log.Fatalf("AddAzureSearch: %v", err)
+	search := builder.AddAzureSearch("resource")
+	search.WithSearchRoleAssignments(search, nil)
+	if err = search.Err(); err != nil {
+		log.Fatalf("search: %v", err)
 	}
-	_, _ = search.WithSearchRoleAssignments(search, nil)
 
 	app, err := builder.Build()
 	if err != nil {

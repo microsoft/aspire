@@ -17,17 +17,17 @@ func main() {
 
 	_, _ = builder.AddParameter("parameter", nil)
 
-	mysql, err := builder.AddMySql("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMySql: %v", err)
-	}
+	mysql := builder.AddMySql("resource", nil, nil)
 	mysql.WithPhpMyAdmin(nil, nil)
-
-	db, err := mysql.AddDatabase("resource", nil)
-	if err != nil {
-		log.Fatalf("AddDatabase: %v", err)
+	if err = mysql.Err(); err != nil {
+		log.Fatalf("mysql: %v", err)
 	}
+
+	db := mysql.AddDatabase("resource", nil)
 	db.WithCreationScript("script.sql")
+	if err = db.Err(); err != nil {
+		log.Fatalf("db: %v", err)
+	}
 
 	_, _ = mysql.PrimaryEndpoint()
 	_, _ = mysql.Host()

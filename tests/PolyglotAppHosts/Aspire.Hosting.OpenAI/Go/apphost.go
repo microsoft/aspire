@@ -17,11 +17,11 @@ func main() {
 
 	_, _ = builder.AddParameter("parameter", nil)
 
-	openai, err := builder.AddOpenAI("resource")
-	if err != nil {
-		log.Fatalf("AddOpenAI: %v", err)
+	openai := builder.AddOpenAI("resource")
+	openai.AddModel("resource", "deployment")
+	if err = openai.Err(); err != nil {
+		log.Fatalf("openai: %v", err)
 	}
-	_, _ = openai.AddModel("resource", "deployment")
 
 	app, err := builder.Build()
 	if err != nil {

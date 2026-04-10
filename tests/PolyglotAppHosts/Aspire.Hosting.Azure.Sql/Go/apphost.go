@@ -15,31 +15,25 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	azStorage, err := builder.AddAzureStorage("resource")
-	if err != nil {
-		log.Fatalf("AddAzureStorage: %v", err)
+	azStorage := builder.AddAzureStorage("resource")
+	if err = azStorage.Err(); err != nil {
+		log.Fatalf("azStorage: %v", err)
 	}
 
-	sqlServer, err := builder.AddAzureSqlServer("resource")
-	if err != nil {
-		log.Fatalf("AddAzureSqlServer: %v", err)
-	}
+	sqlServer := builder.AddAzureSqlServer("resource")
 
-	db, err := sqlServer.AddDatabase("resource", nil)
-	if err != nil {
-		log.Fatalf("AddDatabase: %v", err)
-	}
+	db := sqlServer.AddDatabase("resource", nil)
 	_ = db
 
-	db2, err := sqlServer.AddDatabase("resource", nil)
-	if err != nil {
-		log.Fatalf("AddDatabase: %v", err)
-	}
+	db2 := sqlServer.AddDatabase("resource", nil)
 	db2.WithDefaultAzureSku()
+	if err = db2.Err(); err != nil {
+		log.Fatalf("db2: %v", err)
+	}
 
 	sqlServer.RunAsContainer(nil)
 	sqlServer.WithAdminDeploymentScriptStorage(azStorage)
-	_, _ = sqlServer.AddDatabase("resource", nil)
+	sqlServer.AddDatabase("resource", nil)
 
 	_, _ = sqlServer.HostName()
 	_, _ = sqlServer.Port()
@@ -47,6 +41,9 @@ func main() {
 	_, _ = sqlServer.ConnectionStringExpression()
 	_, _ = sqlServer.JdbcConnectionString()
 	_, _ = sqlServer.IsContainer()
+	if err = sqlServer.Err(); err != nil {
+		log.Fatalf("sqlServer: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

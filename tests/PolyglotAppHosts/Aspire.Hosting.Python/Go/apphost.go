@@ -19,15 +19,15 @@ func main() {
 	_, _ = builder.AddPythonModule("resource", ".", "module")
 	_, _ = builder.AddPythonExecutable("resource", ".", "script.py")
 
-	uvicorn, err := builder.AddUvicornApp("resource", ".", "app:app")
-	if err != nil {
-		log.Fatalf("AddUvicornApp: %v", err)
+	uvicorn := builder.AddUvicornApp("resource", ".", "app:app")
+	uvicorn.WithVirtualEnvironment(".venv", nil)
+	uvicorn.WithDebugging()
+	uvicorn.WithEntrypoint(aspire.EntrypointType("uvicorn"), "app:app")
+	uvicorn.WithPip(nil, nil)
+	uvicorn.WithUv(nil, nil)
+	if err = uvicorn.Err(); err != nil {
+		log.Fatalf("uvicorn: %v", err)
 	}
-	_, _ = uvicorn.WithVirtualEnvironment(".venv", nil)
-	_, _ = uvicorn.WithDebugging()
-	_, _ = uvicorn.WithEntrypoint(aspire.EntrypointType("uvicorn"), "app:app")
-	_, _ = uvicorn.WithPip(nil, nil)
-	_, _ = uvicorn.WithUv(nil, nil)
 
 	app, err := builder.Build()
 	if err != nil {

@@ -15,74 +15,70 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	foundry, err := builder.AddFoundry("resource")
-	if err != nil {
-		log.Fatalf("AddFoundry: %v", err)
-	}
-	_, _ = foundry.AddDeploymentFromModel("resource", nil)
-
-	localFoundry, err := builder.AddFoundry("resource")
-	if err != nil {
-		log.Fatalf("AddFoundry: %v", err)
-	}
-	_, _ = localFoundry.AddDeployment("resource", "model", "version", "format")
-
-	registry, err := builder.AddAzureContainerRegistry("resource")
-	if err != nil {
-		log.Fatalf("AddAzureContainerRegistry: %v", err)
-	}
-	vault, err := builder.AddAzureKeyVault("resource")
-	if err != nil {
-		log.Fatalf("AddAzureKeyVault: %v", err)
-	}
-	appInsights, err := builder.AddAzureApplicationInsights("resource")
-	if err != nil {
-		log.Fatalf("AddAzureApplicationInsights: %v", err)
-	}
-	cosmos, err := builder.AddAzureCosmosDB("resource")
-	if err != nil {
-		log.Fatalf("AddAzureCosmosDB: %v", err)
-	}
-	azStorage, err := builder.AddAzureStorage("resource")
-	if err != nil {
-		log.Fatalf("AddAzureStorage: %v", err)
+	foundry := builder.AddFoundry("resource")
+	foundry.AddDeploymentFromModel("resource", nil)
+	if err = foundry.Err(); err != nil {
+		log.Fatalf("foundry: %v", err)
 	}
 
-	project, err := foundry.AddProject("resource")
-	if err != nil {
-		log.Fatalf("AddProject: %v", err)
+	localFoundry := builder.AddFoundry("resource")
+	localFoundry.AddDeployment("resource", "model", "version", "format")
+	if err = localFoundry.Err(); err != nil {
+		log.Fatalf("localFoundry: %v", err)
 	}
+
+	registry := builder.AddAzureContainerRegistry("resource")
+	if err = registry.Err(); err != nil {
+		log.Fatalf("registry: %v", err)
+	}
+	vault := builder.AddAzureKeyVault("resource")
+	if err = vault.Err(); err != nil {
+		log.Fatalf("vault: %v", err)
+	}
+	appInsights := builder.AddAzureApplicationInsights("resource")
+	if err = appInsights.Err(); err != nil {
+		log.Fatalf("appInsights: %v", err)
+	}
+	cosmos := builder.AddAzureCosmosDB("resource")
+	if err = cosmos.Err(); err != nil {
+		log.Fatalf("cosmos: %v", err)
+	}
+	azStorage := builder.AddAzureStorage("resource")
+	if err = azStorage.Err(); err != nil {
+		log.Fatalf("azStorage: %v", err)
+	}
+
+	project := foundry.AddProject("resource")
 	project.WithContainerRegistry(registry)
 	project.WithKeyVault(vault)
 	project.WithAppInsights(appInsights)
-	_, _ = project.AddCosmosConnection(cosmos)
-	_, _ = project.AddStorageConnection(azStorage)
-	_, _ = project.AddContainerRegistryConnection(registry)
-	_, _ = project.AddKeyVaultConnection(vault)
-
-	builderProjectFoundry, err := builder.AddFoundry("resource")
-	if err != nil {
-		log.Fatalf("AddFoundry: %v", err)
+	project.AddCosmosConnection(cosmos)
+	project.AddStorageConnection(azStorage)
+	project.AddContainerRegistryConnection(registry)
+	project.AddKeyVaultConnection(vault)
+	project.AddModelDeploymentFromModel("resource", nil)
+	if err = project.Err(); err != nil {
+		log.Fatalf("project: %v", err)
 	}
-	builderProject, err := builderProjectFoundry.AddProject("resource")
-	if err != nil {
-		log.Fatalf("AddProject: %v", err)
-	}
-	_, _ = builderProject.AddModelDeployment("resource", "model", "version", "format")
 
-	_, _ = project.AddModelDeploymentFromModel("resource", nil)
-
-	hostedAgent, err := builder.AddExecutable("resource", "echo", ".", nil)
-	if err != nil {
-		log.Fatalf("AddExecutable: %v", err)
+	builderProjectFoundry := builder.AddFoundry("resource")
+	builderProject := builderProjectFoundry.AddProject("resource")
+	builderProject.AddModelDeployment("resource", "model", "version", "format")
+	if err = builderProject.Err(); err != nil {
+		log.Fatalf("builderProject: %v", err)
 	}
+
+	hostedAgent := builder.AddExecutable("resource", "echo", ".", nil)
 	hostedAgent.PublishAsHostedAgent(nil, nil)
-
-	api, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
+	if err = hostedAgent.Err(); err != nil {
+		log.Fatalf("hostedAgent: %v", err)
 	}
-	_, _ = api.WithRoleAssignments(foundry, nil)
+
+	api := builder.AddContainer("resource", "image")
+	api.WithRoleAssignments(foundry, nil)
+	if err = api.Err(); err != nil {
+		log.Fatalf("api: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

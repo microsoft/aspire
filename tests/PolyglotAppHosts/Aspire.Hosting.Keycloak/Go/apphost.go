@@ -15,27 +15,20 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter", nil)
-	_, _ = builder.AddParameter("parameter", nil)
+	builder.AddParameter("parameter", nil)
+	builder.AddParameter("parameter", nil)
 
-	keycloak, err := builder.AddKeycloak("resource", nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddKeycloak: %v", err)
-	}
-
-	_, err = builder.AddKeycloak("resource", nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddKeycloak: %v", err)
-	}
-
-	_, err = builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
-
+	keycloak := builder.AddKeycloak("resource", nil, nil, nil)
 	_, _ = keycloak.Name()
 	_, _ = keycloak.Entrypoint()
 	_, _ = keycloak.ShellExecution()
+	if err = keycloak.Err(); err != nil {
+		log.Fatalf("keycloak: %v", err)
+	}
+
+	builder.AddKeycloak("resource", nil, nil, nil)
+
+	builder.AddContainer("resource", "image")
 
 	app, err := builder.Build()
 	if err != nil {

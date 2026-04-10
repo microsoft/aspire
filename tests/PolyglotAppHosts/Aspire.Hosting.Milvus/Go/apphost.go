@@ -15,73 +15,39 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	milvus, err := builder.AddMilvus("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
+	milvus := builder.AddMilvus("resource", nil, nil)
+	milvus.AddDatabase("resource", nil)
+	milvus.AddDatabase("resource", nil)
+	milvus.WithAttu(nil, nil)
+	milvus.WithDataVolume(nil, nil)
+	if err = milvus.Err(); err != nil {
+		log.Fatalf("milvus: %v", err)
 	}
 
 	param, err := builder.AddParameter("parameter", nil)
 	if err != nil {
 		log.Fatalf("AddParameter: %v", err)
 	}
-	milvus2, err := builder.AddMilvus("resource", param, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
-	}
-
-	_, err = builder.AddMilvus("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
-	}
-
-	_, err = milvus.AddDatabase("resource", nil)
-	if err != nil {
-		log.Fatalf("AddDatabase: %v", err)
-	}
-
-	_, _ = milvus.AddDatabase("resource", nil)
-	milvus.WithAttu(nil, nil)
+	milvus2 := builder.AddMilvus("resource", param, nil)
 	milvus2.WithAttu(nil, nil)
-
-	_, err = builder.AddMilvus("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
-	}
-
-	milvus.WithDataVolume(nil, nil)
 	milvus2.WithDataVolume(nil, nil)
-
-	_, err = builder.AddMilvus("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
+	if err = milvus2.Err(); err != nil {
+		log.Fatalf("milvus2: %v", err)
 	}
 
-	_, err = builder.AddMilvus("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
-	}
+	builder.AddMilvus("resource", nil, nil)
+	builder.AddMilvus("resource", nil, nil)
+	builder.AddMilvus("resource", nil, nil)
+	builder.AddMilvus("resource", nil, nil)
+	builder.AddMilvus("resource", nil, nil)
+	builder.AddMilvus("resource", nil, nil)
 
-	_, err = builder.AddMilvus("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
+	api := builder.AddContainer("resource", "image")
+	api.WithReference(nil, nil, nil, nil)
+	api.WithReference(nil, nil, nil, nil)
+	if err = api.Err(); err != nil {
+		log.Fatalf("api: %v", err)
 	}
-
-	_, err = builder.AddMilvus("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
-	}
-
-	_, err = builder.AddMilvus("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddMilvus: %v", err)
-	}
-
-	api, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
-	_, _ = api.WithReference(nil, nil, nil, nil)
-	_, _ = api.WithReference(nil, nil, nil, nil)
 
 	_, _ = milvus.PrimaryEndpoint()
 	_, _ = milvus.Host()

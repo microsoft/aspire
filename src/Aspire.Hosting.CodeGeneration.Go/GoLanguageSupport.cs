@@ -51,8 +51,8 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             	}
 
             	// Add your resources here, for example:
-            	// redis, _ := builder.AddRedis("cache")
-            	// postgres, _ := builder.AddPostgres("db")
+            	// redis := builder.AddRedis("cache", nil, nil)
+            	// postgres := builder.AddPostgres("db", nil, nil)
 
             	app, err := builder.Build()
             	if err != nil {

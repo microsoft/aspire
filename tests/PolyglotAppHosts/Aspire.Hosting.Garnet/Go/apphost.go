@@ -15,15 +15,15 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	garnet, err := builder.AddGarnet("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddGarnet: %v", err)
-	}
+	garnet := builder.AddGarnet("resource", nil, nil)
 	_, _ = garnet.PrimaryEndpoint()
 	_, _ = garnet.Host()
 	_, _ = garnet.Port()
 	_, _ = garnet.UriExpression()
 	_, _ = garnet.ConnectionStringExpression()
+	if err = garnet.Err(); err != nil {
+		log.Fatalf("garnet: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

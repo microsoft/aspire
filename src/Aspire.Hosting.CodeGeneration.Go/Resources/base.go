@@ -45,6 +45,13 @@ func (b *ResourceBuilderBase) Err() error {
 	return b.err
 }
 
+// NewErroredResourceBuilder creates a ResourceBuilderBase pre-loaded with an
+// error. Used by generated Add* methods to propagate errors through the fluent
+// chain when the parent builder already failed or the RPC call itself fails.
+func NewErroredResourceBuilder(err error) ResourceBuilderBase {
+	return ResourceBuilderBase{err: err}
+}
+
 // ReferenceExpression represents a reference expression.
 // Supports value mode (Format + Args) and conditional mode (Condition + WhenTrue + WhenFalse).
 type ReferenceExpression struct {

@@ -15,22 +15,13 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	eventHubs, err := builder.AddAzureEventHubs("resource")
-	if err != nil {
-		log.Fatalf("AddAzureEventHubs: %v", err)
-	}
+	eventHubs := builder.AddAzureEventHubs("resource")
 	_, _ = eventHubs.WithEventHubsRoleAssignments(eventHubs, nil)
 
-	hub, err := eventHubs.AddHub("resource", nil)
-	if err != nil {
-		log.Fatalf("AddHub: %v", err)
-	}
+	hub := eventHubs.AddHub("resource", nil)
 	hub.WithProperties(nil)
 
-	consumerGroup, err := hub.AddConsumerGroup("resource", nil)
-	if err != nil {
-		log.Fatalf("AddConsumerGroup: %v", err)
-	}
+	consumerGroup := hub.AddConsumerGroup("resource", nil)
 	_, _ = consumerGroup.WithEventHubsRoleAssignments(eventHubs, nil)
 
 	eventHubs.RunAsEmulator(nil)

@@ -15,15 +15,9 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, err = builder.AddAzureApplicationInsights("resource")
-	if err != nil {
-		log.Fatalf("AddAzureApplicationInsights: %v", err)
-	}
+	_ = builder.AddAzureApplicationInsights("resource")
 
-	_, err = builder.AddAzureLogAnalyticsWorkspace("resource")
-	if err != nil {
-		log.Fatalf("AddAzureLogAnalyticsWorkspace: %v", err)
-	}
+	_ = builder.AddAzureLogAnalyticsWorkspace("resource")
 
 	app, err := builder.Build()
 	if err != nil {

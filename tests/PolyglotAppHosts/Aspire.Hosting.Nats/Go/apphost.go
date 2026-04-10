@@ -15,37 +15,31 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	nats, err := builder.AddNats("resource", nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddNats: %v", err)
-	}
+	nats := builder.AddNats("resource", nil, nil, nil)
 	nats.WithJetStream()
 	nats.WithDataVolume(nil, nil)
-
-	_, err = builder.AddNats("resource", nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddNats: %v", err)
+	if err = nats.Err(); err != nil {
+		log.Fatalf("nats: %v", err)
 	}
 
-	nats3, err := builder.AddNats("resource", nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddNats: %v", err)
-	}
+	builder.AddNats("resource", nil, nil, nil)
+
+	nats3 := builder.AddNats("resource", nil, nil, nil)
 	nats3.WithDataBindMount("/tmp", nil)
+	if err = nats3.Err(); err != nil {
+		log.Fatalf("nats3: %v", err)
+	}
 
 	_, _ = builder.AddParameter("parameter", nil)
 	_, _ = builder.AddParameter("parameter", nil)
-	_, err = builder.AddNats("resource", nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddNats: %v", err)
-	}
+	builder.AddNats("resource", nil, nil, nil)
 
-	consumer, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
+	consumer := builder.AddContainer("resource", "image")
+	consumer.WithReference(nil, nil, nil, nil)
+	consumer.WithReference(nil, nil, nil, nil)
+	if err = consumer.Err(); err != nil {
+		log.Fatalf("consumer: %v", err)
 	}
-	_, _ = consumer.WithReference(nil, nil, nil, nil)
-	_, _ = consumer.WithReference(nil, nil, nil, nil)
 
 	_, _ = nats.PrimaryEndpoint()
 	_, _ = nats.Host()

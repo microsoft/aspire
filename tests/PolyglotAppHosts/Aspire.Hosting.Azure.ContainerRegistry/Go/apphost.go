@@ -15,15 +15,9 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	registry, err := builder.AddAzureContainerRegistry("resource")
-	if err != nil {
-		log.Fatalf("AddAzureContainerRegistry: %v", err)
-	}
+	registry := builder.AddAzureContainerRegistry("resource")
 
-	env, err := builder.AddAzureContainerAppEnvironment("resource")
-	if err != nil {
-		log.Fatalf("AddAzureContainerAppEnvironment: %v", err)
-	}
+	env := builder.AddAzureContainerAppEnvironment("resource")
 	env.WithAzureContainerRegistry(registry)
 	_, _ = env.WithContainerRegistryRoleAssignments(registry, nil)
 

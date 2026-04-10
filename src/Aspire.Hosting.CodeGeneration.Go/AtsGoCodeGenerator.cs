@@ -294,8 +294,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         //   - void (no useful return), OR
         //   - the same type as the receiver (self-return, i.e. the IResourceBuilder<T>.With* pattern).
         //
-        // Methods that return a *different* type (e.g. Add* producing a child resource) are kept as
-        // (*ChildType, error) so callers can capture and configure the child.
+        // A method is "child-fluent" when it is on a resource builder AND returns a *different*
+        // resource builder type (e.g. Add* producing a child resource). The child builder carries
+        // any error so callers can chain directly: builder.AddRedis("cache").WithDataVolume(nil, nil).Err()
         var returnTypeId = capability.ReturnType?.TypeId;
         var isVoid = returnTypeId == AtsConstants.Void;
         var returnsSameType = _structNames.TryGetValue(returnTypeId ?? "", out var retStructName)
@@ -305,10 +306,20 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var returnType = MapTypeRefToGo(capability.ReturnType, false);
         var hasReturn = !isVoid;
 
+        // Child-fluent: returns a different resource builder type (Add* pattern).
+        var returnsChildBuilder = !isFluent && isResourceBuilder && hasReturn
+            && capability.ReturnsBuilder
+            && !returnsSameType;
+
         string returnSignature;
-        if (isFluent)
+        if (isFluent || returnsChildBuilder)
         {
-            returnSignature = $"*{structName}";
+            // Both fluent patterns return a single pointer — self or child.
+            returnSignature = isFluent
+                ? $"*{structName}"
+                : returnType.StartsWith("*", StringComparison.Ordinal)
+                    ? returnType
+                    : $"*{returnType}";
         }
         else if (hasReturn)
         {
@@ -353,6 +364,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             // Short-circuit: if a previous call in the chain already failed, skip and return self.
             WriteLine("\tif s.err != nil {");
             WriteLine("\t\treturn s");
+            WriteLine("\t}");
+        }
+        else if (returnsChildBuilder)
+        {
+            // Short-circuit: propagate the parent's error into a new child builder.
+            var childStructName = returnType.TrimStart('*');
+            WriteLine("\tif s.err != nil {");
+            WriteLine($"\t\treturn &{childStructName}{{ResourceBuilderBase: NewErroredResourceBuilder(s.err)}}");
             WriteLine("\t}");
         }
 
@@ -400,6 +419,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             // so we continue chaining on s and store any error in s.err.
             WriteLine($"\t_, s.err = s.Client().InvokeCapability(\"{capability.CapabilityId}\", reqArgs)");
             WriteLine("\treturn s");
+        }
+        else if (returnsChildBuilder)
+        {
+            // Return the child builder, wrapping errors so the chain can continue.
+            var childStructName = returnType.TrimStart('*');
+            WriteLine($"\tresult, err := s.Client().InvokeCapability(\"{capability.CapabilityId}\", reqArgs)");
+            WriteLine("\tif err != nil {");
+            WriteLine($"\t\treturn &{childStructName}{{ResourceBuilderBase: NewErroredResourceBuilder(err)}}");
+            WriteLine("\t}");
+            WriteLine($"\treturn result.({returnSignature})");
         }
         else if (hasReturn)
         {

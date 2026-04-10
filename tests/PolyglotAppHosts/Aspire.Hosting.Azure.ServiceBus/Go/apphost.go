@@ -15,34 +15,34 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	serviceBus, err := builder.AddAzureServiceBus("resource")
-	if err != nil {
-		log.Fatalf("AddAzureServiceBus: %v", err)
-	}
+	serviceBus := builder.AddAzureServiceBus("resource")
 
-	queue, err := serviceBus.AddServiceBusQueue("resource", nil)
-	if err != nil {
-		log.Fatalf("AddServiceBusQueue: %v", err)
-	}
+	queue := serviceBus.AddServiceBusQueue("resource", nil)
 
-	topic, err := serviceBus.AddServiceBusTopic("resource", nil)
-	if err != nil {
-		log.Fatalf("AddServiceBusTopic: %v", err)
-	}
+	topic := serviceBus.AddServiceBusTopic("resource", nil)
 
-	subscription, err := topic.AddServiceBusSubscription("resource", nil)
-	if err != nil {
-		log.Fatalf("AddServiceBusSubscription: %v", err)
-	}
+	subscription := topic.AddServiceBusSubscription("resource", nil)
 
 	queue.WithProperties(nil)
 	topic.WithProperties(nil)
 	subscription.WithProperties(nil)
 
-	_, _ = serviceBus.WithServiceBusRoleAssignments(serviceBus, nil)
-	_, _ = queue.WithServiceBusRoleAssignments(serviceBus, nil)
-	_, _ = topic.WithServiceBusRoleAssignments(serviceBus, nil)
-	_, _ = subscription.WithServiceBusRoleAssignments(serviceBus, nil)
+	serviceBus.WithServiceBusRoleAssignments(serviceBus, nil)
+	queue.WithServiceBusRoleAssignments(serviceBus, nil)
+	topic.WithServiceBusRoleAssignments(serviceBus, nil)
+	subscription.WithServiceBusRoleAssignments(serviceBus, nil)
+	if err = serviceBus.Err(); err != nil {
+		log.Fatalf("serviceBus: %v", err)
+	}
+	if err = queue.Err(); err != nil {
+		log.Fatalf("queue: %v", err)
+	}
+	if err = topic.Err(); err != nil {
+		log.Fatalf("topic: %v", err)
+	}
+	if err = subscription.Err(); err != nil {
+		log.Fatalf("subscription: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

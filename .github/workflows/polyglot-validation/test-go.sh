@@ -44,12 +44,9 @@ if grep -q "builder.Build()" apphost.go; then
     awk '/builder\.Build\(\)/{
         print "\t// Add Redis cache resource"
         print "\tredisPort := 0.0"
-        print "\tredis, err := builder.AddRedis(\"cache\", &redisPort, nil)"
-        print "\tif err != nil {"
-        print "\t\tlog.Fatalf(\"Failed to add Redis: %v\", err)"
-        print "\t}"
-        print "\tif err := redis.WithImageRegistry(\"netaspireci.azurecr.io\").Err(); err != nil {"
-        print "\t\tlog.Fatalf(\"Failed to set image registry: %v\", err)"
+        print "\tredis := builder.AddRedis(\"cache\", &redisPort, nil).WithImageRegistry(\"netaspireci.azurecr.io\")"
+        print "\tif err := redis.Err(); err != nil {"
+        print "\t\tlog.Fatalf(\"Failed to set up Redis: %v\", err)"
         print "\t}"
         print ""
     }1' apphost.go > apphost.go.tmp && mv apphost.go.tmp apphost.go

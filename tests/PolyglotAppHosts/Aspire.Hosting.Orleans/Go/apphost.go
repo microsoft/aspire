@@ -17,9 +17,9 @@ func main() {
 
 	_, _ = builder.AddConnectionString("connection-string", nil)
 
-	orleans, err := builder.AddOrleans("resource")
-	if err != nil {
-		log.Fatalf("AddOrleans: %v", err)
+	orleans := builder.AddOrleans("resource")
+	if err = orleans.Err(); err != nil {
+		log.Fatalf("orleans: %v", err)
 	}
 	orService, err := orleans.AsClient()
 	if err != nil {
@@ -27,17 +27,17 @@ func main() {
 	}
 	_ = orService
 
-	silo, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
+	silo := builder.AddContainer("resource", "image")
+	silo.WithOrleansReference(orleans)
+	if err = silo.Err(); err != nil {
+		log.Fatalf("silo: %v", err)
 	}
-	_, _ = silo.WithOrleansReference(orleans)
 
-	client, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
+	client := builder.AddContainer("resource", "image")
+	client.WithOrleansClientReference(orService)
+	if err = client.Err(); err != nil {
+		log.Fatalf("client: %v", err)
 	}
-	_, _ = client.WithOrleansClientReference(orService)
 
 	app, err := builder.Build()
 	if err != nil {

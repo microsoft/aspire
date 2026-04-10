@@ -17,41 +17,27 @@ func main() {
 
 	// addRedis — full overload with port and password parameter
 	secret := true
-	password, err := builder.AddParameter("redis-password", &secret)
-	if err != nil {
-		log.Fatalf("AddParameter: %v", err)
-	}
+	password := builder.AddParameter("redis-password", &secret)
 
-	cache, err := builder.AddRedis("cache", nil, password)
-	if err != nil {
-		log.Fatalf("AddRedis: %v", err)
+	cache := builder.AddRedis("cache", nil, password).WithDataVolume(nil, nil).WithPersistence(nil, nil)
+	if err = cache.Err(); err != nil {
+		log.Fatalf("cache: %v", err)
 	}
 
 	// addRedisWithPort — overload with explicit port
 	var port float64 = 6380
-	cache2, err := builder.AddRedisWithPort("cache2", port)
-	if err != nil {
-		log.Fatalf("AddRedisWithPort: %v", err)
-	}
-
-	// withDataVolume + withPersistence — fluent chaining on RedisResource
-	if err := cache.WithDataVolume(nil, nil).WithPersistence(nil, nil).Err(); err != nil {
-		log.Fatalf("cache setup: %v", err)
-	}
-
 	// withDataBindMount + withHostPort on cache2 — fluent chain
 	secret2 := true
-	newPassword, err := builder.AddParameter("new-redis-password", &secret2)
-	if err != nil {
-		log.Fatalf("AddParameter: %v", err)
-	}
-	if err := cache2.WithDataBindMount("/tmp/redis-data", nil).WithHostPort(6380).WithPassword(newPassword).Err(); err != nil {
-		log.Fatalf("cache2 setup: %v", err)
+	newPassword := builder.AddParameter("new-redis-password", &secret2)
+	cache2 := builder.AddRedisWithPort("cache2", port).WithDataBindMount("/tmp/redis-data", nil).WithHostPort(6380).WithPassword(newPassword)
+	if err = cache2.Err(); err != nil {
+		log.Fatalf("cache2: %v", err)
 	}
 
 	// withHostPort on cache — stand-alone (after the first chain)
-	if err := cache.WithHostPort(6379).Err(); err != nil {
-		log.Fatalf("WithHostPort: %v", err)
+	cache.WithHostPort(6379)
+	if err = cache.Err(); err != nil {
+		log.Fatalf("cache: %v", err)
 	}
 
 	// withRedisCommander — fluent (1 return value)

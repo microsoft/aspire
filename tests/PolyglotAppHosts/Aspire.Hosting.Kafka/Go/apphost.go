@@ -15,25 +15,25 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	kafka, err := builder.AddKafka("resource", nil)
-	if err != nil {
-		log.Fatalf("AddKafka: %v", err)
-	}
+	kafka := builder.AddKafka("resource", nil)
 
 	kafkaWithUI := kafka.WithKafkaUI(nil, nil)
 	kafkaWithUI.WithDataVolume(nil, nil)
-
-	kafka2, err := builder.AddKafka("resource", nil)
-	if err != nil {
-		log.Fatalf("AddKafka: %v", err)
-	}
-	kafka2.WithDataBindMount("/tmp", nil)
 
 	_, _ = kafka.PrimaryEndpoint()
 	_, _ = kafka.Host()
 	_, _ = kafka.Port()
 	_, _ = kafka.InternalEndpoint()
 	_, _ = kafka.ConnectionStringExpression()
+	if err = kafka.Err(); err != nil {
+		log.Fatalf("kafka: %v", err)
+	}
+
+	kafka2 := builder.AddKafka("resource", nil)
+	kafka2.WithDataBindMount("/tmp", nil)
+	if err = kafka2.Err(); err != nil {
+		log.Fatalf("kafka2: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

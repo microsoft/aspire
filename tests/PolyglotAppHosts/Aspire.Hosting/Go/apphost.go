@@ -20,59 +20,36 @@ func main() {
 	// ===================================================================
 
 	// addContainer (pre-existing)
-	container, err := builder.AddContainer("mycontainer", "nginx")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
+	container := builder.AddContainer("mycontainer", "nginx")
 
 	// addDockerfile
-	dockerContainer, err := builder.AddDockerfile("dockerapp", "./app", nil, nil)
-	if err != nil {
-		log.Fatalf("AddDockerfile: %v", err)
-	}
+	dockerContainer := builder.AddDockerfile("dockerapp", "./app", nil, nil)
 
 	// addExecutable (pre-existing)
-	_, err = builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
-	if err != nil {
-		log.Fatalf("AddExecutable: %v", err)
-	}
+	_ = builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
 
 	// addProject (pre-existing)
-	_, err = builder.AddProject("myproject", "./src/MyProject", "https")
-	if err != nil {
-		log.Fatalf("AddProject: %v", err)
-	}
+	_ = builder.AddProject("myproject", "./src/MyProject", "https")
 
 	// addCSharpApp
-	_, err = builder.AddCSharpApp("csharpapp", "./src/CSharpApp")
-	if err != nil {
-		log.Fatalf("AddCSharpApp: %v", err)
-	}
+	_ = builder.AddCSharpApp("csharpapp", "./src/CSharpApp")
 
 	// addDotnetTool
-	tool, err := builder.AddDotnetTool("mytool", "dotnet-ef")
-	if err != nil {
-		log.Fatalf("AddDotnetTool: %v", err)
-	}
+	tool := builder.AddDotnetTool("mytool", "dotnet-ef")
 
 	// addParameterFromConfiguration
-	configParam, err := builder.AddParameterFromConfiguration("myconfig", "MyConfig:Key", nil)
-	if err != nil {
-		log.Fatalf("AddParameterFromConfiguration: %v", err)
-	}
+	configParam := builder.AddParameterFromConfiguration("myconfig", "MyConfig:Key", nil)
 	secret := true
-	_, err = builder.AddParameterFromConfiguration("mysecret", "MyConfig:Secret", &secret)
-	if err != nil {
-		log.Fatalf("AddParameterFromConfiguration: %v", err)
-	}
+	_ = builder.AddParameterFromConfiguration("mysecret", "MyConfig:Secret", &secret)
 
 	// ===================================================================
 	// Container-specific methods on ContainerResource (fluent)
 	// ===================================================================
 
 	// withImageRegistry — fluent, chains on ContainerResource
-	if err := container.WithImageRegistry("docker.io").Err(); err != nil {
-		log.Fatalf("WithImageRegistry: %v", err)
+	container.WithImageRegistry("docker.io")
+	if err = container.Err(); err != nil {
+		log.Fatalf("container: %v", err)
 	}
 
 	// withDockerfileBaseImage — non-fluent (returns *IResource)
@@ -95,17 +72,11 @@ func main() {
 
 	expr := aspire.RefExpr("Host={0}", endpoint)
 
-	_, err = builder.AddConnectionStringBuilder("customcs", func(args ...any) any {
+	_ = builder.AddConnectionStringBuilder("customcs", func(args ...any) any {
 		return nil
 	})
-	if err != nil {
-		log.Fatalf("AddConnectionStringBuilder: %v", err)
-	}
 
-	envConnectionString, err := builder.AddConnectionString("envcs", nil)
-	if err != nil {
-		log.Fatalf("AddConnectionString: %v", err)
-	}
+	envConnectionString := builder.AddConnectionString("envcs", nil)
 
 	// ===================================================================
 	// ResourceBuilderExtensions on ContainerResource (non-fluent)
@@ -175,15 +146,15 @@ func main() {
 	// DotnetToolResourceExtensions — all With-tool methods are fluent
 	// ===================================================================
 
-	if err := tool.
+	tool.
 		WithToolIgnoreExistingFeeds().
 		WithToolIgnoreFailedSources().
 		WithToolPackage("dotnet-ef").
 		WithToolPrerelease().
 		WithToolSource("https://api.nuget.org/v3/index.json").
-		WithToolVersion("8.0.0").
-		Err(); err != nil {
-		log.Fatalf("tool setup: %v", err)
+		WithToolVersion("8.0.0")
+	if err = tool.Err(); err != nil {
+		log.Fatalf("tool: %v", err)
 	}
 
 	// PublishAsDockerFile — non-fluent (returns *ExecutableResource)

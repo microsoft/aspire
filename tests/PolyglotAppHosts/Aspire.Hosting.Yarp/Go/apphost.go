@@ -20,37 +20,22 @@ func main() {
 	isSecret2 := true
 	buildSecretParam, _ := builder.AddParameterFromConfiguration("buildSecret", "MyConfig:Secret", &isSecret2)
 
-	_, err = builder.AddContainer("static-files-source", "nginx")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
+	builder.AddContainer("static-files-source", "nginx")
+	builder.AddContainer("backend", "nginx")
+	builder.AddProject("backend-service", "./src/BackendService", "http")
+	builder.AddExternalService("external-backend", "https://example.com")
 
-	_, err = builder.AddContainer("backend", "nginx")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
-
-	_, err = builder.AddProject("backend-service", "./src/BackendService", "http")
-	if err != nil {
-		log.Fatalf("AddProject: %v", err)
-	}
-
-	_, err = builder.AddExternalService("external-backend", "https://example.com")
-	if err != nil {
-		log.Fatalf("AddExternalService: %v", err)
-	}
-
-	proxy, err := builder.AddYarp("proxy")
-	if err != nil {
-		log.Fatalf("AddYarp: %v", err)
-	}
+	proxy := builder.AddYarp("proxy")
 	proxy.WithHostPort(8080)
 	proxy.WithHostHttpsPort(8443)
-	_, _ = proxy.WithVolume("target", nil, nil)
-	_, _ = proxy.WithBuildArg("BUILD_VERSION", buildVersionParam)
-	_, _ = proxy.WithBuildSecret("MY_SECRET", buildSecretParam)
+	proxy.WithVolume("target", nil, nil)
+	proxy.WithBuildArg("BUILD_VERSION", buildVersionParam)
+	proxy.WithBuildSecret("MY_SECRET", buildSecretParam)
 	proxy.PublishWithStaticFiles(nil)
-	_, _ = proxy.PublishAsConnectionString()
+	proxy.PublishAsConnectionString()
+	if err = proxy.Err(); err != nil {
+		log.Fatalf("proxy: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

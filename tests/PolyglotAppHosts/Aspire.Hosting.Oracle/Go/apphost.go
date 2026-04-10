@@ -15,43 +15,40 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	oracle, err := builder.AddOracle("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddOracle: %v", err)
+	oracle := builder.AddOracle("resource", nil, nil)
+	if err = oracle.Err(); err != nil {
+		log.Fatalf("oracle: %v", err)
 	}
 
 	_, _ = builder.AddParameter("parameter", nil)
-	_, err = builder.AddOracle("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddOracle: %v", err)
-	}
+	builder.AddOracle("resource", nil, nil)
 
-	db, err := oracle.AddDatabase("resource", nil)
-	if err != nil {
-		log.Fatalf("AddDatabase: %v", err)
+	db := oracle.AddDatabase("resource", nil)
+	if err = db.Err(); err != nil {
+		log.Fatalf("db: %v", err)
 	}
 	_ = db
 
-	_, _ = oracle.AddDatabase("resource", nil)
+	oracle.AddDatabase("resource", nil)
 	oracle.WithDataVolume(nil)
+	oracle.WithReference(nil, nil, nil, nil)
+	oracle.WithReference(nil, nil, nil, nil)
+	oracle.WithReference(nil, nil, nil, nil)
 
-	oracle2, err := builder.AddOracle("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddOracle: %v", err)
-	}
+	oracle2 := builder.AddOracle("resource", nil, nil)
 	oracle2.WithDataVolume(nil)
 	oracle2.WithDataBindMount("/tmp")
 	oracle2.WithInitFiles("./init")
 	oracle2.WithDbSetupBindMount("/tmp")
-	_, _ = oracle.WithReference(nil, nil, nil, nil)
-	_, _ = oracle.WithReference(nil, nil, nil, nil)
-	_, _ = oracle.WithReference(nil, nil, nil, nil)
-
-	oracle3, err := builder.AddOracle("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddOracle: %v", err)
+	if err = oracle2.Err(); err != nil {
+		log.Fatalf("oracle2: %v", err)
 	}
-	_, _ = oracle3.AddDatabase("resource", nil)
+
+	oracle3 := builder.AddOracle("resource", nil, nil)
+	oracle3.AddDatabase("resource", nil)
+	if err = oracle3.Err(); err != nil {
+		log.Fatalf("oracle3: %v", err)
+	}
 
 	_, _ = oracle.PrimaryEndpoint()
 	_, _ = oracle.Host()

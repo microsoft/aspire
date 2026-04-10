@@ -17,13 +17,13 @@ func main() {
 
 	_, _ = builder.AddParameter("parameter", nil)
 
-	seq, err := builder.AddSeq("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddSeq: %v", err)
-	}
+	seq := builder.AddSeq("resource", nil, nil)
 	seq.WithDataVolume(nil, nil)
 	seq.WithDataVolume(nil, nil)
 	seq.WithDataBindMount("/tmp", nil)
+	if err = seq.Err(); err != nil {
+		log.Fatalf("seq: %v", err)
+	}
 
 	_, _ = seq.PrimaryEndpoint()
 	_, _ = seq.Host()

@@ -15,11 +15,11 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	signalr, err := builder.AddAzureSignalR("resource")
-	if err != nil {
-		log.Fatalf("AddAzureSignalR: %v", err)
-	}
+	signalr := builder.AddAzureSignalR("resource")
 	signalr.RunAsEmulator(nil)
+	if err = signalr.Err(); err != nil {
+		log.Fatalf("signalr: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

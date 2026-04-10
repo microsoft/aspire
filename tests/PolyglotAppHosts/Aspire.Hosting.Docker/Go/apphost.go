@@ -15,24 +15,23 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	compose, err := builder.AddDockerComposeEnvironment("resource")
-	if err != nil {
-		log.Fatalf("AddDockerComposeEnvironment: %v", err)
-	}
-
-	api, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
-
+	compose := builder.AddDockerComposeEnvironment("resource")
 	compose.WithProperties(nil)
 	compose.WithDashboard(nil)
 	compose.WithDashboard(nil)
 	compose.ConfigureDashboard(nil)
-	_, _ = api.PublishAsDockerComposeService(nil)
 	_, _ = compose.DefaultNetworkName()
 	_, _ = compose.DashboardEnabled()
 	_, _ = compose.Name()
+	if err = compose.Err(); err != nil {
+		log.Fatalf("compose: %v", err)
+	}
+
+	api := builder.AddContainer("resource", "image")
+	_, _ = api.PublishAsDockerComposeService(nil)
+	if err = api.Err(); err != nil {
+		log.Fatalf("api: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

@@ -20,9 +20,9 @@ func main() {
 	}
 
 	// Add your resources here, for example:
-	// cache, err := builder.AddRedis("cache", nil, nil)
-	// if err != nil {
-	//     log.Fatalf("Failed to add Redis: %v", err)
+	// cache := builder.AddRedis("cache", nil, nil)
+	// if cache.Err() != nil {
+	//     log.Fatalf("Failed to add Redis: %v", cache.Err())
 	// }
 	// _ = cache
 

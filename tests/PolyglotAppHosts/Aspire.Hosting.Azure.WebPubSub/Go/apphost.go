@@ -15,32 +15,30 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	webpubsub, err := builder.AddAzureWebPubSub("resource")
-	if err != nil {
-		log.Fatalf("AddAzureWebPubSub: %v", err)
-	}
+	webpubsub := builder.AddAzureWebPubSub("resource")
 
-	hub, err := webpubsub.AddHub("resource", nil)
-	if err != nil {
-		log.Fatalf("AddHub: %v", err)
-	}
+	hub := webpubsub.AddHub("resource", nil)
 
-	_, err = webpubsub.AddHub("resource", nil)
-	if err != nil {
-		log.Fatalf("AddHub: %v", err)
-	}
+	webpubsub.AddHub("resource", nil)
 
 	hub.AddEventHandler(nil, nil, nil)
 	hub.AddEventHandler(nil, nil, nil)
-
-	container, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
+	if err = hub.Err(); err != nil {
+		log.Fatalf("hub: %v", err)
 	}
-	_, _ = container.WithWebPubSubRoleAssignments(webpubsub, nil)
-	_, _ = webpubsub.WithWebPubSubRoleAssignments(webpubsub, nil)
-	_, _ = container.WithReference(nil, nil, nil, nil)
-	_, _ = container.WithReference(nil, nil, nil, nil)
+
+	webpubsub.WithWebPubSubRoleAssignments(webpubsub, nil)
+	if err = webpubsub.Err(); err != nil {
+		log.Fatalf("webpubsub: %v", err)
+	}
+
+	container := builder.AddContainer("resource", "image")
+	container.WithWebPubSubRoleAssignments(webpubsub, nil)
+	container.WithReference(nil, nil, nil, nil)
+	container.WithReference(nil, nil, nil, nil)
+	if err = container.Err(); err != nil {
+		log.Fatalf("container: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

@@ -17,9 +17,9 @@ func main() {
 
 	_, _ = builder.AddParameter("parameter", nil)
 
-	valkey, err := builder.AddValkey("resource", nil, nil)
-	if err != nil {
-		log.Fatalf("AddValkey: %v", err)
+	valkey := builder.AddValkey("resource", nil, nil)
+	if err = valkey.Err(); err != nil {
+		log.Fatalf("valkey: %v", err)
 	}
 
 	_, _ = valkey.PrimaryEndpoint()

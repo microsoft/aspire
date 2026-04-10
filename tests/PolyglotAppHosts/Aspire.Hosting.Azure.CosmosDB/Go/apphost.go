@@ -15,37 +15,22 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	cosmos, err := builder.AddAzureCosmosDB("resource")
-	if err != nil {
-		log.Fatalf("AddAzureCosmosDB: %v", err)
-	}
+	cosmos := builder.AddAzureCosmosDB("resource")
 	cosmos.WithDefaultAzureSku()
 
-	db, err := cosmos.AddCosmosDatabase("resource", nil)
-	if err != nil {
-		log.Fatalf("AddCosmosDatabase: %v", err)
-	}
-	_, _ = db.AddContainer("resource", "image", nil)
-	_, _ = db.AddContainerWithPartitionKeyPaths("resource", []string{"/id"}, nil)
+	db := cosmos.AddCosmosDatabase("resource", nil)
+	_ = db.AddContainer("resource", "image", nil)
+	_ = db.AddContainerWithPartitionKeyPaths("resource", []string{"/id"}, nil)
 
 	cosmos.WithAccessKeyAuthentication()
 
-	_, err = builder.AddAzureKeyVault("resource")
-	if err != nil {
-		log.Fatalf("AddAzureKeyVault: %v", err)
-	}
+	_ = builder.AddAzureKeyVault("resource")
 	cosmos.WithAccessKeyAuthenticationWithKeyVault(nil)
 
-	cosmosEmulator, err := builder.AddAzureCosmosDB("resource")
-	if err != nil {
-		log.Fatalf("AddAzureCosmosDB: %v", err)
-	}
+	cosmosEmulator := builder.AddAzureCosmosDB("resource")
 	cosmosEmulator.RunAsEmulator(nil)
 
-	cosmosPreview, err := builder.AddAzureCosmosDB("resource")
-	if err != nil {
-		log.Fatalf("AddAzureCosmosDB: %v", err)
-	}
+	cosmosPreview := builder.AddAzureCosmosDB("resource")
 	cosmosPreview.RunAsPreviewEmulator(nil)
 
 	app, err := builder.Build()

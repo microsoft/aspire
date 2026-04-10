@@ -15,60 +15,42 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	tunnel, err := builder.AddDevTunnel("resource", nil, nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddDevTunnel: %v", err)
-	}
+	tunnel := builder.AddDevTunnel("resource", nil, nil, nil, nil)
 
-	tunnel2, err := builder.AddDevTunnel("resource", nil, nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddDevTunnel: %v", err)
-	}
+	tunnel2 := builder.AddDevTunnel("resource", nil, nil, nil, nil)
 
-	_, err = builder.AddDevTunnel("resource", nil, nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddDevTunnel: %v", err)
-	}
+	builder.AddDevTunnel("resource", nil, nil, nil, nil)
 
-	web, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
+	web := builder.AddContainer("resource", "image")
 	endpoint, err := web.GetEndpoint("default")
 	if err != nil {
 		log.Fatalf("GetEndpoint: %v", err)
 	}
 	tunnel.WithTunnelReference(endpoint)
-
-	web2, err := builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
+	if err = tunnel.Err(); err != nil {
+		log.Fatalf("tunnel: %v", err)
 	}
+
+	web2 := builder.AddContainer("resource", "image")
 	endpoint2, err := web2.GetEndpoint("default")
 	if err != nil {
 		log.Fatalf("GetEndpoint: %v", err)
 	}
 	tunnel2.WithTunnelReferenceAnonymous(endpoint2, false)
+	if err = tunnel2.Err(); err != nil {
+		log.Fatalf("tunnel2: %v", err)
+	}
 
-	tunnel3, err := builder.AddDevTunnel("resource", nil, nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddDevTunnel: %v", err)
-	}
-	_, err = builder.AddContainer("resource", "image")
-	if err != nil {
-		log.Fatalf("AddContainer: %v", err)
-	}
+	tunnel3 := builder.AddDevTunnel("resource", nil, nil, nil, nil)
+	builder.AddContainer("resource", "image")
 	tunnel3.WithTunnelReferenceAll(nil, false)
-
-	_, err = builder.AddDevTunnel("resource", nil, nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddDevTunnel: %v", err)
+	if err = tunnel3.Err(); err != nil {
+		log.Fatalf("tunnel3: %v", err)
 	}
 
-	_, err = builder.AddDevTunnel("resource", nil, nil, nil, nil)
-	if err != nil {
-		log.Fatalf("AddDevTunnel: %v", err)
-	}
+	builder.AddDevTunnel("resource", nil, nil, nil, nil)
+
+	builder.AddDevTunnel("resource", nil, nil, nil, nil)
 
 	app, err := builder.Build()
 	if err != nil {

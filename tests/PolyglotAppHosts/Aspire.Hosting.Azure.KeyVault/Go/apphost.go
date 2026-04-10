@@ -15,34 +15,19 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	vault, err := builder.AddAzureKeyVault("resource")
-	if err != nil {
-		log.Fatalf("AddAzureKeyVault: %v", err)
-	}
-	_, _ = builder.AddParameter("parameter", nil)
-	_, _ = builder.AddParameter("parameter", nil)
+	vault := builder.AddAzureKeyVault("resource")
+	builder.AddParameter("parameter", nil)
+	builder.AddParameter("parameter", nil)
 
 	_, _ = vault.WithKeyVaultRoleAssignments(vault, nil)
 
-	secretFromParameter, err := vault.AddSecret("resource", nil)
-	if err != nil {
-		log.Fatalf("AddSecret: %v", err)
-	}
+	secretFromParameter := vault.AddSecret("resource", nil)
 
-	secretFromExpression, err := vault.AddSecretFromExpression("resource", nil)
-	if err != nil {
-		log.Fatalf("AddSecretFromExpression: %v", err)
-	}
+	secretFromExpression := vault.AddSecretFromExpression("resource", nil)
 
-	namedSecretFromParameter, err := vault.AddSecretWithName("resource", "resource", nil)
-	if err != nil {
-		log.Fatalf("AddSecretWithName: %v", err)
-	}
+	namedSecretFromParameter := vault.AddSecretWithName("resource", "resource", nil)
 
-	namedSecretFromExpression, err := vault.AddSecretWithNameFromExpression("resource", "resource", nil)
-	if err != nil {
-		log.Fatalf("AddSecretWithNameFromExpression: %v", err)
-	}
+	namedSecretFromExpression := vault.AddSecretWithNameFromExpression("resource", "resource", nil)
 
 	_, _ = vault.GetSecret("resource")
 
