@@ -141,10 +141,11 @@ jobs:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
 
           # Verify the signed CLI archive can execute and create a project.
-          # Run for RIDs that can execute on the build agent:
-          #   macOS (Apple Silicon): osx-arm64 (native), osx-x64 (via Rosetta 2)
+          # Run for RIDs that can fully execute on the build agent:
+          #   macOS (Apple Silicon): osx-arm64 only (osx-x64 via Rosetta can run the CLI
+          #     but aspire-managed template resolution fails)
           #   Linux (amd64): linux-x64 only (linux-arm64/linux-musl-x64 are cross-compiled)
-          - ${{ if or(eq(parameters.agentOs, 'macos'), and(eq(parameters.agentOs, 'linux'), eq(targetRid, 'linux-x64'))) }}:
+          - ${{ if or(and(eq(parameters.agentOs, 'macos'), eq(targetRid, 'osx-arm64')), and(eq(parameters.agentOs, 'linux'), eq(targetRid, 'linux-x64'))) }}:
             - script: |
                 set -euo pipefail
                 echo "Finding CLI archive for ${{ targetRid }}..."
