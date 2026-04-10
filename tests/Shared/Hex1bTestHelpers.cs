@@ -94,8 +94,16 @@ internal static class Hex1bTestHelpers
         var builder = Hex1bTerminal.CreateBuilder()
             .WithHeadless()
             .WithDimensions(width, height)
-            .WithAsciinemaRecording(recordingPath)
-            .WithPtyProcess("/bin/bash", ["--norc"]);
+            .WithAsciinemaRecording(recordingPath);
+
+        if (OperatingSystem.IsWindows())
+        {
+            builder.WithPtyProcess("pwsh.exe", ["-NoProfile", "-NoLogo"]);
+        }
+        else
+        {
+            builder.WithPtyProcess("/bin/bash", ["--norc"]);
+        }
 
         return builder.Build();
     }

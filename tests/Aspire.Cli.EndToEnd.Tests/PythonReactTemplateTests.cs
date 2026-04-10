@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class PythonReactTemplateTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     [CaptureWorkspaceOnFailure]
     public async Task CreateAndRunPythonReactProject()
     {

@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class DoctorCommandTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task DoctorCommand_WithoutSslCertDir_ShowsPartiallyTrusted()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -53,7 +53,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task DoctorCommand_WithSslCertDir_ShowsTrusted()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

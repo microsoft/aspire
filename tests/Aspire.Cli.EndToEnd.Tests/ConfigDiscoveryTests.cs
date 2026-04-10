@@ -27,7 +27,7 @@ public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
     /// existing <c>aspire.config.json</c> next to the apphost rather than creating a
     /// new one in the current working directory.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task RunFromParentDirectory_UsesExistingConfigNearAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

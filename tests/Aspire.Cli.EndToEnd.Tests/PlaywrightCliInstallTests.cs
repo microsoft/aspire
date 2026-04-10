@@ -25,7 +25,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     /// 4. Playwright CLI is installed and available on PATH
     /// 5. The <c>.claude/skills/playwright-cli/SKILL.md</c> skill file is generated
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AgentInit_InstallsPlaywrightCli_AndGeneratesSkillFiles()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -109,7 +109,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     /// the missing <c>WorkingDirectory</c> on <c>ProcessStartInfo</c> caused skill files
     /// to be dropped in the CLI process's current working directory.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AgentInit_WhenCwdDiffersFromWorkspaceRoot_PlacesSkillFilesInWorkspaceRoot()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

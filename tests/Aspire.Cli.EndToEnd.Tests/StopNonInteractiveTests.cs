@@ -16,7 +16,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task StopNonInteractiveSingleAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -73,7 +73,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task StopAllAppHostsFromAppHostDirectory()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -140,7 +140,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task StopAllAppHostsFromUnrelatedDirectory()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -212,7 +212,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task StopNonInteractiveMultipleAppHostsShowsError()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

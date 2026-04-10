@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Xml.Linq;
 using Aspire.Cli.Tests.Utils;
 using Hex1b;
@@ -156,7 +157,8 @@ internal static class CliE2ETestHelpers
 
     /// <summary>
     /// Finds the locally-built native AOT CLI publish directory.
-    /// Searches for the aspire binary under artifacts/bin/Aspire.Cli/*/net*/linux-x64/publish/.
+    /// Searches for the aspire binary under artifacts/bin/Aspire.Cli/*/net*/&lt;rid&gt;/publish/.
+    /// On Windows, searches for win-x64 (or win-arm64); on Linux, searches for linux-x64.
     /// </summary>
     /// <returns>The publish directory path, or null if not found.</returns>
     internal static string? FindLocalCliBinary(string repoRoot)
@@ -167,9 +169,25 @@ internal static class CliE2ETestHelpers
             return null;
         }
 
+        // Determine the platform-specific binary name and RID
+        string binaryName;
+        string[] rids;
+        if (OperatingSystem.IsWindows())
+        {
+            binaryName = "aspire.exe";
+            rids = RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                ? ["win-arm64", "win-x64"]
+                : ["win-x64"];
+        }
+        else
+        {
+            binaryName = "aspire";
+            rids = ["linux-x64"];
+        }
+
         // Search for the native AOT binary under any config/TFM combination.
-        var matches = Directory.GetFiles(cliBaseDir, "aspire", SearchOption.AllDirectories)
-            .Where(f => f.Contains("linux-x64") && f.Contains("publish"))
+        var matches = Directory.GetFiles(cliBaseDir, binaryName, SearchOption.AllDirectories)
+            .Where(f => rids.Any(rid => f.Contains(rid)) && f.Contains("publish"))
             .ToArray();
 
         return matches.Length > 0 ? Path.GetDirectoryName(matches[0]) : null;

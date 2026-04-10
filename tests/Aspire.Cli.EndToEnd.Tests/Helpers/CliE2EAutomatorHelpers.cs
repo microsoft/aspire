@@ -99,10 +99,27 @@ internal static class CliE2EAutomatorHelpers
 
     /// <summary>
     /// Prepares a non-Docker terminal environment with prompt counting and workspace navigation.
-    /// Used by tests that run with <see cref="CliE2ETestHelpers.CreateTestTerminal"/> (bare bash, no Docker).
+    /// On Linux/macOS, launches bash with a custom PROMPT_COMMAND.
+    /// On Windows, launches pwsh.exe with a custom prompt function.
+    /// Both produce the same <c>[N OK] $ </c> prompt pattern for consistent prompt detection.
     /// </summary>
     internal static async Task PrepareEnvironmentAsync(
         this Hex1bTerminalAutomator auto,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            await PrepareWindowsEnvironmentAsync(auto, workspace, counter);
+        }
+        else
+        {
+            await PrepareBashEnvironmentAsync(auto, workspace, counter);
+        }
+    }
+
+    private static async Task PrepareBashEnvironmentAsync(
+        Hex1bTerminalAutomator auto,
         TemporaryWorkspace workspace,
         SequenceCounter counter)
     {
@@ -125,6 +142,46 @@ internal static class CliE2EAutomatorHelpers
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
+    private static async Task PrepareWindowsEnvironmentAsync(
+        Hex1bTerminalAutomator auto,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter)
+    {
+        // Wait for the initial PowerShell prompt
+        await auto.WaitUntilAsync(
+            snapshot => snapshot.GetScreenText().Contains("PS "),
+            timeout: TimeSpan.FromSeconds(15),
+            description: "initial pwsh prompt (PS )");
+        await auto.WaitAsync(500);
+
+        // Set up the prompt function to produce the same [N OK] $ pattern as bash.
+        // PowerShell updates $LASTEXITCODE only for native executables, so we treat
+        // null (no native exe has run yet) as success.
+        const string promptSetup =
+            "$global:CMDCOUNT = 0; " +
+            "function prompt { " +
+            "$s = if ($global:LASTEXITCODE -eq 0 -or $null -eq $global:LASTEXITCODE) { 'OK' } else { \"ERR:$($global:LASTEXITCODE)\" }; " +
+            "$global:CMDCOUNT++; " +
+            "\"[$global:CMDCOUNT $s] `$ \" }";
+        await auto.TypeAsync(promptSetup);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Navigate to workspace
+        await auto.TypeAsync($"Set-Location '{workspace.WorkspaceRoot.FullName}'");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Set environment variables
+        await auto.TypeAsync(
+            "$env:ASPIRE_PLAYGROUND = 'true'; " +
+            "$env:DOTNET_CLI_TELEMETRY_OPTOUT = 'true'; " +
+            "$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = 'true'; " +
+            "$env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
     /// <summary>
     /// Installs the Aspire CLI from PR build artifacts in a non-Docker environment.
     /// </summary>
@@ -133,7 +190,16 @@ internal static class CliE2EAutomatorHelpers
         int prNumber,
         SequenceCounter counter)
     {
-        var command = $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
+        string command;
+        if (OperatingSystem.IsWindows())
+        {
+            command = $"iex \"& {{ $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
+        }
+        else
+        {
+            command = $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
+        }
+
         await auto.TypeAsync(command);
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
@@ -146,7 +212,20 @@ internal static class CliE2EAutomatorHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        if (OperatingSystem.IsWindows())
+        {
+            await auto.TypeAsync(
+                "$env:PATH = \"$HOME\\.aspire\\bin;$env:PATH\"; " +
+                "$env:ASPIRE_PLAYGROUND = 'true'; " +
+                "$env:DOTNET_CLI_TELEMETRY_OPTOUT = 'true'; " +
+                "$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = 'true'; " +
+                "$env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'");
+        }
+        else
+        {
+            await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        }
+
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }
@@ -191,7 +270,17 @@ internal static class CliE2EAutomatorHelpers
         int prNumber,
         SequenceCounter counter)
     {
-        var command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
+        string command;
+        if (OperatingSystem.IsWindows())
+        {
+            command = $"$ref = (gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha'); " +
+                      $"iex \"& {{ $(irm https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
+        }
+        else
+        {
+            command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
+        }
+
         await auto.TypeAsync(command);
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
@@ -205,9 +294,54 @@ internal static class CliE2EAutomatorHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        if (OperatingSystem.IsWindows())
+        {
+            await auto.TypeAsync(
+                "$env:PATH = \"$HOME\\.aspire\\bin;$HOME\\.aspire;$env:PATH\"; " +
+                "$env:ASPIRE_PLAYGROUND = 'true'; " +
+                "$env:DOTNET_CLI_TELEMETRY_OPTOUT = 'true'; " +
+                "$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = 'true'; " +
+                "$env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'");
+        }
+        else
+        {
+            await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        }
+
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Pre-trusts the ASP.NET Core HTTPS development certificate so that <c>aspire new</c>
+    /// and <c>aspire start</c> don't hang on the Windows certificate trust dialog.
+    /// Exports the dev cert and imports it directly into the trusted root store (no UI prompt).
+    /// On Linux, this is a no-op (cert trust is handled via SSL_CERT_DIR).
+    /// </summary>
+    internal static async Task EnsureDevCertsTrustedAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            // Create the dev cert (without --trust to avoid UI dialog), export it, then
+            // import into Trusted Root store using PowerShell (no UI prompt needed).
+            var certCommands =
+                "dotnet dev-certs https --export-path $env:TEMP\\aspire-dev-cert.pfx --password '' --format pfx 2>$null; " +
+                "if (Test-Path $env:TEMP\\aspire-dev-cert.pfx) { " +
+                "Import-PfxCertificate -FilePath $env:TEMP\\aspire-dev-cert.pfx -CertStoreLocation Cert:\\CurrentUser\\Root -Password (ConvertTo-SecureString '' -AsPlainText -Force) | Out-Null; " +
+                "Remove-Item $env:TEMP\\aspire-dev-cert.pfx -Force " +
+                "}";
+            await auto.TypeAsync(certCommands);
+        }
+        else
+        {
+            // Linux: cert trust is handled by the CLI via SSL_CERT_DIR, just ensure cert exists
+            await auto.TypeAsync("dotnet dev-certs https 2>/dev/null || true");
+        }
+
+        await auto.EnterAsync();
+        await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
     }
 
     /// <summary>

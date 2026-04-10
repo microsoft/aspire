@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class CertificatesCommandTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CertificatesTrust_WithUntrustedCert_TrustsCertificate()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -58,7 +58,7 @@ public sealed class CertificatesCommandTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CertificatesClean_RemovesCertificates()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -101,7 +101,7 @@ public sealed class CertificatesCommandTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CertificatesTrust_WithNoCert_CreatesAndTrustsCertificate()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

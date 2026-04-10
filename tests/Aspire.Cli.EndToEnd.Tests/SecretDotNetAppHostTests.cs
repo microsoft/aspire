@@ -13,7 +13,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class SecretDotNetAppHostTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task SecretCrudOnDotNetAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

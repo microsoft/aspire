@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class PsCommandTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task PsCommandListsRunningAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -85,7 +85,7 @@ public sealed class PsCommandTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task PsFormatJsonOutputsOnlyJsonToStdout()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

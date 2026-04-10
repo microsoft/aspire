@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task RestoreSupportsConfigOnlyHelperPackageAndCrossPackageTypes()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

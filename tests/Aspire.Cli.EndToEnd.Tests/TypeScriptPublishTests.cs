@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task PublishWithDockerComposeServiceCallbackSucceeds()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

@@ -35,7 +35,7 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
     /// "apphost.ts" exercises the same code path as "../src/apphost.ts" → "src/apphost.ts".
     /// </para>
     /// </remarks>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task LegacySettingsMigration_AdjustsRelativeAppHostPath()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

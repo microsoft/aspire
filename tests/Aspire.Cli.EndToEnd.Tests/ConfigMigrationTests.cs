@@ -104,7 +104,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// ~/.aspire/aspire.config.json when a CLI command is run, and that the legacy file
     /// is preserved for backward compatibility with older CLI versions.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task GlobalSettings_MigratedFromLegacyFormat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -169,7 +169,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// Verifies that global migration does NOT overwrite an existing aspire.config.json.
     /// If the user already has the new format, legacy globalsettings.json should be ignored.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task GlobalMigration_SkipsWhenNewConfigExists()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -219,7 +219,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// Verifies that the CLI gracefully handles malformed JSON in legacy globalsettings.json
     /// without crashing, and that subsequent config operations still work.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task GlobalMigration_HandlesMalformedLegacyJson()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -278,7 +278,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// Verifies that legacy globalsettings.json containing JSON comments and trailing commas
     /// (common when hand-edited) is correctly parsed and migrated to aspire.config.json.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task GlobalMigration_HandlesCommentsAndTrailingCommas()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -348,7 +348,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// (the new format) and that aspire config get correctly reads from this structure.
     /// Also confirms globalsettings.json is NOT created when using the new CLI.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task ConfigSetGet_CreatesNestedJsonFormat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -432,7 +432,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// value types: channel (string), features (dictionary of bools), and packages
     /// (dictionary of strings).
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task GlobalMigration_PreservesAllValueTypes()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -516,7 +516,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// predates the aspire.config.json consolidation, sets global config values using the
     /// old format, then upgrades to the new CLI and verifies all settings are migrated.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15937")]
     [OuterloopTest("Requires downloading two separate CLI versions from GitHub")]
     public async Task FullUpgrade_LegacyCliToNewCli_MigratesGlobalSettings()

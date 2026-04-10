@@ -176,7 +176,7 @@ jobs:
   tests_requires_cli_archive:
     name: ${{ matrix.shortname }}
     uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
+    needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows]
     if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null }}
     strategy:
       fail-fast: false
@@ -199,6 +199,26 @@ jobs:
     needs: [build_packages, build_cli_archive_linux]
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
+
+  # Windows ARM64 E2E tests run on windows-11-arm to validate the CLI on ARM hardware.
+  # Docker-based tests are auto-skipped (RequiresLinuxDockerFact), so only bare-terminal
+  # tests run: WindowsPtySmokeTests, StarterValidationTests, and other non-Docker tests.
+  cli_e2e_windows_arm64:
+    name: CLI E2E (Windows ARM64)
+    uses: ./.github/workflows/run-tests.yml
+    needs: [setup_for_tests, build_packages, build_cli_archive_windows_arm]
+    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+    with:
+      testShortName: Cli.EndToEnd-arm64
+      os: windows-11-arm
+      testProjectPath: tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj
+      testSessionTimeout: "30m"
+      testHangTimeout: "15m"
+      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\""
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      requiresNugets: true
+      requiresTestSdk: true
+      requiresCliArchive: true
 
   cli_starter_validation_windows:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})

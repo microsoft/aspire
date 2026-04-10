@@ -17,8 +17,9 @@
     <!-- Disable strong name signing because Hex1b package is not signed -->
     <SignAssembly>false</SignAssembly>
 
-    <!-- Only run on Linux since Hex1b requires a Linux terminal environment -->
-    <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
+    <!-- Hex1b 0.126.0+ supports Windows via PTY proxy (hex1bpty.exe).
+         Docker-based tests are skipped on Windows at runtime. -->
+    <RunOnGithubActionsWindows>true</RunOnGithubActionsWindows>
     <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
     <RunOnGithubActionsLinux>true</RunOnGithubActionsLinux>
 

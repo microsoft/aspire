@@ -22,7 +22,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     /// - aspire mcp --help (legacy, still works)
     /// - aspire mcp start --help (legacy, still works)
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AgentCommands_AllHelpOutputs_AreCorrect()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -84,7 +84,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     /// Tests that deprecated MCP configs are detected and can be migrated
     /// to the new agent mcp format during aspire agent init.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AgentInitCommand_MigratesDeprecatedConfig()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -159,7 +159,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     /// <summary>
     /// Tests that aspire doctor warns about deprecated agent configs.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task DoctorCommand_DetectsDeprecatedAgentConfig()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -199,7 +199,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     /// prompts, and that accepting the defaults (Standard location + all skills) completes
     /// successfully and creates the skill file in the .agents/skills/ directory.
     /// </summary>
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AgentInitCommand_DefaultSelection_InstallsSkillOnly()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

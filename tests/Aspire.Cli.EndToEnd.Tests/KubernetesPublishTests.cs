@@ -26,7 +26,7 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
     private static string GenerateUniqueClusterName() =>
         $"{ClusterNamePrefix}-{Guid.NewGuid():N}"[..32]; // KinD cluster names max 32 chars
 
-    [Fact]
+    [RequiresLinuxFact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15870")]
     public async Task CreateAndPublishToKubernetes()

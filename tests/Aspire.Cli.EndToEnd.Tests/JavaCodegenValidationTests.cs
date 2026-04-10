@@ -14,7 +14,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task RestoreGeneratesSdkFiles()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

@@ -13,7 +13,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class SecretTypeScriptAppHostTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task SecretCrudOnTypeScriptAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

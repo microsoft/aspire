@@ -16,7 +16,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class WaitCommandTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/14993")]
     public async Task CreateStartWaitAndStopAspireProject()
     {

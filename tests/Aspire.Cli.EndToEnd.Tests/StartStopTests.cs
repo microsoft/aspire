@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class StartStopTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CreateStartAndStopAspireProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -63,7 +63,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task StopWithNoRunningAppHostExitsSuccessfully()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -97,7 +97,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AddPackageWhileAppHostRunningDetached()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -157,7 +157,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await pendingRun;
     }
 
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task AddPackageInteractiveWhileAppHostRunningDetached()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

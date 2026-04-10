@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task CreateTypeScriptAppHostWithViteApp()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

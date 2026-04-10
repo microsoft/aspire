@@ -100,7 +100,9 @@ try {
   }
 
   if ($toolExitCode -ne 0) {
-    Write-Error "ExtractTestPartitions failed with exit code $toolExitCode."
+    # Partition extraction can fail when the tool (net8.0) can't load assemblies
+    # targeting a newer TFM (e.g., net10.0). Fall through to class-based splitting.
+    Write-Warning "ExtractTestPartitions failed with exit code $toolExitCode. Will fall back to class-based splitting."
   }
 
   # Read partitions if the file was created

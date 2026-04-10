@@ -19,7 +19,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         CliE2ETestHelpers.GetRepoRoot(),
         "tests", "Aspire.Cli.EndToEnd.Tests", "Fixtures", "JsPublish");
 
-    [Fact]
+    [RequiresLinuxFact]
     [CaptureWorkspaceOnFailure]
     public async Task AllPublishMethodsBuildDockerImages()
     {

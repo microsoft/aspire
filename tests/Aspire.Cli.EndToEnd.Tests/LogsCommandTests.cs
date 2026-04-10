@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class LogsCommandTests(ITestOutputHelper output)
 {
-    [Fact]
+    [RequiresLinuxDockerFact]
     public async Task LogsCommandShowsResourceLogs()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
