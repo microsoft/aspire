@@ -1,5 +1,6 @@
 from flask import Flask, jsonify
 import logging
+import os
 
 def create_app():
     """Application factory for Flask app."""
@@ -37,4 +38,5 @@ def create_app():
 # For running directly with python app.py
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    debug_mode = os.getenv('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
