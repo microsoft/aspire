@@ -24,8 +24,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureContainerAppEnvironment: %v", err)
 	}
-	_, _ = env2.WithDashboard(nil)
-	_, _ = env2.WithHttpsUpgrade(nil)
+	if err := env2.WithDashboard(nil).WithHttpsUpgrade(nil).Err(); err != nil {
+		log.Fatalf("env2 setup: %v", err)
+	}
 
 	laws, err := builder.AddAzureLogAnalyticsWorkspace("resource")
 	if err != nil {
@@ -35,7 +36,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddAzureContainerAppEnvironment: %v", err)
 	}
-	_, _ = env3.WithAzureLogAnalyticsWorkspace(laws)
+	if err := env3.WithAzureLogAnalyticsWorkspace(laws).Err(); err != nil {
+		log.Fatalf("env3 setup: %v", err)
+	}
 
 	_, _ = builder.AddParameter("parameter", nil)
 	_, _ = builder.AddParameter("parameter", nil)
@@ -44,7 +47,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("AddContainer: %v", err)
 	}
-	_, _ = web.PublishAsAzureContainerApp(func(args ...any) any { return nil })
+	if err := web.PublishAsAzureContainerApp(func(args ...any) any { return nil }).Err(); err != nil {
+		log.Fatalf("PublishAsAzureContainerApp: %v", err)
+	}
 
 	api, err := builder.AddExecutable("resource", "echo", ".", nil)
 	if err != nil {

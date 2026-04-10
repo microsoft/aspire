@@ -351,6 +351,7 @@ func (c *AspireClient) closeConnection(conn io.ReadWriteCloser, err error) {
 	c.connected = false
 	c.conn = nil
 	callbacks := c.disconnectCallbacks
+	c.disconnectCallbacks = nil
 	c.mu.Unlock()
 
 	// 2. Wait for any in-flight write to finish, then close the socket.
