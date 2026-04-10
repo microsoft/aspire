@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Semver;
 #if CLI
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 #else
@@ -86,14 +85,14 @@ internal static class PackageUpdateHelpers
         if (currentVersion.IsPrerelease)
         {
             // Rule 1: If using a prerelease version where the version is lower than the latest stable version, prompt to upgrade
-            if (newestStable is not null && SemVersion.PrecedenceComparer.Compare(currentVersion, newestStable) < 0)
+            if (newestStable is not null && currentVersion.IsOlderThan(newestStable))
             {
                 logger.LogDebug("Current version {CurrentVersion} is prerelease and older than newest stable version {NewestStableVersion}.", currentVersion, newestStable);
                 return newestStable;
             }
 
             // Rule 2: If using a prerelease version and there is a newer prerelease version, prompt to upgrade
-            if (newestPrerelease is not null && SemVersion.PrecedenceComparer.Compare(currentVersion, newestPrerelease) < 0)
+            if (newestPrerelease is not null && currentVersion.IsOlderThan(newestPrerelease))
             {
                 logger.LogDebug("Current version {CurrentVersion} is prerelease and older than newest prerelease version {NewestPrereleaseVersion}.", currentVersion, newestPrerelease);
                 return newestPrerelease;
@@ -102,7 +101,7 @@ internal static class PackageUpdateHelpers
         else
         {
             // Rule 3: If using a stable version and there is a newer stable version, prompt to upgrade
-            if (newestStable is not null && SemVersion.PrecedenceComparer.Compare(currentVersion, newestStable) < 0)
+            if (newestStable is not null && currentVersion.IsOlderThan(newestStable))
             {
                 logger.LogDebug("Current version {CurrentVersion} is stable and older than newest stable version {NewestStableVersion}.", currentVersion, newestStable);
                 return newestStable;
@@ -116,11 +115,11 @@ internal static class PackageUpdateHelpers
         {
             if (version.IsPrerelease)
             {
-                newestPrerelease = newestPrerelease is null || SemVersion.PrecedenceComparer.Compare(version, newestPrerelease) > 0 ? version : newestPrerelease;
+                newestPrerelease = newestPrerelease is null || version.IsNewerThan(newestPrerelease) ? version : newestPrerelease;
             }
             else
             {
-                newestStable = newestStable is null || SemVersion.PrecedenceComparer.Compare(version, newestStable) > 0 ? version : newestStable;
+                newestStable = newestStable is null || version.IsNewerThan(newestStable) ? version : newestStable;
             }
         }
     }

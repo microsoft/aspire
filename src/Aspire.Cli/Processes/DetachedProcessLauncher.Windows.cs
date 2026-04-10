@@ -17,7 +17,7 @@ internal static partial class DetachedProcessLauncher
     /// PROC_THREAD_ATTRIBUTE_HANDLE_LIST to prevent handle inheritance to grandchildren.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static Process StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory)
+    private static Process StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable)
     {
         // Open NUL device for stdout/stderr — child writes go nowhere
         using var nulHandle = CreateFileW(
@@ -88,34 +88,53 @@ internal static partial class DetachedProcessLauncher
 
                     var flags = CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNoWindow;
 
-                    if (!CreateProcessW(
-                        null,
-                        commandLine,
-                        nint.Zero,
-                        nint.Zero,
-                        bInheritHandles: true, // TRUE but HANDLE_LIST restricts what's actually inherited
-                        flags,
-                        nint.Zero,
-                        workingDirectory,
-                        ref si,
-                        out var pi))
-                    {
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create detached process");
-                    }
-
-                    Process detachedProcess;
+                    // Build a filtered environment block if variables need to be removed.
+                    // CreateProcessW with lpEnvironment=nint.Zero inherits the parent's
+                    // environment, so we only build a custom block when filtering is needed.
+                    var envBlockHandle = nint.Zero;
                     try
                     {
-                        detachedProcess = Process.GetProcessById(pi.dwProcessId);
+                        if (shouldRemoveEnvironmentVariable is not null)
+                        {
+                            envBlockHandle = BuildFilteredEnvironmentBlock(shouldRemoveEnvironmentVariable);
+                        }
+
+                        if (!CreateProcessW(
+                            null,
+                            commandLine,
+                            nint.Zero,
+                            nint.Zero,
+                            bInheritHandles: true, // TRUE but HANDLE_LIST restricts what's actually inherited
+                            flags,
+                            envBlockHandle,
+                            workingDirectory,
+                            ref si,
+                            out var pi))
+                        {
+                            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create detached process");
+                        }
+
+                        Process detachedProcess;
+                        try
+                        {
+                            detachedProcess = Process.GetProcessById(pi.dwProcessId);
+                        }
+                        finally
+                        {
+                            // Close the process and thread handles returned by CreateProcess.
+                            CloseHandle(pi.hProcess);
+                            CloseHandle(pi.hThread);
+                        }
+
+                        return detachedProcess;
                     }
                     finally
                     {
-                        // Close the process and thread handles returned by CreateProcess.
-                        CloseHandle(pi.hProcess);
-                        CloseHandle(pi.hThread);
+                        if (envBlockHandle != nint.Zero)
+                        {
+                            Marshal.FreeHGlobal(envBlockHandle);
+                        }
                     }
-
-                    return detachedProcess;
                 }
                 finally
                 {
@@ -215,6 +234,57 @@ internal static partial class DetachedProcessLauncher
         }
 
         sb.Append('"');
+    }
+
+    /// <summary>
+    /// Builds a Unicode environment block for CreateProcessW with specified variables removed.
+    /// The block is sorted by variable name (case-insensitive, as required by Windows)
+    /// and double-null-terminated. The caller must free the returned pointer with Marshal.FreeHGlobal.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static nint BuildFilteredEnvironmentBlock(Func<string, bool> shouldRemove)
+    {
+        // Collect current environment variables, excluding the ones to remove.
+        var envVars = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            var key = (string)entry.Key;
+            if (!shouldRemove(key))
+            {
+                envVars[key] = (string?)entry.Value ?? string.Empty;
+            }
+        }
+
+        // Build the double-null-terminated Unicode environment block:
+        // KEY1=VALUE1\0KEY2=VALUE2\0...\0\0
+        var blockBuilder = new StringBuilder();
+        foreach (var kvp in envVars)
+        {
+            blockBuilder.Append(kvp.Key);
+            blockBuilder.Append('=');
+            blockBuilder.Append(kvp.Value);
+            blockBuilder.Append('\0');
+        }
+
+        if (envVars.Count == 0)
+        {
+            blockBuilder.Append('\0');
+        }
+
+        blockBuilder.Append('\0'); // Final terminator
+
+        var blockString = blockBuilder.ToString();
+        var byteCount = Encoding.Unicode.GetByteCount(blockString);
+        var ptr = Marshal.AllocHGlobal(byteCount);
+        unsafe
+        {
+            fixed (char* pStr = blockString)
+            {
+                Encoding.Unicode.GetBytes(pStr, blockString.Length, (byte*)ptr, byteCount);
+            }
+        }
+
+        return ptr;
     }
 
     // --- Constants ---

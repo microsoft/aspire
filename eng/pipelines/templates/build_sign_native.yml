@@ -63,18 +63,46 @@ jobs:
             displayName: 🟣Restore
 
         steps:
+          # Build, publish, and sign aspire-managed before creating the bundle layout.
+          # This ensures aspire-managed is signed before CreateLayout packs it into the bundle archive.
+          # Step 1: dotnet publish produces the self-contained single-file binary.
+          # Step 2: build.sh --sign runs Arcade's signing (only when codeSign is enabled).
+          # Step 3: Bundle.proj creates the bundle layout and archive using the signed binary.
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              publish
+              $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
+              -c $(_BuildConfig)
+              -r ${{ targetRid }}
+              --self-contained
+              /p:GenerateDocumentationFile=false
+              /p:EnforceCodeStyleInBuild=false
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
+            displayName: 🟣Publish aspire-managed
+
+          - ${{ if eq(parameters.codeSign, true) }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(scriptName)
+                --restore --sign
+                ${{ parameters.extraBuildArgs }}
+                -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
+                /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
+              displayName: 🟣Sign aspire-managed
+              env:
+                SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
               msbuild
               $(Build.SourcesDirectory)/eng/Bundle.proj
-              /restore
+              "/t:_RestoreDcpPackage;_RunCreateLayout"
               /p:Configuration=$(_BuildConfig)
               /p:TargetRid=${{ targetRid }}
               /p:BundleVersion=ci-bundlepayload
-              /p:SkipNativeBuild=true
               /p:ContinuousIntegrationBuild=true
-              /bl:$(Build.Arcade.LogsPath)BundlePayload.binlog
-            displayName: 🟣Build bundle payload
+              /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
+            displayName: 🟣Create bundle layout
 
           - script: >-
               $(Build.SourcesDirectory)/$(scriptName)

@@ -237,12 +237,12 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     /// <summary>
     /// Regression test for channel switching bug.
-    /// When a project has a channel configured in .aspire/settings.json (project-local),
+    /// When a project has a channel configured in aspire.config.json (project-local),
     /// the NuGet.config should use that channel's hive path, NOT the global config channel.
     /// 
     /// Bug scenario:
     /// 1. User runs `aspire update` and selects "pr-new" channel
-    /// 2. UpdatePackagesAsync saves channel="pr-new" to project-local .aspire/settings.json
+    /// 2. UpdatePackagesAsync saves channel="pr-new" to project-local aspire.config.json
     /// 3. BuildAndGenerateSdkAsync calls CreateProjectFilesAsync
     /// 4. BUG: CreateProjectFilesAsync reads channel from GLOBAL config (returns "pr-old")
     /// 5. NuGet.config is generated with pr-old hive path instead of pr-new
@@ -259,14 +259,15 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var prOldHive = hivesDir.CreateSubdirectory("pr-old");
         var prNewHive = hivesDir.CreateSubdirectory("pr-new");
 
-        // Create project-local .aspire/settings.json with channel="pr-new"
+        // Create project-local aspire.config.json with channel="pr-new"
         // This simulates what happens after `aspire update` saves the selected channel
-        var aspireDir = _workspace.WorkspaceRoot.CreateSubdirectory(".aspire");
-        var settingsJson = Path.Combine(aspireDir.FullName, "settings.json");
-        await File.WriteAllTextAsync(settingsJson, """
+        var aspireConfigPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
             {
                 "channel": "pr-new",
-                "sdkVersion": "13.1.0"
+                "sdk": {
+                    "version": "13.1.0"
+                }
             }
             """);
 

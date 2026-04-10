@@ -7,7 +7,6 @@ using Aspire.Cli.Npm;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 
@@ -962,6 +961,7 @@ public class PlaywrightCliInstallerTests
     private sealed class TestNpmRunner : INpmRunner
     {
         public bool IsAvailable => true;
+
         public NpmPackageInfo? ResolveResult { get; set; }
         public string? PackResult { get; set; }
         public bool AuditResult { get; set; } = true;

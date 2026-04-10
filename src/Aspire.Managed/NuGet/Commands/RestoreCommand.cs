@@ -9,6 +9,7 @@ using NuGet.Frameworks;
 using NuGet.LibraryModel;
 using NuGet.ProjectModel;
 using NuGet.Protocol.Core.Types;
+using NuGet.RuntimeModel;
 using NuGet.Versioning;
 
 namespace Aspire.Managed.NuGet.Commands;
@@ -19,6 +20,9 @@ namespace Aspire.Managed.NuGet.Commands;
 /// </summary>
 public static class RestoreCommand
 {
+    private const string RuntimeIdentifierGraphFileName = "RuntimeIdentifierGraph.json";
+    private const string RuntimeIdentifierGraphResourceName = "Aspire.Managed.RuntimeIdentifierGraph.json";
+
     /// <summary>
     /// Creates the restore command.
     /// </summary>
@@ -40,6 +44,12 @@ public static class RestoreCommand
             DefaultValueFactory = _ => "net10.0"
         };
         command.Options.Add(frameworkOption);
+
+        var runtimeIdentifierOption = new Option<string?>("--runtime-identifier", "--rid")
+        {
+            Description = "Runtime identifier to restore for"
+        };
+        command.Options.Add(runtimeIdentifierOption);
 
         var outputOption = new Option<string>("--output", "-o")
         {
@@ -85,6 +95,7 @@ public static class RestoreCommand
             // Note: ?? is used for null-safety even with DefaultValueFactory because GetValue returns T?
             var packageArgs = parseResult.GetValue(packageOption) ?? [];
             var framework = parseResult.GetValue(frameworkOption)!;
+            var runtimeIdentifier = parseResult.GetValue(runtimeIdentifierOption);
             var output = parseResult.GetValue(outputOption)!;
             var sources = parseResult.GetValue(sourceOption) ?? [];
             var nugetConfigPath = parseResult.GetValue(configOption);
@@ -109,7 +120,7 @@ public static class RestoreCommand
                 packages.Add((parts[0], parts[1]));
             }
 
-            return await ExecuteRestoreAsync(packages, framework, output, sources, nugetConfigPath, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
+            return await ExecuteRestoreAsync(packages, framework, runtimeIdentifier, output, sources, nugetConfigPath, workingDir, noNugetOrg, verbose).ConfigureAwait(false);
         });
 
         return command;
@@ -118,6 +129,7 @@ public static class RestoreCommand
     private static async Task<int> ExecuteRestoreAsync(
         List<(string Id, string Version)> packages,
         string framework,
+        string? runtimeIdentifier,
         string output,
         string[] cliSources,
         string? nugetConfigPath,
@@ -140,6 +152,10 @@ public static class RestoreCommand
             {
                 Console.WriteLine($"Restoring {packages.Count} packages for {framework}");
                 Console.WriteLine($"Output: {outputPath}");
+                if (!string.IsNullOrWhiteSpace(runtimeIdentifier))
+                {
+                    Console.WriteLine($"Runtime identifier: {runtimeIdentifier}");
+                }
                 if (workingDir is not null)
                 {
                     Console.WriteLine($"Working dir: {workingDir}");
@@ -156,7 +172,7 @@ public static class RestoreCommand
             var nugetFramework = NuGetFramework.Parse(framework);
 
             // Build PackageSpec and DependencyGraphSpec
-            var packageSpec = BuildPackageSpec(packages, nugetFramework, outputPath, packageSources, settings);
+            var packageSpec = BuildPackageSpec(packages, nugetFramework, runtimeIdentifier, outputPath, packageSources, settings);
 
             var dgSpec = new DependencyGraphSpec();
             dgSpec.AddProject(packageSpec);
@@ -244,6 +260,7 @@ public static class RestoreCommand
     private static PackageSpec BuildPackageSpec(
         List<(string Id, string Version)> packages,
         NuGetFramework framework,
+        string? runtimeIdentifier,
         string outputPath,
         List<PackageSource> sources,
         ISettings settings)
@@ -251,6 +268,9 @@ public static class RestoreCommand
         var projectName = "AspireRestore";
         var projectPath = Path.Combine(outputPath, "project.json");
         var tfmShort = framework.GetShortFolderName();
+        var runtimeIdentifierGraphPath = !string.IsNullOrWhiteSpace(runtimeIdentifier)
+            ? EnsureRuntimeIdentifierGraphPath(outputPath)
+            : null;
 
         var dependencies = packages.Select(p => new LibraryDependency
         {
@@ -264,7 +284,8 @@ public static class RestoreCommand
         {
             FrameworkName = framework,
             TargetAlias = tfmShort,
-            Dependencies = dependencies
+            Dependencies = dependencies,
+            RuntimeIdentifierGraphPath = runtimeIdentifierGraphPath
         };
 
         var restoreMetadata = new ProjectRestoreMetadata
@@ -289,11 +310,34 @@ public static class RestoreCommand
             TargetAlias = tfmShort
         });
 
-        return new PackageSpec([tfInfo])
+        var packageSpec = new PackageSpec([tfInfo])
         {
             Name = projectName,
             FilePath = projectPath,
             RestoreMetadata = restoreMetadata,
         };
+
+        if (!string.IsNullOrWhiteSpace(runtimeIdentifier))
+        {
+            packageSpec.RuntimeGraph = new RuntimeGraph([new RuntimeDescription(runtimeIdentifier)]);
+        }
+
+        return packageSpec;
+    }
+
+    private static string EnsureRuntimeIdentifierGraphPath(string outputPath)
+    {
+        var graphPath = Path.Combine(outputPath, RuntimeIdentifierGraphFileName);
+        if (File.Exists(graphPath))
+        {
+            return graphPath;
+        }
+
+        using var resourceStream = typeof(RestoreCommand).Assembly.GetManifestResourceStream(RuntimeIdentifierGraphResourceName)
+            ?? throw new InvalidOperationException($"Embedded runtime identifier graph resource '{RuntimeIdentifierGraphResourceName}' was not found.");
+        using var fileStream = File.Create(graphPath);
+        resourceStream.CopyTo(fileStream);
+
+        return graphPath;
     }
 }

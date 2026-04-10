@@ -268,7 +268,7 @@ internal sealed class ResourceContainerImageManager(
         {
             if (!resource.TryGetContainerImageName(out var imageName))
             {
-                throw new InvalidOperationException("Resource image name could not be determined.");
+                throw new InvalidOperationException($"The container image name for resource '{resource.Name}' could not be determined.");
             }
 
             // This is a container resource so we'll use the container runtime to build the image
@@ -288,7 +288,7 @@ internal sealed class ResourceContainerImageManager(
         }
         else
         {
-            throw new NotSupportedException($"The resource type '{resource.GetType().Name}' is not supported.");
+            throw new NotSupportedException($"The resource '{resource.Name}' of type '{resource.GetType().Name}' is not supported.");
         }
     }
 
@@ -306,7 +306,7 @@ internal sealed class ResourceContainerImageManager(
             if (!success)
             {
                 logger.LogError("Building image for {ResourceName} failed", resource.Name);
-                throw new DistributedApplicationException($"Failed to build container image.");
+                throw new DistributedApplicationException($"Failed to build container image for resource '{resource.Name}'.");
             }
             else
             {
@@ -324,7 +324,7 @@ internal sealed class ResourceContainerImageManager(
         // This is a resource project so we'll use the .NET SDK to build the container image.
         if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
         {
-            throw new DistributedApplicationException($"The resource '{projectMetadata}' does not have a project metadata annotation.");
+            throw new DistributedApplicationException($"The resource '{resource.Name}' does not have a project metadata annotation.");
         }
 
         var arguments = $"publish \"{projectMetadata.ProjectPath}\" --configuration Release /t:PublishContainer /p:ContainerRepository=\"{options.LocalImageName}\" /p:ContainerImageTag=\"{options.LocalImageTag}\"";

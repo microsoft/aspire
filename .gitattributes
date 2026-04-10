@@ -48,6 +48,7 @@
 *.fsx text=auto
 *.hs text=auto
 *.json text=auto
+src/Components/**/ConfigurationSchema.json text eol=lf
 
 *.csproj text=auto
 *.vbproj text=auto

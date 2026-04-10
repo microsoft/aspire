@@ -56,8 +56,11 @@
     <FileSignInfo Include="Tuf.dll" CertificateName="3PartySHA2" />
 
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire.exe" CertificateName="MicrosoftDotNet500" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="aspire-managed.exe" CertificateName="MicrosoftDotNet500" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire" CertificateName="MicrosoftDotNet500" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsLinux())" Include="aspire-managed" CertificateName="MicrosoftDotNet500" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire" CertificateName="MacDeveloperHardenWithNotarization" />
+    <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire-managed" CertificateName="MacDeveloperHardenWithNotarization" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="get-aspire-cli.ps1" CertificateName="MicrosoftDotNet500" />
 
     <!-- Sign the manifest catalog on Windows -->
@@ -72,6 +75,11 @@
     <ItemsToSign Include="$(ArtifactsPackagesDir)**\aspire-cli-*.zip" />
     <ItemsToSign Include="$(ArtifactsPackagesDir)**\aspire-cli-*.tar.gz" />
     <ItemsToSign Include="$(RepoRoot)eng\scripts\get-aspire-cli.ps1" Condition="$([System.OperatingSystem]::IsWindows())" />
+
+    <!-- Sign the aspire-managed binary at its publish output path (before it gets packed into the bundle archive) -->
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsWindows())" Include="$(ArtifactsBinDir)Aspire.Managed\**\publish\aspire-managed.exe" />
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsLinux())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
+    <ItemsToSign Condition="$([System.OperatingSystem]::IsMacOS())" Include="$(ArtifactsBinDir)Aspire.Managed/**/publish/aspire-managed" />
     <!-- 
       Note: VS Code extension (.vsix) is NOT included here.
       Signing the VSIX changes its hash, breaking manifest integrity verification.

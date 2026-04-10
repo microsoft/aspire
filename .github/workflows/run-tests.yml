@@ -164,11 +164,15 @@ jobs:
         shell: pwsh
         run: |
           $runnerOs = "${{ runner.os }}"
-          switch ($runnerOs) {
-            'Linux'   { $rid = 'linux-x64' }
-            'macOS'   { $rid = 'osx-arm64' }
-            'Windows' { $rid = 'win-x64' }
-            Default { Write-Error "Unknown runner.os '$runnerOs' for RID mapping"; exit 1 }
+          $runnerArch = "${{ runner.arch }}"
+          $rid = switch ("$runnerOs-$runnerArch") {
+            'Linux-X64'     { 'linux-x64' }
+            'Linux-ARM64'   { 'linux-arm64' }
+            'Windows-X64'   { 'win-x64' }
+            'Windows-ARM64' { 'win-arm64' }
+            'macOS-ARM64'   { 'osx-arm64' }
+            'macOS-X64'     { 'osx-x64' }
+            Default { Write-Error "Unknown runner OS/arch '$runnerOs-$runnerArch' for RID mapping"; exit 1 }
           }
           Write-Host "Using RID=$rid"
           "RID=$rid"    | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append

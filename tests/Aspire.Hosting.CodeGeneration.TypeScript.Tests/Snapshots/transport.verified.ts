@@ -1,4 +1,4 @@
-// transport.ts - ATS transport layer: RPC, Handle, errors, callbacks
+﻿// transport.ts - ATS transport layer: RPC, Handle, errors, callbacks
 import * as net from 'net';
 import * as rpc from 'vscode-jsonrpc/node.js';
 
@@ -14,6 +14,10 @@ export interface AspireClientRpc {
     readonly connected: boolean;
     invokeCapability<TResult = unknown>(capabilityId: string, args?: Record<string, unknown>): Promise<TResult>;
     cancelToken(cancellationId: string): Promise<boolean>;
+    trackPromise(promise: Promise<unknown>): void;
+    flushPendingPromises(): Promise<void>;
+    /** When true (default), rejected tracked promises are collected and re-thrown by flushPendingPromises. */
+    throwOnPendingRejections: boolean;
 }
 
 /**
@@ -360,6 +364,7 @@ export class CapabilityError extends Error {
     ) {
         super(error.message);
         this.name = 'CapabilityError';
+        Object.setPrototypeOf(this, new.target.prototype);
     }
 
     /** Machine-readable error code */
@@ -380,10 +385,11 @@ export class AppHostUsageError extends Error {
     constructor(message: string) {
         super(message);
         this.name = 'AppHostUsageError';
+        Object.setPrototypeOf(this, new.target.prototype);
     }
 }
 
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     return (
         value !== null &&
         (typeof value === 'object' || typeof value === 'function') &&
@@ -753,8 +759,56 @@ export class AspireClient implements AspireClientRpc {
     private _pendingCalls = 0;
     private _connectPromise: Promise<void> | null = null;
     private _disconnectNotified = false;
+    private _pendingPromises: Set<Promise<unknown>> = new Set();
+    private _rejectedErrors: Set<unknown> = new Set();
+    throwOnPendingRejections = true;
 
     constructor(private socketPath: string) { }
+
+    trackPromise(promise: Promise<unknown>): void {
+        this._pendingPromises.add(promise);
+        // Remove on both resolve and reject. The reject handler swallows the
+        // error to prevent Node.js unhandled-rejection crashes.
+        //
+        // When throwOnPendingRejections is true (default), rejection errors are
+        // eagerly collected so that flushPendingPromises can re-throw them even
+        // if the promise settles before flush is called.
+        //
+        // Limitation: JavaScript provides no way to detect whether a rejection
+        // was already observed by the caller (e.g., try { await p } catch {}).
+        // The .then() reject handler fires regardless. This means user-caught
+        // rejections will also be re-thrown by build(). We accept this tradeoff
+        // because the common case — an un-awaited chain fails silently — should
+        // fail loud. The uncommon case (catch an error from an un-awaited chain,
+        // then continue to build) can opt out with:
+        //   createBuilder({ throwOnPendingRejections: false })
+        promise.then(
+            () => this._pendingPromises.delete(promise),
+            (err) => {
+                this._pendingPromises.delete(promise);
+                if (this.throwOnPendingRejections) {
+                    this._rejectedErrors.add(err);
+                }
+            }
+        );
+    }
+
+    async flushPendingPromises(): Promise<void> {
+        if (this._pendingPromises.size > 0) {
+            console.warn(`Flushing ${this._pendingPromises.size} pending promise(s). Consider awaiting fluent calls to avoid implicit flushing.`);
+            // Snapshot the current set before awaiting. Promises tracked after
+            // flush starts (e.g. by .then() callbacks or the build PromiseImpl
+            // constructor) are excluded. This prevents deadlocks where a tracked
+            // promise depends on flush completing.
+            const pending = [...this._pendingPromises];
+            await Promise.allSettled(pending);
+        }
+        if (this._rejectedErrors.size > 0) {
+            const errors = [...this._rejectedErrors];
+            this._rejectedErrors.clear();
+            throw new AggregateError(errors, 'One or more unawaited fluent calls failed');
+        }
+    }
 
     /**
      * Register a callback to be called when the connection is lost

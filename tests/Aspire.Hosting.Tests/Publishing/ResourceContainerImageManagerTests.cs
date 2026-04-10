@@ -634,6 +634,39 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task BuildImageAsync_ProjectBuildFailureIncludesResourceName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddFakeLogging();
+            logging.AddXunit(output);
+        });
+
+        using var tempDir = new TestTempDirectory();
+
+        var project = builder.AddResource(new ProjectResource("broken-project"))
+            .WithAnnotation(new TestProjectMetadata(Path.Combine(tempDir.Path, "missing.csproj")))
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.Destination = ContainerImageDestination.Archive;
+                ctx.ImageFormat = ContainerImageFormat.Oci;
+                ctx.OutputPath = tempDir.Path;
+            });
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            imageBuilder.BuildImageAsync(project.Resource, cts.Token));
+
+        Assert.Contains("broken-project", exception.Message);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task CanBuildImageFromDockerfileWithBuildArgsSecretsAndStage()
     {
@@ -1403,4 +1436,11 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         // Verify CheckIfRunningAsync was called
         Assert.Equal(1, fakeContainerRuntime.CheckIfRunningCallCount);
     }
+}
+
+file sealed class TestProjectMetadata(string projectPath) : IProjectMetadata
+{
+    public string ProjectPath { get; } = projectPath;
+
+    public LaunchSettings LaunchSettings { get; } = new();
 }

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -136,22 +135,10 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             return ExitCodeConstants.InvalidCommand;
         }
 
-        // Build query string with multiple resource parameters
-        var additionalParams = new List<(string key, string? value)>
-        {
-            ("traceId", traceId),
-            ("severity", severity)
-        };
-        if (limit.HasValue && !follow)
-        {
-            additionalParams.Add(("limit", limit.Value.ToString(CultureInfo.InvariantCulture)));
-        }
-        if (follow)
-        {
-            additionalParams.Add(("follow", "true"));
-        }
+        // Build URL with query parameters
+        int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
 
-        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, [.. additionalParams]);
+        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, traceId: traceId, severity: severity, limit: effectiveLimit, follow: follow ? true : null);
 
         try
         {

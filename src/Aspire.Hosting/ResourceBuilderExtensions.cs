@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -281,7 +282,7 @@ public static class ResourceBuilderExtensions
                     var url = await externalService.Resource.UrlParameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
                     if (!ExternalServiceResource.UrlIsValidForExternalService(url, out var _, out var message))
                     {
-                        throw new DistributedApplicationException($"The URL parameter '{externalService.Resource.UrlParameter.Name}' for the external service '{externalService.Resource.Name}' is invalid: {message}");
+                        throw new DistributedApplicationException($"The URL parameter '{externalService.Resource.UrlParameter.Name}' for source resource '{externalService.Resource.Name}' is invalid while configuring target resource '{builder.Resource.Name}': {message}");
                     }
                 }
 
@@ -469,7 +470,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to annotate. Cannot be null.</param>
     /// <param name="value">The value of the connection property, specified as a reference expression.</param>
     /// <returns>The same resource builder instance with the connection property annotation applied.</returns>
-    [AspireExport(Description = "Adds a connection property with a reference expression")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withConnectionProperty dispatcher export.")]
     public static IResourceBuilder<T> WithConnectionProperty<T>(this IResourceBuilder<T> builder, string name, ReferenceExpression value) where T : IResourceWithConnectionString
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -487,13 +488,62 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to add. Cannot be null.</param>
     /// <param name="value">The value to assign to the connection property.</param>
     /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
-    [AspireExport("withConnectionPropertyValue", Description = "Adds a connection property with a string value")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withConnectionProperty dispatcher export.")]
     public static IResourceBuilder<T> WithConnectionProperty<T>(this IResourceBuilder<T> builder, string name, string value) where T : IResourceWithConnectionString
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
 
         return builder.WithAnnotation(new ConnectionPropertyAnnotation(name, ReferenceExpression.Create($"{value}")));
+    }
+
+    /// <summary>
+    /// Adds a connection property annotation to the resource being built.
+    /// </summary>
+    /// <typeparam name="T">The type of resource that implements <see cref="IResourceWithConnectionString"/>.</typeparam>
+    /// <param name="builder">The resource builder to which the connection property will be added.</param>
+    /// <param name="name">The name of the connection property to add.</param>
+    /// <param name="value">The value to assign to the connection property, specified as a string or reference expression.</param>
+    /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
+    [AspireExport("withConnectionProperty", Description = "Adds a connection property with a string or reference expression value")]
+    internal static IResourceBuilder<T> WithConnectionPropertyExport<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        [AspireUnion(typeof(string), typeof(ReferenceExpression))] object value) where T : IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return value switch
+        {
+            string stringValue => builder.WithConnectionProperty(name, stringValue),
+            ReferenceExpression referenceExpression => builder.WithConnectionProperty(name, referenceExpression),
+            _ => throw new ArgumentException(
+                $"Unsupported connection property type '{value.GetType().Name}'. Expected string or ReferenceExpression.",
+                nameof(value))
+        };
+    }
+
+    /// <summary>
+    /// Adds a connection property annotation to the resource being built.
+    /// </summary>
+    /// <typeparam name="T">The type of resource that implements <see cref="IResourceWithConnectionString"/>.</typeparam>
+    /// <param name="builder">The resource builder to which the connection property will be added.</param>
+    /// <param name="name">The name of the connection property to add.</param>
+    /// <param name="value">The string value to assign to the connection property.</param>
+    /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
+    [AspireExport("withConnectionPropertyValue", Description = "Adds a connection property with a string value")]
+    internal static IResourceBuilder<T> WithConnectionPropertyValueExport<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        string value) where T : IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return builder.WithConnectionProperty(name, value);
     }
 
     /// <summary>
@@ -702,6 +752,25 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder.WithAnnotation(new ReferenceEnvironmentInjectionAnnotation(flags));
+    }
+
+    /// <summary>
+    /// Configures how information is injected into environment variables when the resource references other resources.
+    /// </summary>
+    /// <typeparam name="TDestination">The destination resource.</typeparam>
+    /// <param name="builder">The resource to configure.</param>
+    /// <param name="options">Options controlling which reference information is emitted.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withReferenceEnvironment", Description = "Configures which reference values are injected into environment variables")]
+    internal static IResourceBuilder<TDestination> WithReferenceEnvironmentExport<TDestination>(
+        this IResourceBuilder<TDestination> builder,
+        ReferenceEnvironmentInjectionOptions options)
+        where TDestination : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(options);
+
+        return builder.WithReferenceEnvironment(options.ToFlags());
     }
 
     [AspireExport(Description = "Adds a reference to another resource")]
@@ -1013,22 +1082,22 @@ public static class ResourceBuilderExtensions
 
         if (!uri.IsAbsoluteUri)
         {
-            throw new InvalidOperationException("The uri for service reference must be absolute.");
+            throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': it must be absolute.");
         }
 
-        if (!uri.AbsolutePath.EndsWith("/", StringComparison.Ordinal))
+        if (!uri.AbsolutePath.EndsWith('/'))
         {
-            throw new InvalidOperationException("The uri absolute path must end with '/'.");
+            throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': the absolute path must end with '/'.");
         }
 
         if (!string.IsNullOrEmpty(uri.Fragment))
         {
-            throw new InvalidOperationException("The URI cannot contain a fragment.");
+            throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': it cannot contain a fragment.");
         }
 
         if (!string.IsNullOrEmpty(uri.Query))
         {
-            throw new InvalidOperationException("The URI cannot contain a query string.");
+            throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': it cannot contain a query string.");
         }
 
         // Determine what to inject based on the annotation on the destination resource
@@ -1105,7 +1174,7 @@ public static class ResourceBuilderExtensions
                 }
                 else
                 {
-                    throw new DistributedApplicationException($"The URL parameter '{externalService.Resource.UrlParameter.Name}' for the external service '{externalService.Resource.Name}' is invalid: {message}");
+                    throw new DistributedApplicationException($"The URL parameter '{externalService.Resource.UrlParameter.Name}' for source resource '{externalService.Resource.Name}' is invalid while configuring target resource '{builder.Resource.Name}': {message}");
                 }
 
                 if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ServiceDiscovery))
@@ -1285,7 +1354,7 @@ public static class ResourceBuilderExtensions
 
         if (builder.Resource.Annotations.OfType<EndpointAnnotation>().Any(sb => string.Equals(sb.Name, annotation.Name, StringComparisons.EndpointAnnotationName)))
         {
-            throw new DistributedApplicationException($"Endpoint with name '{annotation.Name}' already exists. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking");
+            throw new DistributedApplicationException($"Endpoint with name '{annotation.Name}' already exists on resource '{builder.Resource.Name}'. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking");
         }
 
         // Set the environment variable on the resource
@@ -2292,7 +2361,7 @@ public static class ResourceBuilderExtensions
         {
             if (uri is null)
             {
-                throw new DistributedApplicationException($"The URI for the health check is not set. Ensure that the resource has been allocated before the health check is executed.");
+                throw new DistributedApplicationException($"The URI for the health check on resource '{builder.Resource.Name}' is not set. Ensure that the resource has been allocated before the health check is executed.");
             }
 
             options.AddUri(uri, setup => setup.ExpectHttpCode(statusCode ?? 200));
@@ -3169,6 +3238,26 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(type);
 
         return builder.WithAnnotation(new ResourceRelationshipAnnotation(resource, type));
+    }
+
+    /// <summary>
+    /// Adds a relationship to another resource using its builder.
+    /// </summary>
+    /// <typeparam name="T">The type of the resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="resourceBuilder">The resource builder that the relationship is to.</param>
+    /// <param name="type">The relationship type.</param>
+    /// <returns>A resource builder.</returns>
+    [AspireExport("withBuilderRelationship", MethodName = "withRelationship", Description = "Adds a relationship to another resource")]
+    public static IResourceBuilder<T> WithRelationship<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<IResource> resourceBuilder,
+        string type) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(resourceBuilder);
+
+        return builder.WithRelationship(resourceBuilder.Resource, type);
     }
 
     /// <summary>

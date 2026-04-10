@@ -143,7 +143,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         {
             if (!project.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
             {
-                throw new InvalidOperationException("A project resource is missing required metadata"); // Should never happen.
+                throw new InvalidOperationException($"Project resource '{project.Name}' is missing required metadata."); // Should never happen.
             }
 
             EnsureRequiredAnnotations(project);

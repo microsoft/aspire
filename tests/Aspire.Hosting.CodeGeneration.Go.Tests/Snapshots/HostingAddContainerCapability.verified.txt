@@ -23,13 +23,34 @@
     {
       Name: image,
       Type: {
-        TypeId: string,
-        ClrType: string,
+        TypeId: string|Aspire.Hosting/Aspire.Hosting.Ats.AddContainerOptions,
+        Category: Union,
         IsInterface: false,
         IsReadOnly: false,
         IsResourceBuilder: false,
         IsDistributedApplicationBuilder: false,
-        IsDistributedApplication: false
+        IsDistributedApplication: false,
+        UnionTypes: [
+          {
+            TypeId: string,
+            ClrType: string,
+            IsInterface: false,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          },
+          {
+            TypeId: Aspire.Hosting/Aspire.Hosting.Ats.AddContainerOptions,
+            ClrType: AddContainerOptions,
+            Category: Dto,
+            IsInterface: false,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        ]
       },
       IsOptional: false,
       IsNullable: false,
@@ -237,6 +258,6 @@
     }
   ],
   ReturnsBuilder: true,
-  SourceLocation: Aspire.Hosting.ContainerResourceBuilderExtensions.AddContainer,
+  SourceLocation: Aspire.Hosting.ContainerResourceBuilderExtensions.AddContainerForPolyglot,
   RunSyncOnBackgroundThread: false
 }

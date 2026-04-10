@@ -189,8 +189,10 @@ internal sealed class LayoutBuilder : IDisposable
         var dcpPath = FindDcpPath();
         if (dcpPath is null)
         {
-            Log("  WARNING: DCP not found. Skipping.");
-            return Task.CompletedTask;
+            throw new InvalidOperationException(
+                $"DCP package not found for RID '{_rid}'. " +
+                $"Ensure the DCP NuGet package for the target platform is restored before running CreateLayout. " +
+                $"A bundle without DCP would fail layout validation at runtime.");
         }
 
         var dcpDir = Path.Combine(_outputPath, "dcp");

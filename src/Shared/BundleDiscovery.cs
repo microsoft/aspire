@@ -277,31 +277,7 @@ internal static class BundleDiscovery
     /// </summary>
     public static string GetCurrentRuntimeIdentifier()
     {
-        var arch = RuntimeInformation.OSArchitecture switch
-        {
-            Architecture.X64 => "x64",
-            Architecture.X86 => "x86",
-            Architecture.Arm64 => "arm64",
-            Architecture.Arm => "arm",
-            _ => "x64"
-        };
-
-        if (OperatingSystem.IsWindows())
-        {
-            return $"win-{arch}";
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            return $"osx-{arch}";
-        }
-
-        if (OperatingSystem.IsLinux())
-        {
-            return $"linux-{arch}";
-        }
-
-        return $"unknown-{arch}";
+        return RuntimeInformation.RuntimeIdentifier;
     }
 
     /// <summary>

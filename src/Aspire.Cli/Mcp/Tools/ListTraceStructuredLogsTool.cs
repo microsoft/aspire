@@ -69,7 +69,8 @@ internal sealed class ListTraceStructuredLogsTool(IDashboardInfoProvider dashboa
             var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, cancellationToken).ConfigureAwait(false);
 
             // Build the logs API URL with traceId filter
-            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, resources: null, ("traceId", traceId));
+            // Fetch all logs for the trace from the API. Limiting of returned telemetry to the MCP caller happens later.
+            var url = DashboardUrls.TelemetryLogsApiUrl(apiBaseUrl, traceId: traceId, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
 
             logger.LogDebug("Fetching structured logs from {Url}", url);
 

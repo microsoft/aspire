@@ -6,7 +6,6 @@ using System.Globalization;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Configuration;
-using Semver;
 
 namespace Aspire.Cli.Tests;
 

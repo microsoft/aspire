@@ -1377,6 +1377,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var buildAndGenerateCalled = false;
         string? channelSeenByProject = null;
+        string? sdkVersionSeenByProject = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -1423,8 +1424,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((directory, cancellationToken) =>
         {
             buildAndGenerateCalled = true;
-            var config = AspireJsonConfiguration.Load(directory.FullName);
+            var config = AspireConfigFile.Load(directory.FullName);
             channelSeenByProject = config?.Channel;
+            sdkVersionSeenByProject = config?.SdkVersion;
 
             var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".modules"));
             File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.ts"), "// generated sdk");
@@ -1441,6 +1443,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.True(buildAndGenerateCalled);
         Assert.Equal("daily", channelSeenByProject);
+        Assert.Equal("9.2.0", sdkVersionSeenByProject);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".modules", "aspire.ts")));
     }
 
