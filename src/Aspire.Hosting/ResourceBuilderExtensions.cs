@@ -1369,6 +1369,72 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
+    /// Configures the host port for the default HTTP endpoint on a resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="port">The host port to bind for the <c>"http"</c> endpoint. If <see langword="null"/>, a random port will be assigned.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// This is a convenience method for setting the host port on the endpoint named <c>"http"</c>.
+    /// The endpoint must already exist on the resource, for example by calling
+    /// <see cref="WithHttpEndpoint{T}(IResourceBuilder{T}, int?, int?, string?, string?, bool)"/>,
+    /// or by using a resource type that creates it automatically (such as <c>AddViteApp</c> or <c>AddNextJsApp</c>).
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Set the host port for a Vite application:
+    /// <code>
+    /// var frontend = builder.AddViteApp("frontend", "./frontend")
+    ///     .WithHttpPort(3000);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Sets the host port for the HTTP endpoint")]
+    public static IResourceBuilder<T> WithHttpPort<T>(this IResourceBuilder<T> builder, int? port) where T : IResourceWithEndpoints
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithEndpoint("http", endpoint =>
+        {
+            endpoint.Port = port;
+        });
+    }
+
+    /// <summary>
+    /// Configures the host port for the default HTTPS endpoint on a resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="port">The host port to bind for the <c>"https"</c> endpoint. If <see langword="null"/>, a random port will be assigned.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// This is a convenience method for setting the host port on the endpoint named <c>"https"</c>.
+    /// The endpoint must already exist on the resource, for example by calling
+    /// <see cref="WithHttpsEndpoint{T}(IResourceBuilder{T}, int?, int?, string?, string?, bool)"/>,
+    /// or by using a resource type that creates it automatically (such as <c>AddKeycloak</c>).
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Pin the HTTPS port for a Keycloak resource:
+    /// <code>
+    /// var keycloak = builder.AddKeycloak("keycloak")
+    ///     .WithHttpsPort(8443);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Sets the host port for the HTTPS endpoint")]
+    public static IResourceBuilder<T> WithHttpsPort<T>(this IResourceBuilder<T> builder, int? port) where T : IResourceWithEndpoints
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithEndpoint("https", endpoint =>
+        {
+            endpoint.Port = port;
+        });
+    }
+
+    /// <summary>
     /// Marks existing http or https endpoints on a resource as external.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>

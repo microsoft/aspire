@@ -708,6 +708,58 @@ public class WithEndpointTests
         public LaunchSettings? LaunchSettings => null;
     }
 
+    [Fact]
+    public void WithHttpPortSetsPortOnExistingHttpEndpoint()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint()
+            .WithHttpPort(5000);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        Assert.Equal(5000, endpoint.Port);
+    }
+
+    [Fact]
+    public void WithHttpsPortSetsPortOnExistingHttpsEndpoint()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpsEndpoint()
+            .WithHttpsPort(5001);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "https");
+        Assert.Equal(5001, endpoint.Port);
+    }
+
+    [Fact]
+    public void WithHttpPortAndHttpsPortSetsBothEndpoints()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint()
+            .WithHttpPort(5000)
+            .WithHttpsPort(5001);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var httpEndpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        var httpsEndpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "https");
+        Assert.Equal(5000, httpEndpoint.Port);
+        Assert.Equal(5001, httpsEndpoint.Port);
+    }
+
     private sealed class ProjectA : IProjectMetadata
     {
         public string ProjectPath => "projectA";

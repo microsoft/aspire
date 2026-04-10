@@ -210,4 +210,77 @@ public class ResourceCreationTests
         Assert.True(installerResource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certAnnotation));
         Assert.Equal(CertificateTrustScope.None, certAnnotation.Scope);
     }
+
+    [Fact]
+    public void ViteAppWithHttpPortSetsEndpointPort()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddViteApp("vite", "vite")
+            .WithHttpPort(3000);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var resource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        Assert.Equal(3000, endpoint.Port);
+    }
+
+    [Fact]
+    public void ViteAppWithHttpPortNullKeepsRandomPort()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddViteApp("vite", "vite")
+            .WithHttpPort(null);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var resource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        Assert.Null(endpoint.Port);
+    }
+
+    [Fact]
+    public void NodeAppWithHttpPortSetsEndpointPort()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddNodeApp("node", "node", "app.js")
+            .WithHttpEndpoint(env: "PORT")
+            .WithHttpPort(8080);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var resource = Assert.Single(appModel.Resources.OfType<NodeAppResource>());
+        var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        Assert.Equal(8080, endpoint.Port);
+    }
+
+    [Fact]
+    public void ViteAppWithHttpPortAndHttpsPortSetsBothEndpoints()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddViteApp("vite", "vite")
+            .WithHttpsEndpoint()
+            .WithHttpPort(3000)
+            .WithHttpsPort(3001);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var resource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        var httpEndpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        var httpsEndpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "https");
+        Assert.Equal(3000, httpEndpoint.Port);
+        Assert.Equal(3001, httpsEndpoint.Port);
+    }
 }
