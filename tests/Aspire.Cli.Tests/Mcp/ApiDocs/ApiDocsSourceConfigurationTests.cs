@@ -89,4 +89,20 @@ public class ApiDocsSourceConfigurationTests
             "See [Package](http://localhost:4321/reference/api/csharp/aspire.test.package.md), [Member](http://localhost:4321/reference/api/csharp/aspire.test.package/testtype/methods.md#dothing-string), [CreateBuilder(string[])](http://localhost:4321/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string), and [This section](http://localhost:4321/reference/api/csharp/aspire.test.package/testtype#remarks).",
             rewritten);
     }
+
+    [Fact]
+    public void RewriteMarkdownLinks_RewritesBracketedMemberSignatureLinksFromDistributedApplicationPage()
+    {
+        var rewritten = ApiDocsSourceConfiguration.RewriteMarkdownLinks(
+            """
+            ## Methods
+
+            - [CreateBuilder(string[])](/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string) : [IDistributedApplicationBuilder](/reference/api/csharp/aspire.hosting/idistributedapplicationbuilder.md) `static` `ats export` -- Creates a new instance of [IDistributedApplicationBuilder](/reference/api/csharp/aspire.hosting/idistributedapplicationbuilder.md) with the specified command-line arguments.
+            """,
+            "https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication",
+            "http://localhost:4321/sitemap-0.xml");
+
+        Assert.Contains("[CreateBuilder(string[])](http://localhost:4321/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)", rewritten, StringComparison.Ordinal);
+        Assert.Contains("[IDistributedApplicationBuilder](http://localhost:4321/reference/api/csharp/aspire.hosting/idistributedapplicationbuilder.md)", rewritten, StringComparison.Ordinal);
+    }
 }

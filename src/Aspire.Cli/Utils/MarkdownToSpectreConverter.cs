@@ -275,7 +275,7 @@ internal static partial class MarkdownToSpectreConverter
     [GeneratedRegex(@"!\[([^\]]*)\]\(([^)]+)\)")]
     private static partial Regex ImageRegex();
 
-    [GeneratedRegex(@"\[([^\]]+)\]\(([^)]+)\)")]
+    [GeneratedRegex(@"\[((?:[^\[\]]|\[[^\[\]]*\])+)\]\(([^)]+)\)")]
     private static partial Regex LinkRegex();
 
     [GeneratedRegex(@"^>\s*(.*)$")]

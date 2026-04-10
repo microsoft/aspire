@@ -319,6 +319,46 @@ public class ApiDocsIndexServiceTests
     }
 
     [Fact]
+    public async Task GetAsync_RewritesBracketedMemberSignatureLinksFromDistributedApplicationPage()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [ApiDocsSourceConfiguration.SitemapUrlConfigKey] = "http://localhost:4321/sitemap-0.xml"
+            })
+            .Build();
+
+        var fetcher = new TestApiDocsFetcher(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <url><loc>https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/</loc></url>
+            </urlset>
+            """,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["http://localhost:4321/reference/api/csharp/aspire.hosting/distributedapplication.md"] = """
+                    # DistributedApplication
+
+                    ## Methods
+
+                    - [CreateBuilder(string[])](/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string) : [IDistributedApplicationBuilder](/reference/api/csharp/aspire.hosting/idistributedapplicationbuilder.md) `static` `ats export` -- Creates a new instance of [IDistributedApplicationBuilder](/reference/api/csharp/aspire.hosting/idistributedapplicationbuilder.md) with the specified command-line arguments.
+                    """
+            });
+
+        var service = new ApiDocsIndexService(fetcher, new TestApiDocsCache(), configuration, NullLogger<ApiDocsIndexService>.Instance);
+
+        var item = await service.GetAsync("csharp/aspire.hosting/distributedapplication/");
+
+        Assert.NotNull(item);
+        Assert.Equal("http://localhost:4321/reference/api/csharp/aspire.hosting/distributedapplication", item.Url);
+        Assert.Equal(["http://localhost:4321/reference/api/csharp/aspire.hosting/distributedapplication"], fetcher.RequestedPageUrls);
+        Assert.Equal(["http://localhost:4321/reference/api/csharp/aspire.hosting/distributedapplication.md"], fetcher.RequestedMarkdownUrls);
+        Assert.Contains("[CreateBuilder(string[])](http://localhost:4321/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)", item.Content, StringComparison.Ordinal);
+        Assert.Contains("[IDistributedApplicationBuilder](http://localhost:4321/reference/api/csharp/aspire.hosting/idistributedapplicationbuilder.md)", item.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GetAsync_ForTypeScriptDirectRouteItem_ReturnsMarkdownFromConfiguredHost()
     {
         var configuration = new ConfigurationBuilder()
