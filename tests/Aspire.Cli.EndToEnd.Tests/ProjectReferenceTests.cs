@@ -20,7 +20,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class ProjectReferenceTests(ITestOutputHelper output)
 {
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15831")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15831")]
     public async Task TypeScriptAppHostWithProjectReferenceIntegration()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
