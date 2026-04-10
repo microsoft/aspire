@@ -19,21 +19,21 @@ import (
 
 // AtsErrorCodes contains standard ATS error codes.
 var AtsErrorCodes = struct {
-	CapabilityNotFound  string
-	HandleNotFound      string
-	TypeMismatch        string
-	InvalidArgument     string
-	ArgumentOutOfRange  string
-	CallbackError       string
-	InternalError       string
+	CapabilityNotFound string
+	HandleNotFound     string
+	TypeMismatch       string
+	InvalidArgument    string
+	ArgumentOutOfRange string
+	CallbackError      string
+	InternalError      string
 }{
-	CapabilityNotFound:  "CAPABILITY_NOT_FOUND",
-	HandleNotFound:      "HANDLE_NOT_FOUND",
-	TypeMismatch:        "TYPE_MISMATCH",
-	InvalidArgument:     "INVALID_ARGUMENT",
-	ArgumentOutOfRange:  "ARGUMENT_OUT_OF_RANGE",
-	CallbackError:       "CALLBACK_ERROR",
-	InternalError:       "INTERNAL_ERROR",
+	CapabilityNotFound: "CAPABILITY_NOT_FOUND",
+	HandleNotFound:     "HANDLE_NOT_FOUND",
+	TypeMismatch:       "TYPE_MISMATCH",
+	InvalidArgument:    "INVALID_ARGUMENT",
+	ArgumentOutOfRange: "ARGUMENT_OUT_OF_RANGE",
+	CallbackError:      "CALLBACK_ERROR",
+	InternalError:      "INTERNAL_ERROR",
 }
 
 // CapabilityError represents an error returned from a capability invocation.
@@ -212,6 +212,8 @@ func RegisterCancellation(token *CancellationToken, client *AspireClient) string
 }
 
 // AspireClient manages the connection to the AppHost server.
+// It uses a background reader goroutine so that server-initiated callbacks
+// (invokeCallback) can freely call InvokeCapability without deadlocking.
 type AspireClient struct {
 	socketPath          string
 	conn                io.ReadWriteCloser
@@ -219,17 +221,25 @@ type AspireClient struct {
 	nextID              atomic.Int64
 	disconnectCallbacks []func()
 	connected           bool
-	ioMu                sync.Mutex
+
+	// writeMu protects all writes to conn; separate from read path.
+	writeMu sync.Mutex
+
+	// pending maps in-flight request IDs to their response channels.
+	pendingMu sync.Mutex
+	pending   map[int64]chan map[string]any
 }
 
 // NewAspireClient creates a new client for the given socket path.
 func NewAspireClient(socketPath string) *AspireClient {
 	return &AspireClient{
 		socketPath: socketPath,
+		pending:    make(map[int64]chan map[string]any),
 	}
 }
 
-// Connect establishes the connection to the AppHost server.
+// Connect establishes the connection to the AppHost server and starts the
+// background reader goroutine.
 func (c *AspireClient) Connect() error {
 	if c.connected {
 		return nil
@@ -243,6 +253,8 @@ func (c *AspireClient) Connect() error {
 	c.conn = conn
 	c.reader = bufio.NewReader(conn)
 	c.connected = true
+
+	go c.readLoop()
 	return nil
 }
 
@@ -305,11 +317,17 @@ func (c *AspireClient) Disconnect() {
 	}
 }
 
+// sendRequest sends a JSON-RPC request and waits for the matching response.
+// It does NOT hold any lock while waiting, so callbacks invoked by the server
+// can freely call sendRequest (InvokeCapability) without deadlocking.
 func (c *AspireClient) sendRequest(method string, params []any) (any, error) {
-	c.ioMu.Lock()
-	defer c.ioMu.Unlock()
-
 	requestID := c.nextID.Add(1)
+	ch := make(chan map[string]any, 1)
+
+	c.pendingMu.Lock()
+	c.pending[requestID] = ch
+	c.pendingMu.Unlock()
+
 	message := map[string]any{
 		"jsonrpc": "2.0",
 		"id":      requestID,
@@ -317,31 +335,82 @@ func (c *AspireClient) sendRequest(method string, params []any) (any, error) {
 		"params":  params,
 	}
 
-	if err := c.writeMessage(message); err != nil {
+	c.writeMu.Lock()
+	err := c.writeMessage(message)
+	c.writeMu.Unlock()
+
+	if err != nil {
+		c.pendingMu.Lock()
+		delete(c.pending, requestID)
+		c.pendingMu.Unlock()
 		return nil, err
 	}
 
-	// Read messages until we get our response
+	response := <-ch
+
+	if errObj, hasErr := response["error"]; hasErr {
+		errMap, _ := errObj.(map[string]any)
+		return nil, errors.New(getString(errMap, "message"))
+	}
+	return response["result"], nil
+}
+
+// readLoop runs as a background goroutine, reading messages from the server
+// and dispatching them: responses go to pending channels, server-initiated
+// requests (e.g. invokeCallback) are handled in their own goroutines so they
+// can make nested capability calls.
+func (c *AspireClient) readLoop() {
 	for {
 		response, err := c.readMessage()
 		if err != nil {
-			return nil, fmt.Errorf("connection closed while waiting for response: %w", err)
+			// Connection closed or error – notify pending waiters and disconnect handlers.
+			c.drainPendingWithError(err)
+			c.connected = false
+			for _, cb := range c.disconnectCallbacks {
+				cb()
+			}
+			return
 		}
 
-		// Check if this is a callback request from the server
 		if _, hasMethod := response["method"]; hasMethod {
-			c.handleCallbackRequest(response)
+			// Server-initiated request (e.g. invokeCallback). Handle in a goroutine
+			// so it can call InvokeCapability without blocking the read loop.
+			go c.handleCallbackRequest(response)
 			continue
 		}
 
-		// This is a response - check if it's our response
-		if respID, ok := response["id"].(float64); ok && int64(respID) == requestID {
-			if errObj, hasErr := response["error"]; hasErr {
-				errMap := errObj.(map[string]any)
-				return nil, errors.New(getString(errMap, "message"))
+		// Response to one of our requests.
+		if id, ok := response["id"]; ok {
+			reqID := int64(id.(float64))
+			c.pendingMu.Lock()
+			ch, ok := c.pending[reqID]
+			if ok {
+				delete(c.pending, reqID)
 			}
-			return response["result"], nil
+			c.pendingMu.Unlock()
+			if ok {
+				ch <- response
+			}
 		}
+	}
+}
+
+// drainPendingWithError closes all pending request channels with a synthetic
+// error response so that blocked callers are unblocked when the connection drops.
+func (c *AspireClient) drainPendingWithError(err error) {
+	c.pendingMu.Lock()
+	pending := c.pending
+	c.pending = make(map[int64]chan map[string]any)
+	c.pendingMu.Unlock()
+
+	errResponse := map[string]any{
+		"error": map[string]any{
+			"code":    -32000,
+			"message": err.Error(),
+		},
+	}
+	for _, ch := range pending {
+		ch <- errResponse
 	}
 }
 
@@ -368,11 +437,13 @@ func (c *AspireClient) handleCallbackRequest(message map[string]any) {
 
 	if method != "invokeCallback" {
 		if requestID != nil {
+			c.writeMu.Lock()
 			c.writeMessage(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      requestID,
 				"error":   map[string]any{"code": -32601, "message": fmt.Sprintf("Unknown method: %s", method)},
 			})
+			c.writeMu.Unlock()
 		}
 		return
 	}
@@ -388,19 +459,21 @@ func (c *AspireClient) handleCallbackRequest(message map[string]any) {
 	}
 
 	result, err := invokeCallback(callbackID, args, c)
+	c.writeMu.Lock()
 	if err != nil {
 		c.writeMessage(map[string]any{
 			"jsonrpc": "2.0",
 			"id":      requestID,
 			"error":   map[string]any{"code": -32000, "message": err.Error()},
 		})
-		return
+	} else {
+		c.writeMessage(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      requestID,
+			"result":  result,
+		})
 	}
-	c.writeMessage(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      requestID,
-		"result":  result,
-	})
+	c.writeMu.Unlock()
 }
 
 func (c *AspireClient) readMessage() (map[string]any, error) {

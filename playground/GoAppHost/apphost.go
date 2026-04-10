@@ -2,8 +2,9 @@
 // For more information, see: https://aspire.dev
 //
 // To run:
-//   aspire config set features:experimentalPolyglot:go true --global
-//   aspire run
+//
+//	aspire config set features:experimentalPolyglot:go true --global
+//	aspire run
 package main
 
 import (

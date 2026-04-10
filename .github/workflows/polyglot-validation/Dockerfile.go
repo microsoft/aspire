@@ -30,7 +30,8 @@ WORKDIR /workspace
 
 COPY setup-local-cli.sh /scripts/setup-local-cli.sh
 COPY test-go.sh /scripts/test-go.sh
-RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-go.sh
+COPY test-go-playground.sh /scripts/test-go-playground.sh
+RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-go.sh /scripts/test-go-playground.sh
 
 # Entrypoint: Set up Aspire CLI and run validation
 # Bundle extraction happens lazily on first command that needs the layout
@@ -40,5 +41,6 @@ ENTRYPOINT ["/bin/bash", "-c", "\
     aspire --nologo config set features:experimentalPolyglot:go true --global && \
     echo '' && \
     echo '=== Running validation ===' && \
-    /scripts/test-go.sh \
+    /scripts/test-go.sh && \
+    /scripts/test-go-playground.sh \
 "]
