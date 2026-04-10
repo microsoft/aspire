@@ -29,6 +29,7 @@ internal static class KnownConfigNames
     public const string WaitForDebugger = "ASPIRE_WAIT_FOR_DEBUGGER";
     public const string WaitForDebuggerTimeout = "ASPIRE_DEBUGGER_TIMEOUT";
     public const string UnixSocketPath = "ASPIRE_BACKCHANNEL_PATH";
+    public const string RemoteAppHostToken = "ASPIRE_REMOTE_APPHOST_TOKEN";
     public const string CliProcessId = "ASPIRE_CLI_PID";
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";
@@ -46,12 +47,19 @@ internal static class KnownConfigNames
     public const string ExtensionToken = "ASPIRE_EXTENSION_TOKEN";
     public const string ExtensionCert = "ASPIRE_EXTENSION_CERT";
     public const string ExtensionDebugSessionId = "ASPIRE_EXTENSION_DEBUG_SESSION_ID";
+    public const string ExtensionDebugRunMode = "ASPIRE_EXTENSION_DEBUG_RUN_MODE";
+    public const string ExtensionCapabilities = "ASPIRE_EXTENSION_CAPABILITIES";
 
     public const string DeveloperCertificateDefaultTrust = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_TRUST";
     public const string DeveloperCertificateDefaultHttpsTermination = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_HTTPS_TERMINATION";
+    public const string DcpDeveloperCertificate = "ASPIRE_DCP_USE_DEVELOPER_CERTIFICATE";
 
     public const string DebugSessionInfo = "DEBUG_SESSION_INFO";
     public const string DebugSessionRunMode = "DEBUG_SESSION_RUN_MODE";
+    public const string DebugSessionPort = "DEBUG_SESSION_PORT";
+    public const string DebugSessionToken = "DEBUG_SESSION_TOKEN";
+    public const string DebugSessionServerCertificate = "DEBUG_SESSION_SERVER_CERTIFICATE";
+    public const string DcpInstanceIdPrefix = "DCP_INSTANCE_ID_PREFIX";
 
     public static class Legacy
     {

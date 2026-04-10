@@ -881,7 +881,7 @@ fluent-switch.table-switch::part(label) {
 
 /*
     Korean text can have bad wrapping behavior. See https://github.com/w3c/csswg-drafts/issues/4285
-    This rule prevents Korean "Close" text in tooltip from wrapping. See https://github.com/dotnet/aspire/issues/8170
+    This rule prevents Korean "Close" text in tooltip from wrapping. See https://github.com/microsoft/aspire/issues/8170
 */
 fluent-tooltip[anchor="dialog_close"] > div {
     word-break: keep-all;

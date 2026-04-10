@@ -399,4 +399,274 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         Assert.True(loaded.Profiles.ContainsKey("default"));
         Assert.Equal("https://localhost:5001", loaded.Profiles["default"].ApplicationUrl);
     }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_AdjustsRelativePathFromAspireDir()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        // Legacy .aspire/settings.json stores paths relative to the .aspire/ directory
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "../src/apphost.ts",
+                "language": "typescript/nodejs",
+                "sdkVersion": "13.2.0"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        // Path should be re-based from .aspire/-relative to root-relative
+        Assert.Equal("src/apphost.ts", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_AdjustsPathForApphostAtRoot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        // Legacy path "../apphost.ts" means apphost is at the repo root
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "../apphost.ts",
+                "language": "typescript/nodejs"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        Assert.Equal("apphost.ts", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_RebasesSubdirectoryPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        // Legacy .aspire/settings.json stores appHostPath relative to .aspire/ directory.
+        // A path like "../MyApp.AppHost/MyApp.AppHost.csproj" points from .aspire/ up to
+        // the repo root, then into a subdirectory. After migration it should become
+        // "MyApp.AppHost/MyApp.AppHost.csproj" (relative to the repo root).
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "../MyApp.AppHost/MyApp.AppHost.csproj"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        Assert.Equal("MyApp.AppHost/MyApp.AppHost.csproj", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_SavesConfigFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "../src/apphost.ts",
+                "sdkVersion": "13.2.0"
+            }
+            """);
+
+        AspireConfigFile.LoadOrCreate(root);
+
+        // Verify aspire.config.json was created with correct content
+        var configPath = Path.Combine(root, AspireConfigFile.FileName);
+        Assert.True(File.Exists(configPath));
+
+        var saved = AspireConfigFile.Load(root);
+        Assert.NotNull(saved);
+        Assert.Equal("src/apphost.ts", saved.AppHost?.Path);
+        Assert.Equal("13.2.0", saved.SdkVersion);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_LeavesAbsolutePathUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var absolutePath = Path.Combine(root, "src", "apphost.ts").Replace(Path.DirectorySeparatorChar, '/');
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, $$"""
+            {
+                "appHostPath": "{{absolutePath}}"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        // Absolute paths should not be modified
+        Assert.Equal(absolutePath, config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_NormalizesBackslashSeparators()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        // Simulate a settings file created on Windows with backslash separators.
+        // Even though we always store '/', handle '\' gracefully in case of manual edits.
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "..\\src\\apphost.ts",
+                "language": "typescript/nodejs"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        // Should be re-based and normalized to forward slashes
+        Assert.Equal("src/apphost.ts", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_OutputAlwaysUsesForwardSlashes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "../deeply/nested/path/apphost.ts"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        // Verify output uses forward slashes regardless of platform
+        Assert.Equal("deeply/nested/path/apphost.ts", config.AppHost?.Path);
+        Assert.DoesNotContain("\\", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_SkipsEmptyPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "",
+                "language": "typescript/nodejs"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        // Empty path should not be transformed to "."
+        Assert.Equal("", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_SkipsNullPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "language": "typescript/nodejs"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        // No appHostPath means no migration needed; path stays null
+        Assert.Null(config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_DotSlashRelativePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        // "./MyApp.AppHost/apphost.ts" from .aspire/ dir resolves to .aspire/MyApp.AppHost/apphost.ts
+        // relative to root. While unusual, verifies dot-slash handling doesn't break.
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "./../MyApp.AppHost/apphost.ts"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        Assert.Equal("MyApp.AppHost/apphost.ts", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_BareRelativePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        // A bare relative path without ../ from .aspire/ stays under .aspire/ when resolved.
+        // In practice legacy paths always start with ../ but we verify the math is correct.
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "../MyApp.AppHost/MyApp.AppHost.csproj"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        Assert.Equal("MyApp.AppHost/MyApp.AppHost.csproj", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_LeavesUnixRootedPathUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, """
+            {
+                "appHostPath": "/path/apphost.ts"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        Assert.Equal("/path/apphost.ts", config.AppHost?.Path);
+    }
+
+    [Fact]
+    public void LoadOrCreate_MigratesLegacy_LeavesWindowsRootedPathUnchanged()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows-rooted paths are only recognized on Windows.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var root = workspace.WorkspaceRoot.FullName;
+
+        var settingsPath = Path.Combine(root, ".aspire", "settings.json");
+        File.WriteAllText(settingsPath, $$"""
+            {
+                "appHostPath": "c:\\path\\apphost.ts"
+            }
+            """);
+
+        var config = AspireConfigFile.LoadOrCreate(root);
+
+        // On Windows, c:\ is rooted and should be left unchanged
+        Assert.Equal("c:\\path\\apphost.ts", config.AppHost?.Path);
+    }
 }

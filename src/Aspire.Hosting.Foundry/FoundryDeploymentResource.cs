@@ -93,8 +93,6 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     /// <summary>
     /// Gets the parent Microsoft Foundry resource.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public FoundryResource Parent { get; set; }
 
     /// <summary>

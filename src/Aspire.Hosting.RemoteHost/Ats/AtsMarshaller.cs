@@ -630,6 +630,28 @@ internal sealed class AtsMarshaller
     {
         var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
+        // When target type is object (union parameter), infer from JSON value
+        if (underlyingType == typeof(object))
+        {
+            if (value.TryGetValue<string>(out var s))
+            {
+                return s;
+            }
+            if (value.TryGetValue<bool>(out var b))
+            {
+                return b;
+            }
+            if (value.TryGetValue<long>(out var l))
+            {
+                return l;
+            }
+            if (value.TryGetValue<double>(out var d))
+            {
+                return d;
+            }
+            return value.ToJsonString();
+        }
+
         // Handle enums - they come as string names
         if (underlyingType.IsEnum)
         {

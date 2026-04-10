@@ -6,12 +6,24 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class GuestRuntimeTests
+public class GuestRuntimeTests(ITestOutputHelper outputHelper)
 {
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+
+    private GuestRuntime CreateRuntime(
+        RuntimeSpec? spec = null,
+        Func<string, string?>? commandResolver = null)
+    {
+        return new GuestRuntime(
+            spec ?? CreateTestSpec(),
+            _loggerFactory.CreateLogger<GuestRuntime>(),
+            commandResolver: commandResolver);
+    }
+
     private static RuntimeSpec CreateTestSpec(
         CommandSpec? execute = null,
         CommandSpec? watchExecute = null,
@@ -38,7 +50,7 @@ public class GuestRuntimeTests
     [Fact]
     public void Language_ReturnsSpecLanguage()
     {
-        var runtime = new GuestRuntime(CreateTestSpec(), NullLogger.Instance);
+        var runtime = CreateRuntime();
 
         Assert.Equal("test/runtime", runtime.Language);
     }
@@ -46,7 +58,7 @@ public class GuestRuntimeTests
     [Fact]
     public void DisplayName_ReturnsSpecDisplayName()
     {
-        var runtime = new GuestRuntime(CreateTestSpec(), NullLogger.Instance);
+        var runtime = CreateRuntime();
 
         Assert.Equal("Test Runtime", runtime.DisplayName);
     }
@@ -54,7 +66,7 @@ public class GuestRuntimeTests
     [Fact]
     public void CreateDefaultLauncher_ReturnsProcessGuestLauncher()
     {
-        var runtime = new GuestRuntime(CreateTestSpec(), NullLogger.Instance);
+        var runtime = CreateRuntime();
 
         var launcher = runtime.CreateDefaultLauncher();
 
@@ -69,7 +81,7 @@ public class GuestRuntimeTests
             Command = "my-runner",
             Args = ["{appHostFile}"]
         });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -88,7 +100,7 @@ public class GuestRuntimeTests
             execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
             watchExecute: new CommandSpec { Command = "watch-cmd", Args = ["--watch", "{appHostFile}"] }
         );
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -103,7 +115,7 @@ public class GuestRuntimeTests
     public async Task RunAsync_WatchModeWithoutWatchSpec_FallsBackToExecute()
     {
         var spec = CreateTestSpec(execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -120,7 +132,7 @@ public class GuestRuntimeTests
             execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
             publishExecute: new CommandSpec { Command = "publish-cmd", Args = ["{appHostFile}", "{args}"] }
         );
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -135,7 +147,7 @@ public class GuestRuntimeTests
     public async Task PublishAsync_WithoutPublishSpec_FallsBackToExecute()
     {
         var spec = CreateTestSpec(execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -154,7 +166,7 @@ public class GuestRuntimeTests
             Args = ["{appHostFile}"],
             EnvironmentVariables = new Dictionary<string, string> { ["SPEC_VAR"] = "spec_value" }
         });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -175,7 +187,7 @@ public class GuestRuntimeTests
             Args = ["{appHostFile}"],
             EnvironmentVariables = new Dictionary<string, string> { ["SHARED_VAR"] = "from_spec" }
         });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -194,7 +206,7 @@ public class GuestRuntimeTests
             Command = "npx",
             Args = ["tsx", "{appHostFile}"]
         });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/home/user/project/apphost.ts");
         var directory = new DirectoryInfo("/home/user/project");
@@ -213,7 +225,7 @@ public class GuestRuntimeTests
             Command = "test-cmd",
             Args = ["--dir", "{appHostDir}"]
         });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/home/user/project/apphost.ts");
         var directory = new DirectoryInfo("/home/user/project");
@@ -231,7 +243,7 @@ public class GuestRuntimeTests
             Command = "test-cmd",
             Args = ["{appHostFile}"]
         });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -251,7 +263,7 @@ public class GuestRuntimeTests
             Command = "test-cmd",
             Args = ["{args}"]
         });
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
         var launcher = new RecordingLauncher();
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
@@ -273,7 +285,7 @@ public class GuestRuntimeTests
             Execute = new CommandSpec { Command = "test-cmd", Args = ["{appHostFile}"] },
             ExtensionLaunchCapability = "node"
         };
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
 
         Assert.Equal("node", runtime.ExtensionLaunchCapability);
     }
@@ -281,7 +293,7 @@ public class GuestRuntimeTests
     [Fact]
     public void ExtensionLaunchCapability_DefaultsToNull()
     {
-        var runtime = new GuestRuntime(CreateTestSpec(), NullLogger.Instance);
+        var runtime = CreateRuntime();
 
         Assert.Null(runtime.ExtensionLaunchCapability);
     }
@@ -290,7 +302,7 @@ public class GuestRuntimeTests
     public async Task InstallDependenciesAsync_WithNoSpec_ReturnsZero()
     {
         var spec = CreateTestSpec();
-        var runtime = new GuestRuntime(spec, NullLogger.Instance);
+        var runtime = CreateRuntime(spec);
 
         var (exitCode, output) = await runtime.InstallDependenciesAsync(new DirectoryInfo("/tmp"), CancellationToken.None);
 
@@ -301,7 +313,7 @@ public class GuestRuntimeTests
     [Fact]
     public async Task InstallDependenciesAsync_WhenNpmIsMissing_ReturnsNodeInstallMessage()
     {
-        var runtime = new GuestRuntime(
+        var runtime = CreateRuntime(
             new RuntimeSpec
             {
                 Language = KnownLanguageId.TypeScript,
@@ -311,7 +323,6 @@ public class GuestRuntimeTests
                 Execute = new CommandSpec { Command = "npx", Args = ["tsx", "{appHostFile}"] },
                 InstallDependencies = new CommandSpec { Command = "npm", Args = ["install"] }
             },
-            NullLogger.Instance,
             commandResolver: _ => null);
 
         var (exitCode, output) = await runtime.InstallDependenciesAsync(new DirectoryInfo(Path.GetTempPath()), CancellationToken.None);
@@ -329,7 +340,7 @@ public class GuestRuntimeTests
     [Fact]
     public async Task RunAsync_WhenNpxIsMissing_ReturnsNodeInstallMessage()
     {
-        var runtime = new GuestRuntime(
+        var runtime = CreateRuntime(
             new RuntimeSpec
             {
                 Language = KnownLanguageId.TypeScript,
@@ -338,7 +349,6 @@ public class GuestRuntimeTests
                 DetectionPatterns = ["apphost.ts"],
                 Execute = new CommandSpec { Command = "npx", Args = ["tsx", "{appHostFile}"] }
             },
-            NullLogger.Instance,
             commandResolver: _ => null);
 
         var appHostFile = new FileInfo(Path.Combine(Path.GetTempPath(), "apphost.ts"));
@@ -372,7 +382,7 @@ public class GuestRuntimeTests
 
             var launcher = new ProcessGuestLauncher(
                 "test",
-                NullLogger.Instance,
+                _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
                 fileLoggerProvider,
                 commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null);
 
@@ -409,6 +419,110 @@ public class GuestRuntimeTests
                 File.Delete(logFilePath);
             }
         }
+    }
+
+    [Fact]
+    public async Task RunAsync_CreatesMissingMigrationFiles()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var tempDir = tempDirectory.Path;
+
+        var migrationFileName = "tsconfig.apphost.json";
+        var migrationContent = """{ "compilerOptions": { "target": "ES2022" } }""";
+
+        var spec = new RuntimeSpec
+        {
+            Language = "test/runtime",
+            DisplayName = "Test Runtime",
+            CodeGenLanguage = "Test",
+            DetectionPatterns = ["apphost.test"],
+            Execute = new CommandSpec
+            {
+                Command = "test-cmd",
+                Args = ["--tsconfig", migrationFileName, "{appHostFile}"]
+            },
+            MigrationFiles = new Dictionary<string, string>
+            {
+                [migrationFileName] = migrationContent
+            }
+        };
+
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo(Path.Combine(tempDir, "apphost.ts"));
+        var directory = new DirectoryInfo(tempDir);
+
+        // File should not exist before run
+        var migrationFilePath = Path.Combine(tempDir, migrationFileName);
+        Assert.False(File.Exists(migrationFilePath));
+
+        await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        // File should be created after run
+        Assert.True(File.Exists(migrationFilePath));
+        var writtenContent = await File.ReadAllTextAsync(migrationFilePath);
+        Assert.Equal(migrationContent, writtenContent);
+    }
+
+    [Fact]
+    public async Task RunAsync_DoesNotOverwriteExistingMigrationFiles()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var tempDir = tempDirectory.Path;
+
+        var migrationFileName = "tsconfig.apphost.json";
+        var migrationContent = """{ "compilerOptions": { "target": "ES2022" } }""";
+        var existingContent = """{ "compilerOptions": { "target": "ES2020" } }""";
+
+        // Pre-create the file with different content
+        var migrationFilePath = Path.Combine(tempDir, migrationFileName);
+        await File.WriteAllTextAsync(migrationFilePath, existingContent);
+
+        var spec = new RuntimeSpec
+        {
+            Language = "test/runtime",
+            DisplayName = "Test Runtime",
+            CodeGenLanguage = "Test",
+            DetectionPatterns = ["apphost.test"],
+            Execute = new CommandSpec
+            {
+                Command = "test-cmd",
+                Args = ["--tsconfig", migrationFileName, "{appHostFile}"]
+            },
+            MigrationFiles = new Dictionary<string, string>
+            {
+                [migrationFileName] = migrationContent
+            }
+        };
+
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo(Path.Combine(tempDir, "apphost.ts"));
+        var directory = new DirectoryInfo(tempDir);
+
+        await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        // File should NOT be overwritten
+        var writtenContent = await File.ReadAllTextAsync(migrationFilePath);
+        Assert.Equal(existingContent, writtenContent);
+    }
+
+    [Fact]
+    public async Task RunAsync_NoMigrationFiles_ExecutesNormally()
+    {
+        var spec = CreateTestSpec(execute: new CommandSpec
+        {
+            Command = "test-cmd",
+            Args = ["{appHostFile}"]
+        });
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        Assert.Equal("test-cmd", launcher.LastCommand);
     }
 
     private sealed class RecordingLauncher : IGuestProcessLauncher

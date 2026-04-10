@@ -200,7 +200,7 @@ public sealed class ParameterProcessor(
             executeCommand: async context =>
             {
                 await SetParameterAsync(parameterResource, context.CancellationToken).ConfigureAwait(false);
-                return CommandResults.Success();
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceSetParameter, parameterResource.Name) };
             },
             updateState: _ => ResourceCommandState.Enabled,
             displayDescription: CommandStrings.SetParameterDescription,
@@ -216,7 +216,7 @@ public sealed class ParameterProcessor(
             executeCommand: async context =>
             {
                 await DeleteParameterAsync(parameterResource, context.CancellationToken).ConfigureAwait(false);
-                return CommandResults.Success();
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceDeletedParameter, parameterResource.Name) };
             },
             updateState: _ => HasParameterValue(parameterResource) ? ResourceCommandState.Enabled : ResourceCommandState.Hidden,
             displayDescription: CommandStrings.DeleteParameterDescription,

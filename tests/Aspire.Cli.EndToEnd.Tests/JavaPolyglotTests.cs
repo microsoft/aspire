@@ -72,7 +72,7 @@ public sealed class JavaPolyglotTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Press CTRL+C to stop the apphost and exit.", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
 
         await auto.Ctrl().KeyAsync(Hex1b.Input.Hex1bKey.C);
         await auto.WaitForSuccessPromptAsync(counter);

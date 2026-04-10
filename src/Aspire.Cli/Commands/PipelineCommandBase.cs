@@ -508,7 +508,9 @@ internal abstract class PipelineCommandBase : BaseCommand
                             Title = title,
                             Number = stepCounter++,
                             StartTime = DateTime.UtcNow,
-                            CompletionState = activity.Data.CompletionState
+                            CompletionState = activity.Data.CompletionState,
+                            ParentStepId = activity.Data.ParentStepId,
+                            HierarchyLevel = activity.Data.HierarchyLevel ?? 0
                         };
 
                         steps[activity.Data.Id] = stepInfo;
@@ -517,6 +519,8 @@ internal abstract class PipelineCommandBase : BaseCommand
                     }
                     else if (IsCompletionStateComplete(activity.Data.CompletionState))
                     {
+                        stepInfo.ParentStepId ??= activity.Data.ParentStepId;
+                        stepInfo.HierarchyLevel = activity.Data.HierarchyLevel ?? stepInfo.HierarchyLevel;
                         stepInfo.CompletionState = activity.Data.CompletionState;
                         stepInfo.CompletionText = ConvertTextWithMarkdownFlag(activity.Data.StatusText, activity.Data);
                         stepInfo.EndTime = DateTime.UtcNow;
@@ -670,8 +674,11 @@ internal abstract class PipelineCommandBase : BaseCommand
                     }
                 }
 
-                // Build duration breakdown (sorted by duration desc)
+                // Build duration breakdown, ordered by step sequence
                 var now = DateTime.UtcNow;
+                var earliestStartTime = steps.Count > 0
+                    ? steps.Values.Min(s => s.StartTime)
+                    : now;
                 var durationRecords = steps.Values.Select(s =>
                 {
                     var end = s.EndTime ?? now;
@@ -687,9 +694,14 @@ internal abstract class PipelineCommandBase : BaseCommand
                         s.Title,
                         state,
                         end - s.StartTime,
-                        s.FailureReason);
+                        s.FailureReason,
+                        s.ParentStepId,
+                        s.HierarchyLevel,
+                        s.Number,
+                        s.StartTime - earliestStartTime,
+                        end - earliestStartTime);
                 })
-                .OrderByDescending(r => r.Duration)
+                .OrderBy(r => r.Sequence)
                 .ToList();
                 logger.SetStepDurations(durationRecords);
 
@@ -901,6 +913,8 @@ internal abstract class PipelineCommandBase : BaseCommand
         public string Id { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public int Number { get; set; }
+        public string? ParentStepId { get; set; }
+        public int HierarchyLevel { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime? EndTime { get; set; }
         public string CompletionState { get; set; } = CompletionStates.InProgress;

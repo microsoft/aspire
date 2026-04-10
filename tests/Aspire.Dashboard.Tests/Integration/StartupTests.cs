@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
@@ -16,6 +17,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -137,19 +139,28 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     [InlineData(KnownConfigNames.Legacy.DashboardConfigFilePath)]
     public async Task Configuration_ConfigFilePathDoesntExist_Error(string dashboardConfigFilePathNameKey)
     {
-        // Arrange & Act
-        var configFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-        var ex = await Assert.ThrowsAsync<FileNotFoundException>(async () =>
-        {
-            await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
-                additionalConfiguration: data =>
-                {
-                    data[dashboardConfigFilePathNameKey] = configFilePath;
-                });
-        }).DefaultTimeout();
+        var tempDirectory = Directory.CreateTempSubdirectory();
 
-        // Assert
-        Assert.Contains(configFilePath, ex.Message);
+        try
+        {
+            // Arrange & Act
+            var configFilePath = Path.Combine(tempDirectory.FullName, Path.GetRandomFileName());
+            var ex = await Assert.ThrowsAsync<FileNotFoundException>(async () =>
+            {
+                await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+                    additionalConfiguration: data =>
+                    {
+                        data[dashboardConfigFilePathNameKey] = configFilePath;
+                    });
+            }).DefaultTimeout();
+
+            // Assert
+            Assert.Contains(configFilePath, ex.Message);
+        }
+        finally
+        {
+            Directory.Delete(tempDirectory.FullName, recursive: true);
+        }
     }
 
     [Theory]
@@ -237,7 +248,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     public async Task Configuration_FileConfigDirectoryDoesntExist_Error()
     {
         // Arrange & Act
-        var fileConfigDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var fileConfigDirectory = Directory.CreateTempSubdirectory().FullName;
+        Directory.Delete(fileConfigDirectory);
         var ex = await Assert.ThrowsAsync<DirectoryNotFoundException>(async () =>
         {
             await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
@@ -551,7 +563,8 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     public async Task Configuration_Logging_FileConfig_OverrideDefaults(string dashboardConfigFilePathNameKey)
     {
         // Arrange
-        var configFilePath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        var configFilePath = Path.Combine(tempDirectory.FullName, Path.GetRandomFileName());
         var configJson = new JsonObject
         {
             ["Logging"] = new JsonObject
@@ -587,7 +600,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         }
         finally
         {
-            File.Delete(configFilePath);
+            Directory.Delete(tempDirectory.FullName, recursive: true);
         }
     }
 
@@ -990,6 +1003,59 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.Equal(value, app.DashboardOptionsMonitor.CurrentValue.AI.Disabled);
         Assert.Equal(!(value ?? false), aiContextProvider.Enabled);
+    }
+
+    [Fact]
+    public async Task Run_AddressAlreadyInUse_ReturnsExitCodeAddressInUse()
+    {
+        // Bind a port so the dashboard can't use it.
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        await using var app = new DashboardWebApplication(preConfigureBuilder: builder =>
+        {
+            RemoveEnvironmentVariableSources(builder);
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = $"http://127.0.0.1:{port}",
+                [DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
+                [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured),
+            });
+        });
+
+        var exitCode = app.Run();
+
+        Assert.Equal(DashboardWebApplication.ExitCodeAddressInUse, exitCode);
+    }
+
+    [Fact]
+    public async Task Run_ValidationFailure_ReturnsExitCodeValidationFailure()
+    {
+        // Omit required configuration so the dashboard fails validation.
+        await using var app = new DashboardWebApplication(preConfigureBuilder: builder =>
+        {
+            RemoveEnvironmentVariableSources(builder);
+            // No frontend URL or auth mode configured — validation will fail.
+        });
+
+        var exitCode = app.Run();
+
+        Assert.Equal(DashboardWebApplication.ExitCodeValidationFailure, exitCode);
+    }
+
+    private static void RemoveEnvironmentVariableSources(WebApplicationBuilder builder)
+    {
+        var sources = ((IConfigurationBuilder)builder.Configuration).Sources;
+        foreach (var item in sources.ToList())
+        {
+            if (item is EnvironmentVariablesConfigurationSource)
+            {
+                sources.Remove(item);
+            }
+        }
     }
 
     private static void AssertIPv4OrIPv6Endpoint(Func<ResolvedEndpointInfo> endPointAccessor)

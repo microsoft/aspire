@@ -35,7 +35,7 @@ public static class AzureNatGatewayExtensions
     ///     .WithNatGateway(natGateway);
     /// </code>
     /// </example>
-    [AspireExport("addNatGateway", Description = "Adds an Azure NAT Gateway resource to the application model.")]
+    [AspireExport(Description = "Adds an Azure NAT Gateway resource to the application model.")]
     public static IResourceBuilder<AzureNatGatewayResource> AddNatGateway(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -72,7 +72,7 @@ public static class AzureNatGatewayExtensions
     ///     .WithPublicIPAddress(pip);
     /// </code>
     /// </example>
-    [AspireExport("withPublicIPAddress", Description = "Associates an Azure Public IP Address resource with an Azure NAT Gateway resource.")]
+    [AspireExport(Description = "Associates an Azure Public IP Address resource with an Azure NAT Gateway resource.")]
     public static IResourceBuilder<AzureNatGatewayResource> WithPublicIPAddress(
         this IResourceBuilder<AzureNatGatewayResource> builder,
         IResourceBuilder<AzurePublicIPAddressResource> publicIPAddress)

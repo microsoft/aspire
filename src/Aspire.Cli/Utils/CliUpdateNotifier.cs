@@ -5,7 +5,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
-using Semver;
 
 namespace Aspire.Cli.Utils;
 

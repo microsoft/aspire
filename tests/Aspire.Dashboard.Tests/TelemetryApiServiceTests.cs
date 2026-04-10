@@ -453,6 +453,164 @@ public class TelemetryApiServiceTests
         }
     }
 
+    [Fact]
+    public void GetSpans_WithLimit_ReturnsMostRecentSpans()
+    {
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "trace1", spanId: "old-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)),
+                            CreateSpan(traceId: "trace2", spanId: "mid-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)),
+                            CreateSpan(traceId: "trace3", spanId: "new-span", startTime: s_testTime.AddMinutes(4), endTime: s_testTime.AddMinutes(5))
+                        }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: 2);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, result.TotalCount);
+        Assert.Equal(2, result.ReturnedCount);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.DoesNotContain("old-span", json);
+        Assert.Contains("mid-span", json);
+        Assert.Contains("new-span", json);
+    }
+
+    [Fact]
+    public void GetTraces_WithLimit_ReturnsMostRecentTraces()
+    {
+        var repository = CreateRepository();
+
+        for (var i = 1; i <= 3; i++)
+        {
+            repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = CreateScope(),
+                            Spans =
+                            {
+                                CreateSpan(traceId: $"trace{i}", spanId: $"span{i}", startTime: s_testTime.AddMinutes(i * 10), endTime: s_testTime.AddMinutes(i * 10 + 1))
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        var service = CreateService(repository);
+
+        var result = service.GetTraces(resourceNames: null, hasError: null, limit: 2);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, result.TotalCount);
+        Assert.Equal(2, result.ReturnedCount);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.DoesNotContain("span1", json);
+        Assert.Contains("span2", json);
+        Assert.Contains("span3", json);
+    }
+
+    [Fact]
+    public void GetLogs_WithLimit_ReturnsMostRecentLogs()
+    {
+        var repository = CreateRepository();
+
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime, message: "old-log", severity: SeverityNumber.Info),
+                            CreateLogRecord(time: s_testTime.AddMinutes(1), message: "mid-log", severity: SeverityNumber.Info),
+                            CreateLogRecord(time: s_testTime.AddMinutes(2), message: "new-log", severity: SeverityNumber.Info)
+                        }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: 2);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, result.TotalCount);
+        Assert.Equal(2, result.ReturnedCount);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.DoesNotContain("old-log", json);
+        Assert.Contains("mid-log", json);
+        Assert.Contains("new-log", json);
+    }
+
+    [Fact]
+    public void GetLogs_LargeLimit_ReturnsAllLogs()
+    {
+        const int totalLogs = 20_000;
+        var repository = CreateRepository(maxLogCount: totalLogs);
+
+        var logRecords = new RepeatedField<LogRecord>();
+        for (var i = 0; i < totalLogs; i++)
+        {
+            logRecords.Add(CreateLogRecord(time: s_testTime.AddMilliseconds(i), message: $"log{i}", severity: SeverityNumber.Info));
+        }
+
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { logRecords }
+                    }
+                }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: 100_000);
+
+        Assert.NotNull(result);
+        Assert.Equal(totalLogs, result.TotalCount);
+        Assert.Equal(totalLogs, result.ReturnedCount);
+    }
+
     /// <summary>
     /// Creates a TelemetryApiService instance for testing with optional custom dependencies.
     /// </summary>

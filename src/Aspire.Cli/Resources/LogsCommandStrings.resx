@@ -118,7 +118,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Display logs from resources in a running apphost</value>
+    <value>Display logs from resources in a running AppHost</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
     <value>The name of the resource to get logs for. If not specified, logs from all resources are shown.</value>

@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="de" original="../LogsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Display logs from resources in a running apphost</source>
+        <source>Display logs from resources in a running AppHost</source>
         <target state="needs-review-translation">Protokolle von Ressourcen in einem laufenden Aspire-AppHost anzeigen.</target>
         <note />
       </trans-unit>

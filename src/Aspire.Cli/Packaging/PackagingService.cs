@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using System.Reflection;
 
@@ -44,7 +45,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
                 // The packages subdirectory contains the actual .nupkg files
                 // Use forward slashes for cross-platform NuGet config compatibility
                 var packagesPath = Path.Combine(prHive.FullName, "packages").Replace('\\', '/');
-                var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Prerelease, new[]
+                var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Both, new[]
                 {
                     new PackageMapping("Aspire*", packagesPath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
@@ -109,8 +110,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         if (!string.IsNullOrEmpty(overrideFeed))
         {
             // Validate that the override URL is well-formed
-            if (Uri.TryCreate(overrideFeed, UriKind.Absolute, out var uri) && 
-                (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp))
+            if (UrlHelper.IsHttpUrl(overrideFeed))
             {
                 return overrideFeed;
             }
@@ -124,7 +124,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         }
 
         // Extract commit hash from assembly version to build staging feed URL
-        // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-{commitHash}/nuget/v3/index.json
+        // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{commitHash}/nuget/v3/index.json
         var assembly = Assembly.GetExecutingAssembly();
         var informationalVersion = assembly
             .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
@@ -145,7 +145,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         var commitHash = informationalVersion[(plusIndex + 1)..];
         var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
         
-        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-{truncatedHash}/nuget/v3/index.json";
+        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
     }
 
     private PackageChannelQuality GetStagingQuality()

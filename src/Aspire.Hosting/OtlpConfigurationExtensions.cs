@@ -117,7 +117,7 @@ public static class OtlpConfigurationExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withOtlpExporter", Description = "Configures OTLP telemetry export")]
+    [AspireExport(Description = "Configures OTLP telemetry export")]
     public static IResourceBuilder<T> WithOtlpExporter<T>(this IResourceBuilder<T> builder) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);

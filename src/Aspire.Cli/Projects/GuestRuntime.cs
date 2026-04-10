@@ -177,6 +177,8 @@ internal sealed class GuestRuntime
     {
         var args = ReplacePlaceholders(commandSpec.Args, appHostFile, directory, additionalArgs);
 
+        await EnsureMigrationFilesExistAsync(directory, cancellationToken);
+
         var mergedEnvironment = new Dictionary<string, string>(environmentVariables);
         if (commandSpec.EnvironmentVariables is not null)
         {
@@ -188,6 +190,28 @@ internal sealed class GuestRuntime
 
         _logger.LogDebug("Launching: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
         return await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates any migration files that are required by the runtime but missing from the project directory.
+    /// This handles upgrade scenarios where a newer CLI introduces new required files.
+    /// </summary>
+    private async Task EnsureMigrationFilesExistAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    {
+        if (_spec.MigrationFiles is null or { Count: 0 })
+        {
+            return;
+        }
+
+        foreach (var (fileName, content) in _spec.MigrationFiles)
+        {
+            var filePath = Path.Combine(directory.FullName, fileName);
+            if (!File.Exists(filePath))
+            {
+                _logger.LogInformation("Creating missing required file: {FileName}", fileName);
+                await File.WriteAllTextAsync(filePath, content, cancellationToken);
+            }
+        }
     }
 
     /// <summary>

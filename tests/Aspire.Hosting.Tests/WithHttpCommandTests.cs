@@ -397,7 +397,7 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.True(callbackCalled);
         Assert.False(result.Success);
-        Assert.Equal("A test error message", result.ErrorMessage);
+        Assert.Equal("A test error message", result.Message);
     }
 
     [Fact]

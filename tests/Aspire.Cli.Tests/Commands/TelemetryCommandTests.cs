@@ -1,13 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Net;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -29,51 +34,45 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithNoResources_ReturnsEmptyString()
+    public void TelemetryLogsApiUrl_WithNoParams_ReturnsBaseUrl()
     {
-        var result = DashboardUrls.BuildResourceQueryString(null);
-        Assert.Equal("", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000");
+        Assert.Equal("https://localhost:5000/api/telemetry/logs", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithSingleResource_ReturnsCorrectQueryString()
+    public void TelemetryLogsApiUrl_WithSingleResource_ReturnsCorrectUrl()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["frontend"]);
-        Assert.Equal("?resource=frontend", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithMultipleResources_ReturnsAllResourceParams()
+    public void TelemetryLogsApiUrl_WithMultipleResources_ReturnsAllResourceParams()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["frontend-abc123", "frontend-xyz789"]);
-        Assert.Equal("?resource=frontend-abc123&resource=frontend-xyz789", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend-abc123", "frontend-xyz789"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend-abc123&resource=frontend-xyz789", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithResourcesAndAdditionalParams_CombinesCorrectly()
+    public void TelemetryLogsApiUrl_WithAllParams_CombinesCorrectly()
     {
-        var result = DashboardUrls.BuildResourceQueryString(
-            ["frontend"],
-            ("traceId", "abc123"),
-            ("limit", "10"));
-        Assert.Equal("?resource=frontend&traceId=abc123&limit=10", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"], traceId: "abc123", severity: "Error", limit: 10, follow: true);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend&traceId=abc123&severity=Error&limit=10&follow=true", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithNullAdditionalParams_SkipsNullValues()
+    public void TelemetryLogsApiUrl_WithNullParams_SkipsNullValues()
     {
-        var result = DashboardUrls.BuildResourceQueryString(
-            ["frontend"],
-            ("traceId", null),
-            ("limit", "10"));
-        Assert.Equal("?resource=frontend&limit=10", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"], traceId: null, limit: 10);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend&limit=10", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithSpecialCharacters_EncodesCorrectly()
+    public void TelemetryLogsApiUrl_WithSpecialCharacters_EncodesCorrectly()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["service with spaces"]);
-        Assert.Equal("?resource=service%20with%20spaces", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["service with spaces"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=service%20with%20spaces", result);
     }
 
     [Fact]
@@ -197,6 +196,103 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         // replicas with GUID instance id → name-shortened8chars
         yield return [MakeResource("worker", guidStr), new IOtlpResource[] { new SimpleOtlpResource("worker", guidStr), new SimpleOtlpResource("worker", Guid.NewGuid().ToString()) }, $"worker-{guid:N}"[..15]];
     }
+
+    [Theory]
+    [MemberData(nameof(InvalidTelemetryApiResponseTestData))]
+    public async Task TelemetryCommand_WithDashboardUrl_InvalidTelemetryApiResponse_DisplaysErrorMessage(
+        string otelCommand, HttpStatusCode? statusCode, string? contentType, string? body, HttpStatusCode? baseProbeStatusCode, string expectedMessageKey)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+
+        var handler = CreateInvalidResponseHandler(statusCode, contentType, body, baseProbeStatusCode);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"otel {otelCommand} --dashboard-url http://localhost:18888");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
+        var expectedMessage = GetExpectedErrorMessage(expectedMessageKey);
+        Assert.Equal(expectedMessage, errorMessage);
+    }
+
+    public static IEnumerable<object?[]> InvalidTelemetryApiResponseTestData()
+    {
+        string[] commands = ["logs", "spans", "traces"];
+
+        (HttpStatusCode? statusCode, string? contentType, string? body, HttpStatusCode? baseProbeStatusCode, string expectedMessageKey)[] cases =
+        [
+            (null, null, null, null, nameof(TelemetryCommandStrings.DashboardConnectionFailed)),
+            (HttpStatusCode.NotFound, "text/plain", "Not Found", HttpStatusCode.OK, nameof(TelemetryCommandStrings.DashboardApiNotEnabled)),
+            (HttpStatusCode.NotFound, "text/plain", "Not Found", HttpStatusCode.NotFound, nameof(TelemetryCommandStrings.DashboardUrlNotReachable)),
+            (HttpStatusCode.OK, "text/html", "<html></html>", HttpStatusCode.OK, nameof(TelemetryCommandStrings.DashboardApiNotEnabled)),
+            (HttpStatusCode.OK, "text/html", "<html></html>", HttpStatusCode.NotFound, nameof(TelemetryCommandStrings.DashboardUrlNotReachable)),
+            (HttpStatusCode.OK, "text/plain", "not json", HttpStatusCode.OK, nameof(TelemetryCommandStrings.FailedToFetchTelemetry)),
+            (HttpStatusCode.OK, "text/plain", "not json", HttpStatusCode.NotFound, nameof(TelemetryCommandStrings.FailedToFetchTelemetry)),
+        ];
+
+        foreach (var cmd in commands)
+        {
+            foreach (var (statusCode, contentType, body, baseProbeStatusCode, expectedMessageKey) in cases)
+            {
+                yield return [cmd, statusCode, contentType, body, baseProbeStatusCode, expectedMessageKey];
+            }
+        }
+    }
+
+    private static MockHttpMessageHandler CreateInvalidResponseHandler(
+        HttpStatusCode? statusCode, string? contentType, string? body, HttpStatusCode? baseProbeStatusCode)
+    {
+        return new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/resources"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            if (url.Contains("/api/telemetry/"))
+            {
+                if (statusCode is null)
+                {
+                    throw new HttpRequestException("Connection refused");
+                }
+                return new HttpResponseMessage(statusCode.Value)
+                {
+                    Content = new StringContent(body!, System.Text.Encoding.UTF8, contentType!)
+                };
+            }
+            // Base URL probe
+            if (baseProbeStatusCode is null)
+            {
+                throw new HttpRequestException("Connection refused");
+            }
+            return new HttpResponseMessage(baseProbeStatusCode.Value);
+        });
+    }
+
+    private static string GetExpectedErrorMessage(string key) => key switch
+    {
+        nameof(TelemetryCommandStrings.DashboardApiNotEnabled) => string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, "http://localhost:18888"),
+        nameof(TelemetryCommandStrings.DashboardUrlNotReachable) => string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlNotReachable, "http://localhost:18888"),
+        nameof(TelemetryCommandStrings.DashboardConnectionFailed) => string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, "http://localhost:18888"),
+        nameof(TelemetryCommandStrings.FailedToFetchTelemetry) => string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry,
+            string.Format(CultureInfo.InvariantCulture, TelemetryCommandStrings.UnexpectedContentType, "text/plain")),
+        _ => throw new ArgumentException($"Unknown message key: {key}")
+    };
 
     private static OtlpResourceJson MakeResource(string serviceName, string? instanceId)
     {

@@ -269,6 +269,6 @@ public interface IDistributedApplicationBuilder
     /// when the process exists.
     /// </para>
     /// </remarks>
-    [AspireExport("build", Description = "Builds the distributed application")]
+    [AspireExport(Description = "Builds the distributed application")]
     DistributedApplication Build();
 }

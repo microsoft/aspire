@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Security.Cryptography;
-using System.Text;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -36,28 +34,7 @@ internal sealed class AppHostServerProjectFactory(
 {
     public async Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
     {
-        // Normalize the path
-        var normalizedPath = Path.GetFullPath(appPath);
-        normalizedPath = new Uri(normalizedPath).LocalPath;
-        normalizedPath = OperatingSystem.IsWindows() ? normalizedPath.ToLowerInvariant() : normalizedPath;
-
-        // Generate socket path based on app path hash (deterministic for same project)
-        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedPath));
-        var socketName = Convert.ToHexString(pathHash)[..12].ToLowerInvariant() + ".sock";
-
-        string socketPath;
-        if (OperatingSystem.IsWindows())
-        {
-            // Windows uses named pipes
-            socketPath = socketName;
-        }
-        else
-        {
-            // Unix uses domain sockets
-            var socketDir = Path.Combine(Path.GetTempPath(), ".aspire", "sockets");
-            Directory.CreateDirectory(socketDir);
-            socketPath = Path.Combine(socketDir, socketName);
-        }
+        var socketPath = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
 
         // Priority 1: Check for dev mode (ASPIRE_REPO_ROOT or running from Aspire source repo)
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(appPath);

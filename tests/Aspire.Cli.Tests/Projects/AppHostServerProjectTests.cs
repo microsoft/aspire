@@ -2,11 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
+using System.Security.Cryptography;
+using System.Text;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -187,6 +190,38 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void ProjectModelPath_UsesUserAspireDirectory()
+    {
+        // Arrange
+        var project = CreateProject();
+        var normalizedAppPath = Path.GetFullPath(project.AppDirectoryPath);
+        normalizedAppPath = new Uri(normalizedAppPath).LocalPath;
+        normalizedAppPath = OperatingSystem.IsWindows() ? normalizedAppPath.ToLowerInvariant() : normalizedAppPath;
+
+        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppPath));
+        var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
+        var expectedRoot = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "hosts");
+        var expectedPath = Path.Combine(expectedRoot, pathDir);
+        var parentDirectory = Path.GetDirectoryName(project.ProjectModelPath);
+        var isSafeToDelete = string.Equals(project.ProjectModelPath, expectedPath, StringComparison.OrdinalIgnoreCase) &&
+            parentDirectory is not null &&
+            string.Equals(parentDirectory, expectedRoot, StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            // Assert
+            Assert.Equal(expectedPath, project.ProjectModelPath);
+        }
+        finally
+        {
+            if (isSafeToDelete && Directory.Exists(project.ProjectModelPath))
+            {
+                Directory.Delete(project.ProjectModelPath, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void UserSecretsId_IsStableForSameAppPath()
     {
         // Arrange
@@ -202,12 +237,12 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     /// <summary>
     /// Regression test for channel switching bug.
-    /// When a project has a channel configured in .aspire/settings.json (project-local),
+    /// When a project has a channel configured in aspire.config.json (project-local),
     /// the NuGet.config should use that channel's hive path, NOT the global config channel.
     /// 
     /// Bug scenario:
     /// 1. User runs `aspire update` and selects "pr-new" channel
-    /// 2. UpdatePackagesAsync saves channel="pr-new" to project-local .aspire/settings.json
+    /// 2. UpdatePackagesAsync saves channel="pr-new" to project-local aspire.config.json
     /// 3. BuildAndGenerateSdkAsync calls CreateProjectFilesAsync
     /// 4. BUG: CreateProjectFilesAsync reads channel from GLOBAL config (returns "pr-old")
     /// 5. NuGet.config is generated with pr-old hive path instead of pr-new
@@ -224,14 +259,15 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var prOldHive = hivesDir.CreateSubdirectory("pr-old");
         var prNewHive = hivesDir.CreateSubdirectory("pr-new");
 
-        // Create project-local .aspire/settings.json with channel="pr-new"
+        // Create project-local aspire.config.json with channel="pr-new"
         // This simulates what happens after `aspire update` saves the selected channel
-        var aspireDir = _workspace.WorkspaceRoot.CreateSubdirectory(".aspire");
-        var settingsJson = Path.Combine(aspireDir.FullName, "settings.json");
-        await File.WriteAllTextAsync(settingsJson, """
+        var aspireConfigPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
             {
                 "channel": "pr-new",
-                "sdkVersion": "13.1.0"
+                "sdk": {
+                    "version": "13.1.0"
+                }
             }
             """);
 

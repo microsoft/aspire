@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
 using System.Xml.Linq;
@@ -20,21 +20,6 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-    }
-
-    private sealed class TestFeatures : IFeatures
-    {
-        private readonly Dictionary<string, bool> _features = new();
-
-        public bool IsFeatureEnabled(string featureFlag, bool defaultValue)
-        {
-            return _features.TryGetValue(featureFlag, out var value) ? value : defaultValue;
-        }
-
-        public void SetFeature(string featureFlag, bool enabled)
-        {
-            _features[featureFlag] = enabled;
-        }
     }
 
     [Fact]
@@ -162,7 +147,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
         
-        var azureDevOpsFeedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-abcd1234/nuget/v3/index.json";
+        var azureDevOpsFeedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcd1234/nuget/v3/index.json";
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -350,7 +335,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["overrideStagingFeed"] = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-48a11dae/nuget/v3/index.json"
+                ["overrideStagingFeed"] = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-48a11dae/nuget/v3/index.json"
             })
             .Build();
 
@@ -382,7 +367,8 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var globalPackagesFolderAdd = configSection.Elements("add")
             .FirstOrDefault(add => string.Equals((string?)add.Attribute("key"), "globalPackagesFolder", StringComparison.OrdinalIgnoreCase));
         Assert.NotNull(globalPackagesFolderAdd);
-        Assert.Equal(".nugetpackages", (string?)globalPackagesFolderAdd.Attribute("value"));
+        var actualGlobalPackagesFolder = (string?)globalPackagesFolderAdd.Attribute("value");
+        Assert.Equal(".nugetpackages", actualGlobalPackagesFolder);
     }
 
     [Fact]
@@ -898,8 +884,8 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         {
             // Simulate what the real cache does: filter by prerelease flag
             var filtered = prerelease
-                ? packages.Where(p => Semver.SemVersion.Parse(p.Version).IsPrerelease)
-                : packages.Where(p => !Semver.SemVersion.Parse(p.Version).IsPrerelease);
+                ? packages.Where(p => SemVersion.Parse(p.Version).IsPrerelease)
+                : packages.Where(p => !SemVersion.Parse(p.Version).IsPrerelease);
             return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(filtered.ToList());
         }
 

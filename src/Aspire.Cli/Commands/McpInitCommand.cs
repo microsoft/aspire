@@ -8,6 +8,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -40,6 +41,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
         IAgentEnvironmentDetector agentEnvironmentDetector,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
+        ILanguageDiscovery languageDiscovery,
         AspireCliTelemetry telemetry)
         : base("init", McpCommandStrings.InitCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
@@ -52,6 +54,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
             agentEnvironmentDetector,
             playwrightCliInstaller,
             gitRepository,
+            languageDiscovery,
             telemetry);
     }
 

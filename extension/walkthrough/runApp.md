@@ -11,6 +11,14 @@ When you run, the extension:
 ### Debugging
 When you **debug** instead of run, the extension attaches debuggers to your services automatically — set breakpoints in any project and they'll be hit as requests flow through your app.
 
+### Editor indicators
+While your app is running, the extension shows live resource status directly in your apphost source file:
+
+- **Gutter icons** — distinct shapes in the editor gutter next to each resource definition show state at a glance: a green **✓** checkmark for running healthy, a yellow **⚠** triangle for unhealthy or degraded, a red **✕** for errors, a blue **⌛** hourglass for starting or waiting, and a grey **○** circle for not yet started.
+- **Code lens** — inline labels above each resource show the current state and health (e.g. "Running - (Unhealthy 0/1)", "Not Started", "Waiting") along with quick actions like Restart, Stop, Start, and Logs.
+
+![Editor showing gutter icons and code lens labels for resources in different states](../resources/editor-indicators-dark.png)
+
 ### The dashboard
 Once running, the dashboard shows all your resources, endpoints, logs, traces, and metrics in one place:
 

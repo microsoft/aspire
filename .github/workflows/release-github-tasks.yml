@@ -356,7 +356,7 @@ jobs:
 
       - name: Create Merge PR
         if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
-        uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1 # v1
+        uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
           title: "Merge ${{ inputs.release_branch }} to main after v${{ inputs.release_version }} release"
@@ -372,6 +372,7 @@ jobs:
             *Created automatically by the release workflow.*
           branch: ${{ inputs.release_branch }}
           base: main
+          branch-already-exists: 'true'
           labels: |
             area-infrastructure
             release-automation
@@ -476,7 +477,7 @@ jobs:
 
       - name: Create Baseline PR
         if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
-        uses: dotnet/actions-create-pull-request@e8d799aa1f8b17f324f9513832811b0a62f1e0b1 # v1
+        uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
           title: "Update PackageValidationBaselineVersion to ${{ inputs.release_version }}"
@@ -492,6 +493,7 @@ jobs:
             *Created automatically by the release workflow.*
           branch: update-baseline-${{ inputs.release_version }}
           base: main
+          branch-already-exists: 'true'
           labels: |
             area-infrastructure
             release-automation

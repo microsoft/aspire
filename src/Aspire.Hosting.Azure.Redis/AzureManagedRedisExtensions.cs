@@ -43,7 +43,7 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addAzureManagedRedis", Description = "Adds an Azure Managed Redis resource")]
+    [AspireExport(Description = "Adds an Azure Managed Redis resource")]
     public static IResourceBuilder<AzureManagedRedisResource> AddAzureManagedRedis(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -81,7 +81,7 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("runAsContainer", Description = "Configures Azure Managed Redis to run in a local container", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures Azure Managed Redis to run in a local container", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureManagedRedisResource> RunAsContainer(
         this IResourceBuilder<AzureManagedRedisResource> builder,
         Action<IResourceBuilder<RedisResource>>? configureContainer = null)
@@ -126,7 +126,7 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withAccessKeyAuthentication", Description = "Configures Azure Managed Redis to use access key authentication")]
+    [AspireExport(Description = "Configures Azure Managed Redis to use access key authentication")]
     public static IResourceBuilder<AzureManagedRedisResource> WithAccessKeyAuthentication(this IResourceBuilder<AzureManagedRedisResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -138,7 +138,7 @@ public static class AzureManagedRedisExtensions
         // need to do this later in case builder becomes an emulator after this method is called.
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((data, token) =>
+            builder.ApplicationBuilder.OnBeforeStart((data, token) =>
             {
                 if (builder.Resource.IsContainer())
                 {

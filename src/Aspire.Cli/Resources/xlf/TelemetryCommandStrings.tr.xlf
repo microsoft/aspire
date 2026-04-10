@@ -2,13 +2,53 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../TelemetryCommandStrings.resx">
     <body>
+      <trans-unit id="ApiKeyOptionDescription">
+        <source>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</source>
+        <target state="new">API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardApiNotAvailable">
-        <source>Dashboard API is not available. Ensure the apphost is running with Dashboard enabled.</source>
+        <source>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</source>
         <target state="needs-review-translation">Pano API'si kullanılamıyor. AppHost'un Pano özelliği etkin olarak çalıştığından emin olun.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardApiNotEnabled">
+        <source>The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</source>
+        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardAuthFailed">
+        <source>Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</source>
+        <target state="new">Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardConnectionFailed">
+        <source>Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</source>
+        <target state="new">Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlAndAppHostExclusive">
+        <source>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</source>
+        <target state="new">The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlInvalid">
+        <source>The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</source>
+        <target state="new">The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlNotReachable">
+        <source>The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</source>
+        <target state="new">The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardUrlOptionDescription">
+        <source>URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</source>
+        <target state="new">URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
-        <source>View OpenTelemetry data (logs, spans, traces) from a running apphost</source>
+        <source>View OpenTelemetry data (logs, spans, traces) from a running AppHost</source>
         <target state="needs-review-translation">Çalışan bir Aspire uygulamasından telemetri verilerini (günlükler, yayılmalar, izlemeler) görüntüleyin.</target>
         <note />
       </trans-unit>
@@ -113,8 +153,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedContentType">
-        <source>Dashboard API returned unexpected content type. Expected JSON response.</source>
-        <target state="translated">Pano API'si beklenmeyen içerik türü döndürdü. JSON yanıtı bekleniyordu.</target>
+        <source>Dashboard API returned unexpected content type '{0}'. Expected JSON response.</source>
+        <target state="new">Dashboard API returned unexpected content type '{0}'. Expected JSON response.</target>
         <note />
       </trans-unit>
     </body>

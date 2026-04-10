@@ -15,3 +15,7 @@ function getAspireConfig(): vscode.WorkspaceConfiguration {
 export function getRegisterMcpServerInWorkspace(): boolean {
     return getAspireConfig().get<boolean>(registerMcpServerInWorkspaceSettingName, false);
 }
+
+export function getEnableAutoRestore(): boolean {
+    return getAspireConfig().get<boolean>('enableAutoRestore', true);
+}

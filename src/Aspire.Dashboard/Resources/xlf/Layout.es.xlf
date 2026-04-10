@@ -17,9 +17,19 @@
         <target state="translated">Repositorio de Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutLaunchNotifications">
+        <source>Notifications</source>
+        <target state="new">Notifications</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutLaunchSettings">
         <source>Settings</source>
         <target state="translated">Configuración</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutNotificationCenterTitle">
+        <source>Notifications</source>
+        <target state="new">Notifications</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">

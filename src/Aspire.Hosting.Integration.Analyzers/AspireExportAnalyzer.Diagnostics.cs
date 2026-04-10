@@ -111,6 +111,16 @@ public partial class AspireExportAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{ExportedSyncDelegateInvokedInlineId}");
 
+        private const string RedundantExportIdId = "ASPIREEXPORT011";
+        internal static readonly DiagnosticDescriptor s_redundantExportId = new(
+            id: RedundantExportIdId,
+            title: "Redundant AspireExport ID",
+            messageFormat: "Export ID '{0}' on method '{1}' is redundant because it matches the convention-derived name. Remove the explicit ID.",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{RedundantExportIdId}");
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -121,7 +131,8 @@ public partial class AspireExportAnalyzer
             s_duplicateExportId,
             s_missingExportAttribute,
             s_exportNameShouldBeUnique,
-            s_exportedSyncDelegateInvokedInline
+            s_exportedSyncDelegateInvokedInline,
+            s_redundantExportId
         );
     }
 }

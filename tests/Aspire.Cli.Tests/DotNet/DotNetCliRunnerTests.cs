@@ -35,7 +35,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions()
+        var options = new ProcessInvocationOptions()
         {
             NoLaunchProfile = true
         };
@@ -75,7 +75,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -104,7 +104,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -142,7 +142,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         });
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -171,7 +171,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -200,7 +200,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -229,7 +229,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -267,7 +267,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -308,7 +308,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -351,7 +351,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -389,7 +389,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         });
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -429,7 +429,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         });
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -471,7 +471,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         });
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -546,7 +546,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             args: [],
             env: null,
             backchannelCompletionSource: new TaskCompletionSource<IAppHostCliBackchannel>(),
-            options: new DotNetCliRunnerInvocationOptions(),
+            options: new ProcessInvocationOptions(),
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         await launchAppHostCalledTcs.Task.DefaultTimeout();
@@ -563,7 +563,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -616,7 +616,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -683,7 +683,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -749,7 +749,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -831,7 +831,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions
+        var options = new ProcessInvocationOptions
         {
             StandardOutputCallback = (line) => outputHelper.WriteLine($"stdout: {line}")
         };
@@ -872,7 +872,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -902,7 +902,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions()
+        var options = new ProcessInvocationOptions()
         {
             NoLaunchProfile = true
         };
@@ -948,7 +948,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions()
+        var options = new ProcessInvocationOptions()
         {
             NoLaunchProfile = false
         };
@@ -994,7 +994,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var provider = services.BuildServiceProvider();
 
         // Use watch=true and NoLaunchProfile=false to ensure some empty strings are generated
-        var options = new DotNetCliRunnerInvocationOptions()
+        var options = new ProcessInvocationOptions()
         {
             NoLaunchProfile = false,
             Debug = false
@@ -1038,7 +1038,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions()
+        var options = new ProcessInvocationOptions()
         {
             NoLaunchProfile = false // This will generate an empty string for noProfileSwitch
         };
@@ -1089,7 +1089,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions()
+        var options = new ProcessInvocationOptions()
         {
             NoLaunchProfile = true,
             Debug = true
@@ -1138,7 +1138,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions()
+        var options = new ProcessInvocationOptions()
         {
             NoLaunchProfile = true,
             Debug = false // No debug, so no --verbose
@@ -1186,7 +1186,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -1222,7 +1222,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -1275,7 +1275,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             logger: logger
         );
 
-        var options = new DotNetCliRunnerInvocationOptions { SuppressLogging = true };
+        var options = new ProcessInvocationOptions { SuppressLogging = true };
 
         var result = await runner.SearchPackagesAsync(
             workspace.WorkspaceRoot,
@@ -1316,7 +1316,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             logger: logger
         );
 
-        var options = new DotNetCliRunnerInvocationOptions { SuppressLogging = true };
+        var options = new ProcessInvocationOptions { SuppressLogging = true };
 
         var result = await runner.SearchPackagesAsync(
             workspace.WorkspaceRoot,
@@ -1357,7 +1357,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             logger: logger
         );
 
-        var options = new DotNetCliRunnerInvocationOptions { SuppressLogging = true };
+        var options = new ProcessInvocationOptions { SuppressLogging = true };
 
         var result = await runner.SearchPackagesAsync(
             workspace.WorkspaceRoot,
@@ -1401,7 +1401,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -1439,7 +1439,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -1477,7 +1477,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(
@@ -1517,7 +1517,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         var provider = services.BuildServiceProvider();
 
-        var options = new DotNetCliRunnerInvocationOptions();
+        var options = new ProcessInvocationOptions();
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var runner = DotNetCliRunnerTestHelper.Create(

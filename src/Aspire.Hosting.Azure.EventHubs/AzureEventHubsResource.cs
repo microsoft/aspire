@@ -14,8 +14,9 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Event Hubs resource.</param>
+[AspireExport]
 public class AzureEventHubsResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
-    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
+    : AzureProvisioningResource(name, configureInfrastructure), IResourceWithConnectionString, IResourceWithEndpoints, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     private static readonly string[] s_eventHubClientNames =
     [
@@ -212,8 +213,6 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
             yield return new("ConnectionString", ReferenceExpression.Create($"Endpoint={EmulatorEndpoint.Property(EndpointProperty.HostAndPort)};SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"));
         }
     }
-
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["namespace"];
 

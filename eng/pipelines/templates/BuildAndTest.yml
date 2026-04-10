@@ -41,19 +41,42 @@ parameters:
 steps:
   # Internal pipeline: Build with pack+sign
   - ${{ if ne(parameters.runAsPublic, 'true') }}:
-    # Build bundle payload (aspire-managed) for each target RID before the main build
+    # Build, publish, and sign aspire-managed for each target RID before the main build.
+    # This ensures aspire-managed is signed before CreateLayout packs it into the bundle archive.
+    # Step 1: dotnet publish produces the self-contained single-file binary.
+    # Step 2: build.cmd -sign runs Arcade's signing, which picks up the binary via ItemsToSign in Signing.props.
+    # Step 3: Bundle.proj creates the bundle layout and archive using the signed binary.
     - ${{ each targetRid in parameters.targetRids }}:
+      - script: ${{ parameters.dotnetScript }}
+                publish
+                $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
+                -c ${{ parameters.buildConfig }}
+                -r ${{ targetRid }}
+                --self-contained
+                /p:GenerateDocumentationFile=false
+                /p:EnforceCodeStyleInBuild=false
+                $(_OfficialBuildIdArgs)
+                /bl:${{ parameters.repoLogPath }}/PublishManaged-${{ targetRid }}.binlog
+        displayName: 🟣Publish aspire-managed (${{ targetRid }})
+
+      - script: ${{ parameters.buildScript }}
+                -restore -sign $(_SignArgs)
+                -configuration ${{ parameters.buildConfig }}
+                $(_OfficialBuildIdArgs)
+                -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
+                /bl:${{ parameters.repoLogPath }}/SignManaged-${{ targetRid }}.binlog
+        displayName: 🟣Sign aspire-managed (${{ targetRid }})
+
       - script: ${{ parameters.dotnetScript }}
                 msbuild
                 $(Build.SourcesDirectory)/eng/Bundle.proj
-                /restore
+                "/t:_RestoreDcpPackage;_RunCreateLayout"
                 /p:Configuration=${{ parameters.buildConfig }}
                 /p:TargetRid=${{ targetRid }}
                 /p:BundleVersion=ci-bundlepayload
-                /p:SkipNativeBuild=true
                 /p:ContinuousIntegrationBuild=true
-                /bl:${{ parameters.repoLogPath }}/BundlePayload-${{ targetRid }}.binlog
-        displayName: 🟣Build bundle payload (${{ targetRid }})
+                /bl:${{ parameters.repoLogPath }}/BundleLayout-${{ targetRid }}.binlog
+        displayName: 🟣Create bundle layout (${{ targetRid }})
 
     - script: ${{ parameters.buildScript }}
               -restore -build

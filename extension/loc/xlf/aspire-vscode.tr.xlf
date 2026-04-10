@@ -148,7 +148,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.launchingWithAppHost">
         <source xml:lang="en">Launching Aspire debug session for apphost {0}...</source>
-        <target state="translated">Apphost {0} için Aspire hata ayıklama oturumu başlatılıyor...</target>
+        <target state="translated">AppHost {0} için Aspire hata ayıklama oturumu başlatılıyor...</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.launchingWithDirectory">
         <source xml:lang="en">Launching Aspire debug session using directory {0}: attempting to determine effective apphost...</source>
@@ -232,7 +232,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.incompatibleAppHostError">
         <source xml:lang="en">The apphost is not compatible. Consider upgrading the apphost or Aspire CLI.</source>
-        <target state="translated">Apphost uyumlu değil. Apphost veya Aspire CLI'yi yükseltmeyi düşünün.</target>
+        <target state="translated">AppHost uyumlu değil. AppHost veya Aspire CLI'yi yükseltmeyi düşünün.</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.fieldRequired">
         <source xml:lang="en">This field is required.</source>

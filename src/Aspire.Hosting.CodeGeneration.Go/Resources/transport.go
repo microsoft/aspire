@@ -268,6 +268,21 @@ func (c *AspireClient) InvokeCapability(capabilityID string, args map[string]any
 	return WrapIfHandle(result, c), nil
 }
 
+// Authenticate authenticates the client session with the AppHost server.
+func (c *AspireClient) Authenticate(token string) error {
+	result, err := c.sendRequest("authenticate", []any{token})
+	if err != nil {
+		return err
+	}
+
+	authenticated, _ := result.(bool)
+	if !authenticated {
+		return errors.New("failed to authenticate to the AppHost server")
+	}
+
+	return nil
+}
+
 // CancelToken cancels a cancellation token on the server.
 func (c *AspireClient) CancelToken(tokenID string) bool {
 	result, err := c.sendRequest("cancelToken", []any{tokenID})

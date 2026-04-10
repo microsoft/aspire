@@ -21,7 +21,8 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     IResourceWithConnectionString,
     IResourceWithEndpoints,
     IResourceWithAzureFunctionsConfig,
-    IAzurePrivateEndpointTarget
+    IAzurePrivateEndpointTarget,
+    IAzureNspAssociationTarget
 {
     internal List<AzureCosmosDBDatabaseResource> Databases { get; } = [];
 
@@ -262,8 +263,6 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
             yield return new("ConnectionString", ConnectionStringExpression);
         }
     }
-
-    BicepOutputReference IAzurePrivateEndpointTarget.Id => Id;
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["Sql"];
 

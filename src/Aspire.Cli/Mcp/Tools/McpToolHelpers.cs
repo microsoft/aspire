@@ -25,17 +25,16 @@ internal static class McpToolHelpers
             throw new McpProtocolException(McpErrorMessages.DashboardNotAvailable, McpErrorCode.InternalError);
         }
 
-        var dashboardBaseUrl = GetBaseUrl(dashboardInfo.DashboardUrls.FirstOrDefault());
+        var dashboardBaseUrl = StripLoginPath(dashboardInfo.DashboardUrls.FirstOrDefault());
 
         return (dashboardInfo.ApiToken, dashboardInfo.ApiBaseUrl, dashboardBaseUrl);
     }
 
     /// <summary>
-    /// Extracts the base URL (scheme, host, and port) from a URL, removing any path and query string.
+    /// Strips the <c>/login</c> path segment (and any query string) from a dashboard URL
+    /// returned by the AppHost. Other path segments are preserved.
     /// </summary>
-    /// <param name="url">The full URL that may contain path and query string.</param>
-    /// <returns>The base URL with only scheme, host, and port, or null if the input is null or invalid.</returns>
-    internal static string? GetBaseUrl(string? url)
+    internal static string? StripLoginPath(string? url)
     {
         if (url is null)
         {
@@ -44,7 +43,16 @@ internal static class McpToolHelpers
 
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
         {
-            return $"{uri.Scheme}://{uri.Authority}";
+            // Dashboard URLs from the AppHost look like: http://localhost:18888/login?t=abcd1234
+            // or with a base path: http://localhost:18888/base/login?t=abcd1234
+            // Strip the trailing /login segment but preserve any other path components.
+            var path = uri.AbsolutePath;
+            if (path.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
+            {
+                path = path[..^"/login".Length];
+            }
+
+            return $"{uri.Scheme}://{uri.Authority}{path.TrimEnd('/')}";
         }
 
         return url;

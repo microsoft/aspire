@@ -10,20 +10,26 @@ namespace Aspire.Hosting
 {
     public static partial class AzureKustoBuilderExtensions
     {
+        [AspireExport("addAzureKustoCluster", Description = "Adds an Azure Data Explorer (Kusto) cluster resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKustoClusterResource> AddAzureKustoCluster(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport("addReadWriteDatabase", Description = "Adds a Kusto read-write database resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKustoReadWriteDatabaseResource> AddReadWriteDatabase(this ApplicationModel.IResourceBuilder<Azure.AzureKustoClusterResource> builder, string name, string? databaseName = null) { throw null; }
 
+        [AspireExport("runAsEmulator", Description = "Configures the Kusto cluster to run using the local emulator", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKustoClusterResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.AzureKustoClusterResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureKustoEmulatorResource>>? configureContainer = null) { throw null; }
 
+        [AspireExport("withCreationScript", Description = "Defines the KQL script used to create the database")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKustoReadWriteDatabaseResource> WithCreationScript(this ApplicationModel.IResourceBuilder<Azure.AzureKustoReadWriteDatabaseResource> builder, string script) { throw null; }
 
+        [AspireExport("withHostPort", Description = "Sets the host port for the Kusto emulator endpoint")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureKustoEmulatorResource> WithHostPort(this ApplicationModel.IResourceBuilder<Azure.AzureKustoEmulatorResource> builder, int port) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.Azure
 {
+    [AspireExport(ExposeProperties = true)]
     public partial class AzureKustoClusterResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithEndpoints
     {
         public AzureKustoClusterResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
@@ -52,6 +58,7 @@ namespace Aspire.Hosting.Azure
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
     }
 
+    [AspireExport(ExposeProperties = true)]
     public partial class AzureKustoReadWriteDatabaseResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureKustoClusterResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
     {
         public AzureKustoReadWriteDatabaseResource(string name, string databaseName, AzureKustoClusterResource kustoParentResource) : base(default!) { }

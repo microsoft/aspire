@@ -27,6 +27,26 @@ export interface LaunchProfile {
     useSSL?: boolean;
 }
 
+/**
+ * Expands environment variable references in a string.
+ * Supports $(VAR) and %VAR% syntax used by launch profiles.
+ */
+export function expandEnvironmentVariables(value: string): string {
+    // Expand $(VAR) syntax (used by VS and MSBuild-style launch profiles)
+    let result = value.replace(/\$\(([^)]+)\)/g, (_, varName) => process.env[varName] ?? '');
+    // Expand %VAR% syntax (Windows)
+    result = result.replace(/%([^%]+)%/g, (_, varName) => process.env[varName] ?? '');
+    return result;
+}
+
+/**
+ * Well-known launch profile command names (lowercased for case-insensitive comparison).
+ */
+export const LaunchProfileCommandName = {
+    project: 'project',
+    executable: 'executable',
+} as const;
+
 export interface LaunchSettings {
     profiles: { [key: string]: LaunchProfile };
 }
@@ -128,7 +148,7 @@ export function determineBaseLaunchProfile(
 
     // If launch_profile is absent, choose the first one with commandName='Project'
     for (const [name, profile] of Object.entries(launchSettings.profiles)) {
-        if (profile.commandName === 'Project') {
+        if (profile.commandName?.toLowerCase() === LaunchProfileCommandName.project) {
             extensionLogOutputChannel.debug(`Using default launch profile: ${name}`);
             return { profile, profileName: name };
         }
@@ -209,13 +229,14 @@ export function determineWorkingDirectory(
     baseProfile: LaunchProfile | null
 ): string {
     if (baseProfile?.workingDirectory) {
+        const workingDirectory = expandEnvironmentVariables(baseProfile.workingDirectory);
         // If working directory is relative, resolve it relative to project directory
-        if (path.isAbsolute(baseProfile.workingDirectory)) {
-            extensionLogOutputChannel.debug(`Using absolute working directory from launch profile: ${baseProfile.workingDirectory}`);
-            return baseProfile.workingDirectory;
+        if (path.isAbsolute(workingDirectory)) {
+            extensionLogOutputChannel.debug(`Using absolute working directory from launch profile: ${workingDirectory}`);
+            return workingDirectory;
         } else {
             const projectDir = path.dirname(projectPath);
-            const workingDir = path.resolve(projectDir, baseProfile.workingDirectory);
+            const workingDir = path.resolve(projectDir, workingDirectory);
             extensionLogOutputChannel.debug(`Using relative working directory from launch profile: ${workingDir}`);
             return workingDir;
         }

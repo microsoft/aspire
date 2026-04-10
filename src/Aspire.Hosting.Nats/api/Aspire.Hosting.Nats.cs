@@ -10,23 +10,29 @@ namespace Aspire.Hosting
 {
     public static partial class NatsBuilderExtensions
     {
+        [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> AddNats(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> AddNats(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
+        [AspireExport("withDataBindMount", Description = "Mounts a host directory as the NATS data directory.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport("withDataVolume", Description = "Adds a persistent data volume to the NATS resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use the overload without the srcMountPath parameter and WithDataBindMount extension instead if you want to keep data locally.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithJetStream(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string? srcMountPath = null) { throw null; }
 
+        [AspireExport("withJetStream", Description = "Configures the NATS resource to enable JetStream.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithJetStream(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
+    [AspireExport(ExposeProperties = true)]
     public partial class NatsServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
     {
         public NatsServerResource(string name, ParameterResource? userName, ParameterResource? password) : base(default!, default) { }

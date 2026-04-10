@@ -586,6 +586,373 @@ suite('CSharpAppHostParser', () => {
         }
     });
 
+    // --- statementStartLine: preceding code blocks (issue #15618) ---
+
+    test('statementStartLine not affected by preceding if block with braces', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Exception("This should not work");',
+                '}',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].name, 'nginx');
+        assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start on builder.AddContainer line, not inside the if block');
+    });
+
+    test('statementStartLine not affected by preceding nested braces', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (true)',
+                '{',
+                '    if (false)',
+                '    {',
+                '        throw new Exception("nested");',
+                '    }',
+                '}',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 10, 'statement should start on builder.AddContainer line, not inside nested blocks');
+    });
+
+    test('statementStartLine not affected by preceding block with semicolons inside', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (true)',
+                '{',
+                '    Console.WriteLine("hello");',
+                '    Console.WriteLine("world");',
+                '}',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.AddContainer line');
+    });
+
+    test('statementStartLine with comment between block and resource call', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Exception("fail");',
+                '}',
+                '',
+                '// Add nginx container',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.AddContainer line, skipping the comment');
+    });
+
+    test('statementStartLine with block comment between block and resource call', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Exception("fail");',
+                '}',
+                '',
+                '/* Add nginx container */',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.AddContainer line, skipping block comment');
+    });
+
+    test('statementStartLine with mixed comments between block and resource call', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Exception("fail");',
+                '}',
+                '',
+                '// Line comment',
+                '/* Block comment',
+                ' * continuation',
+                ' */',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 11, 'statement should start on builder.AddContainer line, skipping all comments');
+    });
+
+    test('statementStartLine with comment between block and fluent chain', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Exception("fail");',
+                '}',
+                '',
+                '// Add nginx',
+                'var nginx = builder',
+                '    .AddContainer("nginx", "nginx")',
+                '    .WithEndpoint(80);',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start at var nginx, skipping comment after block');
+    });
+
+    test('statementStartLine with multi-line fluent chain after a block', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Exception("fail");',
+                '}',
+                '',
+                'var nginx = builder',
+                '    .AddContainer("nginx", "nginx")',
+                '    .WithEndpoint(80);',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start at var nginx = builder, not inside the if block');
+    });
+
+    test('statementStartLine not affected by preceding try/catch block', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'try',
+                '{',
+                '    DoSomething();',
+                '}',
+                'catch (Exception ex)',
+                '{',
+                '    Console.WriteLine(ex);',
+                '}',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 11, 'statement should start on builder.AddContainer line, not inside try/catch');
+    });
+
+    test('statementStartLine not affected by preceding single-line block', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false) { throw new Exception("fail"); }',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 4, 'statement should start on builder.AddContainer line, not inside single-line block');
+    });
+
+    test('statementStartLine not affected by preceding empty block', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (true) { }',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 4, 'statement should start on builder.AddContainer line, not inside empty block');
+    });
+
+    test('statementStartLine not affected by preceding for loop', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'for (int i = 0; i < 10; i++)',
+                '{',
+                '    Console.WriteLine(i);',
+                '}',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start on builder.AddContainer line, not inside for loop');
+    });
+
+    test('statementStartLine correct for multiple resources after blocks', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Exception("fail");',
+                '}',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+                '',
+                'if (true)',
+                '{',
+                '    Console.WriteLine("ok");',
+                '}',
+                '',
+                'builder.AddRedis("cache");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 2);
+        assert.strictEqual(resources[0].statementStartLine, 7, 'first resource should start on its own line');
+        assert.strictEqual(resources[1].statementStartLine, 14, 'second resource should start on its own line');
+    });
+
+    test('statementStartLine not affected by closing brace with trailing comment', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Exception("fail");',
+                '} // end if',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 6, 'statement should start on builder.AddContainer line, not on } // end if line');
+    });
+
+    test('statementStartLine reaches top of fluent chain through callback lambda', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'var catalogDb = builder.AddPostgres("postgres")',
+                '                       .WithPgAdmin(resource => {',
+                '                           resource.SomeConfig();',
+                '                       })',
+                '                       .AddDatabase("catalogdb");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 2);
+        assert.strictEqual(resources[0].name, 'postgres');
+        assert.strictEqual(resources[0].statementStartLine, 2, 'AddPostgres starts at var catalogDb');
+        assert.strictEqual(resources[1].name, 'catalogdb');
+        assert.strictEqual(resources[1].statementStartLine, 2, 'AddDatabase should also start at var catalogDb, not after callback }');
+    });
+
+    test('statementStartLine reaches top of fluent chain through RunAsContainer callback', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'var db = builder.AddPostgres("postgres")',
+                '    .RunAsContainer(c => {',
+                '        c.WithLifetime(ContainerLifetime.Persistent);',
+                '    })',
+                '    .AddDatabase("db");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 2);
+        assert.strictEqual(resources[1].name, 'db');
+        assert.strictEqual(resources[1].statementStartLine, 2, 'AddDatabase should start at var db, not after callback }');
+    });
+
+    test('statementStartLine not affected by } else { between block and resource', () => {
+        const parser = getCSharpParser();
+        const doc = createMockDocument(
+            [
+                'var builder = DistributedApplication.CreateBuilder(args);',
+                '',
+                'if (true)',
+                '{',
+                '    DoSomething();',
+                '} else {',
+                '    DoSomethingElse();',
+                '}',
+                '',
+                'builder.AddContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/AppHost.cs'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 9, 'statement should start on builder.AddContainer line');
+    });
+
     // --- Pipeline step classification ---
 
     test('classifies AddStep as pipelineStep', () => {
@@ -1064,6 +1431,373 @@ suite('JsTsAppHostParser', () => {
         for (const r of resources) {
             assert.strictEqual(r.kind, 'resource');
         }
+    });
+
+    // --- statementStartLine: preceding code blocks (issue #15618) ---
+
+    test('statementStartLine not affected by preceding if block with braces', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Error("This should not work");',
+                '}',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].name, 'nginx');
+        assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start on builder.addContainer line, not inside the if block');
+    });
+
+    test('statementStartLine not affected by preceding nested braces', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (true)',
+                '{',
+                '    if (false)',
+                '    {',
+                '        throw new Error("nested");',
+                '    }',
+                '}',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 10, 'statement should start on builder.addContainer line, not inside nested blocks');
+    });
+
+    test('statementStartLine not affected by preceding block with semicolons inside', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (true)',
+                '{',
+                '    console.log("hello");',
+                '    console.log("world");',
+                '}',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.addContainer line');
+    });
+
+    test('statementStartLine with comment between block and resource call', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Error("fail");',
+                '}',
+                '',
+                '// Add nginx container',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.addContainer line, skipping the comment');
+    });
+
+    test('statementStartLine with block comment between block and resource call', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Error("fail");',
+                '}',
+                '',
+                '/* Add nginx container */',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start on builder.addContainer line, skipping block comment');
+    });
+
+    test('statementStartLine with mixed comments between block and resource call', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Error("fail");',
+                '}',
+                '',
+                '// Line comment',
+                '/* Block comment',
+                ' * continuation',
+                ' */',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 11, 'statement should start on builder.addContainer line, skipping all comments');
+    });
+
+    test('statementStartLine with comment between block and fluent chain', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Error("fail");',
+                '}',
+                '',
+                '// Add nginx',
+                'const nginx = builder',
+                '    .addContainer("nginx", "nginx")',
+                '    .withEndpoint(80);',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 8, 'statement should start at const nginx, skipping comment after block');
+    });
+
+    test('statementStartLine with multi-line fluent chain after a block', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Error("fail");',
+                '}',
+                '',
+                'const nginx = builder',
+                '    .addContainer("nginx", "nginx")',
+                '    .withEndpoint(80);',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start at const nginx = builder, not inside the if block');
+    });
+
+    test('statementStartLine not affected by preceding try/catch block', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'try',
+                '{',
+                '    doSomething();',
+                '}',
+                'catch (e)',
+                '{',
+                '    console.error(e);',
+                '}',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 11, 'statement should start on builder.addContainer line, not inside try/catch');
+    });
+
+    test('statementStartLine not affected by preceding single-line block', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false) { throw new Error("fail"); }',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 4, 'statement should start on builder.addContainer line, not inside single-line block');
+    });
+
+    test('statementStartLine not affected by preceding empty block', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (true) { }',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 4, 'statement should start on builder.addContainer line, not inside empty block');
+    });
+
+    test('statementStartLine not affected by preceding for loop', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'for (let i = 0; i < 10; i++)',
+                '{',
+                '    console.log(i);',
+                '}',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 7, 'statement should start on builder.addContainer line, not inside for loop');
+    });
+
+    test('statementStartLine correct for multiple resources after blocks', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Error("fail");',
+                '}',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+                '',
+                'if (true)',
+                '{',
+                '    console.log("ok");',
+                '}',
+                '',
+                'builder.addRedis("cache");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 2);
+        assert.strictEqual(resources[0].statementStartLine, 7, 'first resource should start on its own line');
+        assert.strictEqual(resources[1].statementStartLine, 14, 'second resource should start on its own line');
+    });
+
+    test('statementStartLine not affected by closing brace with trailing comment', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (false)',
+                '{',
+                '    throw new Error("fail");',
+                '} // end if',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 6, 'statement should start on builder.addContainer line, not on } // end if line');
+    });
+
+    test('statementStartLine reaches top of fluent chain through callback arrow function', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'const catalogDb = builder.addPostgres("postgres")',
+                '    .withPgAdmin((resource) => {',
+                '        resource.someConfig();',
+                '    })',
+                '    .addDatabase("catalogdb");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 2);
+        assert.strictEqual(resources[0].name, 'postgres');
+        assert.strictEqual(resources[0].statementStartLine, 2, 'addPostgres starts at const catalogDb');
+        assert.strictEqual(resources[1].name, 'catalogdb');
+        assert.strictEqual(resources[1].statementStartLine, 2, 'addDatabase should also start at const catalogDb, not after callback }');
+    });
+
+    test('statementStartLine reaches top of fluent chain through runAsContainer callback', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'const db = builder.addPostgres("postgres")',
+                '    .runAsContainer((c) => {',
+                '        c.withLifetime("persistent");',
+                '    })',
+                '    .addDatabase("db");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 2);
+        assert.strictEqual(resources[1].name, 'db');
+        assert.strictEqual(resources[1].statementStartLine, 2, 'addDatabase should start at const db, not after callback }');
+    });
+
+    test('statementStartLine not affected by } else { between block and resource', () => {
+        const parser = getJsTsParser();
+        const doc = createMockDocument(
+            [
+                'import { createBuilder } from "@aspire/sdk";',
+                '',
+                'if (true)',
+                '{',
+                '    doSomething();',
+                '} else {',
+                '    doSomethingElse();',
+                '}',
+                '',
+                'builder.addContainer("nginx", "nginx");',
+            ].join('\n'),
+            '/test/apphost.ts'
+        );
+        const resources = parser.parseResources(doc);
+        assert.strictEqual(resources.length, 1);
+        assert.strictEqual(resources[0].statementStartLine, 9, 'statement should start on builder.addContainer line');
     });
 
     // --- Pipeline step classification ---

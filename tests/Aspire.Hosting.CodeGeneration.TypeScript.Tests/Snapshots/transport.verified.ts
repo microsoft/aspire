@@ -7,10 +7,24 @@ import * as rpc from 'vscode-jsonrpc/node.js';
 // ============================================================================
 
 /**
+ * Structural client surface used by generated wrappers and transport helpers.
+ * This keeps generated types assignable across separately restored SDK copies.
+ */
+export interface AspireClientRpc {
+    readonly connected: boolean;
+    invokeCapability<TResult = unknown>(capabilityId: string, args?: Record<string, unknown>): Promise<TResult>;
+    cancelToken(cancellationId: string): Promise<boolean>;
+    trackPromise(promise: Promise<unknown>): void;
+    flushPendingPromises(): Promise<void>;
+    /** When true (default), rejected tracked promises are collected and re-thrown by flushPendingPromises. */
+    throwOnPendingRejections: boolean;
+}
+
+/**
  * Type for callback functions that can be registered and invoked from .NET.
  * Internal: receives args and client for handle wrapping.
  */
-export type CallbackFunction = (args: unknown, client: AspireClient) => unknown | Promise<unknown>;
+export type CallbackFunction = (args: unknown, client: AspireClientRpc) => unknown | Promise<unknown>;
 
 /**
  * Represents a handle to a .NET object in the ATS system.
@@ -104,6 +118,17 @@ function isAbortSignal(value: unknown): value is AbortSignal {
     );
 }
 
+function isCancellationTokenLike(value: unknown): value is CancellationToken {
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        'register' in value &&
+        typeof (value as { register?: unknown }).register === 'function' &&
+        'toJSON' in value &&
+        typeof (value as { toJSON?: unknown }).toJSON === 'function'
+    );
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
     if (value === null || typeof value !== 'object') {
         return false;
@@ -146,35 +171,25 @@ function createCircularReferenceError(capabilityId: string, path: string): AppHo
  * @typeParam T - The ATS type ID (e.g., "Aspire.Hosting/IDistributedApplicationBuilder")
  */
 export class Handle<T extends string = string> {
-    private readonly _handleId: string;
-    private readonly _typeId: T;
+    readonly $handle: string;
+    readonly $type: T;
 
     constructor(marshalled: MarshalledHandle) {
-        this._handleId = marshalled.$handle;
-        this._typeId = marshalled.$type as T;
-    }
-
-    /** The handle ID (instance number) */
-    get $handle(): string {
-        return this._handleId;
-    }
-
-    /** The ATS type ID */
-    get $type(): T {
-        return this._typeId;
+        this.$handle = marshalled.$handle;
+        this.$type = marshalled.$type as T;
     }
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle {
         return {
-            $handle: this._handleId,
-            $type: this._typeId
+            $handle: this.$handle,
+            $type: this.$type
         };
     }
 
     /** String representation for debugging */
     toString(): string {
-        return `Handle<${this._typeId}>(${this._handleId})`;
+        return `Handle<${this.$type}>(${this.$handle})`;
     }
 }
 
@@ -205,22 +220,47 @@ export class Handle<T extends string = string> {
  * const connectionString = await connectionStringExpression.getValue(cancellationToken);
  * ```
  */
-export class CancellationToken {
-    private readonly _signal?: AbortSignal;
-    private readonly _remoteTokenId?: string;
+const cancellationTokenState = new WeakMap<CancellationToken, {
+    signal?: AbortSignal;
+    remoteTokenId?: string;
+}>();
 
+export class CancellationToken {
     constructor(signal?: AbortSignal);
     constructor(tokenId?: string);
     constructor(value?: AbortSignal | string | null) {
+        const state: { signal?: AbortSignal; remoteTokenId?: string } = {};
+
         if (typeof value === 'string') {
-            this._remoteTokenId = value;
+            state.remoteTokenId = value;
         } else if (isAbortSignal(value)) {
-            this._signal = value;
+            state.signal = value;
         }
+
+        cancellationTokenState.set(this, state);
     }
 
     /**
      * Creates a cancellation token from a local {@link AbortSignal}.
+     */
+    toJSON(): string | undefined {
+        return cancellationTokenState.get(this)?.remoteTokenId;
+    }
+
+    register(client?: AspireClientRpc): string | undefined {
+        const state = cancellationTokenState.get(this);
+
+        if (state?.remoteTokenId !== undefined) {
+            return state.remoteTokenId;
+        }
+
+        return client
+            ? registerCancellation(client, state?.signal)
+            : registerCancellation(state?.signal);
+    }
+
+    /**
+     * Creates transport-safe cancellation token values for the generated SDK.
      */
     static from(signal?: AbortSignal): CancellationToken {
         return new CancellationToken(signal);
@@ -231,7 +271,7 @@ export class CancellationToken {
      * Generated code uses this to materialize values that come from the AppHost.
      */
     static fromValue(value: unknown): CancellationToken {
-        if (value instanceof CancellationToken) {
+        if (isCancellationTokenLike(value)) {
             return value;
         }
 
@@ -245,23 +285,6 @@ export class CancellationToken {
 
         return new CancellationToken();
     }
-
-    /**
-     * Serializes the token for JSON-RPC transport.
-     */
-    toJSON(): string | undefined {
-        return this._remoteTokenId;
-    }
-
-    register(client?: AspireClient): string | undefined {
-        if (this._remoteTokenId !== undefined) {
-            return this._remoteTokenId;
-        }
-
-        return client
-            ? registerCancellation(client, this._signal)
-            : registerCancellation(this._signal);
-    }
 }
 
 // ============================================================================
@@ -271,7 +294,7 @@ export class CancellationToken {
 /**
  * Factory function for creating typed wrapper instances from handles.
  */
-export type HandleWrapperFactory = (handle: Handle, client: AspireClient) => unknown;
+export type HandleWrapperFactory = (handle: Handle, client: AspireClientRpc) => unknown;
 
 /**
  * Registry of handle wrapper factories by type ID.
@@ -294,7 +317,7 @@ export function registerHandleWrapper(typeId: string, factory: HandleWrapperFact
  * @param value - The value to potentially wrap
  * @param client - Optional client for creating typed wrapper instances
  */
-export function wrapIfHandle(value: unknown, client?: AspireClient): unknown {
+export function wrapIfHandle(value: unknown, client?: AspireClientRpc): unknown {
     if (isMarshalledHandle(value)) {
         const handle = new Handle(value);
         const typeId = value.$type;
@@ -341,6 +364,7 @@ export class CapabilityError extends Error {
     ) {
         super(error.message);
         this.name = 'CapabilityError';
+        Object.setPrototypeOf(this, new.target.prototype);
     }
 
     /** Machine-readable error code */
@@ -361,10 +385,11 @@ export class AppHostUsageError extends Error {
     constructor(message: string) {
         super(message);
         this.name = 'AppHostUsageError';
+        Object.setPrototypeOf(this, new.target.prototype);
     }
 }
 
-function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+export function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     return (
         value !== null &&
         (typeof value === 'object' || typeof value === 'function') &&
@@ -456,7 +481,7 @@ export function registerCallback<TResult = void>(
     const callbackId = `callback_${++callbackIdCounter}_${Date.now()}`;
 
     // Wrap the callback to handle .NET's positional argument format
-    const wrapper: CallbackFunction = async (args: unknown, client: AspireClient) => {
+    const wrapper: CallbackFunction = async (args: unknown, client: AspireClientRpc) => {
         // .NET sends args as object { p0: value0, p1: value1, ... }
         if (args && typeof args === 'object' && !Array.isArray(args)) {
             const argObj = args as Record<string, unknown>;
@@ -537,7 +562,7 @@ const cancellationRegistry = new Map<string, () => void>();
 let cancellationIdCounter = 0;
 const connectedClients = new Set<AspireClient>();
 
-function resolveCancellationClient(client?: AspireClient): AspireClient {
+function resolveCancellationClient(client?: AspireClientRpc): AspireClientRpc {
     if (client) {
         return client;
     }
@@ -559,6 +584,22 @@ function resolveCancellationClient(client?: AspireClient): AspireClient {
     );
 }
 
+function isAspireClientLike(value: unknown): value is AspireClientRpc {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+
+    const candidate = value as {
+        invokeCapability?: unknown;
+        cancelToken?: unknown;
+        connected?: unknown;
+    };
+
+    return typeof candidate.invokeCapability === 'function'
+        && typeof candidate.cancelToken === 'function'
+        && typeof candidate.connected === 'boolean';
+}
+
 /**
  * Registers cancellation support for a local signal or SDK cancellation token.
  * Returns a cancellation ID that should be passed to methods accepting cancellation input.
@@ -569,12 +610,12 @@ function resolveCancellationClient(client?: AspireClient): AspireClient {
  * @param signalOrToken - The signal or token to register (optional)
  * @returns The cancellation ID, or undefined if no value was provided or the token maps to CancellationToken.None
  */
-export function registerCancellation(client: AspireClient, signalOrToken?: AbortSignal | CancellationToken): string | undefined;
+export function registerCancellation(client: AspireClientRpc, signalOrToken?: AbortSignal | CancellationToken): string | undefined;
 /**
  * Registers cancellation support using the single connected AspireClient.
  *
  * @param signalOrToken - The signal or token to register (optional)
- * @returns The cancellation ID, or undefined if no value was provided or the token maps to CancellationToken.None
+ * @returns The cancellation ID, or undefined if no value was provided, the signal was already aborted, or the token maps to CancellationToken.None
  *
  * @example
  * const controller = new AbortController();
@@ -588,10 +629,10 @@ export function registerCancellation(client: AspireClient, signalOrToken?: Abort
  */
 export function registerCancellation(signalOrToken?: AbortSignal | CancellationToken): string | undefined;
 export function registerCancellation(
-    clientOrSignalOrToken?: AspireClient | AbortSignal | CancellationToken,
+    clientOrSignalOrToken?: AspireClientRpc | AbortSignal | CancellationToken,
     maybeSignalOrToken?: AbortSignal | CancellationToken
 ): string | undefined {
-    const client = clientOrSignalOrToken instanceof AspireClient ? clientOrSignalOrToken : undefined;
+    const client = isAspireClientLike(clientOrSignalOrToken) ? clientOrSignalOrToken : undefined;
     const signalOrToken = client
         ? maybeSignalOrToken
         : clientOrSignalOrToken as AbortSignal | CancellationToken | undefined;
@@ -600,7 +641,7 @@ export function registerCancellation(
         return undefined;
     }
 
-    if (signalOrToken instanceof CancellationToken) {
+    if (isCancellationTokenLike(signalOrToken)) {
         return signalOrToken.register(client);
     }
 
@@ -638,7 +679,7 @@ export function registerCancellation(
 
 async function marshalTransportValue(
     value: unknown,
-    client: AspireClient,
+    client: AspireClientRpc,
     cancellationIds: string[],
     capabilityId: string,
     path: string = 'args',
@@ -648,7 +689,7 @@ async function marshalTransportValue(
         return value;
     }
 
-    if (value instanceof CancellationToken) {
+    if (isCancellationTokenLike(value)) {
         const cancellationId = value.register(client);
         if (cancellationId !== undefined) {
             cancellationIds.push(cancellationId);
@@ -711,15 +752,63 @@ export function unregisterCancellation(cancellationId: string | undefined): void
 /**
  * Client for connecting to the Aspire AppHost via socket/named pipe.
  */
-export class AspireClient {
+export class AspireClient implements AspireClientRpc {
     private connection: rpc.MessageConnection | null = null;
     private socket: net.Socket | null = null;
     private disconnectCallbacks: (() => void)[] = [];
     private _pendingCalls = 0;
     private _connectPromise: Promise<void> | null = null;
     private _disconnectNotified = false;
+    private _pendingPromises: Set<Promise<unknown>> = new Set();
+    private _rejectedErrors: Set<unknown> = new Set();
+    throwOnPendingRejections = true;
 
     constructor(private socketPath: string) { }
+
+    trackPromise(promise: Promise<unknown>): void {
+        this._pendingPromises.add(promise);
+        // Remove on both resolve and reject. The reject handler swallows the
+        // error to prevent Node.js unhandled-rejection crashes.
+        //
+        // When throwOnPendingRejections is true (default), rejection errors are
+        // eagerly collected so that flushPendingPromises can re-throw them even
+        // if the promise settles before flush is called.
+        //
+        // Limitation: JavaScript provides no way to detect whether a rejection
+        // was already observed by the caller (e.g., try { await p } catch {}).
+        // The .then() reject handler fires regardless. This means user-caught
+        // rejections will also be re-thrown by build(). We accept this tradeoff
+        // because the common case — an un-awaited chain fails silently — should
+        // fail loud. The uncommon case (catch an error from an un-awaited chain,
+        // then continue to build) can opt out with:
+        //   createBuilder({ throwOnPendingRejections: false })
+        promise.then(
+            () => this._pendingPromises.delete(promise),
+            (err) => {
+                this._pendingPromises.delete(promise);
+                if (this.throwOnPendingRejections) {
+                    this._rejectedErrors.add(err);
+                }
+            }
+        );
+    }
+
+    async flushPendingPromises(): Promise<void> {
+        if (this._pendingPromises.size > 0) {
+            console.warn(`Flushing ${this._pendingPromises.size} pending promise(s). Consider awaiting fluent calls to avoid implicit flushing.`);
+            // Snapshot the current set before awaiting. Promises tracked after
+            // flush starts (e.g. by .then() callbacks or the build PromiseImpl
+            // constructor) are excluded. This prevents deadlocks where a tracked
+            // promise depends on flush completing.
+            const pending = [...this._pendingPromises];
+            await Promise.allSettled(pending);
+        }
+        if (this._rejectedErrors.size > 0) {
+            const errors = [...this._rejectedErrors];
+            this._rejectedErrors.clear();
+            throw new AggregateError(errors, 'One or more unawaited fluent calls failed');
+        }
+    }
 
     /**
      * Register a callback to be called when the connection is lost
@@ -830,7 +919,7 @@ export class AspireClient {
                 failConnect(new Error('Connection closed before JSON-RPC was established'));
             };
 
-            const onConnect = () => {
+            const onConnect = async () => {
                 if (settled) {
                     return;
                 }
@@ -867,7 +956,16 @@ export class AspireClient {
                     socket.on('error', onConnectedSocketError);
                     socket.on('close', onConnectedSocketClose);
 
+                    const authToken = process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+                    if (!authToken) {
+                        throw new Error('ASPIRE_REMOTE_APPHOST_TOKEN environment variable is not set.');
+                    }
                     this.connection.listen();
+                    const authenticated = await this.connection.sendRequest<boolean>('authenticate', authToken);
+                    if (!authenticated) {
+                        throw new Error('Failed to authenticate to the AppHost server.');
+                    }
+
                     connectedClients.add(this);
                     this._connectPromise = null;
                     settled = true;

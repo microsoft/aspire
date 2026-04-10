@@ -277,7 +277,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetTemplates_WhenShowAllTemplatesIsEnabled_ReturnsAllTemplates()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: true);
+        var features = new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
         var factory = CreateTemplateFactory(features);
 
         // Act
@@ -296,7 +296,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetTemplates_WhenShowAllTemplatesIsDisabled_ReturnsOnlyStarterTemplates()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: false);
+        var features = new TestFeatures();
         var factory = CreateTemplateFactory(features);
 
         // Act
@@ -315,7 +315,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetTemplates_SingleFileAppHostIsNotReturned()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: false);
+        var features = new TestFeatures();
         var factory = CreateTemplateFactory(features);
 
         // Act
@@ -331,7 +331,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetInitTemplates_IncludesSingleFileAppHostTemplate()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: false);
+        var features = new TestFeatures();
         var factory = CreateTemplateFactory(features);
 
         // Act
@@ -346,7 +346,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetTemplates_WhenDotNetSdkIsUnavailable_ReturnsNoTemplates()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: true);
+        var features = new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
         var sdkInstaller = new TestDotNetSdkInstaller
         {
             CheckAsyncCallback = _ => (false, null, "10.0.100")
@@ -431,25 +431,6 @@ public class DotNetTemplateFactoryTests
         }
     }
 
-    private sealed class TestFeatures : IFeatures
-    {
-        private readonly bool _showAllTemplates;
-
-        public TestFeatures(bool showAllTemplates = false)
-        {
-            _showAllTemplates = showAllTemplates;
-        }
-
-        public bool IsFeatureEnabled(string featureFlag, bool defaultValue)
-        {
-            return featureFlag switch
-            {
-                "showAllTemplates" => _showAllTemplates,
-                _ => defaultValue
-            };
-        }
-    }
-
     private sealed class TestInteractionService : IInteractionService
     {
         public ConsoleOutput Console { get; set; }
@@ -486,7 +467,7 @@ public class DotNetTemplateFactoryTests
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
         public void DisplayPlainText(string text) { }
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
-        public void DisplayMarkdown(string markdown) { }
+        public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null) { }
         public void DisplayMarkupLine(string markup) { }
         public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
         public void DisplayEmptyLine() { }
@@ -498,46 +479,46 @@ public class DotNetTemplateFactoryTests
 
     private sealed class TestDotNetCliRunner : IDotNetCliRunner
     {
-        public Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> NewProjectAsync(string templateName, string projectName, string outputPath, string[] extraArgs, DotNetCliRunnerInvocationOptions? options, CancellationToken cancellationToken)
+        public Task<int> NewProjectAsync(string templateName, string projectName, string outputPath, string[] extraArgs, ProcessInvocationOptions? options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> RestoreAsync(FileInfo projectFile, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<int> RestoreAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> BuildAsync(FileInfo projectFile, bool noRestore, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<int> BuildAsync(FileInfo projectFile, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> AddPackageAsync(FileInfo projectFile, string packageName, string version, string? packageSourceUrl, bool noRestore, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<int> AddPackageAsync(FileInfo projectFile, string packageName, string version, string? packageSourceUrl, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProjectFile, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProjectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> RunAsync(FileInfo projectFile, bool watch, bool noBuild, bool noRestore, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<int> RunAsync(FileInfo projectFile, bool watch, bool noBuild, bool noRestore, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> InitUserSecretsAsync(FileInfo projectFile, DotNetCliRunnerInvocationOptions options, CancellationToken cancellationToken)
+        public Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => Task.FromResult(0);
     }
 

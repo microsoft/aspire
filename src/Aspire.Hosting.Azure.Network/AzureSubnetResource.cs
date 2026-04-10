@@ -17,6 +17,7 @@ namespace Aspire.Hosting.Azure;
 /// <remarks>
 /// Use <see cref="AzureProvisioningResourceExtensions.ConfigureInfrastructure{T}(ApplicationModel.IResourceBuilder{T}, Action{AzureResourceInfrastructure})"/> to configure specific <see cref="Azure.Provisioning"/> properties.
 /// </remarks>
+[AspireExport]
 public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNetworkResource>
 {
     // Backing field holds either string or ParameterResource

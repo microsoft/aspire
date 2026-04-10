@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Projects;
 
@@ -93,13 +94,30 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     {
         foreach (var language in s_allLanguages.Where(IsLanguageEnabled))
         {
-            foreach (var pattern in language.DetectionPatterns)
+            // Flat scan — only checks the immediate directory using
+            // Directory.EnumerateFiles so glob patterns like *.csproj work.
+            var match = FileSystemHelper.FindFirstFile(
+                directory.FullName,
+                recurseLimit: 0,
+                language.DetectionPatterns);
+
+            if (match is not null)
             {
-                var filePath = Path.Combine(directory.FullName, pattern);
-                if (File.Exists(filePath))
-                {
-                    return Task.FromResult<LanguageId?>(language.LanguageId);
-                }
+                return Task.FromResult<LanguageId?>(language.LanguageId);
+            }
+        }
+
+        return Task.FromResult<LanguageId?>(null);
+    }
+
+    /// <inheritdoc />
+    public Task<LanguageId?> DetectLanguageRecursiveAsync(DirectoryInfo directory, CancellationToken cancellationToken = default)
+    {
+        foreach (var language in s_allLanguages.Where(IsLanguageEnabled))
+        {
+            if (language.FindInDirectory(directory.FullName) is not null)
+            {
+                return Task.FromResult<LanguageId?>(language.LanguageId);
             }
         }
 
@@ -132,8 +150,7 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
     /// <inheritdoc />
     public LanguageInfo? GetLanguageByFile(FileInfo file)
     {
-        var match = s_allLanguages.FirstOrDefault(l =>
-            l.DetectionPatterns.Any(p => MatchesPattern(file.Name, p)));
+        var match = s_allLanguages.FirstOrDefault(l => l.MatchesFile(file.Name));
 
         if (match is not null && !IsLanguageEnabled(match))
         {
@@ -156,18 +173,5 @@ internal sealed class DefaultLanguageDiscovery(IFeatures features) : ILanguageDi
         }
 
         return true;
-    }
-
-    private static bool MatchesPattern(string fileName, string pattern)
-    {
-        // Handle wildcard patterns like "*.csproj"
-        if (pattern.StartsWith("*.", StringComparison.Ordinal))
-        {
-            var extension = pattern[1..]; // ".csproj"
-            return fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
-        }
-        
-        // Exact match
-        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
     }
 }

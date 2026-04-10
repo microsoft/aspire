@@ -1095,6 +1095,11 @@ internal sealed class PythonModuleBuilder
                 self._check_connection()
                 return self._send_request("ping")
 
+            def authenticate(self, token: str) -> None:
+                '''Authenticate to the AppHost server with a session token.'''
+                if not bool(self._send_request("authenticate", token)):
+                    raise RuntimeError("Failed to authenticate to the AppHost server.")
+
             def invoke_capability(
                 self,
                 capability_id: str,
@@ -1726,7 +1731,6 @@ internal sealed class PythonModuleBuilder
                 return self._handle
 
             def __enter__(self) -> DistributedApplicationBuilder:
-                self._client.connect()
                 self._handle = self._client.invoke_capability(
                     'Aspire.Hosting/createBuilderWithOptions',
                     {'options': self._options}
@@ -1760,6 +1764,14 @@ internal sealed class PythonModuleBuilder
                 )
 
             client = AspireClient(socket_path, debug=debug, heartbeat_interval=heartbeat_interval)
+            client.connect()
+            auth_token = os.environ.get('ASPIRE_REMOTE_APPHOST_TOKEN')
+            if not auth_token:
+                raise ValueError(
+                    'ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. '
+                    'Run this application using `aspire run`.'
+                )
+            client.authenticate(auth_token)
             return client
 
 

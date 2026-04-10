@@ -69,7 +69,7 @@ public class ExecuteResourceCommandToolTests
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
             {
                 Success = false,
-                ErrorMessage = "Resource not found"
+                Message = "Resource not found"
             }
         };
         monitor.AddConnection("hash1", "socket.hash1", connection);
@@ -160,8 +160,11 @@ public class ExecuteResourceCommandToolTests
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
             {
                 Success = true,
-                Result = "{\"token\": \"abc123\"}",
-                ResultFormat = "json"
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "{\"token\": \"abc123\"}",
+                    Format = CommandResultFormat.Json
+                }
             }
         };
         monitor.AddConnection("hash1", "socket.hash1", connection);

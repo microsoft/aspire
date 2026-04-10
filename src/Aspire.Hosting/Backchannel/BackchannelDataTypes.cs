@@ -11,6 +11,7 @@ namespace Aspire.Hosting.Backchannel;
 
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 
@@ -284,17 +285,64 @@ internal sealed class ExecuteResourceCommandResponse
     /// <summary>
     /// Gets the error message if the command failed.
     /// </summary>
+    [Obsolete("Use Message instead.")]
     public string? ErrorMessage { get; init; }
 
     /// <summary>
-    /// Gets the result data produced by the command.
+    /// Gets the message associated with the command result.
     /// </summary>
-    public string? Result { get; init; }
+    public string? Message { get; init; }
 
     /// <summary>
-    /// Gets the format of the result data (e.g. "none", "text", "json").
+    /// Gets the value produced by the command.
     /// </summary>
-    public string? ResultFormat { get; init; }
+    public ExecuteResourceCommandResult? Value { get; init; }
+}
+
+/// <summary>
+/// Value produced by a resource command.
+/// </summary>
+internal sealed class ExecuteResourceCommandResult
+{
+    /// <summary>
+    /// Gets the value data.
+    /// </summary>
+    public required string Value { get; init; }
+
+    /// <summary>
+    /// Gets the format of the value data.
+    /// </summary>
+    public CommandResultFormat Format { get; init; }
+
+    /// <summary>
+    /// Gets whether to immediately display the value in the dashboard.
+    /// </summary>
+    public bool DisplayImmediately { get; init; }
+}
+
+/// <summary>
+/// Specifies the format of a command result.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CommandResultFormat>))]
+internal enum CommandResultFormat
+{
+    /// <summary>
+    /// Plain text result.
+    /// </summary>
+    [JsonStringEnumMemberName("text")]
+    Text,
+
+    /// <summary>
+    /// JSON result.
+    /// </summary>
+    [JsonStringEnumMemberName("json")]
+    Json,
+
+    /// <summary>
+    /// Markdown result.
+    /// </summary>
+    [JsonStringEnumMemberName("markdown")]
+    Markdown
 }
 
 #endregion
@@ -392,19 +440,21 @@ internal sealed class RpcResourceState
 }
 
 /// <summary>
-/// Represents dashboard URLs with authentication tokens.
+/// Represents dashboard URLs for the running AppHost.
 /// </summary>
 internal sealed class DashboardUrlsState
 {
     public bool DashboardHealthy { get; init; } = true;
 
     /// <summary>
-    /// Gets the base dashboard URL with a login token.
+    /// Gets the dashboard URL.
+    /// When browser token authentication is enabled, this value includes the login token.
     /// </summary>
     public string? BaseUrlWithLoginToken { get; init; }
 
     /// <summary>
-    /// Gets the Codespaces dashboard URL with a login token, if available.
+    /// Gets the Codespaces dashboard URL, if available.
+    /// When browser token authentication is enabled, this value includes the login token.
     /// </summary>
     public string? CodespacesUrlWithLoginToken { get; init; }
 }
@@ -464,6 +514,17 @@ internal sealed class PublishingActivityData
     /// Gets the identifier of the step this task belongs to (only applicable for tasks).
     /// </summary>
     public string? StepId { get; init; }
+
+    /// <summary>
+    /// Gets the identifier of the parent step used for hierarchical step summaries.
+    /// </summary>
+    public string? ParentStepId { get; init; }
+
+    /// <summary>
+    /// Gets the hierarchical level of the step used for display purposes.
+    /// Nullable for backwards compatibility with older app hosts that do not send hierarchy metadata.
+    /// </summary>
+    public int? HierarchyLevel { get; init; }
 
     /// <summary>
     /// Gets the optional completion message for tasks (appears as dimmed child text).

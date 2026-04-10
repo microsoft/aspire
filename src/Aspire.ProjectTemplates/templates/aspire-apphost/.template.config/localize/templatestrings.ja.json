@@ -17,6 +17,7 @@
   "symbols/LocalhostTld/displayName": "アプリケーション URL で .dev.localhost TLD を使用する",
   "symbols/LocalhostTld/description": "ローカル開発用のアプリケーション URL 内で、プロジェクト名を .dev.localhost TLD と組み合わせるかどうか (例: https://myapp.dev.localhost:12345)。.NET 10 以降でサポートされています。",
   "postActions/set-startup-project/description": "ソリューションのスタートアップ プロジェクトを設定します",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "このプロジェクトに必要な NuGet パッケージを復元します。",
   "postActions/restore/manualInstructions/default/text": "'dotnet restore' を実行する"
 }
