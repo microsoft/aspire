@@ -760,6 +760,34 @@ public class WithEndpointTests
         Assert.Equal(5001, httpsEndpoint.Port);
     }
 
+    [Fact]
+    public void WithHttpPortDoesNotCreateEndpointWhenMissing()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpPort(5000);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        Assert.DoesNotContain(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
+    }
+
+    [Fact]
+    public void WithHttpsPortDoesNotCreateEndpointWhenMissing()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpsPort(5001);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        Assert.DoesNotContain(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "https");
+    }
+
     private sealed class ProjectA : IProjectMetadata
     {
         public string ProjectPath => "projectA";

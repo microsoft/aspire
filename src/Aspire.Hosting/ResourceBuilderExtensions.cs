@@ -1398,7 +1398,7 @@ public static class ResourceBuilderExtensions
         return builder.WithEndpoint("http", endpoint =>
         {
             endpoint.Port = port;
-        });
+        }, createIfNotExists: false);
     }
 
     /// <summary>
@@ -1431,7 +1431,7 @@ public static class ResourceBuilderExtensions
         return builder.WithEndpoint("https", endpoint =>
         {
             endpoint.Port = port;
-        });
+        }, createIfNotExists: false);
     }
 
     /// <summary>
