@@ -132,40 +132,41 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     internal sealed record CapturedHelmImageReference(string Section, string ResourceKey, string ValueKey, IResource Resource);
 
     /// <summary>
+    /// Gets or sets the delegate that creates deployment pipeline steps for the configured engine.
+    /// </summary>
+    internal Func<KubernetesEnvironmentResource, PipelineStepFactoryContext, Task<IReadOnlyList<PipelineStep>>>? DeploymentEngineStepsFactory { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="KubernetesEnvironmentResource"/> class.
     /// </summary>
     /// <param name="name">The name of the Kubernetes environment.</param>
     public KubernetesEnvironmentResource(string name) : base(name)
     {
         // Publish step - generates Helm chart YAML artifacts
-        Annotations.Add(new PipelineStepAnnotation(context =>
+        Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
         {
-            var step = new PipelineStep
+            var environment = (KubernetesEnvironmentResource)factoryContext.Resource;
+            var model = factoryContext.PipelineContext.Model;
+            var steps = new List<PipelineStep>();
+
+            // Publish step
+            var publishStep = new PipelineStep
             {
                 Name = $"publish-{Name}",
                 Description = $"Publishes the Kubernetes environment configuration for {Name}.",
                 Action = ctx => PublishAsync(ctx)
             };
-            step.RequiredBy(WellKnownPipelineSteps.Publish);
-            return step;
-        }));
+            publishStep.RequiredBy(WellKnownPipelineSteps.Publish);
+            steps.Add(publishStep);
 
-        // Deployment engine steps - expands steps from KubernetesDeploymentEngineAnnotation (e.g., Helm)
-        Annotations.Add(new PipelineStepAnnotation(async (factoryContext) =>
-        {
-            var environment = (KubernetesEnvironmentResource)factoryContext.Resource;
-
-            if (!environment.TryGetLastAnnotation<KubernetesDeploymentEngineAnnotation>(out var engineAnnotation))
+            // Deployment engine steps (e.g., Helm prepare, deploy, uninstall)
+            if (environment.DeploymentEngineStepsFactory is not null)
             {
-                return [];
+                var engineSteps = await environment.DeploymentEngineStepsFactory(environment, factoryContext).ConfigureAwait(false);
+                steps.AddRange(engineSteps);
             }
 
-            var steps = await engineAnnotation.CreateSteps(environment, factoryContext).ConfigureAwait(false);
-
-            // Also expand deployment target steps for compute resources (including dashboard if enabled)
-            var model = factoryContext.PipelineContext.Model;
-            var allSteps = new List<PipelineStep>(steps);
-
+            // Expand deployment target steps for compute resources (including dashboard if enabled)
             var resources = environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource dashboard
                 ? [.. model.GetComputeResources(), dashboard]
                 : model.GetComputeResources();
@@ -185,12 +186,18 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                         };
 
                         var deploymentTargetSteps = await annotation.CreateStepsAsync(childFactoryContext).ConfigureAwait(false);
-                        allSteps.AddRange(deploymentTargetSteps);
+
+                        foreach (var step in deploymentTargetSteps)
+                        {
+                            step.Resource ??= deploymentTarget;
+                        }
+
+                        steps.AddRange(deploymentTargetSteps);
                     }
                 }
             }
 
-            return allSteps;
+            return steps;
         }));
 
         // Pipeline configuration - wire up step dependencies

@@ -26,7 +26,7 @@ internal static partial class HelmDeploymentEngine
 {
     private const string HelmDeployTag = "helm-deploy";
     private const string HelmUninstallTag = "helm-uninstall";
-    private const string PrintSummaryTag = "print-summary";
+    internal const string PrintSummaryTag = "print-summary";
 
     /// <summary>
     /// Gets the environment-specific values file name, mirroring Docker Compose's .env.{envName} pattern.
@@ -140,28 +140,7 @@ internal static partial class HelmDeploymentEngine
         helmDeployStep.RequiredBy(WellKnownPipelineSteps.Deploy);
         steps.Add(helmDeployStep);
 
-        // Step 3: Print summary for each resource with external endpoints
-        foreach (var computeResource in model.GetComputeResources())
-        {
-            var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget;
-            if (deploymentTarget is not KubernetesResource k8sResource)
-            {
-                continue;
-            }
-
-            var summaryStep = new PipelineStep
-            {
-                Name = $"print-{computeResource.Name}-summary",
-                Description = $"Retrieves deployment status for {computeResource.Name}.",
-                Tags = [PrintSummaryTag],
-                Action = ctx => PrintResourceSummaryAsync(ctx, environment, computeResource, k8sResource)
-            };
-            summaryStep.DependsOn($"helm-deploy-{environment.Name}");
-            summaryStep.RequiredBy(WellKnownPipelineSteps.Deploy);
-            steps.Add(summaryStep);
-        }
-
-        // Step 3b: Print deployment instructions (dashboard access, Helm commands)
+        // Step 3: Print deployment instructions (dashboard access, Helm commands)
         var instructionsStep = new PipelineStep
         {
             Name = $"print-{environment.Name}-instructions",
@@ -464,7 +443,7 @@ internal static partial class HelmDeploymentEngine
         }
     }
 
-    private static async Task PrintResourceSummaryAsync(
+    internal static async Task PrintResourceSummaryAsync(
         PipelineStepContext context,
         KubernetesEnvironmentResource environment,
         IResource computeResource,

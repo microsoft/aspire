@@ -41,6 +41,7 @@ internal sealed class KubernetesInfrastructure(
             if (environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource dashboard)
             {
                 var dashboardService = await environmentContext.CreateKubernetesResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
+                dashboardService.AddPrintSummaryStep();
 
                 dashboard.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
                 {
@@ -66,6 +67,7 @@ internal sealed class KubernetesInfrastructure(
 
                 // Create a Kubernetes compute resource for the resource
                 var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
+                serviceResource.AddPrintSummaryStep();
 
                 // Add deployment target annotation to the resource
                 r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)

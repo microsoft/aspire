@@ -86,10 +86,8 @@ public static class KubernetesEnvironmentExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        // Add or replace the Helm deployment engine annotation
-        builder.WithAnnotation(
-            new KubernetesDeploymentEngineAnnotation(HelmDeploymentEngine.CreateStepsAsync),
-            ResourceAnnotationMutationBehavior.Replace);
+        // Set the Helm deployment engine
+        builder.Resource.DeploymentEngineStepsFactory = HelmDeploymentEngine.CreateStepsAsync;
 
         if (configure is not null)
         {
@@ -163,9 +161,6 @@ public static class KubernetesEnvironmentExtensions
 
     private static void EnsureDefaultHelmEngine(IResourceBuilder<KubernetesEnvironmentResource> builder)
     {
-        if (!builder.Resource.HasAnnotationOfType<KubernetesDeploymentEngineAnnotation>())
-        {
-            builder.WithAnnotation(new KubernetesDeploymentEngineAnnotation(HelmDeploymentEngine.CreateStepsAsync));
-        }
+        builder.Resource.DeploymentEngineStepsFactory ??= HelmDeploymentEngine.CreateStepsAsync;
     }
 }

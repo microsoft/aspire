@@ -28,8 +28,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         var env = app.Services.GetRequiredService<DistributedApplicationModel>()
             .Resources.OfType<KubernetesEnvironmentResource>().Single();
 
-        Assert.True(env.TryGetLastAnnotation<KubernetesDeploymentEngineAnnotation>(out var annotation));
-        Assert.NotNull(annotation.CreateSteps);
+        Assert.NotNull(env.DeploymentEngineStepsFactory);
     }
 
     [Fact]
@@ -46,8 +45,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         var env = app.Services.GetRequiredService<DistributedApplicationModel>()
             .Resources.OfType<KubernetesEnvironmentResource>().Single();
 
-        var annotations = env.Annotations.OfType<KubernetesDeploymentEngineAnnotation>().ToList();
-        Assert.Single(annotations);
+        Assert.NotNull(env.DeploymentEngineStepsFactory);
     }
 
     [Fact]
@@ -195,7 +193,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         var env = app.Services.GetRequiredService<DistributedApplicationModel>()
             .Resources.OfType<KubernetesEnvironmentResource>().Single();
 
-        Assert.True(env.TryGetLastAnnotation<KubernetesDeploymentEngineAnnotation>(out _));
+        Assert.NotNull(env.DeploymentEngineStepsFactory);
     }
 
     [Fact]

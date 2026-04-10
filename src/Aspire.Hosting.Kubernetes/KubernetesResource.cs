@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.Globalization;
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
+using Aspire.Hosting.Pipelines;
 
 namespace Aspire.Hosting.Kubernetes;
 
@@ -17,6 +20,23 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 {
     /// <inheritdoc/>
     public KubernetesEnvironmentResource Parent => kubernetesEnvironmentResource;
+
+    internal void AddPrintSummaryStep()
+    {
+        Annotations.Add(new PipelineStepAnnotation(_ =>
+        {
+            var printResourceSummary = new PipelineStep
+            {
+                Name = $"print-{resource.Name}-summary",
+                Description = $"Retrieves deployment status for {resource.Name}.",
+                Action = async ctx => await HelmDeploymentEngine.PrintResourceSummaryAsync(ctx, kubernetesEnvironmentResource, resource, this).ConfigureAwait(false),
+                Tags = [HelmDeploymentEngine.PrintSummaryTag],
+                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+            };
+
+            return new List<PipelineStep> { printResourceSummary };
+        }));
+    }
 
     internal record EndpointMapping(string Scheme, string Protocol, string Host, HelmValue Port, string Name, string? HelmExpression = null, HelmValue? ServicePort = null);
     internal Dictionary<string, EndpointMapping> EndpointMappings { get; } = [];
