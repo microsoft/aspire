@@ -80,19 +80,8 @@ try {
     Write-Host "  Aspire CLI Archive Verification"
     Write-Host "=========================================="
     Write-Host "  Archive: $ArchivePath"
-    Write-Host "  dotnet:  $(Get-Command dotnet -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)"
     Write-Host "=========================================="
     Write-Host ""
-
-    # Step 0: Verify dotnet is available
-    Write-Step "Checking dotnet SDK availability..."
-    $dotnetVersion = & dotnet --version
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "dotnet command not found or failed."
-        exit 1
-    }
-    Write-Host "  dotnet version: $dotnetVersion"
-    Write-Ok "dotnet SDK available"
 
     # Step 1: Back up and clean ~/.aspire
     Write-Step "Cleaning ~/.aspire state..."
@@ -162,21 +151,16 @@ try {
     $projectDir = Join-Path $verifyTmpDir "VerifyApp"
     New-Item -ItemType Directory -Path $projectDir -Force | Out-Null
 
-    Write-Step "Running 'aspire new aspire-starter --name VerifyApp'..."
+    Write-Step "Running 'aspire new aspire-starter --name VerifyApp --output $projectDir --non-interactive --nologo'..."
+    $env:ASPIRE_CLI_TELEMETRY_OPTOUT = "true"
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = "true"
     $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "true"
     $env:DOTNET_GENERATE_ASPNET_CERTIFICATE = "false"
 
-    Push-Location $projectDir
-    try {
-        & $aspireBin new aspire-starter --name VerifyApp 2>&1 | Write-Host
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "'aspire new' failed with exit code $LASTEXITCODE"
-            exit 1
-        }
-    }
-    finally {
-        Pop-Location
+    & $aspireBin new aspire-starter --name VerifyApp --output $projectDir --non-interactive --nologo 2>&1 | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "'aspire new' failed with exit code $LASTEXITCODE"
+        exit 1
     }
 
     # Verify the project was created
@@ -195,31 +179,19 @@ try {
         # Step 5: Restore the project
         $appHostCsproj = Join-Path $appHostDir "VerifyApp.AppHost.csproj"
         Write-Step "Running 'aspire restore' on the created project..."
-        Push-Location $projectDir
-        try {
-            & $aspireBin restore --apphost $appHostCsproj 2>&1 | Write-Host
-            if ($LASTEXITCODE -ne 0) {
-                Write-Err "'aspire restore' failed with exit code $LASTEXITCODE"
-                exit 1
-            }
-        }
-        finally {
-            Pop-Location
+        & $aspireBin restore --apphost $appHostCsproj --non-interactive --nologo 2>&1 | Write-Host
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "'aspire restore' failed with exit code $LASTEXITCODE"
+            exit 1
         }
         Write-Ok "'aspire restore' succeeded"
 
         # Step 6: Build the project
         Write-Step "Running 'dotnet build' on the created project..."
-        Push-Location $projectDir
-        try {
-            & dotnet build $appHostCsproj 2>&1 | Write-Host
-            if ($LASTEXITCODE -ne 0) {
-                Write-Err "'dotnet build' failed with exit code $LASTEXITCODE"
-                exit 1
-            }
-        }
-        finally {
-            Pop-Location
+        & dotnet build $appHostCsproj 2>&1 | Write-Host
+        if ($LASTEXITCODE -ne 0) {
+            Write-Err "'dotnet build' failed with exit code $LASTEXITCODE"
+            exit 1
         }
         Write-Ok "'dotnet build' succeeded"
     }

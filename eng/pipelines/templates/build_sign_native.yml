@@ -157,6 +157,7 @@ jobs:
               displayName: 🟣Verify CLI archive (${{ targetRid }})
               condition: succeeded()
               env:
+                ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
           - task: 1ES.PublishBuildArtifacts@1

@@ -110,6 +110,7 @@ steps:
       displayName: 🟣Verify CLI archive (win-x64)
       condition: succeeded()
       env:
+        ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
         DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
     # Log MicroBuild environment for debugging

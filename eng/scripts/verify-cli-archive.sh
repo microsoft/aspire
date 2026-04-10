@@ -129,18 +129,8 @@ echo "=========================================="
 echo "  Aspire CLI Archive Verification"
 echo "=========================================="
 echo "  Archive: $ARCHIVE_PATH"
-echo "  dotnet:  $(which dotnet 2>/dev/null || echo 'not found')"
 echo "=========================================="
 echo ""
-
-# Step 0: Verify dotnet is available
-log_step "Checking dotnet SDK availability..."
-if ! command -v dotnet &>/dev/null; then
-    log_err "dotnet command not found. Set --dotnet-root or ensure dotnet is in PATH."
-    exit 1
-fi
-dotnet --version
-log_ok "dotnet SDK available"
 
 # Step 1: Back up and clean ~/.aspire
 log_step "Cleaning ~/.aspire state..."
@@ -207,16 +197,13 @@ log_ok "'aspire --version' succeeded"
 PROJECT_DIR="${VERIFY_TMPDIR}/VerifyApp"
 mkdir -p "$PROJECT_DIR"
 
-log_step "Running 'aspire new aspire-starter --name VerifyApp'..."
+log_step "Running 'aspire new aspire-starter --name VerifyApp --output $PROJECT_DIR --non-interactive --nologo'..."
+export ASPIRE_CLI_TELEMETRY_OPTOUT=true
 export DOTNET_CLI_TELEMETRY_OPTOUT=true
 export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
 export DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 
-# aspire new needs a working directory and creates the project there
-(
-    cd "$PROJECT_DIR"
-    "$ASPIRE_BIN" new aspire-starter --name VerifyApp 2>&1
-) || {
+"$ASPIRE_BIN" new aspire-starter --name VerifyApp --output "$PROJECT_DIR" --non-interactive --nologo 2>&1 || {
     log_err "'aspire new' failed"
     echo "Contents of project directory:"
     find "$PROJECT_DIR" -maxdepth 3 -type f 2>/dev/null || true
@@ -237,10 +224,7 @@ if [[ "$SKIP_BUILD" == "true" ]]; then
 else
     # Step 5: Restore the project with aspire restore
     log_step "Running 'aspire restore' on the created project..."
-    (
-        cd "$PROJECT_DIR"
-        "$ASPIRE_BIN" restore --apphost "$PROJECT_DIR/VerifyApp.AppHost/VerifyApp.AppHost.csproj" 2>&1
-    ) || {
+    "$ASPIRE_BIN" restore --apphost "$PROJECT_DIR/VerifyApp.AppHost/VerifyApp.AppHost.csproj" --non-interactive --nologo 2>&1 || {
         log_err "'aspire restore' failed"
         exit 1
     }
