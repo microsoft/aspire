@@ -47,96 +47,13 @@ If you're unsure whether something is a service, whether two services depend on 
 
 ### Always use latest Aspire APIs — verify before you write
 
-**Do not assume APIs exist.** Aspire evolves fast. Before writing any AppHost code, look up the correct API. Follow this **tiered preference** when choosing how to model a resource:
+**Do not assume APIs exist.** Before writing any AppHost code, look up the correct API using `aspire docs search` and `aspire docs get`. Follow the tiered preference: Tier 1 (first-party `Aspire.Hosting.*`) → Tier 2 (community `CommunityToolkit.Aspire.Hosting.*`) → Tier 3 (raw `AddExecutable`/`AddDockerfile`/`AddContainer`). See the "Looking up APIs and integrations" section below for full discovery workflow, tier details, and auto-managed values.
 
-#### Tier 1: First-party Aspire hosting packages (always prefer)
-
-Packages named `Aspire.Hosting.*` — these are maintained by the Aspire team and ship with every release. Examples:
-
-| Package | Unlocks |
-|---------|---------|
-| `Aspire.Hosting.Python` | `AddPythonApp()`, `AddUvicornApp()` |
-| `Aspire.Hosting.JavaScript` | `AddJavaScriptApp()`, `AddNodeApp()`, `AddViteApp()`, `.WithYarn()`, `.WithPnpm()` |
-| `Aspire.Hosting.PostgreSQL` | `AddPostgres()`, `AddDatabase()` |
-| `Aspire.Hosting.Redis` | `AddRedis()` |
-
-#### Tier 2: Community Toolkit packages (use when no first-party exists)
-
-Packages named `CommunityToolkit.Aspire.Hosting.*` — maintained by the community, documented on aspire.dev, and installable via `aspire add`. Examples:
-
-| Package | Unlocks |
-|---------|---------|
-| `CommunityToolkit.Aspire.Hosting.Golang` | `AddGolangApp()` — handles `go run .`, working dir, PORT env |
-| `CommunityToolkit.Aspire.Hosting.Rust` | `AddRustApp()` |
-| `CommunityToolkit.Aspire.Hosting.Java` | Java hosting support |
-
-These provide typed APIs with proper endpoint handling, health checks, and dashboard integration — significantly better than raw executables.
-
-#### Tier 3: Raw fallbacks (last resort)
-
-`AddExecutable()`, `AddDockerfile()`, `AddContainer()` — use only when no Tier 1 or Tier 2 package exists for the technology, or when the user's setup is too custom for a typed integration.
-
-#### How to discover available packages
-
-Before writing any builder call:
-
-1. Run `aspire docs search "<technology>"` (e.g., `aspire docs search "golang"`, `aspire docs search "python"`)
-2. Run `aspire docs get "<slug>"` to read the full API surface and installation instructions
-3. Run `aspire list integrations` to see all available packages (requires Aspire MCP — if unavailable, rely on docs search)
-4. Install with `aspire add <integration-name>` (e.g., `aspire add communitytoolkit-golang`)
-5. For TypeScript, run `aspire restore` then check `.modules/aspire.ts` to see what's available
-
-**Don't invent APIs** — if the docs search and integration list don't return it, it doesn't exist. Fall back to Tier 3 and note the limitation to the user.
-
-**API shapes differ between C# and TypeScript** — always check the correct language docs.
+**Don't invent APIs** — if docs search and integration list don't return it, it doesn't exist. Fall back to Tier 3. **API shapes differ between C# and TypeScript** — always check the correct language docs.
 
 ### Choosing the right JavaScript resource type
 
-The `Aspire.Hosting.JavaScript` package provides three resource types. Pick the right one:
-
-| Signal | Use | Example |
-|--------|-----|---------|
-| Vite app (has `vite.config.*`) | `AddViteApp(name, dir)` | Frontend SPA, Vite + React/Vue/Svelte |
-| App runs via package.json script only | `AddJavaScriptApp(name, dir, { runScriptName })` | CRA app, Next.js, monorepo root scripts |
-| App has a specific Node entry file (`.js`/`.ts`) and uses a dev script like `ts-node-dev` | `AddNodeApp(name, dir, "entry.js")` + `.WithRunScript("start:dev")` | Express/Fastify API, Socket.IO server |
-
-**Key distinctions:**
-- `AddNodeApp` is for apps that run a **specific file** with Node (e.g., an Express server at `src/index.ts`). Use `.WithRunScript("start:dev")` to override the dev-time command (e.g., `ts-node-dev`).
-- `AddJavaScriptApp` runs a **package.json script** — simpler, good when the script handles everything.
-- `AddViteApp` is `AddJavaScriptApp` with Vite-specific defaults (auto-HTTPS config augmentation, `dev` as default script).
-
-### JavaScript dev scripts
-
-Use `.WithRunScript()` to control which package.json script runs during development:
-
-```typescript
-// Express API with TypeScript: uses ts-node-dev for hot reload in dev
-const api = await builder
-    .addNodeApp("api", "./api", "src/index.ts")
-    .withRunScript("start:dev")                      // runs "yarn start:dev" (ts-node-dev)
-    .withYarn()
-    .withHttpEndpoint({ env: "PORT" });
-
-// Vite frontend: default "dev" script is fine, just add yarn
-const web = await builder
-    .addViteApp("web", "./frontend")
-    .withYarn();
-```
-
-### Framework-specific port binding
-
-Not all frameworks read ports from env vars the same way:
-
-| Framework | Port mechanism | AppHost pattern |
-|-----------|---------------|-----------------|
-| Express/Fastify | `process.env.PORT` | `.withHttpEndpoint({ env: "PORT" })` |
-| Vite | `--port` CLI arg or `server.port` in config | `.withHttpEndpoint({ env: "PORT" })` — Aspire's Vite integration handles this automatically |
-| Next.js | `PORT` env or `--port` | `.withHttpEndpoint({ env: "PORT" })` |
-| CRA | `PORT` env | `.withHttpEndpoint({ env: "PORT" })` |
-
-When the framework supports reading the port from an env var or Aspire already handles it, **prefer that over pinning a fixed port**. Managed ports make repeated local runs more reliable and work better when multiple services or multiple Aspire apps are running.
-
-**Suppress auto-browser-open:** Many dev servers (Vite, CRA, Next.js) auto-open a browser on start. Add `.withEnvironment("BROWSER", "none")` to prevent this in Aspire-managed apps. Vite also respects `server.open: false` in its config.
+For JavaScript/TypeScript apps, pick the right resource type (`AddViteApp`, `AddNodeApp`, or `AddJavaScriptApp`) and configure dev scripts and port binding. See [references/javascript-apps.md](references/javascript-apps.md) for the selection table, dev script patterns, framework-specific port binding, and browser suppression.
 
 ### Never call it ".NET Aspire"
 
@@ -161,40 +78,11 @@ var redis = builder.AddRedis("redis")
 
 ### Prefer HTTPS over HTTP
 
-Always set up HTTPS endpoints by default. Use `WithHttpsEndpoint()` instead of `WithHttpEndpoint()` unless HTTPS doesn't work for a specific integration.
-
-For JavaScript and Python apps, call `WithHttpsDeveloperCertificate()` to configure the ASP.NET Core dev cert for serving HTTPS. Some apps may also need `WithDeveloperCertificateTrust(true)` so they trust the dev cert for outbound calls (e.g., to the dashboard OTLP collector). If HTTPS causes issues for a specific resource, fall back to HTTP and leave a comment explaining why.
-
-```csharp
-// JavaScript/Vite — HTTPS with dev cert
-var frontend = builder.AddViteApp("frontend", "../frontend")
-    .WithHttpsDeveloperCertificate()
-    .WithHttpsEndpoint(env: "PORT");
-
-// Python — HTTPS with dev cert
-var pyApi = builder.AddUvicornApp("py-api", "../py-api", "app:main")
-    .WithHttpsDeveloperCertificate();
-
-// .NET — HTTPS works out of the box, no extra config needed
-var api = builder.AddCSharpApp("api", "../src/Api");
-```
-
-> **Note**: These certificate APIs are experimental (`ASPIRECERTIFICATES001`). Use `aspire docs search "certificate configuration"` to check the latest API shape. If `WithHttpsDeveloperCertificate` causes errors for a resource type, fall back to `WithHttpEndpoint()`.
+Always set up HTTPS endpoints by default. Use `WithHttpsEndpoint()` instead of `WithHttpEndpoint()` unless HTTPS doesn't work for a specific integration. For JavaScript and Python apps, call `WithHttpsDeveloperCertificate()` to configure the dev cert. If HTTPS causes issues for a specific resource, fall back to HTTP and leave a comment explaining why. See the "Endpoints and ports" section in the AppHost wiring reference below for detailed patterns and examples.
 
 ### Never hardcode URLs — use endpoint references
 
-When a service needs another service's URL as an environment variable, **always** pass an endpoint reference — never a hardcoded string. Hardcoded URLs break whenever Aspire assigns different ports.
-
-```typescript
-// ✅ CORRECT — endpoint reference, Aspire resolves the actual URL at runtime
-const roomEndpoint = await room.getEndpoint("http");
-builder.addViteApp("frontend", "./frontend")
-    .withEnvironment("VITE_APP_WS_SERVER_URL", roomEndpoint);
-
-// ❌ WRONG — hardcoded URL, breaks when ports change
-builder.addViteApp("frontend", "./frontend")
-    .withEnvironment("VITE_APP_WS_SERVER_URL", "http://localhost:3002");
-```
+When a service needs another service's URL as an environment variable, **always** pass an endpoint reference — never a hardcoded string. Hardcoded URLs break whenever Aspire assigns different ports. See the "Cross-service environment variable wiring" section in the AppHost wiring reference below for examples.
 
 Similarly, **never use `withUrlForEndpoint` / `WithUrlForEndpoint` to set `dev.localhost` URLs**. That API is ONLY for setting display labels in the dashboard (e.g., `url.DisplayText = "Web UI"`). `dev.localhost` configuration belongs in `aspire.config.json` profiles — see Step 9.
 
@@ -242,11 +130,6 @@ var api = builder.AddCSharpApp("api", "../src/Api")
     .WithEnvironment("DEBUG", "true");              // plain config
 ```
 
-**The goal is to make `.env` files unnecessary** so all configuration flows through the AppHost. This means:
-- No more "did you copy the .env.example?" onboarding friction
-- Secrets are stored securely (not in plaintext files that get accidentally committed)
-- All service config is visible in one place (the dashboard)
-
 **Important: Never delete `.env` files automatically.** After migrating all values into the AppHost, explicitly ask the user:
 > "I've migrated all the values from your `.env` file into the AppHost. The `.env` file is no longer needed for running via Aspire, but it still works for non-Aspire workflows. Would you like me to remove it, or keep it around?"
 
@@ -262,7 +145,7 @@ Present this as a recommendation. Walk through the `.env` contents with the user
 - `<UserSecretsId>` in `.csproj` files — indicates the project uses User Secrets
 - Documentation referencing `dotnet user-secrets set` or `setup_secrets` scripts
 
-**Aspire's `AddParameter(name, secret: true)` stores values in the same .NET User Secrets store under the hood.** This means migration is seamless — the developer's existing workflow stays nearly identical, but secrets are now centralized in the AppHost instead of scattered across individual service projects.
+**Aspire's `AddParameter(name, secret: true)` stores values in the same .NET User Secrets store under the hood**, so secrets are centralized in the AppHost instead of scattered across individual service projects.
 
 Migration approach:
 
@@ -594,8 +477,7 @@ Always check `aspire list integrations` and `aspire docs search "<language>"` to
 
 **Important rules:**
 
-- Use `aspire docs search` and `aspire docs get` to look up the correct builder API for each resource type. Do not guess API shapes.
-- Check `.modules/aspire.ts` (TypeScript) or NuGet package APIs (C#) to confirm available methods.
+- **Look up APIs before writing code** — see "Looking up APIs and integrations" section below. Do not guess API shapes.
 - Use meaningful resource names derived from the project/directory name.
 - Wire up `WithReference()`/`withReference()` and `WaitFor()`/`waitFor()` for services that depend on each other (ask the user if relationships are unclear).
 - Use `WithExternalHttpEndpoints()`/`withExternalHttpEndpoints()` for user-facing frontends.
@@ -604,67 +486,11 @@ Always check `aspire list integrations` and `aspire docs search "<language>"` to
 
 #### TypeScript AppHost
 
-**package.json** — if one exists at the root, augment it (do not overwrite). Add/merge these scripts that delegate to the Aspire CLI:
+See [references/javascript-apps.md](references/javascript-apps.md) for `package.json`, `tsconfig.json`, and ESLint configuration patterns. Key points:
 
-```json
-{
-  "type": "module",
-  "scripts": {
-    "dev": "aspire run",
-    "build": "tsc",
-    "watch": "tsc --watch"
-  }
-}
-```
-
-If no root `package.json` exists, create a minimal one matching the canonical Aspire template:
-
-```json
-{
-  "name": "<repo-name>",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "aspire run",
-    "build": "tsc",
-    "watch": "tsc --watch"
-  },
-  "engines": {
-    "node": "^20.19.0 || ^22.13.0 || >=24"
-  }
-}
-```
-
-**Important**: Scripts should point to `aspire run`/`aspire start` — the Aspire CLI handles TypeScript compilation internally. Do not use `npx tsc && node apphost.js` patterns.
-
-Never overwrite existing `scripts`, `dependencies`, or `devDependencies` — merge only. Do not manually add Aspire SDK packages — `aspire restore` handles those.
-
-Run `aspire restore` to generate the `.modules/` directory with TypeScript SDK bindings, then install dependencies with the repo's package manager (`npm install`, `pnpm install`, or `yarn`).
-
-**tsconfig.json** — augment if it exists:
-
-- Ensure `".modules/**/*.ts"` and `"apphost.ts"` are in `include`
-- Ensure `"module"` is `"nodenext"` or `"node16"` (ESM required)
-- Ensure `"moduleResolution"` matches
-
-If no `tsconfig.json` exists and `aspire restore` didn't create one, create a minimal one:
-
-```json
-{
-  "compilerOptions": {
-    "target": "ES2022",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
-    "esModuleInterop": true,
-    "strict": true,
-    "outDir": "./dist",
-    "rootDir": "."
-  },
-  "include": ["apphost.ts", ".modules/**/*.ts"]
-}
-```
-
-**ESLint** — only augment if config already exists. If it uses `parserOptions.project` or `parserOptions.projectService`, ensure the AppHost tsconfig is discoverable. Do not create ESLint configuration from scratch.
+- Augment existing files, never overwrite
+- Run `aspire restore` to generate `.modules/`, then install deps with the repo's package manager
+- Do not manually add Aspire SDK packages — `aspire restore` handles those
 
 #### C# AppHost
 
@@ -702,123 +528,14 @@ Be careful with code placement — look at existing structure (top-level stateme
 
 ### Step 8: Wire up OpenTelemetry
 
-OpenTelemetry makes your services' traces, metrics, and logs visible in the Aspire dashboard. For .NET services, ServiceDefaults handles this automatically. For everything else, the services need a small setup to export telemetry. Aspire automatically injects `OTEL_EXPORTER_OTLP_ENDPOINT` into all managed resources — the services just need to read it.
+For .NET services, ServiceDefaults handles OTel automatically. For everything else, the services need a small setup to export telemetry. Aspire automatically injects `OTEL_EXPORTER_OTLP_ENDPOINT` into all managed resources — the services just need to read it.
 
 **Present this to the user as an option, not a mandatory step.** Some users may want to add OTel later, and that's fine — their services will still run, they just won't appear in the dashboard's trace/metrics views.
 
 **For each service that doesn't already have OTel, ask:**
 > "Would you like me to add OpenTelemetry instrumentation to `<service>`? This lets the Aspire dashboard show its traces, metrics, and logs. I'll need to add a few packages and an instrumentation setup file."
 
-If they say yes, follow the per-language guide below.
-
-#### Node.js/TypeScript services
-
-```bash
-# Use the repo's package manager (npm/pnpm/yarn)
-npm install @opentelemetry/sdk-node @opentelemetry/auto-instrumentations-node @opentelemetry/exporter-otlp-grpc
-# or: pnpm add ...
-# or: yarn add ...
-```
-
-Create an instrumentation file (e.g., `instrumentation.ts` or `instrumentation.js`):
-
-```typescript
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-otlp-grpc';
-import { OTLPMetricExporter } from '@opentelemetry/exporter-otlp-grpc';
-import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-
-const sdk = new NodeSDK({
-  traceExporter: new OTLPTraceExporter(),
-  metricReader: new PeriodicExportingMetricReader({
-    exporter: new OTLPMetricExporter(),
-  }),
-  instrumentations: [getNodeAutoInstrumentations()],
-  serviceName: process.env.OTEL_SERVICE_NAME,
-});
-
-sdk.start();
-```
-
-Then ensure the service loads it early — either via `--require`/`--import` in the start script or by importing it as the first line of the entry point.
-
-#### Python services
-
-```bash
-pip install opentelemetry-distro opentelemetry-exporter-otlp
-opentelemetry-bootstrap -a install  # auto-detect and install framework instrumentations
-```
-
-Add to the service's startup (e.g., top of `main.py` or as a separate `instrumentation.py`):
-
-```python
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
-from opentelemetry import trace, metrics
-import os
-
-resource = Resource.create({"service.name": os.environ.get("OTEL_SERVICE_NAME", "unknown")})
-
-# Traces
-trace.set_tracer_provider(TracerProvider(resource=resource))
-trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
-
-# Metrics
-metrics.set_meter_provider(MeterProvider(
-    resource=resource,
-    metric_readers=[PeriodicExportingMetricReader(OTLPMetricExporter())],
-))
-```
-
-Or more simply, run with the auto-instrumentation wrapper:
-
-```bash
-opentelemetry-instrument uvicorn main:app --host 0.0.0.0
-```
-
-#### Go services
-
-```bash
-go get go.opentelemetry.io/otel
-go get go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc
-go get go.opentelemetry.io/otel/sdk/trace
-go get go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
-```
-
-Add initialization in `main()`:
-
-```go
-import (
-    "go.opentelemetry.io/otel"
-    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-    sdktrace "go.opentelemetry.io/otel/sdk/trace"
-)
-
-func initTracer() func() {
-    exporter, _ := otlptracegrpc.New(context.Background())
-    tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exporter))
-    otel.SetTracerProvider(tp)
-    return func() { tp.Shutdown(context.Background()) }
-}
-```
-
-Wrap HTTP handlers with `otelhttp.NewHandler()` for automatic HTTP span creation.
-
-#### Java services
-
-Point the user to the [OpenTelemetry Java Agent](https://opentelemetry.io/docs/zero-code/java/agent/) — it's the easiest approach:
-
-```bash
-java -javaagent:opentelemetry-javaagent.jar -jar myapp.jar
-```
-
-The agent auto-instruments common frameworks. Aspire injects `OTEL_EXPORTER_OTLP_ENDPOINT` automatically.
+If they say yes, follow the per-language setup guides in [references/opentelemetry.md](references/opentelemetry.md).
 
 ### Step 9: Offer dev experience enhancements
 
@@ -830,8 +547,6 @@ Before validating, present the user with optional quality-of-life improvements. 
    > "Would you like me to set up `dev.localhost` subdomains for your services? This gives each service its own cookie/session scope so they don't interfere with each other. URLs will look like `frontend.dev.localhost:5173` — the `*.dev.localhost` domain resolves to 127.0.0.1 automatically on most systems, no `/etc/hosts` changes needed."
 
    **How to do it:** Update the `profiles` section in `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost` in `applicationUrl`, and use descriptive subdomains like `otlp.dev.localhost` and `resources.dev.localhost` for the infrastructure URLs. This is the same mechanism `aspire new` uses.
-
-   > ⚠️ **Do NOT use `withUrlForEndpoint` / `WithUrlForEndpoint` in the AppHost for `dev.localhost`** — the config file is the right place. `withUrlForEndpoint` is ONLY for dashboard display labels.
 
    Real-world example:
 
@@ -851,11 +566,10 @@ Before validating, present the user with optional quality-of-life improvements. 
 
    Use the project/repo name (lowercased) as the subdomain prefix for `applicationUrl`. Use `otlp` and `resources` for the infrastructure URLs. Keep the existing port numbers — just swap `localhost` for the appropriate `*.dev.localhost` subdomain.
 
-2. **Custom URL labels in the dashboard** (display text only): Rename endpoint URLs in the Aspire dashboard for clarity. This is the ONLY valid use of `withUrlForEndpoint` — setting `DisplayText`, nothing else:
+2. **Custom URL labels in the dashboard** (display text only): Rename endpoint URLs in the Aspire dashboard for clarity:
    ```csharp
    .WithUrlForEndpoint("https", url => url.DisplayText = "Web UI")
    ```
-   Never set `url.Url` in this callback — that's what `aspire.config.json` profiles are for.
 
 3. **OpenTelemetry** (if not done in Step 8): "Would you like me to add observability to your services so they appear in the Aspire dashboard's traces and metrics views?"
 
@@ -873,7 +587,7 @@ Once the app is running, use the Aspire CLI to verify everything is wired up cor
 2. **Environment flows correctly**: `aspire describe` — check that environment variables (connection strings, ports, secrets from parameters) are injected into each resource as expected. Verify `.env` values that were migrated to parameters are present.
 3. **OTel is flowing** (if configured in Step 8): `aspire otel` — verify that services instrumented with OpenTelemetry are exporting traces and metrics to the Aspire dashboard collector.
 4. **No startup errors**: `aspire logs <resource>` — check logs for each resource to ensure clean startup with no crashes, missing config, or connection failures.
-5. **Dashboard is accessible**: Confirm the dashboard URL (including the login token) is printed and can be opened. The full URL looks like `http://localhost:18888/login?t=<token>` — always include the token.
+5. **Dashboard is accessible**: Confirm the dashboard URL is printed and can be opened (remember: include the login token — see "Dashboard URL must include auth token" above).
 
 **This skill is not done until `aspire start` runs without errors and every resource is in an expected terminal/runtime state.** Acceptable end states are:
 
@@ -904,7 +618,7 @@ Resources:
 <any notes about optional steps skipped, e.g., "OTel not configured — run the aspire skill to add it later">
 ```
 
-Get the dashboard URL from `aspire start` output (always include the `?t=<token>` parameter). Get resource status from `aspire describe`. If any resource shows `Finished`, confirm from logs that it was an intentional one-shot resource that exited successfully before including it as success. This summary is the user's confirmation that init worked — make it complete and accurate.
+Get the dashboard URL (with login token) from `aspire start` output. Get resource status from `aspire describe`. If any resource shows `Finished`, confirm from logs that it was an intentional one-shot resource that exited successfully before including it as success. This summary is the user's confirmation that init worked — make it complete and accurate.
 
 Common issues:
 
@@ -937,361 +651,14 @@ After successful validation:
 - **Never overwrite existing files** — always augment/merge
 - **Ask the user before modifying service code** (especially OTel and ServiceDefaults injection)
 - **Respect existing project structure** — don't reorganize the repo
-- **This is a one-time skill** — delete it after successful init
 - **If stuck, use `aspire doctor`** to diagnose environment issues
 - **Never hardcode URLs in `withEnvironment`** — when a service needs another service's URL (e.g., `VITE_APP_WS_SERVER_URL`), pass an endpoint reference, NOT a string literal. Use `room.getEndpoint("http")` (TS) or `room.GetEndpoint("http")` (C#) and pass that to `withEnvironment`. Hardcoded URLs break when ports change.
 - **Never use `withUrlForEndpoint` to set `dev.localhost` URLs** — `dev.localhost` configuration belongs in `aspire.config.json` profiles, not in AppHost code. `withUrlForEndpoint` is ONLY for setting display labels (e.g., `url.DisplayText = "Web UI"`).
 
-## Looking up APIs and integrations
-
-Before writing AppHost code for an unfamiliar resource type or integration, **always** look it up. Follow the tiered preference from the principles section (first-party → community toolkit → raw fallbacks).
-
-```bash
-# Search for documentation on a topic
-aspire docs search "redis"
-aspire docs search "golang"
-aspire docs search "python uvicorn"
-
-# Get a specific doc page by slug (returned from search results)
-aspire docs get "redis-integration"
-aspire docs get "go-integration"
-
-# List ALL available integrations (first-party and community toolkit)
-# Note: requires the Aspire MCP server to be connected. If this fails, use aspire docs search instead.
-aspire list integrations
-```
-
-Use `aspire docs search` to find the right builder methods, configuration options, and patterns. Use `aspire docs get <slug>` to read the full doc page. Use `aspire list integrations` to discover packages you might not have known about. Do not guess API shapes — Aspire has many resource types with specific overloads.
-
-### Check what integrations auto-manage
-
-Before modeling environment variables, passwords, ports, or volumes for a typed integration, **check the docs to see what the integration handles automatically**. Many typed integrations auto-generate passwords, manage ports dynamically, and handle volumes — duplicating this config causes errors or conflicts.
-
-```bash
-# Check what AddPostgres manages automatically
-aspire docs get "postgresql-hosting-integration" --section "Connection properties"
-
-# Check what AddSqlServer manages
-aspire docs get "sql-server-integration" --section "Hosting integration"
-```
-
-Look for the **"Connection properties"** section — it lists what the integration injects into consuming services. If it lists `Password`, `Host`, `Port` — the integration manages those. Do not create `AddParameter()` for values the integration already handles.
-
-Common auto-managed values (do NOT model these manually):
-
-| Integration | Auto-managed |
-|-------------|-------------|
-| `AddPostgres()` | Password, host, port, connection string |
-| `AddSqlServer()` | SA password, host, port, connection string |
-| `AddRedis()` | Connection string, port |
-| `AddMySql()` | Root password, host, port, connection string |
-| `AddRabbitMQ()` | Username, password, host, port, connection string |
-| `AddMongoDB()` | Connection string, port |
-
-To add an integration package (which unlocks typed builder methods):
-
-```bash
-# First-party
-aspire add redis
-aspire add python
-aspire add nodejs
-
-# Community Toolkit
-aspire add communitytoolkit-golang
-aspire add communitytoolkit-rust
-```
-
-After adding, run `aspire restore` (TypeScript) or `dotnet restore` (C#) to update available APIs, then check what methods are now available.
-
-**Always prefer a typed integration over raw `AddExecutable`/`AddContainer`.** Typed integrations handle working directories, port injection, health checks, and dashboard integration automatically.
-
 ## References
 
+- For AppHost wiring patterns, API lookup, endpoint configuration, and resource wiring, see [references/apphost-wiring.md](references/apphost-wiring.md).
 - For solution-backed C# AppHosts (`.sln`/`.slnx` + `.csproj` AppHost), see [references/full-solution-apphosts.md](references/full-solution-apphosts.md).
 - For repos with `docker-compose.yml` or `compose.yml`, see [references/docker-compose.md](references/docker-compose.md).
-
-## AppHost wiring reference
-
-This section covers the patterns you'll need when writing Step 5 (Wire up the AppHost). Refer back to it as needed.
-
-### Service communication: `WithReference` vs `WithEnvironment`
-
-**`WithReference()`** is the primary way to connect services. It does two things:
-
-1. Injects the referenced resource's connection information (connection string or URL) into the consuming service
-2. Enables Aspire service discovery — .NET services can resolve the referenced resource by name
-
-```csharp
-// C#: api gets the database connection string injected automatically
-var db = builder.AddPostgres("pg").AddDatabase("mydb");
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithReference(db);
-
-// C#: frontend gets service discovery URL for api
-var frontend = builder.AddCSharpApp("web", "../src/Web")
-    .WithReference(api);
-```
-
-```typescript
-// TypeScript equivalent
-const db = await builder.addPostgres("pg").addDatabase("mydb");
-const api = await builder.addCSharpApp("api", "./src/Api")
-    .withReference(db);
-```
-
-**How services consume references**: Services receive connection info as environment variables. The naming convention is:
-- Connection strings: `ConnectionStrings__<resourceName>` (e.g., `ConnectionStrings__mydb=Host=...`)
-- Service URLs: `services__<resourceName>__<endpointName>__0` (e.g., `services__api__http__0=http://localhost:5123`)
-
-**`WithEnvironment()`** injects raw environment variables. Use this for custom config that isn't a service reference:
-
-```csharp
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithEnvironment("FEATURE_FLAG_X", "true")
-    .WithEnvironment("API_KEY", someParameter);
-```
-
-**When to use which:**
-- Connecting service A to service B or a database/cache/queue → `WithReference()`
-- Passing configuration values, feature flags, API keys → `WithEnvironment()`
-- Never manually construct connection strings with `WithEnvironment()` when `WithReference()` would work
-
-### Endpoints and ports
-
-**Prefer HTTPS by default.** Use `WithHttpsEndpoint()` for all services and fall back to `WithHttpEndpoint()` only if HTTPS doesn't work for that resource.
-
-**Prefer Aspire-managed ports by default.** For most local development scenarios, let Aspire assign the port and inject it into the service. This avoids port collisions, makes multiple AppHosts easier to run side-by-side, and keeps cross-service wiring flexible.
-
-**Ask before pinning a fixed port.** If the repo already uses a hardcoded port, do **not** silently preserve it just because it exists. Ask whether that port is actually required. Good reasons to keep a fixed port include:
-
-- OAuth/callback URLs or external webhooks that expect a stable local address
-- Browser extensions or desktop/mobile clients that are already hardcoded to a specific port
-- Repo docs, scripts, or test tooling that explicitly depend on that exact port
-
-If none of those apply, steer the user toward managed ports.
-
-**`WithHttpsEndpoint()`** — expose an HTTPS endpoint. For services that serve traffic:
-
-```csharp
-// Let Aspire assign a random port (recommended for most cases)
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithHttpsEndpoint();
-
-// Use a specific port only when the user confirms it is required
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithHttpsEndpoint(port: 5001);
-
-// For services that read the port from an env var
-var nodeApi = builder.AddJavaScriptApp("api", "../api", "start")
-    .WithHttpsDeveloperCertificate()
-    .WithHttpsEndpoint(env: "PORT");  // Aspire injects PORT=<assigned-port>
-```
-
-**`WithHttpsDeveloperCertificate()`** — required for JavaScript and Python apps to serve HTTPS. Configures the ASP.NET Core dev cert. .NET apps handle this automatically.
-
-```csharp
-var frontend = builder.AddViteApp("frontend", "../frontend")
-    .WithHttpsDeveloperCertificate();
-
-var pyApi = builder.AddUvicornApp("api", "../api", "app:main")
-    .WithHttpsDeveloperCertificate();
-```
-
-> If `WithHttpsDeveloperCertificate()` causes issues for a resource, fall back to `WithHttpEndpoint()` and leave a comment explaining why.
-
-**`WithHttpEndpoint()`** — fallback for HTTP when HTTPS doesn't work:
-
-```csharp
-// Use when HTTPS causes issues with a specific integration
-var legacy = builder.AddJavaScriptApp("legacy", "../legacy", "start")
-    .WithHttpEndpoint(env: "PORT");  // HTTP fallback
-```
-
-**`WithEndpoint()`** — expose a non-HTTP endpoint (gRPC, TCP, custom protocols):
-
-```csharp
-var grpcService = builder.AddCSharpApp("grpc", "../src/GrpcService")
-    .WithEndpoint("grpc", endpoint =>
-    {
-        endpoint.Port = 5050;
-        endpoint.Protocol = "grpc";
-    });
-```
-
-**`WithExternalHttpEndpoints()`** — mark a resource's HTTP endpoints as externally visible. Use this for user-facing frontends so the URL appears prominently in the dashboard:
-
-```csharp
-var frontend = builder.AddViteApp("frontend", "../frontend")
-    .WithHttpsDeveloperCertificate()
-    .WithHttpsEndpoint(env: "PORT")
-    .WithExternalHttpEndpoints();
-```
-
-**Port injection**: Many frameworks (Express, Vite, Flask) need to know which port to listen on. Use the `env:` parameter:
-- `withHttpsEndpoint({ env: "PORT" })` (TypeScript)
-- `.WithHttpsEndpoint(env: "PORT")` (C#)
-
-Aspire assigns a port and injects it as the specified environment variable. The service should read it and listen on that port.
-
-**Recommended ask when a repo already hardcodes ports:**
-
-> "I found this service pinned to port 3000 today. Unless that exact port is needed for an external callback or another hard requirement, I recommend switching it to read PORT from env and letting Aspire manage the port. That avoids collisions and makes the AppHost more portable. Should I keep 3000 or make it Aspire-managed?"
-
-### Cross-service environment variable wiring
-
-When a service expects a **specific env var name** for a dependency's URL (not the standard `services__` format from `WithReference`), use `WithEnvironment` with an endpoint reference — **never a hardcoded string**:
-
-```typescript
-// ✅ CORRECT — endpoint reference resolves to the actual URL at runtime
-const roomEndpoint = await room.getEndpoint("http");
-
-const frontend = await builder
-    .addViteApp("frontend", "./frontend")
-    .withEnvironment("VITE_APP_WS_SERVER_URL", roomEndpoint)  // EndpointReference, not a string
-    .withReference(room)   // also sets up standard service discovery
-    .waitFor(room);
-
-// ❌ WRONG — hardcoded URL breaks when Aspire assigns different ports
-    .withEnvironment("VITE_APP_WS_SERVER_URL", "http://localhost:3002")  // NEVER DO THIS
-```
-
-```csharp
-// C# equivalent
-var roomEndpoint = room.GetEndpoint("http");
-var frontend = builder.AddViteApp("frontend", "../frontend")
-    .WithEnvironment("VITE_APP_WS_SERVER_URL", roomEndpoint)
-    .WithReference(room)
-    .WaitFor(room);
-```
-
-Use `WithEnvironment(name, endpointRef)` when the consuming service reads a **specific env var name**. Use `WithReference()` when the service uses Aspire service discovery or standard connection string patterns. You can use both together.
-
-### URL labels and dashboard niceties
-
-Customize how endpoints appear in the Aspire dashboard:
-
-```csharp
-// Named endpoints for clarity
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithHttpsEndpoint(name: "public", port: 8443)
-    .WithHttpsEndpoint(name: "internal", port: 8444);
-```
-
-**Cookie/session isolation with `dev.localhost`**: When multiple services share `localhost`, cookies and session storage can leak between them. Using `*.dev.localhost` subdomains gives each service its own cookie scope. URLs still have ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service collisions.
-
-**The right way**: Update `applicationUrl` in the `profiles` section of `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost`, and use `otlp.dev.localhost` / `resources.dev.localhost` for infrastructure URLs. **Never** use `withUrlForEndpoint` to set `dev.localhost` URLs — that API is ONLY for dashboard display labels. Example:
-
-```json
-{
-  "profiles": {
-    "https": {
-      "applicationUrl": "https://myapp.dev.localhost:17042;http://myapp.dev.localhost:15042",
-      "environmentVariables": {
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://otlp.dev.localhost:21042",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://resources.dev.localhost:22042"
-      }
-    }
-  }
-}
-```
-
-> Note: `*.dev.localhost` resolves to `127.0.0.1` on most systems without any `/etc/hosts` changes.
-
-### Dependency ordering: `WaitFor` and `WaitForCompletion`
-
-**`WaitFor()`** — delay starting a resource until another resource is healthy/ready:
-
-```csharp
-var db = builder.AddPostgres("pg").AddDatabase("mydb");
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithReference(db)
-    .WaitFor(db);  // Don't start api until db is healthy
-```
-
-Always pair `WithReference()` with `WaitFor()` for infrastructure dependencies (databases, caches, queues). Services that depend on other services should generally also wait for them.
-
-**`WaitForCompletion()`** — wait for a resource to run to completion (exit successfully). Use for init containers, database migrations, or seed data scripts:
-
-```csharp
-var migration = builder.AddCSharpApp("migration", "../src/MigrationRunner")
-    .WithReference(db)
-    .WaitFor(db);
-
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithReference(db)
-    .WaitFor(db)
-    .WaitForCompletion(migration);  // Don't start until migration finishes
-```
-
-### Container lifetimes
-
-By default, containers are stopped when the AppHost stops. Use **persistent lifetime** to keep containers running across restarts (useful for databases during development):
-
-```csharp
-var db = builder.AddPostgres("pg")
-    .WithLifetime(ContainerLifetime.Persistent);
-```
-
-This prevents data loss when restarting the AppHost — the container stays running and the AppHost reconnects.
-
-**TypeScript equivalent:**
-
-```typescript
-const db = await builder.addPostgres("pg")
-    .withLifetime("persistent");
-```
-
-Recommend persistent lifetime for databases and caches during local development.
-
-### Explicit start (manual start)
-
-Some resources shouldn't auto-start with the AppHost. Mark them for explicit start:
-
-```csharp
-var debugTool = builder.AddContainer("profiler", "myregistry/profiler")
-    .WithLifetime(ContainerLifetime.Persistent)
-    .ExcludeFromManifest()
-    .WithExplicitStart();
-```
-
-The resource appears in the dashboard but stays stopped until the user manually starts it. Useful for debugging tools, admin UIs, or optional services.
-
-### Parent resources (grouping in the dashboard)
-
-Group related resources under a parent for a cleaner dashboard:
-
-```csharp
-var postgres = builder.AddPostgres("pg");
-var ordersDb = postgres.AddDatabase("orders");
-var inventoryDb = postgres.AddDatabase("inventory");
-// ordersDb and inventoryDb appear nested under pg in the dashboard
-```
-
-This happens automatically for databases added to a server resource. For custom grouping of arbitrary resources, use `WithParentRelationship()`:
-
-```csharp
-var backend = builder.AddResource(new ContainerResource("backend-group"));
-var api = builder.AddCSharpApp("api", "../src/Api")
-    .WithParentRelationship(backend);
-var worker = builder.AddCSharpApp("worker", "../src/Worker")
-    .WithParentRelationship(backend);
-```
-
-Use `aspire docs search "parent relationship"` to verify the current API shape.
-
-### Volumes and data persistence
-
-```csharp
-// Named volume (managed by Docker, persists across container recreations)
-var db = builder.AddPostgres("pg")
-    .WithDataVolume("pg-data");
-
-// Bind mount (maps to a host directory)
-var db = builder.AddPostgres("pg")
-    .WithBindMount("./data/pg", "/var/lib/postgresql/data");
-```
-
-```typescript
-const db = await builder.addPostgres("pg")
-    .withDataVolume("pg-data");
-```
+- For per-language OpenTelemetry setup (Node, Python, Go, Java), see [references/opentelemetry.md](references/opentelemetry.md).
+- For JavaScript/TypeScript resource types, dev scripts, and TypeScript AppHost config, see [references/javascript-apps.md](references/javascript-apps.md).

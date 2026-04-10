@@ -196,15 +196,15 @@ services:
 Becomes:
 
 ```csharp
-var sqlPassword = builder.AddParameter("mssql-password", secret: true);
-var mssql = builder.AddSqlServer("mssql", sqlPassword)
+// ✅ Let Aspire auto-generate the SA password — don't model MSSQL_PASSWORD
+var mssql = builder.AddSqlServer("mssql")
     .WithDataVolume();
 
 var redis = builder.AddRedis("redis")
     .WithDataVolume();
 ```
 
-Note: for typed integrations like `AddSqlServer()` and `AddRedis()`, you don't need to map ports — Aspire handles that. You also don't need to model `redis_data` as a named volume — `WithDataVolume()` handles persistence.
+Note: for typed integrations like `AddSqlServer()` and `AddRedis()`, you don't need to map ports or passwords — Aspire handles both. You also don't need to model `redis_data` as a named volume — `WithDataVolume()` handles persistence. The `${MSSQL_PASSWORD}` from the compose file is skipped entirely because `AddSqlServer()` auto-generates a secure SA password.
 
 ## Common pitfalls
 
