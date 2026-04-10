@@ -214,15 +214,31 @@ internal sealed class StopCommand : BaseCommand
             try
             {
                 rpcSucceeded = await connection.StopAppHostAsync(cancellationToken).ConfigureAwait(false);
-                if (!rpcSucceeded)
-                {
-                    _interactionService.DisplayError(StopCommandStrings.FailedToStopAppHost);
-                    return ExitCodeConstants.FailedToDotnetRunAppHost;
-                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to send stop signal via RPC");
+            }
+
+            // If RPC didn't work, try sending SIGINT to AppHost process directly
+            if (!rpcSucceeded && appHostInfo?.ProcessId is int appHostPid)
+            {
+                _logger.LogDebug("RPC stop not available, sending SIGTERM to AppHost PID {Pid}", appHostPid);
+                try
+                {
+                    SendStopSignal(appHostPid, appHostInfo?.StartedAt);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send stop signal to process {Pid}", appHostPid);
+                    _interactionService.DisplayError(StopCommandStrings.FailedToStopAppHost);
+                    return ExitCodeConstants.FailedToDotnetRunAppHost;
+                }
+            }
+            else if (!rpcSucceeded)
+            {
+                _interactionService.DisplayError(StopCommandStrings.FailedToStopAppHost);
+                return ExitCodeConstants.FailedToDotnetRunAppHost;
             }
         }
 
@@ -282,7 +298,7 @@ internal sealed class StopCommand : BaseCommand
 
     /// <summary>
     /// Sends a best-effort graceful shutdown signal to the target process.
-    /// Uses Ctrl-C on Windows and SIGTERM on non-Windows.
+    /// Uses Ctrl-Break on Windows and SIGTERM on non-Windows.
     /// </summary>
     private void SendStopSignal(int pid, DateTimeOffset? startTime)
     {
