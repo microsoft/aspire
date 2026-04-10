@@ -584,7 +584,8 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         => language.ToLowerInvariant() is
             "bash" or "sh" or "shell" or "cmd" or "powershell" or "ps1" or
             "javascript" or "js" or "typescript" or "ts" or "jsx" or "tsx" or
-            "python" or "py" or "csharp" or "cs" or "json" or "yaml" or "yml" or
+            "python" or "py" or "csharp" or "cs" or "go" or "rust" or "java" or
+            "json" or "yaml" or "yml" or
             "xml" or "html" or "css" or "sql" or "typescript/nodejs";
 
     private static string FormatMinifiedCodeBlock(string language, string code)
@@ -646,6 +647,11 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
                 continue;
             }
 
+            if (builder.Length > 0 && builder[^1] == '\n' && character is ' ' or '\t')
+            {
+                continue;
+            }
+
             if (character is '"' or '\'' or '`')
             {
                 builder.Append(character);
@@ -699,7 +705,11 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         => language.ToLowerInvariant() is
             "csharp" or "cs" or
             "javascript" or "js" or
-            "typescript" or "ts" or "jsx" or "tsx" or "typescript/nodejs";
+            "typescript" or "ts" or "jsx" or "tsx" or "typescript/nodejs" or
+            "python" or "py" or
+            "go" or
+            "rust" or
+            "java";
 
     private static bool HasMoreCode(string code, int index)
     {

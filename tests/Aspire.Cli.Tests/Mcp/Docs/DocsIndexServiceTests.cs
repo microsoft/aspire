@@ -458,6 +458,28 @@ public class DocsIndexServiceTests
         Assert.Contains("```", doc.Content, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("go")]
+    [InlineData("rust")]
+    [InlineData("python")]
+    [InlineData("java")]
+    public async Task GetDocumentAsync_FormatsAdditionalMinifiedSingleLineCodeBlockLanguages(string language)
+    {
+        var content = $$"""
+            # Sample
+
+            Example:
+            ```{{language}} first(); second(); ```
+            """;
+
+        var service = CreateService(CreateMockFetcher(content));
+
+        var doc = await service.GetDocumentAsync("sample");
+
+        Assert.NotNull(doc);
+        Assert.Contains($"```{language}\nfirst();\nsecond();\n```", doc.Content, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task EnsureIndexedAsync_OnlyFetchesOnce()
     {
