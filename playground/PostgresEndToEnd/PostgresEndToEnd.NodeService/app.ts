@@ -2,8 +2,14 @@ import express from 'express';
 import { Pool } from 'pg';
 import { DefaultAzureCredential } from '@azure/identity';
 import { v4 as uuidv4 } from 'uuid';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
+
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+});
 
 const AZURE_DB_FOR_POSTGRES_SCOPE = "https://ossrdbms-aad.database.windows.net/.default";
 
@@ -70,7 +76,7 @@ async function getPool() {
     });
 }
 
-app.get('/', async (_req, res) => {
+app.get('/', limiter, async (_req, res) => {
     const pool = await getPool();
     const client = await pool.connect();
     try {
