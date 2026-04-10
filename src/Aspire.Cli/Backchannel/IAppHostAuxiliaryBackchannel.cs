@@ -51,25 +51,17 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// <summary>
     /// Gets the current resource snapshots from the AppHost.
     /// </summary>
-    /// <param name="includeHiddenResources">Whether hidden resources should be included.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A list of resource snapshots representing current state.</returns>
-    Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHiddenResources, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets the current resource snapshots from the AppHost.
-    /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A list of resource snapshots representing current state.</returns>
     Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Watches for resource snapshot changes and streams them from the AppHost.
+    /// Gets resources using the v2 API.
     /// </summary>
-    /// <param name="includeHiddenResources">Whether hidden resources should be included.</param>
+    /// <param name="request">The request with optional filtering and hidden-resource inclusion.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>An async enumerable of resource snapshots as they change.</returns>
-    IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHiddenResources, CancellationToken cancellationToken = default);
+    /// <returns>The resources response.</returns>
+    Task<GetResourcesResponse> GetResourcesV2Async(GetResourcesRequest? request = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Watches for resource snapshot changes and streams them from the AppHost.
@@ -77,6 +69,14 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An async enumerable of resource snapshots as they change.</returns>
     IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Watches resources using the v2 API.
+    /// </summary>
+    /// <param name="request">The request with optional filtering and hidden-resource inclusion.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of resource snapshots.</returns>
+    IAsyncEnumerable<ResourceSnapshot> WatchResourcesV2Async(WatchResourcesRequest? request = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets resource log lines from the AppHost.

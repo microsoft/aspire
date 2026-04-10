@@ -282,36 +282,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
-    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHiddenResources, CancellationToken cancellationToken = default)
-    {
-        if (!includeHiddenResources)
-        {
-            return await GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        var rpc = EnsureConnected();
-
-        _logger?.LogDebug("Getting resource snapshots including hidden resources");
-
-        try
-        {
-            var snapshots = await rpc.InvokeWithCancellationAsync<List<ResourceSnapshot>>(
-                "GetResourceSnapshotsAsync",
-                [includeHiddenResources],
-                cancellationToken).ConfigureAwait(false) ?? [];
-
-            snapshots.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-
-            return snapshots;
-        }
-        catch (RemoteMethodNotFoundException ex)
-        {
-            _logger?.LogDebug(ex, "GetResourceSnapshotsAsync(bool) RPC method not available on the remote AppHost. Falling back to visible resources only.");
-            return await GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
-        }
-    }
-
-    /// <inheritdoc />
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
@@ -329,60 +299,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         catch (RemoteMethodNotFoundException ex)
         {
             _logger?.LogDebug(ex, "WatchResourceSnapshotsAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
-            yield break;
-        }
-
-        if (snapshots is null)
-        {
-            yield break;
-        }
-
-        await foreach (var snapshot in snapshots.WithCancellation(cancellationToken).ConfigureAwait(false))
-        {
-            yield return snapshot;
-        }
-    }
-
-    /// <inheritdoc />
-    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHiddenResources, [EnumeratorCancellation] CancellationToken cancellationToken = default)
-    {
-        if (!includeHiddenResources)
-        {
-            await foreach (var snapshot in WatchResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false))
-            {
-                yield return snapshot;
-            }
-
-            yield break;
-        }
-
-        var rpc = EnsureConnected();
-
-        _logger?.LogDebug("Starting resource snapshots watch including hidden resources");
-
-        IAsyncEnumerable<ResourceSnapshot>? snapshots;
-        var fallbackToVisibleResources = false;
-        try
-        {
-            snapshots = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<ResourceSnapshot>>(
-                "WatchResourceSnapshotsAsync",
-                [includeHiddenResources],
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (RemoteMethodNotFoundException ex)
-        {
-            _logger?.LogDebug(ex, "WatchResourceSnapshotsAsync(bool) RPC method not available on the remote AppHost. Falling back to visible resources only.");
-            snapshots = null;
-            fallbackToVisibleResources = true;
-        }
-
-        if (fallbackToVisibleResources)
-        {
-            await foreach (var snapshot in WatchResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false))
-            {
-                yield return snapshot;
-            }
-
             yield break;
         }
 
@@ -548,12 +464,18 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             // Fall back to v1
             var snapshots = await GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
+            var includeHidden = request?.IncludeHidden is true;
 
             // Apply filter if specified
             if (!string.IsNullOrEmpty(request?.Filter))
             {
                 var filter = request.Filter;
                 snapshots = snapshots.Where(s => s.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            if (!includeHidden)
+            {
+                snapshots = snapshots.Where(s => !s.IsHidden).ToList();
             }
 
             return new GetResourcesResponse
@@ -587,12 +509,19 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             // Fall back to v1
             var filter = request?.Filter;
+            var includeHidden = request?.IncludeHidden is true;
             await foreach (var snapshot in WatchResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false))
             {
                 if (!string.IsNullOrEmpty(filter) && !snapshot.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
+
+                if (!includeHidden && snapshot.IsHidden)
+                {
+                    continue;
+                }
+
                 yield return snapshot;
             }
             yield break;

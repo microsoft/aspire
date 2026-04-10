@@ -142,6 +142,11 @@ internal sealed class GetResourcesRequest
     /// Gets an optional filter pattern for resource names.
     /// </summary>
     public string? Filter { get; init; }
+
+    /// <summary>
+    /// Gets whether hidden resources should be included.
+    /// </summary>
+    public bool? IncludeHidden { get; init; }
 }
 
 /// <summary>
@@ -164,6 +169,11 @@ internal sealed class WatchResourcesRequest
     /// Gets an optional filter pattern for resource names.
     /// </summary>
     public string? Filter { get; init; }
+
+    /// <summary>
+    /// Gets whether hidden resources should be included.
+    /// </summary>
+    public bool? IncludeHidden { get; init; }
 }
 
 /// <summary>

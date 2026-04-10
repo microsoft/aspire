@@ -145,12 +145,15 @@ internal sealed class DescribeCommand : BaseCommand
         // Get dashboard URL and resource snapshots in parallel before
         // dispatching to the snapshot or watch path.
         var dashboardUrlsTask = connection.GetDashboardUrlsAsync(cancellationToken);
-        var snapshotsTask = connection.GetResourceSnapshotsAsync(includeHidden, cancellationToken);
+        var snapshotsTask = connection.GetResourcesV2Async(new GetResourcesRequest
+        {
+            IncludeHidden = includeHidden
+        }, cancellationToken);
 
         await Task.WhenAll(dashboardUrlsTask, snapshotsTask).ConfigureAwait(false);
 
         var dashboardBaseUrl = TelemetryCommandHelpers.ExtractDashboardBaseUrl((await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken);
-        var snapshots = FilterHiddenResources(await snapshotsTask.ConfigureAwait(false), includeHidden);
+        var snapshots = (await snapshotsTask.ConfigureAwait(false)).Resources;
 
         // Pre-resolve colors for all resource names so that assignment is
         // deterministic regardless of which resources are displayed.
@@ -214,13 +217,11 @@ internal sealed class DescribeCommand : BaseCommand
         var lastDisplayedContent = new Dictionary<string, object>(StringComparers.ResourceName);
 
         // Stream resource snapshots
-        await foreach (var snapshot in connection.WatchResourceSnapshotsAsync(includeHidden, cancellationToken).ConfigureAwait(false))
+        await foreach (var snapshot in connection.WatchResourcesV2Async(new WatchResourcesRequest
         {
-            if (!includeHidden && snapshot.IsHidden)
-            {
-                continue;
-            }
-
+            IncludeHidden = includeHidden
+        }, cancellationToken).ConfigureAwait(false))
+        {
             // Update the dictionary with the latest state for this resource
             allResources[snapshot.Name] = snapshot;
 
@@ -306,9 +307,6 @@ internal sealed class DescribeCommand : BaseCommand
 
         _interactionService.DisplayRenderable(table);
     }
-
-    private static IReadOnlyList<ResourceSnapshot> FilterHiddenResources(IReadOnlyList<ResourceSnapshot> snapshots, bool includeHidden)
-        => includeHidden ? snapshots : snapshots.Where(s => !s.IsHidden).ToList();
 
     private static ResourceDisplayState BuildResourceDisplayState(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allResources)
     {

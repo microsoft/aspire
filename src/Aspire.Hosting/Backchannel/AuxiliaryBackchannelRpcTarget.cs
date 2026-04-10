@@ -106,7 +106,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The resources response containing snapshots.</returns>
     public async Task<GetResourcesResponse> GetResourcesAsync(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
     {
-        var snapshots = await GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
+        var snapshots = await GetResourceSnapshotsCoreAsync(request?.IncludeHidden is true, cancellationToken).ConfigureAwait(false);
 
         // Apply filter if specified
         if (!string.IsNullOrEmpty(request?.Filter))
@@ -131,7 +131,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     {
         var filter = request?.Filter;
 
-        await foreach (var snapshot in WatchResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false))
+        await foreach (var snapshot in WatchResourceSnapshotsCoreAsync(request?.IncludeHidden is true, cancellationToken).ConfigureAwait(false))
         {
             // Apply filter if specified
             if (!string.IsNullOrEmpty(filter) && !snapshot.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
@@ -404,16 +404,41 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>A list of resource snapshots.</returns>
-    public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
-        => GetResourceSnapshotsAsync(includeHiddenResources: false, cancellationToken);
+    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
+    {
+        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
+        var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
+        var results = new List<ResourceSnapshot>();
 
-    /// <summary>
-    /// Gets the current resource snapshots for all resources.
-    /// </summary>
-    /// <param name="includeHiddenResources">Whether hidden resources should be included.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>A list of resource snapshots.</returns>
-    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHiddenResources, CancellationToken cancellationToken = default)
+        if (appModel is null)
+        {
+            return results;
+        }
+
+        foreach (var resource in appModel.Resources)
+        {
+            if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
+            {
+                continue;
+            }
+
+            foreach (var instanceName in resource.GetResolvedResourceNames())
+            {
+                if (notificationService.TryGetCurrentState(instanceName, out var resourceEvent))
+                {
+                    var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
+                    if (snapshot is not null)
+                    {
+                        results.Add(snapshot);
+                    }
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private async Task<List<ResourceSnapshot>> GetResourceSnapshotsCoreAsync(bool includeHiddenResources, CancellationToken cancellationToken)
     {
         var appModel = serviceProvider.GetService<DistributedApplicationModel>();
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
@@ -453,16 +478,28 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>An async enumerable of resource snapshots as they change.</returns>
-    public IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(CancellationToken cancellationToken = default)
-        => WatchResourceSnapshotsAsync(includeHiddenResources: false, cancellationToken);
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
-    /// <summary>
-    /// Watches for resource snapshot changes and streams them to the client.
-    /// </summary>
-    /// <param name="includeHiddenResources">Whether hidden resources should be included.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>An async enumerable of resource snapshots as they change.</returns>
-    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHiddenResources, [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        var resourceEvents = notificationService.WatchAsync(cancellationToken);
+
+        await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            if (string.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
+            {
+                continue;
+            }
+
+            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
+            if (snapshot is not null)
+            {
+                yield return snapshot;
+            }
+        }
+    }
+
+    private async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsCoreAsync(bool includeHiddenResources, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
