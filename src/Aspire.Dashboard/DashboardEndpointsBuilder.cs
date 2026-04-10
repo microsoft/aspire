@@ -85,7 +85,13 @@ public static class DashboardEndpointsBuilder
             httpContext.Response.Cookies.Append(
                 CookieRequestCultureProvider.DefaultCookieName,
                 CookieRequestCultureProvider.MakeCookieValue(requestCulture),
-                new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) }); // consistent with theme cookie expiry
+                new CookieOptions
+                {
+                    Expires = DateTimeOffset.UtcNow.AddYears(1), // consistent with theme cookie expiry
+                    Secure = true,
+                    HttpOnly = true,
+                    SameSite = SameSiteMode.Lax
+                });
 
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();
