@@ -323,25 +323,37 @@ func (c *AspireClient) CancelToken(tokenID string) bool {
 // it to return an error and invoke closeConnection itself — closeOnce ensures
 // the callbacks are still only invoked once.
 func (c *AspireClient) Disconnect() {
-	c.mu.Lock()
-	conn := c.conn
-	c.mu.Unlock()
-	if conn != nil {
-		conn.Close() // causes readLoop to exit and call closeConnection
-	}
 	c.closeConnection(nil)
 }
 
 // closeConnection is the single teardown path. It is safe to call from both
 // Disconnect and readLoop; sync.Once guarantees the body runs exactly once.
+//
+// Teardown order:
+//  1. Snapshot and nil-out conn/reader under mu so no new writes can start.
+//  2. Acquire writeMu to wait for any in-flight write to finish, then close
+//     the snapshot — this prevents a nil dereference in writeMessage and
+//     ensures the socket is not leaked on readLoop error paths.
+//  3. Run disconnect callbacks outside all locks.
 func (c *AspireClient) closeConnection(readErr error) {
 	c.closeOnce.Do(func() {
+		// 1. Atomically detach conn so concurrent writeMessage calls see nil.
 		c.mu.Lock()
 		c.connected = false
+		conn := c.conn
 		c.conn = nil
+		c.reader = nil
 		callbacks := c.disconnectCallbacks
 		c.mu.Unlock()
 
+		// 2. Wait for any in-flight write to finish, then close the socket.
+		if conn != nil {
+			c.writeMu.Lock()
+			conn.Close()
+			c.writeMu.Unlock()
+		}
+
+		// 3. Notify callers outside all locks.
 		for _, cb := range callbacks {
 			cb()
 		}
@@ -426,8 +438,11 @@ func (c *AspireClient) readLoop() {
 	}
 }
 
-// jsonRPCID converts a JSON-RPC id value (float64 or string) to an int64 key.
-// Returns false for any type that cannot be mapped to a pending request.
+// jsonRPCID converts a JSON-RPC id value to an int64 key used to look up the
+// pending request. The JSON-RPC spec allows numeric or string IDs; standard
+// Go JSON decoding produces float64 for numbers, but servers may also emit
+// string IDs that contain a numeric value (e.g. "42"). All four forms are
+// handled. Returns false for null, missing, or non-numeric string IDs.
 func jsonRPCID(id any) (int64, bool) {
 	switch v := id.(type) {
 	case float64:
@@ -436,6 +451,9 @@ func jsonRPCID(id any) (int64, bool) {
 		return v, true
 	case json.Number:
 		n, err := v.Int64()
+		return n, err == nil
+	case string:
+		n, err := strconv.ParseInt(v, 10, 64)
 		return n, err == nil
 	default:
 		return 0, false
@@ -462,7 +480,12 @@ func (c *AspireClient) drainPendingWithError(err error) {
 }
 
 func (c *AspireClient) writeMessage(message map[string]any) error {
-	if c.conn == nil {
+	// Snapshot conn under mu so closeConnection can't nil it between our
+	// nil-check and the Write calls (caller holds writeMu for the duration).
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
 		return errors.New("not connected to AppHost")
 	}
 	body, err := json.Marshal(message)
@@ -470,11 +493,10 @@ func (c *AspireClient) writeMessage(message map[string]any) error {
 		return err
 	}
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
-	_, err = c.conn.Write([]byte(header))
-	if err != nil {
+	if _, err = conn.Write([]byte(header)); err != nil {
 		return err
 	}
-	_, err = c.conn.Write(body)
+	_, err = conn.Write(body)
 	return err
 }
 

@@ -15,8 +15,8 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameterFromConfig("buildVersion", "MyConfig:BuildVersion")
-	_, _ = builder.AddParameterFromConfig("buildSecret", "MyConfig:Secret")
+	_, _ = builder.AddParameterFromConfiguration("buildVersion", "MyConfig:BuildVersion", false)
+	_, _ = builder.AddParameterFromConfiguration("buildSecret", "MyConfig:Secret", true)
 
 	_, err = builder.AddContainer("static-files-source", "nginx")
 	if err != nil {
