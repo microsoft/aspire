@@ -112,7 +112,7 @@ internal static class Hex1bAutomatorTestHelpers
         SequenceCounter counter,
         TimeSpan? timeout = null)
     {
-        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(600);
 
         var agentInitPrompt = new CellPatternSearcher()
             .Find("configure AI agent environments");

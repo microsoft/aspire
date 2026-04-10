@@ -24,7 +24,8 @@ public sealed class StarterValidationTests(ITestOutputHelper output)
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(300));
+        // Use a long default timeout — Windows CI runners can be slow for dotnet new + restore
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromMinutes(10));
 
         await auto.PrepareEnvironmentAsync(workspace, counter);
 
@@ -43,7 +44,8 @@ public sealed class StarterValidationTests(ITestOutputHelper output)
 
         output.WriteLine("Creating C# starter app...");
 
-        // Use the interactive aspire new flow (same approach as Docker-based E2E tests)
+        // Use the interactive aspire new flow. Use a long timeout for DeclineAgentInitPrompt
+        // because dotnet new + NuGet restore can take 10+ minutes on slow Windows CI runners.
         await auto.AspireNewAsync("StarterCsSmoke", counter, useRedisCache: false);
 
         output.WriteLine("Created. Navigating into project...");
