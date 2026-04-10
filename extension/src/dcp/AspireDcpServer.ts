@@ -8,7 +8,7 @@ import { AspireResourceDebugSession, DcpServerConnectionInfo, ErrorDetails, Erro
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
-import { timingSafeEqual } from 'crypto';
+import { randomBytes, timingSafeEqual } from 'crypto';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { authorizationAndDcpHeadersRequired, authorizationHeaderMustStartWithBearer, encounteredErrorStartingResource, invalidOrMissingToken, invalidTokenLength } from '../loc/strings';
 
@@ -342,12 +342,34 @@ export default class AspireDcpServer {
     }
 }
 
+function generateSecureBase36String(length: number): string {
+    const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const maxUnbiasedByte = 252; // largest multiple of 36 less than 256
+    let result = '';
+
+    while (result.length < length) {
+        const bytes = randomBytes(length);
+        for (const byte of bytes) {
+            if (byte >= maxUnbiasedByte) {
+                continue;
+            }
+
+            result += alphabet[byte % 36];
+            if (result.length === length) {
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
 export function generateRunId(): string {
-    return `run-${Math.random().toString(36).substring(2, 15)}`;
+    return `run-${generateSecureBase36String(13)}`;
 }
 
 export function generateDcpIdPrefix(): string {
-    return `aspire-extension-run-${Math.random().toString(36).substring(2, 15)}`;
+    return `aspire-extension-run-${generateSecureBase36String(13)}`;
 }
 
 function getDcpIdPrefix(dcpId: string): string | null {
