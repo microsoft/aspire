@@ -266,6 +266,84 @@ public class DurableTaskResourceExtensionsTests
     }
 
     [Fact]
+    public void AddDurableTaskScheduler_HasDefaultRoleAssignment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+
+        Assert.True(dts.Resource.TryGetAnnotationsOfType<DefaultRoleAssignmentsAnnotation>(out var annotations));
+        var annotation = Assert.Single(annotations);
+        var role = Assert.Single(annotation.Roles);
+        Assert.Equal(DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor.ToString(), role.Id);
+    }
+
+    [Fact]
+    public void AddTaskHub_HasDefaultRoleAssignment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        var hub = dts.AddTaskHub("myhub");
+
+        Assert.True(hub.Resource.TryGetAnnotationsOfType<DefaultRoleAssignmentsAnnotation>(out var annotations));
+        var annotation = Assert.Single(annotations);
+        var role = Assert.Single(annotation.Roles);
+        Assert.Equal(DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor.ToString(), role.Id);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_Scheduler_AppliesRoleAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        var project = builder.AddResource(new TestResource("myapp"))
+            .WithRoleAssignments(dts, DurableTaskSchedulerBuiltInRole.DurableTaskWorker);
+
+        Assert.True(project.Resource.TryGetAnnotationsOfType<RoleAssignmentAnnotation>(out var annotations));
+        var annotation = Assert.Single(annotations);
+        Assert.Equal(dts.Resource, annotation.Target);
+        var role = Assert.Single(annotation.Roles);
+        Assert.Equal(DurableTaskSchedulerBuiltInRole.DurableTaskWorker.ToString(), role.Id);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_TaskHub_AppliesRoleAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        var hub = dts.AddTaskHub("myhub");
+        var project = builder.AddResource(new TestResource("myapp"))
+            .WithRoleAssignments(hub, DurableTaskSchedulerBuiltInRole.DurableTaskDataReader);
+
+        Assert.True(project.Resource.TryGetAnnotationsOfType<RoleAssignmentAnnotation>(out var annotations));
+        var annotation = Assert.Single(annotations);
+        Assert.Equal(hub.Resource, annotation.Target);
+        var role = Assert.Single(annotation.Roles);
+        Assert.Equal(DurableTaskSchedulerBuiltInRole.DurableTaskDataReader.ToString(), role.Id);
+    }
+
+    [Fact]
+    public void WithRoleAssignments_Scheduler_MultipleRoles()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var dts = builder.AddDurableTaskScheduler("dts");
+        var project = builder.AddResource(new TestResource("myapp"))
+            .WithRoleAssignments(dts,
+                DurableTaskSchedulerBuiltInRole.DurableTaskDataReader,
+                DurableTaskSchedulerBuiltInRole.DurableTaskWorker);
+
+        Assert.True(project.Resource.TryGetAnnotationsOfType<RoleAssignmentAnnotation>(out var annotations));
+        var annotation = Assert.Single(annotations);
+        Assert.Equal(2, annotation.Roles.Count);
+        Assert.Contains(annotation.Roles, r => r.Id == DurableTaskSchedulerBuiltInRole.DurableTaskDataReader.ToString());
+        Assert.Contains(annotation.Roles, r => r.Id == DurableTaskSchedulerBuiltInRole.DurableTaskWorker.ToString());
+    }
+
+    [Fact]
     public async Task AddDurableTaskScheduler_GeneratesBicep()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -476,4 +554,6 @@ public class DurableTaskResourceExtensionsTests
         var urlAnnotation = hub.Resource.Annotations.OfType<ResourceUrlAnnotation>().SingleOrDefault();
         Assert.Null(urlAnnotation);
     }
+
+    private sealed class TestResource(string name) : Resource(name);
 }

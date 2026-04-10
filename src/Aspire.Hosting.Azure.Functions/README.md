@@ -99,6 +99,69 @@ var scheduler = builder.AddDurableTaskScheduler("scheduler")
 var taskHubName = builder.AddParameter("taskhub-name", "mytaskhub");
 var taskHub = scheduler.AddTaskHub("taskhub").WithTaskHubName(taskHubName);
 ```
+
+### Deploy a new Scheduler to Azure
+
+When you publish your Aspire application, the Durable Task Scheduler and its Task Hubs are automatically provisioned as Azure resources via generated Bicep templates. The generated infrastructure includes:
+
+- A `Microsoft.DurableTask/schedulers` resource with the `Consumption` SKU.
+- A `Microsoft.DurableTask/schedulers/taskhubs` sub-resource for each Task Hub added in the app model.
+- Role assignments granting the `Durable Task Data Contributor` role to applications that reference the Scheduler.
+
+No additional configuration is needed. The connection string is automatically resolved from provisioning outputs using `DefaultAzure` authentication.
+
+#### Use an existing Scheduler at publish time
+
+To reference an existing Scheduler during deployment (instead of provisioning a new one), use `PublishAsExisting`:
+
+```csharp
+var existingName = builder.AddParameter("existingSchedulerName");
+var scheduler = builder.AddDurableTaskScheduler("scheduler")
+    .PublishAsExisting(existingName, resourceGroupParameter: default);
+
+var taskHub = scheduler.AddTaskHub("taskhub");
+```
+
+#### Customize Scheduler infrastructure
+
+You can modify the generated Bicep infrastructure using `ConfigureInfrastructure`. For example, to add additional provisioning outputs:
+
+```csharp
+var scheduler = builder.AddDurableTaskScheduler("scheduler")
+    .ConfigureInfrastructure(infra =>
+    {
+        // Add a custom output to the generated Bicep
+        infra.Add(new ProvisioningOutput("customOutput", typeof(string))
+        {
+            Value = "my-custom-value"
+        });
+    });
+```
+
+#### Role assignments
+
+By default, applications that reference a Scheduler or Task Hub resource are assigned the **Durable Task Data Contributor** role, which provides full access to durable task data operations. The role is scoped to whichever DTS resource is referenced (the scheduler or a specific task hub).
+
+To customize the role assigned to a referencing application, use `WithRoleAssignments`:
+
+```csharp
+var scheduler = builder.AddDurableTaskScheduler("scheduler");
+var hub = scheduler.AddTaskHub("hub");
+
+// Assign a narrower role scoped to the task hub
+builder.AddAzureFunctionsProject<Projects.Company_FunctionApp>("worker")
+    .WithRoleAssignments(hub, DurableTaskSchedulerBuiltInRole.DurableTaskWorker)
+    .WithReference(hub);
+```
+
+The following built-in roles are available via `DurableTaskSchedulerBuiltInRole`:
+
+| Role | Description |
+|------|-------------|
+| Durable Task Data Contributor | Full access to durable task data operations (default) |
+| Durable Task Data Reader | Read-only access to durable task data |
+| Durable Task Worker | Access to execute durable task orchestrations and activities |
+
 ## Additional documentation
 
 - https://learn.microsoft.com/azure/azure-functions

@@ -291,7 +291,10 @@ public static class DurableTaskResourceExtensions
         // TryAddEnumerable ensures it is only registered once even if AddTaskHub is called multiple times.
         builder.ApplicationBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IHostedService, DurableTaskDashboardUrlService>());
 
-        return hubBuilder;
+        return hubBuilder
+            .WithDefaultRoleAssignments(
+                DurableTaskSchedulerBuiltInRole.GetBuiltInRoleName,
+                DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor);
     }
 
     /// <summary>
@@ -346,4 +349,129 @@ public static class DurableTaskResourceExtensions
             IResourceBuilder<ParameterResource> parameter => builder.WithTaskHubName(parameter),
             _ => throw new ArgumentException($"Unexpected task hub name type: {taskHubName.GetType().Name}", nameof(taskHubName))
         };
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Durable Task Scheduler resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <typeparam name="T">The type of the resource to assign the roles to.</typeparam>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Durable Task Scheduler resource.</param>
+    /// <param name="roles">The built-in Durable Task Scheduler roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use
+    /// <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{DurableTaskSchedulerResource}, DurableTaskSchedulerRole[])"/>
+    /// instead.
+    /// <example>
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// var scheduler = builder.AddDurableTaskScheduler("scheduler");
+    ///
+    /// var worker = builder.AddProject&lt;Projects.Worker&gt;("worker")
+    ///   .WithRoleAssignments(scheduler, DurableTaskSchedulerBuiltInRole.DurableTaskWorker)
+    ///   .WithReference(scheduler);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "DurableTaskSchedulerBuiltInRole is a custom type not compatible with ATS. Use the DurableTaskSchedulerRole-based overload instead.")]
+    public static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<DurableTaskSchedulerResource> target,
+        params DurableTaskSchedulerBuiltInRole[] roles)
+        where T : IResource
+    {
+        return builder.WithRoleAssignments(target, DurableTaskSchedulerBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    [AspireExport("withDurableTaskSchedulerRoleAssignments", Description = "Assigns Durable Task Scheduler roles to a resource")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<DurableTaskSchedulerResource> target,
+        params DurableTaskSchedulerRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<DurableTaskSchedulerBuiltInRole>());
+        }
+
+        var builtInRoles = new DurableTaskSchedulerBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                DurableTaskSchedulerRole.DurableTaskDataContributor => DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor,
+                DurableTaskSchedulerRole.DurableTaskDataReader => DurableTaskSchedulerBuiltInRole.DurableTaskDataReader,
+                DurableTaskSchedulerRole.DurableTaskWorker => DurableTaskSchedulerBuiltInRole.DurableTaskWorker,
+                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(DurableTaskSchedulerRole)} value.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
+    }
+
+    /// <summary>
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Durable Task Hub resource. This replaces the default role assignments for the resource.
+    /// </summary>
+    /// <typeparam name="T">The type of the resource to assign the roles to.</typeparam>
+    /// <param name="builder">The resource to which the specified roles will be assigned.</param>
+    /// <param name="target">The target Durable Task Hub resource.</param>
+    /// <param name="roles">The built-in Durable Task Scheduler roles to be assigned.</param>
+    /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <remarks>
+    /// This overload is not available in polyglot app hosts. Use
+    /// <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{DurableTaskHubResource}, DurableTaskSchedulerRole[])"/>
+    /// instead.
+    /// <example>
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// var scheduler = builder.AddDurableTaskScheduler("scheduler");
+    /// var hub = scheduler.AddTaskHub("hub");
+    ///
+    /// var worker = builder.AddProject&lt;Projects.Worker&gt;("worker")
+    ///   .WithRoleAssignments(hub, DurableTaskSchedulerBuiltInRole.DurableTaskWorker)
+    ///   .WithReference(hub);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "DurableTaskSchedulerBuiltInRole is a custom type not compatible with ATS. Use the DurableTaskSchedulerRole-based overload instead.")]
+    public static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<DurableTaskHubResource> target,
+        params DurableTaskSchedulerBuiltInRole[] roles)
+        where T : IResource
+    {
+        return builder.WithRoleAssignments(target, DurableTaskSchedulerBuiltInRole.GetBuiltInRoleName, roles);
+    }
+
+    [AspireExport("withDurableTaskHubRoleAssignments", Description = "Assigns Durable Task Scheduler roles to a resource scoped to a task hub")]
+    internal static IResourceBuilder<T> WithRoleAssignments<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<DurableTaskHubResource> target,
+        params DurableTaskSchedulerRole[] roles)
+        where T : IResource
+    {
+        if (roles is null || roles.Length == 0)
+        {
+            return builder.WithRoleAssignments(target, Array.Empty<DurableTaskSchedulerBuiltInRole>());
+        }
+
+        var builtInRoles = new DurableTaskSchedulerBuiltInRole[roles.Length];
+        for (var i = 0; i < roles.Length; i++)
+        {
+            builtInRoles[i] = roles[i] switch
+            {
+                DurableTaskSchedulerRole.DurableTaskDataContributor => DurableTaskSchedulerBuiltInRole.DurableTaskDataContributor,
+                DurableTaskSchedulerRole.DurableTaskDataReader => DurableTaskSchedulerBuiltInRole.DurableTaskDataReader,
+                DurableTaskSchedulerRole.DurableTaskWorker => DurableTaskSchedulerBuiltInRole.DurableTaskWorker,
+                _ => throw new ArgumentException($"'{roles[i]}' is not a valid {nameof(DurableTaskSchedulerRole)} value.", nameof(roles))
+            };
+        }
+
+        return builder.WithRoleAssignments(target, builtInRoles);
+    }
 }
