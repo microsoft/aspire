@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { Pool } from 'pg';
+import rateLimit from 'express-rate-limit';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,7 +15,14 @@ if (connectionString) {
 
 app.use(express.json());
 
-app.get('/', async (req: Request, res: Response) => {
+const rootRouteLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per window
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+app.get('/', rootRouteLimiter, async (req: Request, res: Response) => {
     try {
         if (!pool) {
             res.json({
