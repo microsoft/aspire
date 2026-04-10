@@ -234,6 +234,12 @@ internal sealed class LayoutBuilder : IDisposable
                                 {
                                     DataStream = dataStream
                                 };
+                                // Set Unix file permissions so that archives built on Windows
+                                // have the correct execute bit when extracted on macOS/Linux.
+                                var entryFileName = Path.GetFileName(filePath);
+                                entry.Mode = entryFileName is "aspire-managed" or "aspire-managed.exe" or "dcp" or "dcp.exe" or "dcpctrl" or "dcpctrl.exe"
+                                    ? (UnixFileMode)0b111_101_101   // 755
+                                    : (UnixFileMode)0b110_100_100;  // 644
                                 await tarWriter.WriteEntryAsync(entry).ConfigureAwait(false);
                             }
                         }

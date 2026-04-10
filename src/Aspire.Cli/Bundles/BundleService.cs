@@ -311,10 +311,28 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
                     }
                     await entry.ExtractToFileAsync(fullPath, overwrite: true, cancellationToken);
 
-                    // Preserve Unix file permissions from tar entry (e.g., execute bit)
-                    if (!OperatingSystem.IsWindows() && entry.Mode != default)
+                    // Preserve Unix file permissions from tar entry (e.g., execute bit).
+                    // When Mode is set in the tar entry, use it directly.
+                    // When Mode is not set (e.g., archives created on Windows with .NET TarWriter),
+                    // apply a sensible default with execute permission for known executables
+                    // so that aspire-managed and DCP binaries are runnable after extraction.
+                    if (!OperatingSystem.IsWindows())
                     {
-                        File.SetUnixFileMode(fullPath, (UnixFileMode)entry.Mode);
+                        if (entry.Mode != default)
+                        {
+                            File.SetUnixFileMode(fullPath, (UnixFileMode)entry.Mode);
+                        }
+                        else
+                        {
+                            var fileName = Path.GetFileName(fullPath);
+                            var isExecutable = fileName is "aspire-managed" or "dcp" or "dcpctrl";
+                            File.SetUnixFileMode(fullPath, isExecutable
+                                ? UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                                  UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                                  UnixFileMode.OtherRead | UnixFileMode.OtherExecute   // 755
+                                : UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                                  UnixFileMode.GroupRead | UnixFileMode.OtherRead);     // 644
+                        }
                     }
                     break;
 
