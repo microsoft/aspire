@@ -35,7 +35,7 @@ internal static class ArchiveHelper
 
     private static void ExtractZipSafe(string archivePath, string destinationPath)
     {
-        var normalizedDestination = Path.GetFullPath(destinationPath);
+        var normalizedDestination = Path.GetFullPath(destinationPath + Path.DirectorySeparatorChar);
 
         using var archive = ZipFile.OpenRead(archivePath);
         foreach (var entry in archive.Entries)
@@ -45,9 +45,8 @@ internal static class ArchiveHelper
                 continue;
             }
 
-            var fullPath = Path.GetFullPath(Path.Combine(destinationPath, entry.FullName));
-            if (!fullPath.StartsWith(normalizedDestination + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
-                !fullPath.Equals(normalizedDestination, StringComparison.Ordinal))
+            var fullPath = Path.GetFullPath(Path.Combine(normalizedDestination, entry.FullName));
+            if (!fullPath.StartsWith(normalizedDestination, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException($"Zip entry '{entry.FullName}' would extract outside the destination directory.");
             }
