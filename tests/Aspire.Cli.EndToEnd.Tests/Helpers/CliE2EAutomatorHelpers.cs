@@ -360,6 +360,57 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Asserts that the specified resources exist in the running AppHost by running
+    /// <c>aspire describe &lt;resource&gt; --format json</c> for each expected resource.
+    /// The CLI handles name/displayName resolution internally.
+    /// On failure, the error output from the CLI is visible in the terminal recording.
+    /// </summary>
+    internal static async Task AssertResourcesExistAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        params string[] expectedResourceNames)
+    {
+        foreach (var resource in expectedResourceNames)
+        {
+            var expectedCounter = counter.Value;
+            await auto.TypeAsync($"aspire describe {resource} --format json");
+            await auto.EnterAsync();
+
+            var succeeded = false;
+            await auto.WaitUntilAsync(s =>
+            {
+                var successSearcher = new CellPatternSearcher()
+                    .FindPattern(expectedCounter.ToString())
+                    .RightText(" OK] $ ");
+                if (successSearcher.Search(s).Count > 0)
+                {
+                    succeeded = true;
+                    return true;
+                }
+
+                var errorSearcher = new CellPatternSearcher()
+                    .FindPattern(expectedCounter.ToString())
+                    .RightText(" ERR:");
+                return errorSearcher.Search(s).Count > 0;
+            }, timeout: TimeSpan.FromSeconds(30), description: $"aspire describe {resource}");
+
+            counter.Increment();
+
+            if (!succeeded)
+            {
+                // Dump all resources so we can see what's actually running
+                await auto.TypeAsync("aspire describe --format json");
+                await auto.EnterAsync();
+                await auto.WaitForAnyPromptAsync(counter);
+
+                throw new InvalidOperationException(
+                    $"Resource '{resource}' not found. 'aspire describe {resource}' exited with an error. " +
+                    "Check the terminal recording for the full resource list above.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Copies interesting diagnostic directories from <c>~/.aspire</c> to the mounted workspace
     /// so they are captured by <see cref="CaptureWorkspaceOnFailureAttribute"/>. Call this before
     /// exiting the container. Copies logs and NuGet restore output (libs directories).
