@@ -3,6 +3,7 @@ import https from 'node:https';
 import fs from 'node:fs';
 import fetch from 'node-fetch';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import { createTerminus, HealthCheckError } from '@godaddy/terminus';
 import { createClient } from 'redis';
 
@@ -35,6 +36,12 @@ await cache.connect();
 // Setup express app
 const app = express();
 
+// Rate limiting for expensive routes
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
+});
+
 // Middleware to redirect HTTP to HTTPS
 function httpsRedirect(req, res, next) {
     if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
@@ -50,7 +57,7 @@ if (httpsOptions.enabled) {
     app.use(httpsRedirect);
 }
 
-app.get('/', async (req, res) => {
+app.get('/', limiter, async (req, res) => {
     const cachedForecasts = await cache.get('forecasts');
     if (cachedForecasts) {
         res.render('index', { forecasts: JSON.parse(cachedForecasts) });
