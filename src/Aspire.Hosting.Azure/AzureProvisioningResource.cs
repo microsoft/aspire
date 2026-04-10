@@ -138,9 +138,30 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
                     ? nameOutputReference.AsProvisioningParameter(infrastructure)
                     : new BicepValue<string>((string)existingAnnotation.Name);
             provisionedResource = createExisting(infrastructure.AspireResource.GetBicepIdentifier(), existingResourceName);
-            if (existingAnnotation.ResourceGroup is not null)
+            
+            // Set scope if either resource group, subscription, or tenant is specified
+            if (existingAnnotation.ResourceGroup is not null || existingAnnotation.Subscription is not null || existingAnnotation.Tenant is not null)
             {
-                infrastructure.AspireResource.Scope = new(existingAnnotation.ResourceGroup);
+                if (existingAnnotation.Tenant is not null && existingAnnotation.Subscription is null && existingAnnotation.ResourceGroup is null)
+                {
+                    // Tenant only
+                    infrastructure.AspireResource.Scope = AzureBicepResourceScope.ForTenant(existingAnnotation.Tenant);
+                }
+                else if (existingAnnotation.ResourceGroup is not null && existingAnnotation.Subscription is not null)
+                {
+                    // Both resource group and subscription
+                    infrastructure.AspireResource.Scope = new(existingAnnotation.ResourceGroup, existingAnnotation.Subscription);
+                }
+                else if (existingAnnotation.ResourceGroup is not null)
+                {
+                    // Resource group only
+                    infrastructure.AspireResource.Scope = new(existingAnnotation.ResourceGroup);
+                }
+                else if (existingAnnotation.Subscription is not null)
+                {
+                    // Subscription only
+                    infrastructure.AspireResource.Scope = AzureBicepResourceScope.ForSubscription(existingAnnotation.Subscription);
+                }
             }
         }
         else
@@ -203,23 +224,73 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
             return false;
         }
 
-        // Apply resource group scope if the target infrastructure's resource group is different from the existing annotation's resource group
-        if (existingAnnotation.ResourceGroup is not null &&
-           !ResourceGroupEquals(existingAnnotation.ResourceGroup, infra.AspireResource.Scope?.ResourceGroup))
+        static void SetScopeProperty(ProvisionableResource provisionableResource, BicepValue<string> scope)
         {
-            BicepValue<string> scope = existingAnnotation.ResourceGroup switch
-            {
-                string rgName => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(rgName)),
-                ParameterResource p => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), p.AsProvisioningParameter(infra).Value.Compile()),
-                _ => throw new NotSupportedException($"Resource group type '{existingAnnotation.ResourceGroup.GetType()}' is not supported.")
-            };
-
             // HACK: This is a dance we do to set extra properties using Azure.Provisioning
             // will be resolved if we ever get https://github.com/Azure/azure-sdk-for-net/issues/47980
             var expression = scope.Compile();
             var value = new BicepValue<string>(expression);
             ((IBicepValue)value).Self = new BicepValueReference(provisionableResource, "Scope", ["scope"]);
             provisionableResource.ProvisionableProperties["scope"] = value;
+        }
+
+        // Apply resource group scope if the target infrastructure's resource group is different from the existing annotation's resource group
+        if (existingAnnotation.ResourceGroup is not null &&
+           !ResourceGroupEquals(existingAnnotation.ResourceGroup, infra.AspireResource.Scope?.ResourceGroup))
+        {
+            BicepValue<string> scope;
+            
+            // Handle subscription-scoped existing resource
+            if (existingAnnotation.Subscription is not null)
+            {
+                scope = existingAnnotation.Subscription switch
+                {
+                    string subId when existingAnnotation.ResourceGroup is string rgName => 
+                        new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(subId), new StringLiteralExpression(rgName)),
+                    string subId when existingAnnotation.ResourceGroup is ParameterResource rgParam => 
+                        new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(subId), rgParam.AsProvisioningParameter(infra).Value.Compile()),
+                    ParameterResource subParam when existingAnnotation.ResourceGroup is string rgName => 
+                        new FunctionCallExpression(new IdentifierExpression("resourceGroup"), subParam.AsProvisioningParameter(infra).Value.Compile(), new StringLiteralExpression(rgName)),
+                    ParameterResource subParam when existingAnnotation.ResourceGroup is ParameterResource rgParam => 
+                        new FunctionCallExpression(new IdentifierExpression("resourceGroup"), subParam.AsProvisioningParameter(infra).Value.Compile(), rgParam.AsProvisioningParameter(infra).Value.Compile()),
+                    _ => throw new NotSupportedException($"Subscription type '{existingAnnotation.Subscription.GetType()}' is not supported.")
+                };
+            }
+            else
+            {
+                scope = existingAnnotation.ResourceGroup switch
+                {
+                    string rgName => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), new StringLiteralExpression(rgName)),
+                    ParameterResource p => new FunctionCallExpression(new IdentifierExpression("resourceGroup"), p.AsProvisioningParameter(infra).Value.Compile()),
+                    _ => throw new NotSupportedException($"Resource group type '{existingAnnotation.ResourceGroup.GetType()}' is not supported.")
+                };
+            }
+
+            SetScopeProperty(provisionableResource, scope);
+        }
+        // Handle subscription-only scope (no resource group override)
+        else if (existingAnnotation.Subscription is not null)
+        {
+            BicepValue<string> scope = existingAnnotation.Subscription switch
+            {
+                string subId => new FunctionCallExpression(new IdentifierExpression("subscription"), new StringLiteralExpression(subId)),
+                ParameterResource subParam => new FunctionCallExpression(new IdentifierExpression("subscription"), subParam.AsProvisioningParameter(infra).Value.Compile()),
+                _ => throw new NotSupportedException($"Subscription type '{existingAnnotation.Subscription.GetType()}' is not supported.")
+            };
+
+            SetScopeProperty(provisionableResource, scope);
+        }
+        // Handle tenant-only scope (no resource group or subscription override)
+        else if (existingAnnotation.Tenant is not null)
+        {
+            BicepValue<string> scope = existingAnnotation.Tenant switch
+            {
+                string tenantId => new FunctionCallExpression(new IdentifierExpression("tenant"), new StringLiteralExpression(tenantId)),
+                ParameterResource tenantParam => new FunctionCallExpression(new IdentifierExpression("tenant"), tenantParam.AsProvisioningParameter(infra).Value.Compile()),
+                _ => throw new NotSupportedException($"Tenant type '{existingAnnotation.Tenant.GetType()}' is not supported.")
+            };
+
+            SetScopeProperty(provisionableResource, scope);
         }
 
         return true;

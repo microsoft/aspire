@@ -1,0 +1,14 @@
+﻿{
+  "type": "azure.bicep.v1",
+  "path": "messaging-roles.module.bicep",
+  "params": {
+    "existingResourceName": "{existingResourceName.value}",
+    "existingSubscriptionId": "{existingSubscriptionId.value}",
+    "principalType": "",
+    "principalId": ""
+  },
+  "scope": {
+    "resourceGroup": "{existingResourceGroupName.value}",
+    "subscription": "{existingSubscriptionId.value}"
+  }
+}

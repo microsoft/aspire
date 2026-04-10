@@ -136,5 +136,258 @@ public class ExistingAzureExtensionsResourceTests
         Assert.Equal("name", existingNameParameter.Name);
         var existingResourceGroupParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.ResourceGroup);
         Assert.Equal("resourceGroup", existingResourceGroupParameter.Name);
+        Assert.Null(existingAzureResourceAnnotation.Subscription);
+        Assert.Null(existingAzureResourceAnnotation.Tenant);
+    }
+
+    // ====== Subscription Support Tests ======
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AsExistingInSubscriptionInBothModesWorks(bool isPublishMode)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .AsExistingInSubscription(nameParameter, subscriptionParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        Assert.Null(existingAzureResourceAnnotation.ResourceGroup);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+        Assert.Null(existingAzureResourceAnnotation.Tenant);
+    }
+
+    [Fact]
+    public void CanCallAsExistingInSubscriptionWithStringArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .AsExistingInSubscription("existingName", "12345678-1234-1234-1234-123456789012");
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        Assert.Equal("existingName", existingAzureResourceAnnotation.Name);
+        Assert.Null(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("12345678-1234-1234-1234-123456789012", existingAzureResourceAnnotation.Subscription);
+        Assert.Null(existingAzureResourceAnnotation.Tenant);
+    }
+
+    [Fact]
+    public void RunAsExistingInSubscriptionInRunModeWorks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .RunAsExistingInSubscription(nameParameter, subscriptionParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        Assert.Null(existingAzureResourceAnnotation.ResourceGroup);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+    }
+
+    [Fact]
+    public void PublishAsExistingInSubscriptionInPublishModeWorks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .PublishAsExistingInSubscription(nameParameter, subscriptionParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        Assert.Null(existingAzureResourceAnnotation.ResourceGroup);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+    }
+
+    // ====== Resource Group with Subscription Support Tests ======
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AsExistingInResourceGroupInBothModesWorks(bool isPublishMode)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .AsExistingInResourceGroup(nameParameter, resourceGroupParameter, subscriptionParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        var existingResourceGroupParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("resourceGroup", existingResourceGroupParameter.Name);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+        Assert.Null(existingAzureResourceAnnotation.Tenant);
+    }
+
+    [Fact]
+    public void CanCallAsExistingInResourceGroupWithStringArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .AsExistingInResourceGroup("existingName", "existingResourceGroup", "12345678-1234-1234-1234-123456789012");
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        Assert.Equal("existingName", existingAzureResourceAnnotation.Name);
+        Assert.Equal("existingResourceGroup", existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("12345678-1234-1234-1234-123456789012", existingAzureResourceAnnotation.Subscription);
+        Assert.Null(existingAzureResourceAnnotation.Tenant);
+    }
+
+    [Fact]
+    public void RunAsExistingInResourceGroupInRunModeWorks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .RunAsExistingInResourceGroup(nameParameter, resourceGroupParameter, subscriptionParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        var existingResourceGroupParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("resourceGroup", existingResourceGroupParameter.Name);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+    }
+
+    [Fact]
+    public void PublishAsExistingInResourceGroupInPublishModeWorks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .PublishAsExistingInResourceGroup(nameParameter, resourceGroupParameter, subscriptionParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        var existingResourceGroupParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("resourceGroup", existingResourceGroupParameter.Name);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+    }
+
+    // ====== Tenant Support Tests ======
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AsExistingWithTenantInBothModesWorks(bool isPublishMode)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(isPublishMode ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+        var tenantParameter = builder.AddParameter("tenant", "87654321-4321-4321-4321-210987654321");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .AsExistingWithTenant(nameParameter, resourceGroupParameter, subscriptionParameter, tenantParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        var existingResourceGroupParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("resourceGroup", existingResourceGroupParameter.Name);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+        var existingTenantParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Tenant);
+        Assert.Equal("tenant", existingTenantParameter.Name);
+    }
+
+    [Fact]
+    public void CanCallAsExistingWithTenantWithStringArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .AsExistingWithTenant("existingName", "existingResourceGroup", "12345678-1234-1234-1234-123456789012", "87654321-4321-4321-4321-210987654321");
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        Assert.Equal("existingName", existingAzureResourceAnnotation.Name);
+        Assert.Equal("existingResourceGroup", existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("12345678-1234-1234-1234-123456789012", existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("87654321-4321-4321-4321-210987654321", existingAzureResourceAnnotation.Tenant);
+    }
+
+    [Fact]
+    public void RunAsExistingWithTenantInRunModeWorks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+        var tenantParameter = builder.AddParameter("tenant", "87654321-4321-4321-4321-210987654321");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .RunAsExistingWithTenant(nameParameter, resourceGroupParameter, subscriptionParameter, tenantParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        var existingResourceGroupParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("resourceGroup", existingResourceGroupParameter.Name);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+        var existingTenantParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Tenant);
+        Assert.Equal("tenant", existingTenantParameter.Name);
+    }
+
+    [Fact]
+    public void PublishAsExistingWithTenantInPublishModeWorks()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var nameParameter = builder.AddParameter("name", "existingName");
+        var resourceGroupParameter = builder.AddParameter("resourceGroup", "existingResourceGroup");
+        var subscriptionParameter = builder.AddParameter("subscription", "12345678-1234-1234-1234-123456789012");
+        var tenantParameter = builder.AddParameter("tenant", "87654321-4321-4321-4321-210987654321");
+
+        var serviceBus = builder.AddAzureServiceBus("sb")
+            .PublishAsExistingWithTenant(nameParameter, resourceGroupParameter, subscriptionParameter, tenantParameter);
+
+        Assert.True(serviceBus.Resource.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingAzureResourceAnnotation));
+        var existingNameParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Name);
+        Assert.Equal("name", existingNameParameter.Name);
+        var existingResourceGroupParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.ResourceGroup);
+        Assert.Equal("resourceGroup", existingResourceGroupParameter.Name);
+        var existingSubscriptionParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Subscription);
+        Assert.Equal("subscription", existingSubscriptionParameter.Name);
+        var existingTenantParameter = Assert.IsType<ParameterResource>(existingAzureResourceAnnotation.Tenant);
+        Assert.Equal("tenant", existingTenantParameter.Name);
     }
 }

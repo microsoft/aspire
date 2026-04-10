@@ -502,4 +502,82 @@ public class ExistingAzureResourceTests
             .AppendContentAsFile(bicep, "bicep");
             
     }
+
+    [Fact]
+    public async Task SupportsExistingServiceBusWithResourceGroupAndSubscriptionInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var existingResourceName = builder.AddParameter("existingResourceName");
+        var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
+        var existingSubscriptionId = builder.AddParameter("existingSubscriptionId");
+        var serviceBus = builder.AddAzureServiceBus("messaging")
+            .PublishAsExistingInResourceGroup(existingResourceName, existingResourceGroupName, existingSubscriptionId);
+        serviceBus.AddServiceBusQueue("queue");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (manifest, bicep) = await GetManifestWithBicep(model, serviceBus.Resource);
+
+        // ensure the role assignments resource has the correct manifest and bicep, specifically the correct scope property
+        var messagingRoles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "messaging-roles");
+        var (rolesManifest, rolesBicep) = await GetManifestWithBicep(messagingRoles, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+                .AppendContentAsFile(bicep, "bicep")
+                .AppendContentAsFile(rolesManifest.ToString(), "json")
+                .AppendContentAsFile(rolesBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task SupportsExistingServiceBusWithSubscriptionOnlyInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var existingResourceName = builder.AddParameter("existingResourceName");
+        var existingSubscriptionId = builder.AddParameter("existingSubscriptionId");
+        var serviceBus = builder.AddAzureServiceBus("messaging")
+            .PublishAsExistingInSubscription(existingResourceName, existingSubscriptionId);
+        serviceBus.AddServiceBusQueue("queue");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (manifest, bicep) = await GetManifestWithBicep(model, serviceBus.Resource);
+
+        // ensure the role assignments resource has the correct manifest and bicep, specifically the correct scope property
+        var messagingRoles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "messaging-roles");
+        var (rolesManifest, rolesBicep) = await GetManifestWithBicep(messagingRoles, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+                .AppendContentAsFile(bicep, "bicep")
+                .AppendContentAsFile(rolesManifest.ToString(), "json")
+                .AppendContentAsFile(rolesBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task SupportsExistingServiceBusWithTenantScopeInPublishMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var existingResourceName = builder.AddParameter("existingResourceName");
+        var existingResourceGroupName = builder.AddParameter("existingResourceGroupName");
+        var existingSubscriptionId = builder.AddParameter("existingSubscriptionId");
+        var existingTenantId = builder.AddParameter("existingTenantId");
+        var serviceBus = builder.AddAzureServiceBus("messaging")
+            .PublishAsExistingWithTenant(existingResourceName, existingResourceGroupName, existingSubscriptionId, existingTenantId);
+        serviceBus.AddServiceBusQueue("queue");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var (manifest, bicep) = await GetManifestWithBicep(model, serviceBus.Resource);
+
+        // ensure the role assignments resource has the correct manifest and bicep, specifically the correct scope property
+        var messagingRoles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "messaging-roles");
+        var (rolesManifest, rolesBicep) = await GetManifestWithBicep(messagingRoles, skipPreparer: true);
+
+        await Verify(manifest.ToString(), "json")
+                .AppendContentAsFile(bicep, "bicep")
+                .AppendContentAsFile(rolesManifest.ToString(), "json")
+                .AppendContentAsFile(rolesBicep, "bicep");
+    }
 }

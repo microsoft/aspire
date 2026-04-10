@@ -279,6 +279,30 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
                 null => ""
             };
             context.Writer.WriteString("resourceGroup", resourceGroup);
+            
+            // Only write subscription if it has a value to maintain backward compatibility
+            if (Scope.Subscription is not null)
+            {
+                var subscription = Scope.Subscription switch
+                {
+                    IManifestExpressionProvider output => output.ValueExpression,
+                    object obj => obj.ToString(),
+                    null => ""
+                };
+                context.Writer.WriteString("subscription", subscription);
+            }
+            
+            // Only write tenant if it has a value to maintain backward compatibility
+            if (Scope.Tenant is not null)
+            {
+                var tenant = Scope.Tenant switch
+                {
+                    IManifestExpressionProvider output => output.ValueExpression,
+                    object obj => obj.ToString(),
+                    null => ""
+                };
+                context.Writer.WriteString("tenant", tenant);
+            }
             context.Writer.WriteEndObject();
         }
     }
