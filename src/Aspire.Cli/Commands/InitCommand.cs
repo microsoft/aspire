@@ -13,9 +13,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Microsoft.Extensions.Configuration;
-using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
@@ -374,11 +371,6 @@ internal sealed class InitCommand : BaseCommand
                         ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{otlpHttpPort}",
                         ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{resourceHttpPort}",
                         ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
-                        if (highestVersion is null || version.IsNewerThan(highestVersion))
-                        {
-                            highestVersion = version;
-                            highestTfm = tfm;
-                        }
                     }
                 }
             };

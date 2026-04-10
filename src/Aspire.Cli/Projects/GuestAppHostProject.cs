@@ -596,6 +596,25 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     {
         var envVars = new Dictionary<string, string>();
         MergeLaunchProfileEnvironmentVariables(launchProfileEnvironmentVariables, envVars, defaultEnvironment: "Development");
+
+        // Provide default dashboard/server URLs when no profile specifies them.
+        // The .NET apphost path (DotNetAppHostProject) hardcodes these defaults;
+        // guest apphosts need the same fallback so the dashboard can start.
+        if (!envVars.ContainsKey("ASPNETCORE_URLS"))
+        {
+            envVars["ASPNETCORE_URLS"] = "https://localhost:17193;http://localhost:15069";
+        }
+
+        if (!envVars.ContainsKey("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"))
+        {
+            envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:21293";
+        }
+
+        if (!envVars.ContainsKey("ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"))
+        {
+            envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:22086";
+        }
+
         return envVars;
     }
 
