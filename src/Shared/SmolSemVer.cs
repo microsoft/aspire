@@ -45,7 +45,7 @@ internal enum SemVersionStyles
 /// </summary>
 /// <remarks>
 /// Implements the SemVer 2.0.0 specification at https://semver.org/.
-/// Uses <see cref="ReadOnlySpan{T}"/> for allocation-free parsing.
+/// Uses <see cref="ReadOnlySpan{T}"/> to minimize allocations during parsing.
 /// </remarks>
 [DebuggerDisplay("{ToString(),nq}")]
 internal sealed class SemVersion : IEquatable<SemVersion>, IComparable<SemVersion>
@@ -293,7 +293,8 @@ internal sealed class SemVersion : IEquatable<SemVersion>, IComparable<SemVersio
 
     private static bool TryConsumeMetadata(ReadOnlySpan<char> input, ref int pos)
     {
-        // Build metadata is dot-separated identifiers (alphanumeric + hyphens). No restrictions on content.
+        // Build metadata is dot-separated identifiers of alphanumeric characters and hyphens.
+        // Empty identifiers are rejected.
         var start = pos;
         while (true)
         {
