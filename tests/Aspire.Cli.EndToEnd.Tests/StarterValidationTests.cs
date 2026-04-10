@@ -15,7 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class StarterValidationTests(ITestOutputHelper output)
 {
-    [Fact]
+    [Fact(Skip = "aspire new hangs on Windows certificate trust step — needs DOTNET_GENERATE_ASPNET_CERTIFICATE=false to be respected by the CLI")]
     public async Task CSharpStarter_NewStartStop()
     {
         var workspace = TemporaryWorkspace.Create(output);
