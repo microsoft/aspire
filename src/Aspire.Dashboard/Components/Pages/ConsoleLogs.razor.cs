@@ -299,7 +299,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             PageViewModel.SelectedResource = GetSelectedOption();
 
-            Logger.LogDebug("Selected console resource from name {ResourceName}.", ResourceName);
+            var sanitizedResourceName = ResourceName?.Replace("\r", string.Empty).Replace("\n", string.Empty);
+            Logger.LogDebug("Selected console resource from name {ResourceName}.", sanitizedResourceName);
             loadingTcs.TrySetResult();
         }
     }
