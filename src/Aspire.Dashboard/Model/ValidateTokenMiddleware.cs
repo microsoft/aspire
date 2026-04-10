@@ -6,6 +6,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Options;
 using System.Web;
 
@@ -46,16 +47,14 @@ internal sealed class ValidateTokenMiddleware
                 {
                     // Failure.
                     // The bad token in the query string could be confusing with the token in the text box.
-                    // Remove it before the presenting the UI to the user.
-                    var qs = HttpUtility.ParseQueryString(context.Request.QueryString.ToString());
-                    qs.Remove("t");
-
-                    // Collection created by ParseQueryString handles escaping names and values.
-                    var newQuerystring = qs.ToString();
-                    if (!string.IsNullOrEmpty(newQuerystring))
+                    // Keep only a safe local returnUrl (if present) before presenting the UI to the user.
+                    string newQuerystring = string.Empty;
+                    if (context.Request.Query.TryGetValue("returnUrl", out var returnUrl) &&
+                        UriHelper.IsLocalUrl(returnUrl.ToString()))
                     {
-                        newQuerystring = "?" + newQuerystring;
+                        newQuerystring = QueryString.Create("returnUrl", returnUrl.ToString()).ToString();
                     }
+
                     context.Response.Redirect($"{context.Request.Path}{newQuerystring}");
                 }
 
@@ -68,7 +67,8 @@ internal sealed class ValidateTokenMiddleware
 
     private static void RedirectAfterValidation(HttpContext context)
     {
-        if (context.Request.Query.TryGetValue("returnUrl", out var returnUrl))
+        if (context.Request.Query.TryGetValue("returnUrl", out var returnUrl) &&
+            UriHelper.IsLocalUrl(returnUrl.ToString()))
         {
             context.Response.Redirect(returnUrl.ToString());
         }
