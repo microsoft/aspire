@@ -820,7 +820,7 @@
     "gulp-filter": "^7.0.0",
     "gulp-sourcemaps": "^3.0.0",
     "gulp-typescript": "^6.0.0-alpha.1",
-    "postcss": "^8.5.7",
+    "postcss": "^8.5.8",
     "sinon": "^21.0.0",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
