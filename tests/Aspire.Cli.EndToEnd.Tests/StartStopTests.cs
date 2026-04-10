@@ -158,6 +158,50 @@ public sealed class StartStopTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task AddPackageWithNonExistentVersionFailsGracefully()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: false, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        // Prepare Docker environment (prompt counting, umask, env vars)
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+
+        // Install the Aspire CLI
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+
+        // Create a new project using aspire new
+        await auto.AspireNewAsync("AspireAddVersionFailApp", counter);
+
+        // Navigate to the AppHost directory
+        await auto.TypeAsync("cd AspireAddVersionFailApp/AspireAddVersionFailApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Try to add a package with a version that doesn't exist.
+        // This should fail gracefully with the PackageInstallationFailed error message
+        // rather than prompting for a version or crashing.
+        await auto.TypeAsync("aspire add redis --version 99.99.99");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("The package installation failed", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForAnyPromptAsync(counter);
+
+        // Exit the shell
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
+    [Fact]
     public async Task AddPackageInteractiveWhileAppHostRunningDetached()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

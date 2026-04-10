@@ -255,6 +255,210 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandDoesNotPromptForVersionIfVersionSpecifiedButNotInSearchResults()
+    {
+        var promptedForVersion = false;
+        string? addedPackageVersion = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not have been prompted for integration version.");
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    var redisPackage = new NuGetPackage()
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "nuget",
+                        Version = "9.2.0"
+                    };
+
+                    return (
+                        0, // Exit code.
+                        new NuGetPackage[] { redisPackage }
+                        );
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addedPackageVersion = packageVersion;
+                    return 0; // Success.
+                };
+
+                return runner;
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis --version 9.3.0");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForVersion);
+        Assert.Equal("9.3.0", addedPackageVersion);
+    }
+
+    [Fact]
+    public async Task AddCommandDoesNotPromptForVersionWithMultipleMatchesIfVersionSpecified()
+    {
+        var promptedForVersion = false;
+        string? addedPackageVersion = null;
+        string? addedPackageName = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+
+                prompter.PromptForIntegrationCallback = (packages) =>
+                {
+                    return packages.Single(p => p.Package.Id == "Aspire.Hosting.Redis");
+                };
+
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not have been prompted for integration version.");
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    var redisPackage = new NuGetPackage()
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "nuget",
+                        Version = "9.2.0"
+                    };
+
+                    var azureRedisPackage = new NuGetPackage()
+                    {
+                        Id = "Aspire.Hosting.Azure.Redis",
+                        Source = "nuget",
+                        Version = "9.2.0"
+                    };
+
+                    return (
+                        0, // Exit code.
+                        new NuGetPackage[] { redisPackage, azureRedisPackage }
+                        );
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addedPackageName = packageName;
+                    addedPackageVersion = packageVersion;
+                    return 0; // Success.
+                };
+
+                return runner;
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add red --version 9.3.0");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForVersion);
+        Assert.Equal("Aspire.Hosting.Redis", addedPackageName);
+        Assert.Equal("9.3.0", addedPackageVersion);
+    }
+
+    [Fact]
+    public async Task AddCommandFailsGracefullyWhenSpecifiedVersionDoesNotExist()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                return new TestAddCommandPrompter(interactionService);
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    var redisPackage = new NuGetPackage()
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "nuget",
+                        Version = "9.2.0"
+                    };
+
+                    return (
+                        0, // Exit code.
+                        new NuGetPackage[] { redisPackage }
+                        );
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    // Simulate dotnet add package failing because the version doesn't exist.
+                    return 1;
+                };
+
+                return runner;
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis --version 99.99.99");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.NotNull(testInteractionService);
+        Assert.Contains(testInteractionService.DisplayedErrors, e => e.Contains(AddCommandStrings.PackageInstallationFailed.Split('{')[0].TrimEnd()));
+    }
+
+    [Fact]
     public async Task AddCommandPromptsForDisambiguation()
     {
         IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>? promptedPackages = null;

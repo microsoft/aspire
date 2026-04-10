@@ -197,13 +197,15 @@ internal sealed class AddCommand : BaseCommand
             // If we didn't match any, show a complete list. If we matched one, and its
             // an exact match, then we still prompt, but it will only prompt for
             // the version. If there is more than one match then we prompt.
+            // When --version is explicitly specified, skip the version prompt entirely
+            // and let 'dotnet add package --version' validate the version.
+            var skipVersionPrompt = version is not null;
             var selectedNuGetPackage = filteredPackagesWithShortName.Count() switch
             {
-                0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(packagesWithShortName, integrationName, cancellationToken),
-                1 => filteredPackagesWithShortName.First().Package.Version == version
-                    ? filteredPackagesWithShortName.First()
-                    : await GetPackageByInteractiveFlow(filteredPackagesWithShortName, null, cancellationToken),
-                > 1 => await GetPackageByInteractiveFlow(filteredPackagesWithShortName, version, cancellationToken),
+                0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(packagesWithShortName, integrationName, skipVersionPrompt, cancellationToken),
+                1 when skipVersionPrompt => filteredPackagesWithShortName.First(),
+                1 => await GetPackageByInteractiveFlow(filteredPackagesWithShortName, null, cancellationToken),
+                > 1 => await GetPackageByInteractiveFlow(filteredPackagesWithShortName, version, cancellationToken, skipVersionPrompt),
                 _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
             };
 
@@ -212,7 +214,7 @@ internal sealed class AddCommand : BaseCommand
             {
                 AppHostFile = effectiveAppHostProjectFile,
                 PackageId = selectedNuGetPackage.Package.Id,
-                PackageVersion = selectedNuGetPackage.Package.Version,
+                PackageVersion = version ?? selectedNuGetPackage.Package.Version,
                 Source = source
             };
 
@@ -249,7 +251,7 @@ internal sealed class AddCommand : BaseCommand
                 return ExitCodeConstants.FailedToAddPackage;
             }
 
-            InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PackageAddedSuccessfully, selectedNuGetPackage.Package.Id, selectedNuGetPackage.Package.Version));
+            InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PackageAddedSuccessfully, selectedNuGetPackage.Package.Id, context.PackageVersion));
             return ExitCodeConstants.Success;
         }
         catch (ProjectLocatorException ex)
@@ -280,7 +282,7 @@ internal sealed class AddCommand : BaseCommand
         }
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, CancellationToken cancellationToken, bool skipVersionPrompt = false)
     {
         var distinctPackages = possiblePackages.DistinctBy(p => p.Package.Id);
 
@@ -310,7 +312,7 @@ internal sealed class AddCommand : BaseCommand
         var orderedPackageVersions = packageVersions
             .OrderByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
-        if (!_hostEnvironment.SupportsInteractiveInput)
+        if (skipVersionPrompt || !_hostEnvironment.SupportsInteractiveInput)
         {
             return orderedPackageVersions.First();
         }
@@ -321,14 +323,14 @@ internal sealed class AddCommand : BaseCommand
         return version;
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? searchTerm, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? searchTerm, bool skipVersionPrompt, CancellationToken cancellationToken)
     {
         if (searchTerm is not null)
         {
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, searchTerm));
         }
 
-        return await GetPackageByInteractiveFlow(possiblePackages, null, cancellationToken);
+        return await GetPackageByInteractiveFlow(possiblePackages, null, cancellationToken, skipVersionPrompt);
     }
 
     internal static (string FriendlyName, NuGetPackage Package, PackageChannel Channel) GenerateFriendlyName((NuGetPackage Package, PackageChannel Channel) packageWithChannel)
