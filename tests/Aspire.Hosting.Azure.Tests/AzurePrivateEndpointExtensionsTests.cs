@@ -208,5 +208,4 @@ public class AzurePrivateEndpointExtensionsTests
         // Each DNS Zone should have one VNet Link
         Assert.All(dnsZones, z => Assert.Single(z.VNetLinks));
     }
-
 }
