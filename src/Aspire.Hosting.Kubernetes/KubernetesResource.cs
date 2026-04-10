@@ -18,7 +18,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     /// <inheritdoc/>
     public KubernetesEnvironmentResource Parent => kubernetesEnvironmentResource;
 
-    internal record EndpointMapping(string Scheme, string Protocol, string Host, HelmValue Port, string Name, string? HelmExpression = null);
+    internal record EndpointMapping(string Scheme, string Protocol, string Host, HelmValue Port, string Name, string? HelmExpression = null, HelmValue? ServicePort = null);
     internal Dictionary<string, EndpointMapping> EndpointMappings { get; } = [];
     internal Dictionary<string, HelmValue> EnvironmentVariables { get; } = [];
     internal Dictionary<string, HelmValue> Secrets { get; } = [];
@@ -201,7 +201,17 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             }
 
             var portValue = resolved.TargetPort.Value.Value.ToString(CultureInfo.InvariantCulture);
-            EndpointMappings[endpoint.Name] = new(endpoint.UriScheme, GetKubernetesProtocolName(endpoint.Protocol), resource.Name.ToServiceName(), HelmValue.Literal(portValue), endpoint.Name);
+
+            // Capture the exposed (service) port when it differs from the target (container) port.
+            // This allows WithHostPort to flow into the Kubernetes Service manifest.
+            HelmValue? servicePort = null;
+            if (resolved.ExposedPort.Value is int exposedPortValue &&
+                exposedPortValue != resolved.TargetPort.Value.Value)
+            {
+                servicePort = HelmValue.Literal(exposedPortValue.ToString(CultureInfo.InvariantCulture));
+            }
+
+            EndpointMappings[endpoint.Name] = new(endpoint.UriScheme, GetKubernetesProtocolName(endpoint.Protocol), resource.Name.ToServiceName(), HelmValue.Literal(portValue), endpoint.Name, ServicePort: servicePort);
         }
     }
 
@@ -569,7 +579,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)
     {
-        var (scheme, _, host, port, _, _) = mapping;
+        var (scheme, _, host, port, _, _, _) = mapping;
 
         return property switch
         {

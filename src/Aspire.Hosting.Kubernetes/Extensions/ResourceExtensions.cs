@@ -164,7 +164,7 @@ internal static class ResourceExtensions
                 new()
                 {
                     Name = mapping.Name,
-                    Port = new(mapping.Port.ToScalar()),
+                    Port = new((mapping.ServicePort ?? mapping.Port).ToScalar()),
                     TargetPort = new(mapping.Port.ToScalar()),
                     Protocol = mapping.Protocol,
                 });

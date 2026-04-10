@@ -24,7 +24,7 @@ spec:
       targetPort: 8000
     - name: "custom2"
       protocol: "TCP"
-      port: 8001
+      port: 7001
       targetPort: 8001
     - name: "custom3"
       protocol: "TCP"
@@ -32,5 +32,5 @@ spec:
       targetPort: 7002
     - name: "custom4"
       protocol: "TCP"
-      port: 7004
+      port: 7003
       targetPort: 7004

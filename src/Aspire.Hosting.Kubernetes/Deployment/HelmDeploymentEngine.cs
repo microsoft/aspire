@@ -47,13 +47,16 @@ internal static partial class HelmDeploymentEngine
             var resolvedRelease = await releaseAnnotation.ReleaseName.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(resolvedRelease))
             {
+                ValidateHelmReleaseName(resolvedRelease);
                 return resolvedRelease;
             }
         }
 
         // Default to the deployment environment name (aspire deploy -e <name>), not the resource name.
         var hostEnvironment = context.Services.GetRequiredService<IHostEnvironment>();
-        return hostEnvironment.EnvironmentName.ToLowerInvariant();
+        var releaseName = hostEnvironment.EnvironmentName.ToLowerInvariant();
+        ValidateHelmReleaseName(releaseName);
+        return releaseName;
     }
 
     /// <summary>
@@ -68,12 +71,41 @@ internal static partial class HelmDeploymentEngine
             var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(resolvedNs))
             {
+                ValidateKubernetesNamespace(resolvedNs);
                 return resolvedNs;
             }
         }
 
         return "default";
     }
+
+    private const int HelmReleaseNameMaxLength = 53;
+    private const int KubernetesNamespaceMaxLength = 63;
+
+    private static void ValidateHelmReleaseName(string releaseName)
+    {
+        if (releaseName.Length > HelmReleaseNameMaxLength || !DnsLabelPattern().IsMatch(releaseName))
+        {
+            throw new InvalidOperationException(
+                $"Helm release name '{releaseName}' is invalid. Use lowercase letters, numbers, and hyphens, " +
+                $"start and end with an alphanumeric character, and stay within {HelmReleaseNameMaxLength} characters. " +
+                "Set an explicit release name with .WithHelm(h => h.WithReleaseName(\"my-release\")).");
+        }
+    }
+
+    private static void ValidateKubernetesNamespace(string @namespace)
+    {
+        if (@namespace.Length > KubernetesNamespaceMaxLength || !DnsLabelPattern().IsMatch(@namespace))
+        {
+            throw new InvalidOperationException(
+                $"Kubernetes namespace '{@namespace}' is invalid. Use lowercase letters, numbers, and hyphens, " +
+                $"start and end with an alphanumeric character, and stay within {KubernetesNamespaceMaxLength} characters. " +
+                "Set an explicit namespace with .WithHelm(h => h.WithNamespace(\"my-namespace\")).");
+        }
+    }
+
+    [GeneratedRegex("^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")]
+    private static partial Regex DnsLabelPattern();
 
     /// <summary>
     /// Creates the deployment pipeline steps for the Helm engine.
@@ -186,11 +218,12 @@ internal static partial class HelmDeploymentEngine
                         if (File.Exists(chartFilePath))
                         {
                             var chartContent = await File.ReadAllTextAsync(chartFilePath, context.CancellationToken).ConfigureAwait(false);
-                            // Simple replacement of the version line in Chart.yaml
+                            // Simple replacement of the version line in Chart.yaml.
+                            // Use a MatchEvaluator to avoid interpreting '$' in version as regex backreferences.
                             chartContent = System.Text.RegularExpressions.Regex.Replace(
                                 chartContent,
                                 @"^version:\s*.*$",
-                                $"version: {version}",
+                                _ => $"version: {version}",
                                 System.Text.RegularExpressions.RegexOptions.Multiline);
                             await File.WriteAllTextAsync(chartFilePath, chartContent, context.CancellationToken).ConfigureAwait(false);
                         }
@@ -409,7 +442,7 @@ internal static partial class HelmDeploymentEngine
                             ? $"helm upgrade --install failed with exit code {processResult.ExitCode}"
                             : $"helm upgrade --install failed: {errorOutput}";
 
-                        await deployTask.FailAsync(message, cancellationToken: context.CancellationToken).ConfigureAwait(false);
+                        throw new InvalidOperationException(message);
                     }
                     else
                     {
@@ -447,7 +480,7 @@ internal static partial class HelmDeploymentEngine
 
         try
         {
-            var endpoints = await GetServiceEndpointsAsync(computeResource.Name, @namespace, context.Logger, context.CancellationToken).ConfigureAwait(false);
+            var endpoints = await GetServiceEndpointsAsync(computeResource.Name.ToServiceName(), @namespace, context.Logger, context.CancellationToken).ConfigureAwait(false);
 
             if (endpoints.Count > 0)
             {

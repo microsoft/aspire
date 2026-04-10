@@ -56,6 +56,8 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         int? port = null)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         return builder.WithEndpoint("http", e =>
         {
             e.Port = port;
