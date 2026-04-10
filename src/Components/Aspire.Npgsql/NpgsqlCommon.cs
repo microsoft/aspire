@@ -11,9 +11,10 @@ internal static class NpgsqlCommon
         meterProviderBuilder
             .AddMeter("Npgsql");
 
-#if !NET10_0_OR_GREATER
-        // starting with Npgsql 10.0, the metrics align with OpenTelemetry's spec
-        // see https://github.com/npgsql/npgsql/commit/a27566ff3e75ab1f75feb6d24cb69cdbd3340ab4
+#if LEGACY_NPGSQL
+        // Npgsql versions prior to 10.0 don't align their metrics with the OpenTelemetry spec,
+        // so custom histogram bucket boundaries are needed for the duration metrics.
+        // See https://github.com/npgsql/npgsql/commit/a27566ff3e75ab1f75feb6d24cb69cdbd3340ab4
         double[] secondsBuckets = [0, 0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10];
 
         meterProviderBuilder
