@@ -63,7 +63,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
             return GetResourceSnapshotsHandler(cancellationToken);
         }
 
-        return Task.FromResult(ResourceSnapshots.Where(r => !r.IsHidden).ToList());
+        return Task.FromResult(ApplyResourceFilters(ResourceSnapshots, filter: null, includeHidden: false).ToList());
     }
 
     public async Task<GetResourcesResponse> GetResourcesV2Async(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
@@ -84,12 +84,10 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        foreach (var snapshot in ResourceSnapshots.Where(r => !r.IsHidden))
+        foreach (var snapshot in ApplyResourceFilters(ResourceSnapshots, filter: null, includeHidden: false))
         {
             yield return snapshot;
         }
-
-        await Task.CompletedTask;
     }
 
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourcesV2Async(WatchResourcesRequest? request = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -98,8 +96,6 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         {
             yield return snapshot;
         }
-
-        await Task.CompletedTask;
     }
 
     public async IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(
@@ -138,32 +134,21 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     }
 
     private static IEnumerable<ResourceSnapshot> ApplyResourceFilters(IEnumerable<ResourceSnapshot> snapshots, GetResourcesRequest? request)
-    {
-        var result = snapshots;
-
-        if (!string.IsNullOrEmpty(request?.Filter))
-        {
-            result = result.Where(r => r.Name.Contains(request.Filter, StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (request?.IncludeHidden is not true)
-        {
-            result = result.Where(r => !r.IsHidden);
-        }
-
-        return result;
-    }
+        => ApplyResourceFilters(snapshots, request?.Filter, request?.IncludeHidden is true);
 
     private static IEnumerable<ResourceSnapshot> ApplyResourceFilters(IEnumerable<ResourceSnapshot> snapshots, WatchResourcesRequest? request)
+        => ApplyResourceFilters(snapshots, request?.Filter, request?.IncludeHidden is true);
+
+    private static IEnumerable<ResourceSnapshot> ApplyResourceFilters(IEnumerable<ResourceSnapshot> snapshots, string? filter, bool includeHidden)
     {
         var result = snapshots;
 
-        if (!string.IsNullOrEmpty(request?.Filter))
+        if (!string.IsNullOrEmpty(filter))
         {
-            result = result.Where(r => r.Name.Contains(request.Filter, StringComparison.OrdinalIgnoreCase));
+            result = result.Where(r => r.Name.Contains(filter, StringComparison.OrdinalIgnoreCase));
         }
 
-        if (request?.IncludeHidden is not true)
+        if (!includeHidden)
         {
             result = result.Where(r => !r.IsHidden);
         }

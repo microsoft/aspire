@@ -156,7 +156,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DescribeCommand_IncludeHiddenOption_CanBeParsed()
+    public async Task DescribeCommand_IncludeHiddenOption_CanBeUsedWithHelp()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
