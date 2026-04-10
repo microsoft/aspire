@@ -254,14 +254,8 @@ builder.AddAzureKeyVaultClient("kv");
             await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Step 12: Verify NSP infrastructure
-            output.WriteLine("Step 12: Verifying NSP infrastructure...");
-            await auto.TypeAsync($"az network perimeter list -g \"{resourceGroupName}\" --query \"[].{{name:name,state:provisioningState}}\" -o table 2>/dev/null || echo 'NSP list command not available, skipping verification'");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-
-            // Step 13: Verify deployed endpoints with retry
-            output.WriteLine("Step 13: Verifying deployed endpoints...");
+            // Step 12: Verify deployed endpoints with retry
+            output.WriteLine("Step 12: Verifying deployed endpoints...");
             await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
                       "urls=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
                       "if [ -z \"$urls\" ]; then echo \"❌ No external container app endpoints found\"; exit 1; fi && " +
@@ -280,7 +274,7 @@ builder.AddAzureKeyVaultClient("kv");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
-            // Step 14: Exit terminal
+            // Step 13: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 
