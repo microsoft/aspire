@@ -29,12 +29,12 @@ internal interface IApiDocsCache : IDocumentContentCache
     Task SetIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Gets the cached parsed C# member index.
+    /// Gets the cached parsed member index.
     /// </summary>
     Task<ApiReferenceItem[]?> GetMemberIndexAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Sets the parsed C# member index in the cache.
+    /// Sets the parsed member index in the cache.
     /// </summary>
     Task SetMemberIndexAsync(ApiReferenceItem[] documents, CancellationToken cancellationToken = default);
 

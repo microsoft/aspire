@@ -162,7 +162,7 @@ internal sealed class ApiDocsCache(
     }
 
     /// <summary>
-    /// Gets the cached C# member index.
+    /// Gets the cached member index.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The cached member index, or <c>null</c> if it is not available.</returns>
@@ -170,7 +170,7 @@ internal sealed class ApiDocsCache(
         => _contentCache.GetJsonAsync(_memberIndexCacheKey, JsonSourceGenerationContext.Default.ApiReferenceItemArray, cancellationToken: cancellationToken);
 
     /// <summary>
-    /// Stores the C# member index in the cache.
+    /// Stores the member index in the cache.
     /// </summary>
     /// <param name="documents">The items to cache.</param>
     /// <param name="cancellationToken">The cancellation token.</param>

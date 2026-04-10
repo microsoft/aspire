@@ -11,6 +11,8 @@ public class ApiDocsIndexServiceTests
 {
     private const string CSharpMethodsUrl = "https://aspire.dev/reference/api/csharp/aspire.test.package/testtype/methods";
     private const string CSharpTypeUrl = "https://aspire.dev/reference/api/csharp/aspire.test.package/testtype";
+    private const string CSharpWithEnvironmentMethodsUrl = "https://aspire.dev/reference/api/csharp/aspire.test.package/resourcebuilderextensions/methods";
+    private const string CSharpWithEnvironmentTypeUrl = "https://aspire.dev/reference/api/csharp/aspire.test.package/resourcebuilderextensions";
 
     [Fact]
     public async Task ListAsync_BuildsHierarchyForBothLanguages()
@@ -104,7 +106,7 @@ public class ApiDocsIndexServiceTests
     }
 
     [Fact]
-    public async Task SearchAsync_FindsCSharpMembersParsedFromMemberGroupMarkdown()
+    public async Task SearchAsync_FindsMembersParsedFromGroupedMemberLinks()
     {
         var service = CreateService();
 
@@ -115,6 +117,19 @@ public class ApiDocsIndexServiceTests
         Assert.Equal("DoThing(string)", result.Name);
         Assert.Equal(ApiReferenceKinds.Member, result.Kind);
         Assert.Equal("Does the thing.", result.Summary);
+    }
+
+    [Fact]
+    public async Task SearchAsync_LoadsMemberIndexWhenBaseRouteHitsExist()
+    {
+        var service = CreateWithEnvironmentService();
+
+        var results = await service.SearchAsync("WithEnv", ApiReferenceLanguages.CSharp, 10);
+
+        Assert.Equal(3, results.Count);
+        Assert.Contains(results, result => result.Id == "csharp/aspire.test.package/iresourcewithenvironment");
+        Assert.Contains(results, result => result.Id == "csharp/aspire.test.package/resourcebuilderextensions/methods#withenvironment-iresourcebuilder-t-string-string");
+        Assert.Contains(results, result => result.Id == "csharp/aspire.test.package/resourcebuilderextensions/methods#withenvironment-iresourcebuilder-t-action-environmentcallbackcontext");
     }
 
     [Fact]
@@ -130,7 +145,7 @@ public class ApiDocsIndexServiceTests
     }
 
     [Fact]
-    public async Task ListAsync_ForCSharpMemberGroupScope_ReturnsParsedMembers()
+    public async Task ListAsync_ForMemberGroupScope_ReturnsParsedMembers()
     {
         var service = CreateService();
 
@@ -169,7 +184,7 @@ public class ApiDocsIndexServiceTests
     }
 
     [Fact]
-    public async Task GetAsync_ForParsedCSharpMember_ReturnsAnchoredUrlAndRawMarkdown()
+    public async Task GetAsync_ForParsedMember_ReturnsAnchoredUrlAndRawMarkdown()
     {
         var service = CreateService();
 
@@ -373,6 +388,51 @@ public class ApiDocsIndexServiceTests
             });
 
         return new ApiDocsIndexService(fetcher, new TestApiDocsCache(), configuration ?? new ConfigurationBuilder().Build(), NullLogger<ApiDocsIndexService>.Instance);
+    }
+
+    private static ApiDocsIndexService CreateWithEnvironmentService()
+    {
+        var fetcher = new TestApiDocsFetcher(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+              <url><loc>https://aspire.dev/reference/api/csharp/aspire.test.package/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/csharp/aspire.test.package/iresourcewithenvironment/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/csharp/aspire.test.package/resourcebuilderextensions/</loc></url>
+              <url><loc>https://aspire.dev/reference/api/csharp/aspire.test.package/resourcebuilderextensions/methods/</loc></url>
+            </urlset>
+            """,
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["https://aspire.dev/reference/api/csharp/aspire.test.package/iresourcewithenvironment"] = """
+                    # IResourceWithEnvironment
+
+                    Provides access to environment configuration.
+                    """,
+                [CSharpWithEnvironmentTypeUrl] = """
+                    # ResourceBuilderExtensions
+
+                    Provides extension methods for configuring resources with environment variables.
+
+                    ## Methods
+
+                    - [WithEnvironment(IResourceBuilder<T>, string, string?)](/reference/api/csharp/aspire.test.package/resourcebuilderextensions/methods.md#withenvironment-iresourcebuilder-t-string-string) : `IResourceBuilder<T>` `extension` -- Adds a string environment variable.
+                    - [WithEnvironment(IResourceBuilder<T>, Action<EnvironmentCallbackContext>)](/reference/api/csharp/aspire.test.package/resourcebuilderextensions/methods.md#withenvironment-iresourcebuilder-t-action-environmentcallbackcontext) : `IResourceBuilder<T>` `extension` -- Adds environment variables from a callback.
+                    """,
+                [CSharpWithEnvironmentMethodsUrl] = """
+                    # Methods
+
+                    ## WithEnvironment(IResourceBuilder<T>, string, string?) {#withenvironment-iresourcebuilder-t-string-string}
+
+                    Adds a string environment variable.
+
+                    ## WithEnvironment(IResourceBuilder<T>, Action<EnvironmentCallbackContext>) {#withenvironment-iresourcebuilder-t-action-environmentcallbackcontext}
+
+                    Adds environment variables from a callback.
+                    """
+            });
+
+        return new ApiDocsIndexService(fetcher, new TestApiDocsCache(), new ConfigurationBuilder().Build(), NullLogger<ApiDocsIndexService>.Instance);
     }
 
     private sealed class TestApiDocsFetcher(string sitemapContent, IReadOnlyDictionary<string, string> pageContent) : IApiDocsFetcher

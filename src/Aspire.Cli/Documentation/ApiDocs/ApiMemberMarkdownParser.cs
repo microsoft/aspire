@@ -6,27 +6,25 @@ using System.Text.RegularExpressions;
 namespace Aspire.Cli.Documentation.ApiDocs;
 
 /// <summary>
-/// Parses member-level C# API entries from type markdown pages.
+/// Parses member-level API entries from markdown pages that link to grouped member pages.
 /// </summary>
 internal static partial class ApiMemberMarkdownParser
 {
     /// <summary>
-    /// Parses member-level API items from a C# type markdown page.
+    /// Parses member-level API items from a markdown page that contains grouped member links.
     /// </summary>
-    /// <param name="typeItem">The parent type page item.</param>
-    /// <param name="markdown">The markdown content for the type page.</param>
+    /// <param name="containerItem">The parent page item.</param>
+    /// <param name="markdown">The markdown content for the parent page.</param>
     /// <param name="sitemapUrl">The configured sitemap URL.</param>
-    /// <param name="memberGroupsByPageUrl">The known C# member-group pages keyed by canonical page URL.</param>
+    /// <param name="memberGroupsByPageUrl">The known grouped member pages keyed by canonical page URL.</param>
     /// <returns>The parsed member items.</returns>
     public static IReadOnlyList<ApiReferenceItem> Parse(
-        ApiReferenceItem typeItem,
+        ApiReferenceItem containerItem,
         string markdown,
         string sitemapUrl,
         IReadOnlyDictionary<string, ApiReferenceItem> memberGroupsByPageUrl)
     {
-        if (!string.Equals(typeItem.Language, ApiReferenceLanguages.CSharp, StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(typeItem.Kind, ApiReferenceKinds.Type, StringComparison.OrdinalIgnoreCase) ||
-            string.IsNullOrWhiteSpace(markdown))
+        if (string.IsNullOrWhiteSpace(markdown) || memberGroupsByPageUrl.Count is 0)
         {
             return [];
         }
@@ -42,7 +40,9 @@ internal static partial class ApiMemberMarkdownParser
             }
 
             var pageUrl = ApiDocsSourceConfiguration.ResolveLinkedPageUrl(href, sitemapUrl);
-            if (pageUrl is null || !memberGroupsByPageUrl.TryGetValue(pageUrl, out var memberGroupItem))
+            if (pageUrl is null ||
+                !memberGroupsByPageUrl.TryGetValue(pageUrl, out var memberGroupItem) ||
+                !string.Equals(memberGroupItem.ParentId, containerItem.Id, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
@@ -90,8 +90,7 @@ internal static partial class ApiMemberMarkdownParser
         }
 
         href = match.Groups["href"].Value.Trim();
-        if (!href.Contains("/reference/api/csharp/", StringComparison.OrdinalIgnoreCase) ||
-            !href.Contains(".md#", StringComparison.OrdinalIgnoreCase))
+        if (href.Length is 0)
         {
             return false;
         }

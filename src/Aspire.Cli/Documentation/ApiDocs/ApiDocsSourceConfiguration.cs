@@ -40,10 +40,10 @@ internal static class ApiDocsSourceConfiguration
         => $"{IndexCacheKeyPrefix}{GetSitemapContentCacheKey(sitemapUrl)}";
 
     /// <summary>
-    /// Gets a source-specific cache key for the parsed C# member index.
+    /// Gets a source-specific cache key for the parsed member index.
     /// </summary>
     /// <param name="sitemapUrl">The configured sitemap URL.</param>
-    /// <returns>The cache key used for the parsed C# member index.</returns>
+    /// <returns>The cache key used for the parsed member index.</returns>
     public static string GetMemberIndexCacheKey(string sitemapUrl)
         => $"{MemberIndexCacheKeyPrefix}{GetSitemapContentCacheKey(sitemapUrl)}";
 
