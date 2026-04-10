@@ -156,6 +156,21 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DescribeCommand_IncludeHiddenOption_CanBeParsed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --include-hidden --help");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
     public async Task DescribeCommand_ResourceNameArgument_CanBeParsed()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -388,6 +403,57 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(resource);
 
         Assert.Equal("http://localhost:18888/?resource=redis", resource.DashboardUrl);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_DefaultOutput_ExcludesHiddenResources()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "frontend", DisplayName = "frontend", ResourceType = "Project", State = "Running" },
+            new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Running", IsHidden = true },
+        ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = string.Join("", outputWriter.Logs);
+        var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+
+        Assert.NotNull(deserialized);
+        Assert.Single(deserialized.Resources);
+        Assert.Equal("frontend", deserialized.Resources[0].Name);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_IncludeHiddenOutput_IncludesHiddenResources()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "frontend", DisplayName = "frontend", ResourceType = "Project", State = "Running" },
+            new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Running", IsHidden = true },
+        ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --format json --include-hidden");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = string.Join("", outputWriter.Logs);
+        var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+
+        Assert.NotNull(deserialized);
+        Assert.Equal(2, deserialized.Resources.Length);
+        Assert.Contains(deserialized.Resources, r => r.Name == "frontend");
+        Assert.Contains(deserialized.Resources, r => r.Name == "aspire-dashboard");
     }
 
     private ServiceProvider CreateDescribeTestServices(

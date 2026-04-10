@@ -404,7 +404,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>A list of resource snapshots.</returns>
-    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
+    public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
+        => GetResourceSnapshotsAsync(includeHiddenResources: false, cancellationToken);
+
+    /// <summary>
+    /// Gets the current resource snapshots for all resources.
+    /// </summary>
+    /// <param name="includeHiddenResources">Whether hidden resources should be included.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A list of resource snapshots.</returns>
+    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHiddenResources, CancellationToken cancellationToken = default)
     {
         var appModel = serviceProvider.GetService<DistributedApplicationModel>();
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
@@ -418,26 +427,20 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         // Get current state for each resource directly using TryGetCurrentState
         foreach (var resource in appModel.Resources)
         {
-            // Skip the dashboard resource
-            if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
-            {
-                continue;
-            }
-
             foreach (var instanceName in resource.GetResolvedResourceNames())
             {
-                await AddResult(instanceName).ConfigureAwait(false);
+                await AddResult(instanceName, includeHiddenResources).ConfigureAwait(false);
             }
         }
 
         return results;
 
-        async Task AddResult(string resourceName)
+        async Task AddResult(string resourceName, bool includeHidden)
         {
             if (notificationService.TryGetCurrentState(resourceName, out var resourceEvent))
             {
                 var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
-                if (snapshot is not null)
+                if (snapshot is not null && (includeHidden || !snapshot.IsHidden))
                 {
                     results.Add(snapshot);
                 }
@@ -450,7 +453,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </summary>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>An async enumerable of resource snapshots as they change.</returns>
-    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+        => WatchResourceSnapshotsAsync(includeHiddenResources: false, cancellationToken);
+
+    /// <summary>
+    /// Watches for resource snapshot changes and streams them to the client.
+    /// </summary>
+    /// <param name="includeHiddenResources">Whether hidden resources should be included.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>An async enumerable of resource snapshots as they change.</returns>
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHiddenResources, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
@@ -458,14 +470,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            // Skip the dashboard resource
-            if (string.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
-            {
-                continue;
-            }
-
             var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
-            if (snapshot is not null)
+            if (snapshot is not null && (includeHiddenResources || !snapshot.IsHidden))
             {
                 yield return snapshot;
             }
@@ -597,6 +603,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             DisplayName = resource.Name,
             ResourceType = snapshot.ResourceType,
             State = snapshot.State?.Text,
+            IsHidden = snapshot.IsHidden,
             StateStyle = snapshot.State?.Style,
             HealthStatus = snapshot.HealthStatus?.ToString(),
             ExitCode = snapshot.ExitCode,

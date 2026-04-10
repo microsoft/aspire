@@ -743,6 +743,11 @@ internal sealed class ResourceSnapshot
     public string? State { get; init; }
 
     /// <summary>
+    /// Gets a value indicating whether the resource is hidden.
+    /// </summary>
+    public bool IsHidden { get; init; }
+
+    /// <summary>
     /// Gets the state style hint (e.g., "success", "error", "warning").
     /// </summary>
     public string? StateStyle { get; init; }
