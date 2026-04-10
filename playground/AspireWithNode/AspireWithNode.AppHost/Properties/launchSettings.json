@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17111;http://localhost:15029",
+      "applicationUrl": "https://AspireWithNode.dev.localhost:17111;http://AspireWithNode.dev.localhost:15029",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21275",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22009"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15029",
+      "applicationUrl": "http://AspireWithNode.dev.localhost:15029",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19105",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20198"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "generate-manifest": {

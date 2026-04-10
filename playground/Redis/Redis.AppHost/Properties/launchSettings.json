@@ -5,12 +5,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:15306;http://localhost:15307",
+      "applicationUrl": "https://Redis.dev.localhost:15306;http://Redis.dev.localhost:15307",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:17329",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:17329",
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true"
       }
     },
@@ -18,12 +16,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15307",
+      "applicationUrl": "http://Redis.dev.localhost:15307",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17330",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:17330",
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
@@ -33,11 +29,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
-      "applicationUrl": "http://localhost:15307",
+      "applicationUrl": "http://Redis.dev.localhost:15307",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17330"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17229;http://localhost:15268",
+      "applicationUrl": "https://DevTunnels.dev.localhost:17229;http://DevTunnels.dev.localhost:15268",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21141",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22267"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15268",
+      "applicationUrl": "http://DevTunnels.dev.localhost:15268",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19147",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20284"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "generate-manifest": {

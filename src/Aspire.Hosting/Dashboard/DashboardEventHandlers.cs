@@ -364,6 +364,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var dashboardUrls = options.DashboardUrl;
         var otlpGrpcEndpointUrl = options.OtlpGrpcEndpointUrl;
         var otlpHttpEndpointUrl = options.OtlpHttpEndpointUrl;
+        var allowUnsecureTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
 
         eventing.Subscribe<ResourceReadyEvent>(dashboardResource, async (@event, cancellationToken) =>
         {
@@ -416,23 +417,15 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             });
         }
 
-        if (otlpGrpcEndpointUrl != null)
+        if (string.IsNullOrWhiteSpace(dashboardUrls))
         {
-            var address = BindingAddress.Parse(otlpGrpcEndpointUrl);
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: KnownEndpointNames.OtlpGrpcEndpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: "http2")
-            {
-                TargetHost = address.Host
-            });
+            var uriScheme = allowUnsecureTransport ? "http" : "https";
+            var endpointName = allowUnsecureTransport ? "http" : "https";
+            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true));
         }
 
-        if (otlpHttpEndpointUrl != null)
-        {
-            var address = BindingAddress.Parse(otlpHttpEndpointUrl);
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: KnownEndpointNames.OtlpHttpEndpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true)
-            {
-                TargetHost = address.Host
-            });
-        }
+        dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, transport: "http2"));
+        dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName));
 
         // Determine whether any HTTPS endpoints are configured
         var hasHttpsEndpoint = dashboardResource.TryGetAnnotationsOfType<EndpointAnnotation>(out var endpoints) && endpoints.Any(e => e.UriScheme is "https");
@@ -528,9 +521,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var options = dashboardOptions.Value;
 
         // Options should have been validated these should not be null
-
-        Debug.Assert(options.DashboardUrl is not null, "DashboardUrl should not be null");
-        Debug.Assert(options.OtlpGrpcEndpointUrl is not null || options.OtlpHttpEndpointUrl is not null, "OtlpGrpcEndpointUrl and OtlpHttpEndpointUrl should not both be null");
 
         var environment = options.AspNetCoreEnvironment;
         var browserToken = options.DashboardToken;
@@ -643,6 +633,29 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
         }
 
+    }
+
+    private static EndpointAnnotation CreateDashboardOtlpEndpointAnnotation(string? endpointUrl, string endpointName, string? transport = null)
+    {
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+        {
+            return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: "https", isProxied: true, transport: transport);
+        }
+
+        if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out var endpointUri))
+        {
+            throw new DistributedApplicationException($"The endpoint URL '{endpointUrl}' for '{endpointName}' is not a valid absolute URI.");
+        }
+
+        var explicitPort = endpointUri.GetComponents(UriComponents.StrongPort, UriFormat.Unescaped);
+        int? port = int.TryParse(explicitPort, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedPort)
+            ? parsedPort
+            : null;
+
+        return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: endpointUri.Scheme, port: port, isProxied: true, transport: transport)
+        {
+            TargetHost = endpointUri.Host
+        };
     }
 
     private static void PopulateDashboardUrls(EnvironmentCallbackContext context)

@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17252;http://localhost:15169",
+      "applicationUrl": "https://AzureDataLakeEndToEnd.dev.localhost:17252;http://AzureDataLakeEndToEnd.dev.localhost:15169",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21049",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22029"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15169",
+      "applicationUrl": "http://AzureDataLakeEndToEnd.dev.localhost:15169",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19104",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20232"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

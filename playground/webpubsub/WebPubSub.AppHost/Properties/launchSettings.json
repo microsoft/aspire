@@ -5,11 +5,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:16490",
+      "applicationUrl": "http://webpubsub.dev.localhost:16490",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17370",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
     },
@@ -17,12 +16,11 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:16490",
+      "applicationUrl": "http://webpubsub.dev.localhost:16490",
       "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17370",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
     }

@@ -4,5 +4,8 @@
       "Default": "Information",
       "Microsoft.AspNetCore": "Warning"
     }
+  },
+  "Dashboard" : {
+    "DetailedErrors": true
   }
 }

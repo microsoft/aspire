@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17225;http://localhost:15262",
+      "applicationUrl": "https://ExternalServices.dev.localhost:17225;http://ExternalServices.dev.localhost:15262",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21140",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22266"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15262",
+      "applicationUrl": "http://ExternalServices.dev.localhost:15262",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19146",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20283"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "generate-manifest": {

@@ -5,12 +5,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:16309;http://localhost:16310",
+      "applicationUrl": "https://Stress.dev.localhost:16309;http://Stress.dev.localhost:16310",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:17259",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:17259",
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true"
       }
     },
@@ -18,12 +16,10 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:16310",
+      "applicationUrl": "http://Stress.dev.localhost:16310",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17260",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:17260",
         "ASPIRE_SHOW_DASHBOARD_RESOURCES": "true",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
@@ -33,11 +29,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
-      "applicationUrl": "http://localhost:16310",
+      "applicationUrl": "http://Stress.dev.localhost:16310",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17260"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

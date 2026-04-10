@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Dashboard;
 
@@ -174,6 +175,71 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
                 Assert.Equal("json", e.Value);
             }
         );
+    }
+
+    [Theory]
+    [InlineData(KnownConfigNames.DashboardOtlpGrpcEndpointUrl)]
+    [InlineData(KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl)]
+    public async Task DashboardWithBlankOtlpEndpoint_AutoConfiguresDynamicOtlpPorts(string dashboardOtlpGrpcEndpointUrlKey)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false,
+            testOutputHelper: testOutputHelper);
+
+        builder.Configuration.Sources.Clear();
+
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.AspNetCoreUrls] = "https://localhost:17131;http://localhost:15000",
+            [dashboardOtlpGrpcEndpointUrlKey] = string.Empty
+        });
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources);
+        var otlpGrpcEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        var otlpHttpEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        var dashboardOptions = app.Services.GetRequiredService<IOptions<DashboardOptions>>().Value;
+
+        Assert.Null(dashboardOptions.OtlpGrpcEndpointUrl);
+        Assert.Equal("https", otlpGrpcEndpoint.UriScheme);
+        Assert.Equal("localhost", otlpGrpcEndpoint.TargetHost);
+        Assert.Null(otlpGrpcEndpoint.Port);
+
+        Assert.Equal("https", otlpHttpEndpoint.UriScheme);
+        Assert.Equal("localhost", otlpHttpEndpoint.TargetHost);
+        Assert.Null(otlpHttpEndpoint.Port);
+    }
+
+    [Theory]
+    [InlineData(false, "https")]
+    [InlineData(true, "http")]
+    public async Task DashboardWithNoApplicationUrl_UsesDynamicFrontendEndpointWithExpectedScheme(bool allowUnsecuredTransport, string expectedEndpointName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false,
+            testOutputHelper: testOutputHelper);
+
+        builder.Configuration.Sources.Clear();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.AllowUnsecuredTransport] = allowUnsecuredTransport.ToString()
+        });
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources);
+        var frontendEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name is "http" or "https");
+
+        Assert.Equal(expectedEndpointName, frontendEndpoint.Name);
+        Assert.Equal(expectedEndpointName, frontendEndpoint.UriScheme);
+        Assert.Null(frontendEndpoint.Port);
     }
 
     [Fact]
