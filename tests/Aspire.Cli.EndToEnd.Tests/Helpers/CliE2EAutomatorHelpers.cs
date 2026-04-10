@@ -270,7 +270,17 @@ internal static class CliE2EAutomatorHelpers
         int prNumber,
         SequenceCounter counter)
     {
-        var command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
+        string command;
+        if (OperatingSystem.IsWindows())
+        {
+            command = $"$ref = (gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha'); " +
+                      $"iex \"& {{ $(irm https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
+        }
+        else
+        {
+            command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
+        }
+
         await auto.TypeAsync(command);
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
@@ -284,7 +294,20 @@ internal static class CliE2EAutomatorHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        if (OperatingSystem.IsWindows())
+        {
+            await auto.TypeAsync(
+                "$env:PATH = \"$HOME\\.aspire\\bin;$HOME\\.aspire;$env:PATH\"; " +
+                "$env:ASPIRE_PLAYGROUND = 'true'; " +
+                "$env:DOTNET_CLI_TELEMETRY_OPTOUT = 'true'; " +
+                "$env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = 'true'; " +
+                "$env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'");
+        }
+        else
+        {
+            await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
+        }
+
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }
