@@ -220,6 +220,48 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void AddRoute_WithStringTarget_CreatesClusterAndRoute()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var yarp = builder.AddYarp("gateway");
+
+        yarp.WithConfiguration(config =>
+        {
+            var route = config.AddRoute("/string/{**catchall}", (object)"https://example.net");
+
+            var cluster = Assert.Single(yarp.Resource.Clusters);
+            var storedRoute = Assert.Single(yarp.Resource.Routes);
+
+            Assert.Same(route, storedRoute);
+            Assert.Equal("https://example.net", Assert.Single(cluster.Targets));
+            Assert.Equal(cluster.ClusterConfig.ClusterId, route.RouteConfig.ClusterId);
+            Assert.Equal($"cluster_{YarpConfigurationBuilderHelpers.CreateSyntheticClusterName("/string/{**catchall}", "https://example.net")}", cluster.ClusterConfig.ClusterId);
+            Assert.Equal("/string/{**catchall}", route.RouteConfig.Match?.Path);
+        });
+    }
+
+    [Fact]
+    public void AddCatchAllRoute_WithStringTarget_CreatesClusterAndRoute()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var yarp = builder.AddYarp("gateway");
+
+        yarp.WithConfiguration(config =>
+        {
+            var route = config.AddCatchAllRoute((object)"https://example.org");
+
+            var cluster = Assert.Single(yarp.Resource.Clusters);
+            var storedRoute = Assert.Single(yarp.Resource.Routes);
+
+            Assert.Same(route, storedRoute);
+            Assert.Equal("https://example.org", Assert.Single(cluster.Targets));
+            Assert.Equal(cluster.ClusterConfig.ClusterId, route.RouteConfig.ClusterId);
+            Assert.Equal($"cluster_{YarpConfigurationBuilderHelpers.CreateSyntheticClusterName("/{**catchall}", "https://example.org")}", cluster.ClusterConfig.ClusterId);
+            Assert.Equal("/{**catchall}", route.RouteConfig.Match?.Path);
+        });
+    }
+
+    [Fact]
     public void ClusterConfigDtos_StayInSyncWithYarpConfigurationTypes()
     {
         AssertDtoShapeMatchesYarpConfig<YarpForwarderRequestConfig, ForwarderRequestConfig>();

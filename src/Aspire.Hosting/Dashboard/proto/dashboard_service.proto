@@ -91,15 +91,22 @@ enum ResourceCommandResponseKind {
 
 message ResourceCommandResponse {
     ResourceCommandResponseKind kind = 1;
-    optional string error_message = 2;
-    optional string result = 3;
-    CommandResultFormat result_format = 4;
+    optional string error_message = 2 [deprecated = true];
+    optional string message = 3;
+    optional ResourceCommandResult result = 4;
+}
+
+message ResourceCommandResult {
+    string value = 1;
+    CommandResultFormat format = 2;
+    bool display_immediately = 3;
 }
 
 enum CommandResultFormat {
     COMMAND_RESULT_FORMAT_NONE = 0;
     COMMAND_RESULT_FORMAT_TEXT = 1;
     COMMAND_RESULT_FORMAT_JSON = 2;
+    COMMAND_RESULT_FORMAT_MARKDOWN = 3;
 }
 
 ////////////////////////////////////////////
@@ -194,12 +201,12 @@ message ResourceRelationship {
 message ResourceProperty {
     // Name of the data item, e.g. "container.id", "executable.pid", "project.path", ...
     string name = 1;
-    // TODO move display_name to reference data, sent once when the connection starts (https://github.com/dotnet/aspire/issues/1644)
+    // TODO move display_name to reference data, sent once when the connection starts (https://github.com/microsoft/aspire/issues/1644)
     // Optional display name, may be localized
     optional string display_name = 2;
     // The data value. May be null, a number, a string, a boolean, a dictionary of values (Struct), or a list of values (ValueList).
     google.protobuf.Value value = 3;
-    // TODO move is_sensitive to reference data, sent once when the connection starts (https://github.com/dotnet/aspire/issues/1644)
+    // TODO move is_sensitive to reference data, sent once when the connection starts (https://github.com/microsoft/aspire/issues/1644)
     // Whether the value is sensitive and should be masked in the UI by default.
     // Defaults to false. When true, the user must explicitly unmask the value to view it.
     optional bool is_sensitive = 4;

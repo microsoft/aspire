@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using Semver;
 
 namespace Aspire.Cli.Agents.OpenCode;
 

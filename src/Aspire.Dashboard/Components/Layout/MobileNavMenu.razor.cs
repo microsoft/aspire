@@ -99,6 +99,12 @@ public partial class MobileNavMenu : ComponentBase
         }
 
         yield return new MobileNavMenuEntry(
+            Loc[nameof(Resources.Layout.MainLayoutLaunchNotifications)],
+            LaunchNotificationsAsync,
+            new Icons.Regular.Size24.Alert()
+        );
+
+        yield return new MobileNavMenuEntry(
             Loc[nameof(Resources.Layout.MainLayoutLaunchSettings)],
             LaunchSettingsAsync,
             new Icons.Regular.Size24.Settings()

@@ -15,7 +15,6 @@ internal sealed class StartCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     private readonly AppHostLauncher _appHostLauncher;
-    private readonly IInteractionService _interactionService;
 
     private static readonly Option<bool> s_noBuildOption = new("--no-build")
     {
@@ -32,7 +31,6 @@ internal sealed class StartCommand : BaseCommand
         : base("start", StartCommandStrings.Description,
                features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        _interactionService = interactionService;
         _appHostLauncher = appHostLauncher;
 
         Options.Add(s_noBuildOption);
@@ -48,7 +46,10 @@ internal sealed class StartCommand : BaseCommand
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
-        var isExtensionHost = ExtensionHelper.IsExtensionHost(_interactionService, out _, out _);
+        // `aspire start` is always user-initiated — the VS Code extension only invokes
+        // `aspire run`, never `aspire start`. So we hardcode isExtensionHost to false
+        // to ensure dashboard URLs always appear in the summary output.
+        var isExtensionHost = false;
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
         var additionalArgs = parseResult.UnmatchedTokens.ToList();

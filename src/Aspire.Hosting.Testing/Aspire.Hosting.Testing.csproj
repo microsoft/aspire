@@ -12,6 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsReader.cs" Link="LaunchSettingsReader.cs" />
     <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsSerializerContext.cs" Link="LaunchSettingsSerializerContext.cs" />
     <Compile Include="$(SharedDir)\KnownConfigNames.cs" Link="KnownConfigNames.cs" />
   </ItemGroup>

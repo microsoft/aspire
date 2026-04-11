@@ -76,7 +76,7 @@ internal static class CoreExports
     /// <param name="name">The volume name. If null, an anonymous volume is created.</param>
     /// <param name="isReadOnly">Whether the volume is read-only.</param>
     /// <returns>The same resource builder handle for chaining.</returns>
-    [AspireExport("withVolume", Description = "Adds a volume")]
+    [AspireExport(Description = "Adds a volume")]
     public static IResourceBuilder<ContainerResource> WithVolume(
         this IResourceBuilder<ContainerResource> resource,
         string target,
@@ -100,7 +100,7 @@ internal static class CoreExports
     /// </remarks>
     /// <param name="resource">The resource builder handle.</param>
     /// <returns>The resource name.</returns>
-    [AspireExport("getResourceName", Description = "Gets the resource name")]
+    [AspireExport(Description = "Gets the resource name")]
     public static string GetResourceName(this IResourceBuilder<IResource> resource)
     {
         return resource.Resource.Name;

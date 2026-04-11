@@ -43,4 +43,30 @@ public class AddProjectTests
                 && value is "{test-project.outputs.endpoint}";
         });
     }
+
+    [Fact]
+    public void AddProject_AfterRunAsFoundryLocal_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var foundry = builder.AddFoundry("account")
+            .RunAsFoundryLocal();
+
+        var exception = Assert.Throws<InvalidOperationException>(() => foundry.AddProject("my-project"));
+
+        Assert.Equal(FoundryExtensions.LocalProjectsNotSupportedMessage, exception.Message);
+    }
+
+    [Fact]
+    public void RunAsFoundryLocal_AfterAddProject_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var foundry = builder.AddFoundry("account");
+        foundry.AddProject("my-project");
+
+        var exception = Assert.Throws<InvalidOperationException>(foundry.RunAsFoundryLocal);
+
+        Assert.Equal(FoundryExtensions.LocalProjectsNotSupportedMessage, exception.Message);
+    }
 }

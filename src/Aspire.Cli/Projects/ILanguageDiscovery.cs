@@ -50,6 +50,52 @@ internal sealed record LanguageInfo(
     /// The well-known folder name where generated code is placed for all guest languages.
     /// </summary>
     internal const string GeneratedFolderName = ".modules";
+
+    /// <summary>
+    /// Maximum directory depth used when scanning the file system for language
+    /// detection patterns. Keeps the scan fast in large workspaces while still
+    /// finding AppHost files in typical nested project layouts.
+    /// </summary>
+    internal const int DetectionRecurseLimit = 5;
+
+    /// <summary>
+    /// Returns whether <paramref name="fileName"/> matches any of this
+    /// language's <see cref="DetectionPatterns"/>. Supports exact names
+    /// (e.g. <c>apphost.ts</c>) and wildcard extensions (e.g. <c>*.csproj</c>).
+    /// </summary>
+    internal bool MatchesFile(string fileName)
+    {
+        return DetectionPatterns.Any(p => MatchesPattern(fileName, p));
+    }
+
+    /// <summary>
+    /// Scans <paramref name="directory"/> (up to <see cref="DetectionRecurseLimit"/>
+    /// levels deep) for any file matching this language's detection patterns.
+    /// Uses <see cref="Utils.FileSystemHelper.FindFirstFile"/> so that glob
+    /// patterns like <c>*.csproj</c> are expanded correctly — unlike a plain
+    /// <see cref="File.Exists"/> call.
+    /// </summary>
+    /// <returns>The full path of the first matching file, or <c>null</c>.</returns>
+    internal string? FindInDirectory(string directory)
+    {
+        return Utils.FileSystemHelper.FindFirstFile(directory, DetectionRecurseLimit, DetectionPatterns);
+    }
+
+    /// <summary>
+    /// Checks whether <paramref name="fileName"/> matches a single detection
+    /// pattern. Handles wildcard extension patterns (<c>*.csproj</c>) and
+    /// exact file names (<c>apphost.ts</c>).
+    /// </summary>
+    internal static bool MatchesPattern(string fileName, string pattern)
+    {
+        if (pattern.StartsWith("*.", StringComparison.Ordinal))
+        {
+            var extension = pattern[1..]; // ".csproj"
+            return fileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 /// <summary>
@@ -78,13 +124,24 @@ internal interface ILanguageDiscovery
     Task<string?> GetPackageForLanguageAsync(LanguageId languageId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Detects the language used in a directory by checking for known file patterns.
-    /// This is a fallback detection mechanism when .aspire/settings.json doesn't exist.
+    /// Detects the language used in a directory by checking for known file patterns
+    /// in the immediate directory only. Does not recurse into subdirectories.
     /// </summary>
     /// <param name="directory">The directory to check.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The detected language ID, or null if no language was detected.</returns>
     Task<LanguageId?> DetectLanguageAsync(DirectoryInfo directory, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Detects the language used in a directory by recursively scanning for known
+    /// file patterns up to <see cref="LanguageInfo.DetectionRecurseLimit"/> levels
+    /// deep. Use this when a broader search is needed (e.g. <c>aspire doctor</c>),
+    /// but be aware it is more expensive than <see cref="DetectLanguageAsync"/>.
+    /// </summary>
+    /// <param name="directory">The root directory to scan.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The detected language ID, or null if no language was detected.</returns>
+    Task<LanguageId?> DetectLanguageRecursiveAsync(DirectoryInfo directory, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets language information by its identifier.

@@ -28,7 +28,7 @@ public class AzurePrivateEndpointResource(
     /// <summary>
     /// Gets the "name" output reference for the resource.
     /// </summary>
-    public BicepOutputReference NameOutput => new("name", this);
+    public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
     /// Gets the subnet where the private endpoint will be created.
@@ -67,7 +67,7 @@ public class AzurePrivateEndpointResource(
             infra,
             endpoint))
         {
-            endpoint.Name = NameOutput.AsProvisioningParameter(infra);
+            endpoint.Name = NameOutputReference.AsProvisioningParameter(infra);
         }
 
         infra.Add(endpoint);

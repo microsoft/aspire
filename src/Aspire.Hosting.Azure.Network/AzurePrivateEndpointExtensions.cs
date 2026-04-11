@@ -3,7 +3,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
-using Aspire.Hosting.Azure.Network;
 using Azure.Provisioning;
 using Azure.Provisioning.Network;
 using Azure.Provisioning.PrivateDns;
@@ -46,7 +45,7 @@ public static class AzurePrivateEndpointExtensions
     /// peSubnet.AddPrivateEndpoint(blobs);
     /// </code>
     /// </example>
-    [AspireExport("addPrivateEndpoint", Description = "Adds an Azure Private Endpoint resource to an Azure subnet resource.")]
+    [AspireExport(Description = "Adds an Azure Private Endpoint resource to an Azure subnet resource.")]
     public static IResourceBuilder<AzurePrivateEndpointResource> AddPrivateEndpoint(
         this IResourceBuilder<AzureSubnetResource> subnet,
         IResourceBuilder<IAzurePrivateEndpointTarget> target)
@@ -100,7 +99,7 @@ public static class AzurePrivateEndpointExtensions
             var dnsZone = azureResource.DnsZone!;
             var dnsZoneIdentifier = dnsZone.GetBicepIdentifier();
             var privateDnsZone = PrivateDnsZone.FromExisting(dnsZoneIdentifier);
-            privateDnsZone.Name = dnsZone.NameOutput.AsProvisioningParameter(infra);
+            privateDnsZone.Name = dnsZone.NameOutputReference.AsProvisioningParameter(infra);
             infra.Add(privateDnsZone);
 
             // Create the Private Endpoint

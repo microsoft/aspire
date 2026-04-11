@@ -13,7 +13,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Deploy an apphost to its deployment targets (Preview)</source>
+        <source>Deploy an AppHost to its deployment targets (Preview)</source>
         <target state="needs-review-translation">Déployez le contenu d’un Aspire AppHost vers les cibles de déploiement définies. (Préversion)</target>
         <note />
       </trans-unit>

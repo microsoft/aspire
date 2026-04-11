@@ -21,6 +21,7 @@
   "symbols/LocalhostTld/displayName": "在应用程序 URL 中使用 .dev.localhost TLD",
   "symbols/LocalhostTld/description": "是否在应用程序 URL 中将项目名称与 .dev.localhost TLD 合并以用于本地开发，例如 https://myapp.dev.localhost:12345。在 .NET 10 及更高版本中受支持。",
   "postActions/set-startup-project/description": "在解决方案中设置启动项目",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "还原此项目所需的 NuGet 包。",
   "postActions/restore/manualInstructions/default/text": "运行 \"dotnet restore\""
 }

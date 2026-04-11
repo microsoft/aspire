@@ -21,7 +21,6 @@ internal sealed class TelemetryApiService(
 {
     private const int DefaultLimit = 200;
     private const int DefaultTraceLimit = 100;
-    private const int MaxQueryCount = 10000;
 
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
 
@@ -50,7 +49,7 @@ internal sealed class TelemetryApiService(
             {
                 ResourceKey = resourceKey,
                 StartIndex = 0,
-                Count = MaxQueryCount,
+                Count = int.MaxValue,
                 Filters = [],
                 FilterText = string.Empty
             });
@@ -121,7 +120,7 @@ internal sealed class TelemetryApiService(
             {
                 ResourceKey = resourceKey,
                 StartIndex = 0,
-                Count = MaxQueryCount,
+                Count = int.MaxValue,
                 Filters = [],
                 FilterText = string.Empty
             });
@@ -237,7 +236,7 @@ internal sealed class TelemetryApiService(
             {
                 ResourceKey = resourceKey,
                 StartIndex = 0,
-                Count = MaxQueryCount,
+                Count = int.MaxValue,
                 Filters = filters
             });
             allLogs.AddRange(result.Items);

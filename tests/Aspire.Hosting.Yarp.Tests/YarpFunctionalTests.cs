@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
@@ -12,7 +12,6 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/9344")]
     public async Task VerifyYarpResourceExtensionsConfig()
     {
         await VerifyYarpResource((yarp, endpoint) =>

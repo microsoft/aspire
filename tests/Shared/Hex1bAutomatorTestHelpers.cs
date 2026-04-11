@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Hex1b.Automation;
+using Hex1b.Input;
 
 namespace Aspire.Tests.Shared;
 
@@ -57,6 +59,174 @@ internal static class Hex1bAutomatorTestHelpers
         }, timeout: effectiveTimeout, description: $"any prompt [{counter.Value} OK/ERR] $");
 
         counter.Increment();
+    }
+
+    /// <summary>
+    /// Repeatedly types a shell command until the first line of command output matches the expected text
+    /// or the timeout expires. Each attempt waits for either the first output line or the next prompt,
+    /// then waits for the prompt if output appeared first.
+    /// </summary>
+    internal static async Task ExecuteCommandUntilOutputAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string commandText,
+        string desiredOutput,
+        TimeSpan? timeout = null,
+        TimeSpan? retryInterval = null)
+    {
+        ArgumentNullException.ThrowIfNull(auto);
+        ArgumentNullException.ThrowIfNull(counter);
+        ArgumentException.ThrowIfNullOrWhiteSpace(commandText);
+        ArgumentException.ThrowIfNullOrWhiteSpace(desiredOutput);
+
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(30);
+        var effectiveRetryInterval = retryInterval ?? TimeSpan.FromSeconds(5);
+        var stopwatch = Stopwatch.StartNew();
+        var attempt = 0;
+
+        while (stopwatch.Elapsed < effectiveTimeout)
+        {
+            attempt++;
+            var expectedPromptSequence = counter.Value;
+            var sawPrompt = false;
+            var firstOutputMatched = false;
+
+            await auto.TypeAsync(commandText);
+            await auto.EnterAsync();
+
+            var remaining = effectiveTimeout - stopwatch.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            var waitThisAttempt = remaining < effectiveRetryInterval ? remaining : effectiveRetryInterval;
+
+            try
+            {
+                await auto.WaitUntilAsync(snapshot =>
+                {
+                    var firstOutputLine = TryGetFirstOutputLine(snapshot, commandText);
+                    if (firstOutputLine is not null)
+                    {
+                        if (IsPromptLine(firstOutputLine, expectedPromptSequence))
+                        {
+                            sawPrompt = true;
+                            return true;
+                        }
+
+                        firstOutputMatched = firstOutputLine.Contains(desiredOutput, StringComparison.Ordinal);
+                        return true;
+                    }
+
+                    if (IsPromptVisible(snapshot, expectedPromptSequence))
+                    {
+                        sawPrompt = true;
+                        return true;
+                    }
+
+                    return false;
+                }, timeout: waitThisAttempt, description: $"waiting for first output or prompt after '{commandText}' (attempt {attempt})");
+            }
+            catch (TimeoutException) when (stopwatch.Elapsed < effectiveTimeout)
+            {
+                continue;
+            }
+
+            if (!sawPrompt)
+            {
+                remaining = effectiveTimeout - stopwatch.Elapsed;
+                if (remaining <= TimeSpan.Zero)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await auto.WaitForAnyPromptAsync(counter, remaining);
+                    sawPrompt = true;
+                }
+                catch (TimeoutException) when (stopwatch.Elapsed < effectiveTimeout)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                counter.Increment();
+            }
+
+            if (firstOutputMatched)
+            {
+                return;
+            }
+        }
+
+        throw new TimeoutException(
+            $"Timed out after {effectiveTimeout} waiting for the first output line from '{commandText}' to contain '{desiredOutput}'.");
+    }
+
+    private static bool IsPromptVisible(IHex1bTerminalRegion snapshot, int expectedPromptSequence)
+    {
+        var successSearcher = new CellPatternSearcher()
+            .FindPattern(expectedPromptSequence.ToString())
+            .RightText(" OK] $ ");
+        var errorSearcher = new CellPatternSearcher()
+            .FindPattern(expectedPromptSequence.ToString())
+            .RightText(" ERR:");
+
+        return successSearcher.Search(snapshot).Count > 0 || errorSearcher.Search(snapshot).Count > 0;
+    }
+
+    private static bool IsPromptLine(string line, int expectedPromptSequence)
+    {
+        return line.Contains($"[{expectedPromptSequence} OK] $", StringComparison.Ordinal) ||
+            line.Contains($"[{expectedPromptSequence} ERR:", StringComparison.Ordinal);
+    }
+
+    private static string? TryGetFirstOutputLine(IHex1bTerminalRegion snapshot, string commandText)
+    {
+        var commandLineIndex = FindCommandLineIndex(snapshot, commandText);
+        if (commandLineIndex < 0)
+        {
+            return null;
+        }
+
+        for (var lineIndex = commandLineIndex + 1; lineIndex < snapshot.Height; lineIndex++)
+        {
+            var line = snapshot.GetLineTrimmed(lineIndex);
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                return line;
+            }
+        }
+
+        return null;
+    }
+
+    private static int FindCommandLineIndex(IHex1bTerminalRegion snapshot, string commandText)
+    {
+        for (var lineIndex = snapshot.Height - 1; lineIndex >= 0; lineIndex--)
+        {
+            var line = snapshot.GetLineTrimmed(lineIndex);
+            if (line.EndsWith(commandText, StringComparison.Ordinal) ||
+                line.Contains($"$ {commandText}", StringComparison.Ordinal) ||
+                line.Contains($"# {commandText}", StringComparison.Ordinal))
+            {
+                return lineIndex;
+            }
+        }
+
+        for (var lineIndex = snapshot.Height - 1; lineIndex >= 0; lineIndex--)
+        {
+            var line = snapshot.GetLineTrimmed(lineIndex);
+            if (line.Contains(commandText, StringComparison.Ordinal))
+            {
+                return lineIndex;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>

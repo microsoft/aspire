@@ -146,7 +146,7 @@
     <value>Channel to use for templates (stable, staging, daily)</value>
   </data>
   <data name="LanguageOptionDescription" xml:space="preserve">
-    <value>The programming language for the apphost</value>
+    <value>The programming language for the AppHost</value>
   </data>
   <data name="ResolvingTemplateVersion" xml:space="preserve">
     <value>Resolving template version...</value>

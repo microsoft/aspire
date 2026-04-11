@@ -271,6 +271,10 @@ public class TextVisualizerViewModel
                 ChangeFormattedText(newFormat, formattedJson);
             }
         }
+        else if (newFormat == DashboardUIHelpers.MarkdownFormat)
+        {
+            ChangeFormattedText(newFormat, Text);
+        }
         else
         {
             ChangeFormattedText(DashboardUIHelpers.PlaintextFormat, Text);

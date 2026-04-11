@@ -465,6 +465,36 @@ describe('AspireClient', () => {
         const client = new AspireClient('nonexistent-pipe-' + Date.now());
         await expect(client.connect(500)).rejects.toThrow();
     });
+
+    it('sends the authentication token as a direct parameter during connect', async () => {
+        const previousToken = process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+        const authenticate = vi.fn(async (token: string) => {
+            expect(token).toBe('secret-token');
+            return true;
+        });
+
+        process.env.ASPIRE_REMOTE_APPHOST_TOKEN = 'secret-token';
+
+        const fixture = createPipeFixture({ authenticate });
+        await fixture.start();
+
+        const client = new AspireClient(fixture.clientSocketPath);
+
+        try {
+            await client.connect();
+            await fixture.waitForClient();
+
+            expect(authenticate).toHaveBeenCalledOnce();
+        } finally {
+            if (previousToken === undefined) {
+                delete process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+            } else {
+                process.env.ASPIRE_REMOTE_APPHOST_TOKEN = previousToken;
+            }
+
+            await fixture.cleanup(client);
+        }
+    });
 });
 
 // ============================================================================
@@ -540,7 +570,7 @@ describe('registerHandleWrapper', () => {
  * Creates a named-pipe server that speaks JSON-RPC, connects an AspireClient,
  * and provides a `sendRequest` helper to invoke callbacks on the client side.
  */
-function createPipeFixture() {
+function createPipeFixture(options?: { authenticate?: (token: string) => boolean | Promise<boolean> }) {
     const pipeName = `aspire-test-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const pipePath = process.platform === 'win32' ? `\\\\.\\pipe\\${pipeName}` : `/tmp/${pipeName}`;
     let serverConnection: rpc.MessageConnection | null = null;
@@ -562,6 +592,10 @@ function createPipeFixture() {
 
         // Handle cancelToken
         serverConnection.onRequest('cancelToken', () => true);
+
+        if (options?.authenticate) {
+            serverConnection.onRequest('authenticate', options.authenticate);
+        }
 
         serverConnection.listen();
         onClientConnected?.();
@@ -591,12 +625,48 @@ function createPipeFixture() {
 
 describe('callback invocation protocol', () => {
     async function connectFixture() {
-        const fixture = createPipeFixture();
+        const previousToken = process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+        const testToken = 'callback-test-token';
+        process.env.ASPIRE_REMOTE_APPHOST_TOKEN = testToken;
+
+        const fixture = createPipeFixture({
+            authenticate: (token: string) => token === testToken,
+        });
+
         await fixture.start();
         const client = new AspireClient(fixture.clientSocketPath);
-        await client.connect();
-        await fixture.waitForClient();
-        return { fixture, client };
+
+        try {
+            await client.connect();
+            await fixture.waitForClient();
+        }
+        catch (error)
+        {
+            if (previousToken === undefined) {
+                delete process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+            } else {
+                process.env.ASPIRE_REMOTE_APPHOST_TOKEN = previousToken;
+            }
+
+            await fixture.cleanup(client);
+            throw error;
+        }
+
+        return {
+            fixture: {
+                ...fixture,
+                cleanup: async (client: AspireClient) => {
+                    if (previousToken === undefined) {
+                        delete process.env.ASPIRE_REMOTE_APPHOST_TOKEN;
+                    } else {
+                        process.env.ASPIRE_REMOTE_APPHOST_TOKEN = previousToken;
+                    }
+
+                    await fixture.cleanup(client);
+                },
+            },
+            client,
+        };
     }
 
     it('invokes a no-arg callback', async () => {
@@ -701,5 +771,231 @@ describe('callback invocation protocol', () => {
             unregisterCallback(id);
             await fixture.cleanup(client);
         }
+    });
+});
+
+// ============================================================================
+// Promise Tracking (trackPromise / flushPendingPromises)
+// ============================================================================
+
+describe('trackPromise / flushPendingPromises', () => {
+    function createClient(): AspireClient {
+        return new AspireClient('/dev/null');
+    }
+
+    it('removes promise from pending set on resolve', async () => {
+        const client = createClient();
+        const p = Promise.resolve();
+        client.trackPromise(p);
+        await Promise.resolve();
+        // No pending promises — flush completes immediately
+        await client.flushPendingPromises();
+    });
+
+    it('re-throws pre-flush rejected promise errors by default (throwOnPendingRejections)', async () => {
+        const client = createClient();
+        const p = Promise.reject(new Error('test error'));
+        client.trackPromise(p);
+        await Promise.resolve();
+        // Default: throwOnPendingRejections = true — flush re-throws even pre-settled rejections
+        await expect(client.flushPendingPromises()).rejects.toThrow(AggregateError);
+    });
+
+    it('suppresses pre-flush rejection errors when throwOnPendingRejections is false', async () => {
+        const client = createClient();
+        client.throwOnPendingRejections = false;
+        const p = Promise.reject(new Error('test error'));
+        client.trackPromise(p);
+        await Promise.resolve();
+        // With throwOnPendingRejections = false, pre-flush rejections are silently removed
+        await client.flushPendingPromises();
+    });
+
+    it('resolves immediately when no promises are tracked', async () => {
+        const client = createClient();
+        await client.flushPendingPromises();
+    });
+
+    it('waits for pending promises to resolve', async () => {
+        const client = createClient();
+        let resolved = false;
+        const p = new Promise<void>(resolve => {
+            setTimeout(() => { resolved = true; resolve(); }, 10);
+        });
+        client.trackPromise(p);
+        await client.flushPendingPromises();
+        expect(resolved).toBe(true);
+    });
+
+    it('throws AggregateError when a pending promise rejects during flush', async () => {
+        const client = createClient();
+        const p = new Promise<void>((_, reject) => {
+            setTimeout(() => reject(new Error('boom')), 10);
+        });
+        client.trackPromise(p);
+        await expect(client.flushPendingPromises()).rejects.toThrow(AggregateError);
+    });
+
+    it('collects multiple errors from multiple rejected promises', async () => {
+        const client = createClient();
+        const p1 = new Promise<void>((_, reject) => setTimeout(() => reject(new Error('err1')), 10));
+        const p2 = new Promise<void>((_, reject) => setTimeout(() => reject(new Error('err2')), 10));
+        client.trackPromise(p1);
+        client.trackPromise(p2);
+        try {
+            await client.flushPendingPromises();
+            expect.unreachable('should have thrown');
+        } catch (err) {
+            expect(err).toBeInstanceOf(AggregateError);
+            const msgs = (err as AggregateError).errors.map((e: Error) => e.message).sort();
+            expect(msgs).toEqual(['err1', 'err2']);
+        }
+    });
+
+    it('does not duplicate errors from chained promise wrappers', async () => {
+        // Simulates the generated pattern: inner promise is tracked by
+        // PromiseImpl, then wrapped in .then() which is also tracked by
+        // the chained PromiseImpl. Both adopt the same rejection.
+        const client = createClient();
+
+        const inner = new Promise<string>((_, reject) =>
+            setTimeout(() => reject(new Error('rpc failed')), 10));
+        client.trackPromise(inner);
+
+        // Outer .then() adopts the inner rejection — also tracked
+        const outer = inner.then(val => val);
+        client.trackPromise(outer);
+
+        try {
+            await client.flushPendingPromises();
+            expect.unreachable('should have thrown');
+        } catch (err) {
+            expect(err).toBeInstanceOf(AggregateError);
+            // Should be 1 unique error, not 2 duplicates
+            expect((err as AggregateError).errors.length).toBe(1);
+            expect((err as AggregateError).errors[0].message).toBe('rpc failed');
+        }
+    });
+
+    it('does not poison the client after a failed flush', async () => {
+        // Simulates the build() poisoning scenario: flushPendingPromises throws
+        // AggregateError, the build promise rejects with it, and if tracked,
+        // the reject handler would add the AggregateError back into _rejectedErrors.
+        // A subsequent flush should be clean.
+        const client = createClient();
+
+        const p = new Promise<void>((_, reject) =>
+            setTimeout(() => reject(new Error('chain failed')), 10));
+        client.trackPromise(p);
+
+        // First flush throws
+        await expect(client.flushPendingPromises()).rejects.toThrow(AggregateError);
+
+        // Second flush should be clean — no stale errors
+        await client.flushPendingPromises();
+    });
+
+    it('does not flush promises created by .then() callbacks during flush (known limitation)', async () => {
+        // The snapshot-based flush only awaits promises tracked before flush starts.
+        // Promises tracked by .then() callbacks during flush are excluded to prevent
+        // deadlocks. This is acceptable because the generated fluent API tracks
+        // promises directly (resource.withX()), not via .then() callbacks.
+        const client = createClient();
+
+        let innerResolved = false;
+        const outer = new Promise<string>(resolve =>
+            setTimeout(() => resolve('done'), 10));
+        client.trackPromise(outer);
+
+        outer.then(() => {
+            const inner = new Promise<void>(resolve =>
+                setTimeout(() => { innerResolved = true; resolve(); }, 50));
+            client.trackPromise(inner);
+        });
+
+        await client.flushPendingPromises();
+        expect(innerResolved).toBe(false);
+    });
+
+    it('does not deadlock when build promise depends on flush completing', async () => {
+        // Simulates the build() pattern: the build promise depends on flush
+        // completing but is NOT tracked (build uses track=false in PromiseImpl).
+        const client = createClient();
+
+        let resolveSlowPromise: () => void;
+        const slowPromise = new Promise<void>(resolve => { resolveSlowPromise = resolve; });
+        client.trackPromise(slowPromise);
+
+        const flushPromise = client.flushPendingPromises();
+
+        // Build promise depends on flush but is NOT tracked (mirrors track=false)
+        const buildPromise = new Promise<void>(resolve => {
+            flushPromise.then(() => resolve());
+        });
+
+        resolveSlowPromise!();
+
+        const result = await Promise.race([
+            flushPromise.then(() => 'completed'),
+            new Promise<string>(resolve => setTimeout(() => resolve('deadlocked'), 1000)),
+        ]);
+        expect(result).toBe('completed');
+
+        await buildPromise;
+    });
+
+    it('snapshot excludes promises tracked after flush starts', async () => {
+        // Even if a promise is tracked during flush (e.g. by a PromiseImpl
+        // constructor), the snapshot approach excludes it. This test verifies
+        // that tracking during flush doesn't cause a deadlock.
+        const client = createClient();
+
+        let resolveSlowPromise: () => void;
+        const slowPromise = new Promise<void>(resolve => { resolveSlowPromise = resolve; });
+        client.trackPromise(slowPromise);
+
+        const flushPromise = client.flushPendingPromises();
+
+        // Track a promise during flush — snapshot already taken, won't be awaited
+        const latePromise = new Promise<void>(resolve => {
+            flushPromise.then(() => resolve());
+        });
+        client.trackPromise(latePromise);
+
+        resolveSlowPromise!();
+
+        const result = await Promise.race([
+            flushPromise.then(() => 'completed'),
+            new Promise<string>(resolve => setTimeout(() => resolve('deadlocked'), 1000)),
+        ]);
+        expect(result).toBe('completed');
+
+        await latePromise;
+    });
+
+    it('re-throws user-caught rejections in strict mode (accepted tradeoff)', async () => {
+        // With throwOnPendingRejections (default), even user-caught rejections are
+        // collected and re-thrown. This is the accepted tradeoff: we prefer
+        // failing loud for genuinely un-awaited errors over silently losing them.
+        const client = createClient();
+        const p = Promise.reject(new Error('user handled'));
+        client.trackPromise(p);
+
+        try { await p; } catch { /* handled */ }
+        await Promise.resolve();
+
+        await expect(client.flushPendingPromises()).rejects.toThrow(AggregateError);
+    });
+
+    it('does not re-throw user-caught rejections when throwOnPendingRejections is false', async () => {
+        const client = createClient();
+        client.throwOnPendingRejections = false;
+        const p = Promise.reject(new Error('user handled'));
+        client.trackPromise(p);
+
+        try { await p; } catch { /* handled */ }
+        await Promise.resolve();
+
+        await client.flushPendingPromises();
     });
 });

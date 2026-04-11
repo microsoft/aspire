@@ -61,16 +61,14 @@ internal sealed partial class CliTemplateFactory
                     _logger.LogDebug("Copying embedded TypeScript starter template files to '{OutputPath}'.", outputPath);
                     await CopyTemplateTreeToDiskAsync("ts-starter", outputPath, ApplyAllTokens, cancellationToken);
 
-                    // Write channel to settings.json before restore so package resolution uses the selected channel.
+                    // Persist the template SDK version before restore so integration and codegen package
+                    // resolution stays aligned with the project we just created.
+                    var config = AspireConfigFile.LoadOrCreate(outputPath, aspireVersion);
                     if (!string.IsNullOrEmpty(inputs.Channel))
                     {
-                        var config = AspireJsonConfiguration.Load(outputPath);
-                        if (config is not null)
-                        {
-                            config.Channel = inputs.Channel;
-                            config.Save(outputPath);
-                        }
+                        config.Channel = inputs.Channel;
                     }
+                    config.Save(outputPath);
 
                     var appHostProject = _projectFactory.TryGetProject(new FileInfo(Path.Combine(outputPath, "apphost.ts")));
                     if (appHostProject is not IGuestAppHostSdkGenerator guestProject)

@@ -9,7 +9,7 @@ namespace Aspire.Hosting.CodeGeneration.Rust;
 /// Provides language support for Rust AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class RustLanguageSupport : ILanguageSupport
+internal sealed class RustLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Rust.

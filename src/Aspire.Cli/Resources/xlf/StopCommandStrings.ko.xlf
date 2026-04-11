@@ -3,37 +3,37 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../StopCommandStrings.resx">
     <body>
       <trans-unit id="AllOptionDescription">
-        <source>Stop all running apphosts</source>
-        <target state="new">Stop all running apphosts</target>
+        <source>Stop all running AppHosts</source>
+        <target state="new">Stop all running AppHosts</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
-        <source>Apphost stopped successfully.</source>
+        <source>AppHost stopped successfully.</source>
         <target state="needs-review-translation">AppHost가 중지되었습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Stop a running apphost</source>
+        <source>Stop a running AppHost</source>
         <target state="needs-review-translation">실행 중인 Aspire AppHost를 중지합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
-        <source>Failed to stop the apphost.</source>
+        <source>Failed to stop the AppHost.</source>
         <target state="needs-review-translation">AppHost를 중지하지 못했습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsNonInteractive">
-        <source>Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
-        <target state="new">Multiple apphosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
+        <source>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</source>
+        <target state="new">Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsRunning">
-        <source>Multiple apphosts are running. Use --apphost to specify which one to stop, or select one:</source>
+        <source>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</source>
         <target state="needs-review-translation">여러 AppHost가 실행 중입니다. --apphost를 사용해 중지할 AppHost를 지정하거나 하나를 선택하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file</source>
+        <source>The path to the Aspire AppHost project file</source>
         <target state="needs-review-translation">Aspire AppHost 프로젝트 파일의 경로입니다.</target>
         <note />
       </trans-unit>
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping Aspire apphost...</source>
-        <target state="translated">Aspire AppHost를 중지하는 중...</target>
+        <source>Stopping Aspire AppHost...</source>
+        <target state="needs-review-translation">Aspire AppHost를 중지하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="AllAndProjectMutuallyExclusive">

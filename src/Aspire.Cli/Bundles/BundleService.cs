@@ -173,16 +173,20 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     /// <summary>
     /// Removes well-known layout subdirectories before re-extraction.
     /// Preserves the bin/ directory (which contains the CLI binary itself).
+    /// If a directory cannot be deleted (e.g. a process is still using files
+    /// inside it), it is renamed to {dir}.old.{timestamp} so extraction can
+    /// proceed. The stale directory will be cleaned up on the next successful
+    /// extraction.
     /// </summary>
     internal static void CleanLayoutDirectories(string layoutPath)
     {
         foreach (var dir in s_layoutDirectories)
         {
+            // Clean up stale .old directories from previous runs first
+            FileDeleteHelper.TryCleanupOldItems(layoutPath, dir);
+
             var fullPath = Path.Combine(layoutPath, dir);
-            if (Directory.Exists(fullPath))
-            {
-                Directory.Delete(fullPath, recursive: true);
-            }
+            FileDeleteHelper.TryDeleteDirectory(fullPath);
         }
 
         // Remove version marker so it's rewritten after extraction
@@ -194,12 +198,41 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     }
 
     /// <summary>
-    /// Gets the assembly informational version of the current CLI binary.
+    /// Gets a fingerprint for the current CLI bundle.
     /// Used as the version marker to detect when re-extraction is needed.
     /// </summary>
-    internal static string GetCurrentVersion()
+    internal static string GetCurrentVersion(string? processPath = null)
     {
-        return VersionHelper.GetDefaultTemplateVersion();
+        var version = VersionHelper.GetDefaultTemplateVersion();
+        processPath ??= Environment.ProcessPath;
+
+        if (string.IsNullOrEmpty(processPath))
+        {
+            return version;
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(processPath);
+            if (!fileInfo.Exists)
+            {
+                return version;
+            }
+
+            return $"{version}|{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}";
+        }
+        catch (IOException)
+        {
+            return version;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return version;
+        }
+        catch (NotSupportedException)
+        {
+            return version;
+        }
     }
 
     /// <summary>

@@ -70,9 +70,8 @@ public class TestProgram : IDisposable
         AppBuilder = builder;
 
         string testPrefix = string.IsNullOrEmpty(testName) ? "" : $"{testName}-";
-        var serviceAPath = Path.Combine(Projects.TestProject_AppHost.ProjectPath, @"..\TestProject.ServiceA\TestProject.ServiceA.csproj");
 
-        ServiceABuilder = AppBuilder.AddProject($"{testPrefix}servicea", serviceAPath, launchProfileName: "http");
+        ServiceABuilder = AppBuilder.AddProject<Projects.ServiceA>($"{testPrefix}servicea", launchProfileName: "http");
         ServiceBBuilder = AppBuilder.AddProject<Projects.ServiceB>($"{testPrefix}serviceb", launchProfileName: "http");
         ServiceCBuilder = AppBuilder.AddProject<Projects.ServiceC>($"{testPrefix}servicec", launchProfileName: "http");
         WorkerABuilder = AppBuilder.AddProject<Projects.WorkerA>($"{testPrefix}workera");

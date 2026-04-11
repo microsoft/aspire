@@ -2,8 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -197,21 +197,5 @@ public class DefaultLanguageDiscoveryTests
 
         Assert.NotNull(language);
         Assert.Equal(KnownLanguageId.Rust, language.LanguageId.Value);
-    }
-
-    private sealed class TestFeatures : IFeatures
-    {
-        private readonly Dictionary<string, bool> _features = new();
-
-        public TestFeatures SetFeature(string featureName, bool value)
-        {
-            _features[featureName] = value;
-            return this;
-        }
-
-        public bool IsFeatureEnabled(string featureName, bool defaultValue = false)
-        {
-            return _features.TryGetValue(featureName, out var value) ? value : defaultValue;
-        }
     }
 }

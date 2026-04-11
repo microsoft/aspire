@@ -107,7 +107,7 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addValkey", Description = "Adds a Valkey container resource")]
+    [AspireExport(Description = "Adds a Valkey container resource")]
     public static IResourceBuilder<ValkeyResource> AddValkey(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -203,7 +203,7 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataVolume", Description = "Adds a data volume for Valkey and enables persistence")]
+    [AspireExport(Description = "Adds a data volume for Valkey and enables persistence")]
     public static IResourceBuilder<ValkeyResource> WithDataVolume(
         this IResourceBuilder<ValkeyResource> builder,
         string? name = null,
@@ -241,7 +241,7 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataBindMount", Description = "Adds a data bind mount for Valkey and enables persistence")]
+    [AspireExport(Description = "Adds a data bind mount for Valkey and enables persistence")]
     public static IResourceBuilder<ValkeyResource> WithDataBindMount(
         this IResourceBuilder<ValkeyResource> builder,
         string source,
@@ -277,7 +277,7 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withPersistence", Description = "Configures Valkey persistence")]
+    [AspireExport(Description = "Configures Valkey persistence")]
     public static IResourceBuilder<ValkeyResource> WithPersistence(
         this IResourceBuilder<ValkeyResource> builder,
         TimeSpan? interval = null,

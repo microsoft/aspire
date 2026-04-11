@@ -24,6 +24,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to get the annotation from.</param>
     /// <param name="annotation">When this method returns, contains the last annotation of the specified type from the resource, if found; otherwise, the default value for <typeparamref name="T"/>.</param>
     /// <returns><see langword="true"/> if the last annotation of the specified type was found in the resource; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetLastAnnotation<T>(this IResource resource, [NotNullWhen(true)] out T? annotation) where T : IResourceAnnotation
     {
         if (resource.Annotations.OfType<T>().LastOrDefault() is { } lastAnnotation)
@@ -45,6 +46,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to retrieve annotations from.</param>
     /// <param name="result">When this method returns, contains the annotations of the specified type, if found; otherwise, <see langword="null"/>.</param>
     /// <returns><see langword="true"/> if annotations of the specified type were found; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetAnnotationsOfType<T>(this IResource resource, [NotNullWhen(true)] out IEnumerable<T>? result) where T : IResourceAnnotation
     {
         var matchingTypeAnnotations = resource.Annotations.OfType<T>();
@@ -67,6 +69,7 @@ public static class ResourceExtensions
     /// <typeparam name="T">The type of annotation to retrieve.</typeparam>
     /// <param name="resource">The resource to retrieve annotations from.</param>
     /// <returns><see langword="true"/> if an annotation of the specified type was found; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool HasAnnotationOfType<T>(this IResource resource) where T : IResourceAnnotation
     {
         return resource.Annotations.Any(a => a is T);
@@ -79,6 +82,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to retrieve annotations from.</param>
     /// <param name="result">When this method returns, contains the annotations of the specified type, if found; otherwise, <see langword="null"/>.</param>
     /// <returns><see langword="true"/> if annotations of the specified type were found; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetAnnotationsIncludingAncestorsOfType<T>(this IResource resource, [NotNullWhen(true)] out IEnumerable<T>? result) where T : IResourceAnnotation
     {
         if (resource is IResourceWithParent)
@@ -116,6 +120,7 @@ public static class ResourceExtensions
     /// <typeparam name="T">The type of annotation to retrieve.</typeparam>
     /// <param name="resource">The resource to retrieve annotations from.</param>
     /// <returns><see langword="true"/> if an annotation of the specified type was found; otherwise, <see langword="false"/>.</returns>
+    [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool HasAnnotationIncludingAncestorsOfType<T>(this IResource resource) where T : IResourceAnnotation
     {
         if (resource is IResourceWithParent)
@@ -149,6 +154,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to get the environment variables from.</param>
     /// <param name="environmentVariables">The environment variables retrieved from the resource, if any.</param>
     /// <returns>True if the environment variables were successfully retrieved, false otherwise.</returns>
+    [AspireExportIgnore(Reason = "Environment callback inspection helper — not part of the ATS surface.")]
     public static bool TryGetEnvironmentVariables(this IResource resource, [NotNullWhen(true)] out IEnumerable<EnvironmentCallbackAnnotation>? environmentVariables)
     {
         return TryGetAnnotationsOfType(resource, out environmentVariables);
@@ -545,6 +551,7 @@ public static class ResourceExtensions
     /// Gets a value indicating whether the resource is excluded from being published.
     /// </summary>
     /// <param name="resource">The resource to determine if it should be excluded from being published.</param>
+    [AspireExportIgnore(Reason = "Manifest inspection helper — not part of the ATS surface.")]
     public static bool IsExcludedFromPublish(this IResource resource) =>
         resource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out var lastAnnotation) && lastAnnotation == ManifestPublishingCallbackAnnotation.Ignore;
 
@@ -655,6 +662,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to get the volume mounts for.</param>
     /// <param name="volumeMounts">When this method returns, contains the volume mounts for the specified resource, if found; otherwise, <c>null</c>.</param>
     /// <returns><c>true</c> if the volume mounts were successfully retrieved; otherwise, <c>false</c>.</returns>
+    [AspireExportIgnore(Reason = "Container mount inspection helper — not part of the ATS surface.")]
     public static bool TryGetContainerMounts(this IResource resource, [NotNullWhen(true)] out IEnumerable<ContainerMountAnnotation>? volumeMounts)
     {
         return TryGetAnnotationsOfType<ContainerMountAnnotation>(resource, out volumeMounts);
@@ -666,6 +674,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to retrieve the endpoints for.</param>
     /// <param name="endpoints">The endpoints for the given resource, if found.</param>
     /// <returns>True if the endpoints were found, false otherwise.</returns>
+    [AspireExportIgnore(Reason = "Endpoint annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetEndpoints(this IResource resource, [NotNullWhen(true)] out IEnumerable<EndpointAnnotation>? endpoints)
     {
         return TryGetAnnotationsOfType(resource, out endpoints);
@@ -677,6 +686,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to retrieve the URLs for.</param>
     /// <param name="urls">The URLs for the given resource, if found.</param>
     /// <returns>True if the URLs were found, false otherwise.</returns>
+    [AspireExportIgnore(Reason = "URL annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetUrls(this IResource resource, [NotNullWhen(true)] out IEnumerable<ResourceUrlAnnotation>? urls)
     {
         return TryGetAnnotationsOfType(resource, out urls);
@@ -687,6 +697,7 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The <see cref="IResourceWithEndpoints"/> which contains <see cref="EndpointAnnotation"/> annotations.</param>
     /// <returns>An enumeration of <see cref="EndpointReference"/> based on the <see cref="EndpointAnnotation"/> annotations from the resources' <see cref="IResource.Annotations"/> collection.</returns>
+    [AspireExportIgnore(Reason = "Resource handle endpoint enumeration is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource)
     {
         if (TryGetAnnotationsOfType<EndpointAnnotation>(resource, out var endpoints))
@@ -703,6 +714,7 @@ public static class ResourceExtensions
     /// <param name="resource">The <see cref="IResourceWithEndpoints"/> which contains <see cref="EndpointAnnotation"/> annotations.</param>
     /// <param name="contextNetworkID">The ID of the network that serves as the context context for the endpoint references.</param>
     /// <returns>An enumeration of <see cref="EndpointReference"/> based on the <see cref="EndpointAnnotation"/> annotations from the resources' <see cref="IResource.Annotations"/> collection.</returns>
+    [AspireExportIgnore(Reason = "Network-specific endpoint enumeration is not part of the ATS surface.")]
     public static IEnumerable<EndpointReference> GetEndpoints(this IResourceWithEndpoints resource, NetworkIdentifier contextNetworkID)
     {
         if (TryGetAnnotationsOfType<EndpointAnnotation>(resource, out var endpoints))
@@ -719,6 +731,7 @@ public static class ResourceExtensions
     /// <param name="resource">The <see cref="IResourceWithEndpoints"/> which contains <see cref="EndpointAnnotation"/> annotations.</param>
     /// <param name="endpointName">The name of the endpoint.</param>
     /// <returns>An <see cref="EndpointReference"/>object providing resolvable reference for the specified endpoint.</returns>
+    [AspireExportIgnore(Reason = "Resource handle endpoint lookup is not part of the ATS surface; use builder-based endpoint exports instead.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName)
     {
         var endpoint = resource.TryGetEndpoints(out var endpoints) ?
@@ -741,6 +754,7 @@ public static class ResourceExtensions
     /// <param name="endpointName">The name of the endpoint.</param>
     /// <param name="contextNetworkID">The network ID of the network that provides the context for the returned <see cref="EndpointReference"/></param>
     /// <returns>An <see cref="EndpointReference"/>object providing resolvable reference for the specified endpoint.</returns>
+    [AspireExportIgnore(Reason = "Network-specific endpoint lookup is not part of the ATS surface.")]
     public static EndpointReference GetEndpoint(this IResourceWithEndpoints resource, string endpointName, NetworkIdentifier contextNetworkID)
     {
 
@@ -765,6 +779,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource containing endpoints to resolve.</param>
     /// <param name="portAllocator">Optional port allocator. If null, uses default allocation starting from port 8000.</param>
     /// <returns>A read-only list of resolved endpoints with computed port values.</returns>
+    [AspireExportIgnore(Reason = "Endpoint resolution exposes infrastructure-specific types that are not part of the ATS surface.")]
     public static IReadOnlyList<ResolvedEndpoint> ResolveEndpoints(this IResource resource, IPortAllocator? portAllocator = null)
     {
         if (!resource.TryGetEndpoints(out var endpoints))
@@ -848,6 +863,7 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to get the container image name from.</param>
     /// <param name="imageName">The container image name if found, otherwise null.</param>
     /// <returns>True if the container image name was found, otherwise false.</returns>
+    [AspireExportIgnore(Reason = "Container image inspection helper — not part of the ATS surface.")]
     public static bool TryGetContainerImageName(this IResource resource, [NotNullWhen(true)] out string? imageName)
     {
         return TryGetContainerImageName(resource, useBuiltImage: true, out imageName);
@@ -860,6 +876,7 @@ public static class ResourceExtensions
     /// <param name="useBuiltImage">When true, uses the image name from DockerfileBuildAnnotation if present. When false, uses only ContainerImageAnnotation.</param>
     /// <param name="imageName">The container image name if found, otherwise null.</param>
     /// <returns>True if the container image name was found, otherwise false.</returns>
+    [AspireExportIgnore(Reason = "Container image inspection helper — not part of the ATS surface.")]
     public static bool TryGetContainerImageName(this IResource resource, bool useBuiltImage, [NotNullWhen(true)] out string? imageName)
     {
         // First check if there's a DockerfileBuildAnnotation with an image name/tag
@@ -901,6 +918,7 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to get the replica count for.</param>
     /// <returns>The number of replicas for the specified resource.</returns>
+    [AspireExportIgnore(Reason = "Replica inspection helper — not part of the ATS surface.")]
     public static int GetReplicaCount(this IResource resource)
     {
         if (resource.TryGetLastAnnotation<ReplicaAnnotation>(out var replicaAnnotation))
@@ -922,6 +940,7 @@ public static class ResourceExtensions
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image build requirements.</param>
     /// <returns>True if the resource requires image building; otherwise, false.</returns>
+    [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuild(this IResource resource)
     {
         if (resource.IsExcludedFromPublish())
@@ -942,6 +961,7 @@ public static class ResourceExtensions
     /// </remarks>
     /// <param name="resource">The resource to evaluate for image push requirements.</param>
     /// <returns>True if the resource requires image building and pushing; otherwise, false.</returns>
+    [AspireExportIgnore(Reason = "Publishing inspection helper — not part of the ATS surface.")]
     public static bool RequiresImageBuildAndPush(this IResource resource)
     {
         return resource.RequiresImageBuild() && !resource.IsBuildOnlyContainer();
@@ -958,6 +978,7 @@ public static class ResourceExtensions
     /// </summary>
     /// <param name="resource">The resource to get the compute environment for.</param>
     /// <returns>The compute environment the resource is bound to, or <c>null</c> if the resource is not bound to any specific compute environment.</returns>
+    [AspireExportIgnore(Reason = "Compute-environment inspection helper — not part of the ATS surface.")]
     public static IComputeEnvironmentResource? GetComputeEnvironment(this IResource resource)
     {
         if (resource.TryGetLastAnnotation<ComputeEnvironmentAnnotation>(out var computeEnvironmentAnnotation))
@@ -971,6 +992,7 @@ public static class ResourceExtensions
     /// Gets the deployment target for the specified resource, if any. Throws an exception if
     /// there are multiple compute environments and a compute environment is not explicitly specified.
     /// </summary>
+    [AspireExportIgnore(Reason = "Deployment target inspection helper — not part of the ATS surface.")]
     public static DeploymentTargetAnnotation? GetDeploymentTargetAnnotation(this IResource resource, IComputeEnvironmentResource? targetComputeEnvironment = null)
     {
         IComputeEnvironmentResource? selectedComputeEnvironment = null;
@@ -1278,6 +1300,7 @@ public static class ResourceExtensions
     /// This method invokes environment variable and command-line argument callbacks to discover all references. The context resource (<paramref name="resource"/>) is not considered a dependency (even if it is transitively referenced).
     /// </para>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Dependency discovery helper depends on execution context and is not part of the ATS surface.")]
     public static Task<IReadOnlySet<IResource>> GetResourceDependenciesAsync(
         this IResource resource,
         DistributedApplicationExecutionContext executionContext,
@@ -1309,6 +1332,7 @@ public static class ResourceExtensions
     /// This method invokes environment variable and command-line argument callbacks to discover all references. The context resource (<paramref name="resource"/>) is not considered a dependency (even if it is transitively referenced).
     /// </para>
     /// </remarks>
+    [AspireExportIgnore(Reason = "Parameters and return type are not ATS-compatible — internal dependency discovery helper.")]
     public static Task<IReadOnlySet<IResource>> GetResourceDependenciesAsync(
         this IResource resource,
         DistributedApplicationExecutionContext executionContext,

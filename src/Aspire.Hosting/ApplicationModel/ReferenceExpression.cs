@@ -27,7 +27,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </remarks>
 [AspireExport]
 [DebuggerDisplay("ReferenceExpression = {ValueExpression}, Providers = {ValueProviders.Count}")]
-public class ReferenceExpression : IManifestExpressionProvider, IValueProvider, IValueWithReferences
+public class ReferenceExpression : IExpressionValue, IManifestExpressionProvider, IValueProvider, IValueWithReferences
 {
     /// <summary>
     /// Represents an empty reference expression with no name, value providers, or arguments.
@@ -506,7 +506,7 @@ public class ReferenceExpressionBuilder
     /// Appends a literal value to the expression.
     /// </summary>
     /// <param name="value">The literal string value to be appended to the interpolated string.</param>
-    [AspireExport("appendLiteral", Description = "Appends a literal string to the reference expression")]
+    [AspireExport(Description = "Appends a literal string to the reference expression")]
     public void AppendLiteral(string value)
     {
         _builder.Append(value);
@@ -526,7 +526,7 @@ public class ReferenceExpressionBuilder
     /// </summary>
     /// <param name="value">The formatted string to be appended to the interpolated string.</param>
     /// <param name="format">The format to be applied to the value. e.g., "uri"</param>
-    [AspireExport("appendFormatted", Description = "Appends a formatted string value to the reference expression")]
+    [AspireExport(Description = "Appends a formatted string value to the reference expression")]
     public void AppendFormatted(string? value, string? format = null)
     {
         if (value is not null)
@@ -586,7 +586,7 @@ public class ReferenceExpressionBuilder
     /// <param name="valueProvider">An object that implements both interfaces, or an IResourceBuilder wrapping such an object.</param>
     /// <param name="format">Optional format specifier.</param>
     /// <exception cref="ArgumentException">Thrown if the object doesn't implement the required interfaces.</exception>
-    [AspireExport("appendValueProvider", Description = "Appends a value provider to the reference expression")]
+    [AspireExport(Description = "Appends a value provider to the reference expression")]
     public void AppendValueProvider(object valueProvider, string? format = null)
     {
         // Unwrap IResourceBuilder<T> to get the underlying resource (covariant interface)
@@ -612,7 +612,7 @@ public class ReferenceExpressionBuilder
     /// <summary>
     /// Builds the <see cref="ReferenceExpression"/>.
     /// </summary>
-    [AspireExport("build", Description = "Builds the reference expression")]
+    [AspireExport(Description = "Builds the reference expression")]
     public ReferenceExpression Build() =>
         ReferenceExpression.Create(_builder.ToString(), [.. _valueProviders], [.. _manifestExpressions], [.. _stringFormats]);
 

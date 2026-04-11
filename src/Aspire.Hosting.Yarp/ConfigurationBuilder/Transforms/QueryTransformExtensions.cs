@@ -14,7 +14,7 @@ public static class QueryTransformExtensions
     /// <summary>
     /// Adds the transform that will append or set the query parameter from the given value.
     /// </summary>
-    [AspireExport("withTransformQueryValue", Description = "Adds the transform that will append or set the query parameter from the given value.")]
+    [AspireExport(Description = "Adds the transform that will append or set the query parameter from the given value.")]
     public static YarpRoute WithTransformQueryValue(this YarpRoute route, string queryKey, string value, bool append = true)
     {
         route.Configure(r => r.WithTransformQueryValue(queryKey, value, append));
@@ -24,7 +24,7 @@ public static class QueryTransformExtensions
     /// <summary>
     /// Adds the transform that will append or set the query parameter from a route value.
     /// </summary>
-    [AspireExport("withTransformQueryRouteValue", Description = "Adds the transform that will append or set the query parameter from a route value.")]
+    [AspireExport(Description = "Adds the transform that will append or set the query parameter from a route value.")]
     public static YarpRoute WithTransformQueryRouteValue(this YarpRoute route, string queryKey, string routeValueKey, bool append = true)
     {
         route.Configure(r => r.WithTransformQueryRouteValue(queryKey, routeValueKey, append));
@@ -34,7 +34,7 @@ public static class QueryTransformExtensions
     /// <summary>
     /// Adds the transform that will remove the given query key.
     /// </summary>
-    [AspireExport("withTransformQueryRemoveKey", Description = "Adds the transform that will remove the given query key.")]
+    [AspireExport(Description = "Adds the transform that will remove the given query key.")]
     public static YarpRoute WithTransformQueryRemoveKey(this YarpRoute route, string queryKey)
     {
         route.Configure(r => r.WithTransformQueryRemoveKey(queryKey));

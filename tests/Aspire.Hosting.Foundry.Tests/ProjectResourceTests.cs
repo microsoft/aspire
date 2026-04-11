@@ -42,7 +42,9 @@ public class ProjectResourceTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        Assert.Empty(builder.Resources.OfType<AzureContainerRegistryResource>());
+        var registry = Assert.Single(builder.Resources.OfType<AzureContainerRegistryResource>());
+        Assert.Equal("my-project-acr", registry.Name);
+        Assert.Same(project.Resource.DefaultContainerRegistry, registry);
         Assert.Same(project.Resource.DefaultContainerRegistry, project.Resource.ContainerRegistry);
     }
 

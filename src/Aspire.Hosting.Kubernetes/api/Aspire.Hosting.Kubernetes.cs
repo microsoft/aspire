@@ -10,13 +10,16 @@ namespace Aspire.Hosting
 {
     public static partial class KubernetesEnvironmentExtensions
     {
+        [AspireExport("addKubernetesEnvironment", Description = "Adds a Kubernetes publishing environment")]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> AddKubernetesEnvironment(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport("withProperties", Description = "Configures properties of a Kubernetes environment", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> WithProperties(this ApplicationModel.IResourceBuilder<Kubernetes.KubernetesEnvironmentResource> builder, System.Action<Kubernetes.KubernetesEnvironmentResource> configure) { throw null; }
     }
 
     public static partial class KubernetesServiceExtensions
     {
+        [AspireExport("publishAsKubernetesService", Description = "Publishes the resource as a Kubernetes service")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsKubernetesService<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Kubernetes.KubernetesResource> configure)
             where T : ApplicationModel.IComputeResource { throw null; }
     }
@@ -24,6 +27,7 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Kubernetes
 {
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class KubernetesEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
     {
         public KubernetesEnvironmentResource(string name) : base(default!) { }
@@ -46,9 +50,11 @@ namespace Aspire.Hosting.Kubernetes
 
         public string HelmChartVersion { get { throw null; } set { } }
 
-        ApplicationModel.ReferenceExpression ApplicationModel.IComputeEnvironmentResource.GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
     }
 
+    [AspireExport(ExposeProperties = true)]
     public partial class KubernetesResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<KubernetesEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
     {
         public KubernetesResource(string name, ApplicationModel.IResource resource, KubernetesEnvironmentResource kubernetesEnvironmentResource) : base(default!) { }
@@ -159,10 +165,10 @@ namespace Aspire.Hosting.Kubernetes.Resources
     {
         public ClusterRole() : base(default!, default!) { }
 
-        [YamlDotNet.Serialization.YamlMember(Alias = "aggregationRule")]
-        public AggregationRuleV1 AggregationRule { get { throw null; } set { } }
+        [YamlDotNet.Serialization.YamlMember(Alias = "aggregationRule", DefaultValuesHandling = YamlDotNet.Serialization.DefaultValuesHandling.OmitDefaults)]
+        public AggregationRuleV1? AggregationRule { get { throw null; } set { } }
 
-        [YamlDotNet.Serialization.YamlMember(Alias = "rules")]
+        [YamlDotNet.Serialization.YamlMember(Alias = "rules", DefaultValuesHandling = YamlDotNet.Serialization.DefaultValuesHandling.Preserve)]
         public System.Collections.Generic.List<PolicyRuleV1> Rules { get { throw null; } }
     }
 

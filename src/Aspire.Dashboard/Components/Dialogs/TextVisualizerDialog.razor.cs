@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -18,10 +19,12 @@ public partial class TextVisualizerDialog : ComponentBase
     private List<SelectViewModel<string>> _options = null!;
     private string? _selectedFormat;
     private bool _isLoading = true;
+    private MarkdownProcessor? _markdownProcessor;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
 
     public HashSet<string?> EnabledOptions { get; } = [];
     internal bool? ShowSecretsWarning { get; private set; }
+    internal bool IsMarkdownFormat => TextVisualizerViewModel.FormatKind == DashboardUIHelpers.MarkdownFormat;
 
     /// <summary>
     /// Returns true if the dialog has a fixed format that cannot be changed by the user.
@@ -56,9 +59,11 @@ public partial class TextVisualizerDialog : ComponentBase
     {
         EnabledOptions.Clear();
         EnabledOptions.Add(DashboardUIHelpers.PlaintextFormat);
+        EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
 
         _options = [
             new SelectViewModel<string> { Id = DashboardUIHelpers.PlaintextFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogPlaintextFormat)] },
+            new SelectViewModel<string> { Id = DashboardUIHelpers.MarkdownFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogMarkdownFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.JsonFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogJsonFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.XmlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogXmlFormat)] }
         ];
@@ -102,6 +107,11 @@ public partial class TextVisualizerDialog : ComponentBase
     {
         _selectedFormat = text;
         TextVisualizerViewModel.UpdateFormat(newFormat ?? DashboardUIHelpers.PlaintextFormat);
+    }
+
+    internal MarkdownProcessor GetMarkdownProcessor()
+    {
+        return _markdownProcessor ??= new MarkdownProcessor(ControlsStringsLoc, safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes, extensions: []);
     }
 
     public static async Task OpenDialogAsync(OpenTextVisualizerDialogOptions options)

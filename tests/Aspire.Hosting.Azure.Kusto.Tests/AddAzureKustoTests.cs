@@ -27,7 +27,7 @@ public class AddAzureKustoTests
     }
 
     [Theory]
-    [InlineData(null, "latest")]
+    [InlineData(null, "2026.03.16.1116-2611-994a3c9-master")]
     [InlineData("custom-tag", "custom-tag")]
     public void RunAsEmulator_ShouldConfigureContainerImageWithCorrectTag(string? customTag, string expectedTag)
     {

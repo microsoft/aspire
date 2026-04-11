@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the app host was lost: {0}.</source>
-        <target state="translated">A conexão com o host do aplicativo foi perdida: {0}.</target>
+        <source>The connection to the AppHost was lost: {0}.</source>
+        <target state="needs-review-translation">A conexão com o host do aplicativo foi perdida: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
+        <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">A versão do AppHost não é compatível. Atualize o apphost ou o Aspire CLI.</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
-        <source>Building apphost...</source>
-        <target state="translated">Criando apphost...</target>
+        <source>Building AppHost...</source>
+        <target state="needs-review-translation">Criando apphost...</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -63,13 +63,13 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</source>
-        <target state="translated">Erro ao se conectar ao host de aplicativo. O host de aplicativo possivelmente falhou antes de estar disponível: {0}.</target>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <target state="needs-review-translation">Erro ao se conectar ao host de aplicativo. O host de aplicativo possivelmente falhou antes de estar disponível: {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
-        <source>Finding apphosts...</source>
-        <target state="translated">Localizando apphosts...</target>
+        <source>Finding AppHosts...</source>
+        <target state="needs-review-translation">Localizando apphosts...</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
@@ -102,19 +102,24 @@
         <target state="translated">O projeto não pôde ser compilado. Ver logs em {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created. See logs at {0}</source>
+        <target state="new">The app could not be created. See logs at {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
         <source>The --apphost option specified a project that does not exist.</source>
         <target state="translated">A opção --apphost especificou um projeto que não existe.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --apphost option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">A opção --apphost não foi especificada e vários arquivos de projeto de host do aplicativo foram detectados.</target>
+        <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
+        <target state="needs-review-translation">A opção --apphost não foi especificada e vários arquivos de projeto de host do aplicativo foram detectados.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no app host project files were detected.</source>
-        <target state="translated">O argumento do projeto não foi especificado e nenhum arquivo de projeto do host do aplicativo foi detectado.</target>
+        <source>The project argument was not specified and no AppHost project files were detected.</source>
+        <target state="needs-review-translation">O argumento do projeto não foi especificado e nenhum arquivo de projeto do host do aplicativo foi detectado.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
@@ -133,12 +138,12 @@
         <note>{0} is the log file path</note>
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
-        <source>Select an apphost to use:</source>
-        <target state="translated">Selecione um apphost a ser usado:</target>
+        <source>Select an AppHost to use:</source>
+        <target state="needs-review-translation">Selecione um apphost a ser usado:</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
-        <source>The specified project file is not an Aspire apphost project.</source>
+        <source>The specified project file is not an Aspire AppHost project.</source>
         <target state="needs-review-translation">O arquivo de projeto especificado não é um projeto Aspire AppHost.</target>
         <note />
       </trans-unit>
@@ -158,8 +163,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
-        <source>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</source>
-        <target state="translated">Nenhum host de aplicativo foi encontrado (pode haver arquivos de projeto de hosts de aplicativos com erros de sintaxe/versões inválidas do SDK).</target>
+        <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
+        <target state="needs-review-translation">Nenhum host de aplicativo foi encontrado (pode haver arquivos de projeto de hosts de aplicativos com erros de sintaxe/versões inválidas do SDK).</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -173,8 +178,8 @@
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
-        <source>Waiting for debugger to attach to app host process</source>
-        <target state="translated">Aguardando que o depurador seja anexado ao processo de host do aplicativo</target>
+        <source>Waiting for debugger to attach to AppHost process</source>
+        <target state="needs-review-translation">Aguardando que o depurador seja anexado ao processo de host do aplicativo</target>
         <note />
       </trans-unit>
     </body>

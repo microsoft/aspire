@@ -342,6 +342,8 @@ public class RedisResource : ContainerResource { }
 // Type ID = Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder
 ```
 
+Assembly-level exports are the mechanism for exposing framework or third-party types that live in a different assembly than the capabilities that use them. Even in that case, the ATS type ID still comes from the exported CLR type's assembly and full type name, not from the assembly that declares the attribute.
+
 ### Type Categories
 
 ATS categorizes types for serialization and code generation using `AtsTypeCategory`:
@@ -397,6 +399,25 @@ public static class ResourceExtensions
 ```
 
 Because `RedisResource` implements `IResourceWithEnvironment` (via `ContainerResource`), the scanner adds `withEnvironment` to `RedisResource`'s capability list.
+
+#### Cross-Assembly Type Exports
+
+Use `[assembly: AspireExport(typeof(T))]` when a capability assembly needs to expose a type defined in another assembly:
+
+```csharp
+// In Aspire.Hosting/Ats/AtsTypeMappings.cs
+[assembly: AspireExport(typeof(IConfiguration))]
+[assembly: AspireExport(typeof(IHostEnvironment), ExposeProperties = true)]
+```
+
+At startup, the remote host creates one ATS context by scanning all loaded assemblies together. That shared scan is what lets one assembly export a type while another assembly contributes capabilities that consume or return it.
+
+- **Type identity still comes from the exported CLR type.** For example, `[assembly: AspireExport(typeof(IConfiguration))]` produces the ATS type ID `Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration`, even though the attribute is declared in `Aspire.Hosting`.
+- **Exported handle types are merged by ATS type ID across the full scan.** Re-exporting the same type from multiple assemblies does not create multiple ATS handle types.
+- **Capabilities are merged from all scanned assemblies, but capability IDs must remain unique.** If two assemblies export the same capability ID, scanning emits a diagnostic error.
+- **Cross-assembly resolution is scan-order independent.** If one assembly exports a type and another references it, the scanner resolves it after collecting the complete type universe from every scanned assembly.
+
+This is how Aspire's core hosting assembly exports framework types such as `IConfiguration`, `IConfigurationSection`, and `IHostEnvironment` while keeping them in the same flattened capability model as types exported directly from integration packages.
 
 #### Flattening in Action
 

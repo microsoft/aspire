@@ -18,21 +18,18 @@ namespace Aspire.Cli.NuGet;
 internal sealed class BundleNuGetPackageCache : INuGetPackageCache
 {
     private readonly IBundleService _bundleService;
+    private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly ILogger<BundleNuGetPackageCache> _logger;
     private readonly IFeatures _features;
 
-    // List of deprecated packages that should be filtered by default
-    private static readonly HashSet<string> s_deprecatedPackages = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Aspire.Hosting.Dapr"
-    };
-
     public BundleNuGetPackageCache(
         IBundleService bundleService,
+        LayoutProcessRunner layoutProcessRunner,
         ILogger<BundleNuGetPackageCache> logger,
         IFeatures features)
     {
         _bundleService = bundleService;
+        _layoutProcessRunner = layoutProcessRunner;
         _logger = logger;
         _features = features;
     }
@@ -161,7 +158,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         _logger.LogDebug("NuGet search args: {Args}", string.Join(" ", args));
         _logger.LogDebug("Working directory: {WorkingDir}", workingDirectory.FullName);
 
-        var (exitCode, output, error) = await LayoutProcessRunner.RunAsync(
+        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             args,
             workingDirectory: workingDirectory.FullName,
@@ -214,6 +211,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
 
     private IEnumerable<NuGetPackage> FilterPackages(IEnumerable<NuGetPackage> packages, Func<string, bool>? filter)
     {
+        var showDeprecatedPackages = _features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
         var effectiveFilter = (NuGetPackage p) =>
         {
             if (filter is not null)
@@ -224,9 +222,9 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
 
             // Apply deprecated package filter unless the user wants to show deprecated packages
-            if (isOfficialPackage && !_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
+            if (isOfficialPackage && !showDeprecatedPackages)
             {
-                return !s_deprecatedPackages.Contains(p.Id);
+                return !DeprecatedPackages.IsDeprecated(p.Id);
             }
 
             return isOfficialPackage;

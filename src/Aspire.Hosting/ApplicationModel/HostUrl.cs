@@ -11,7 +11,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Represents a URL on the host machine. When referenced in a container resource, localhost will be
 /// replaced with the configured container host name.
 /// </summary>
-public record HostUrl(string Url) : IValueProvider, IManifestExpressionProvider
+public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestExpressionProvider
 {
     // Goes into the manifest as a value, not an expression
     string IManifestExpressionProvider.ValueExpression => Url;

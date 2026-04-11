@@ -12,7 +12,7 @@ namespace Aspire.Hosting.CodeGeneration.Go;
 /// Generates a Go SDK using the ATS (Aspire Type System) capability-based API.
 /// Produces wrapper structs that proxy capabilities via JSON-RPC.
 /// </summary>
-public sealed class AtsGoCodeGenerator : ICodeGenerator
+internal sealed class AtsGoCodeGenerator : ICodeGenerator
 {
     private static readonly HashSet<string> s_goKeywords = new(StringComparer.Ordinal)
     {
@@ -308,7 +308,7 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 paramList.Append(", ");
             }
-            var paramName = ToCamelCase(parameter.Name);
+            var paramName = GetLocalIdentifier(parameter.Name);
             var paramType = parameter.IsCallback
                 ? "func(...any) any"
                 : IsCancellationToken(parameter)
@@ -331,7 +331,7 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
 
         foreach (var parameter in parameters)
         {
-            var paramName = ToCamelCase(parameter.Name);
+            var paramName = GetLocalIdentifier(parameter.Name);
             if (parameter.IsCallback)
             {
                 WriteLine($"\tif {paramName} != nil {{");
@@ -490,6 +490,13 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("\t}");
         WriteLine("\tclient := NewAspireClient(socketPath)");
         WriteLine("\tif err := client.Connect(); err != nil {");
+        WriteLine("\t\treturn nil, err");
+        WriteLine("\t}");
+        WriteLine("\tauthToken := os.Getenv(\"ASPIRE_REMOTE_APPHOST_TOKEN\")");
+        WriteLine("\tif authToken == \"\" {");
+        WriteLine("\t\treturn nil, fmt.Errorf(\"ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`\")");
+        WriteLine("\t}");
+        WriteLine("\tif err := client.Authenticate(authToken); err != nil {");
         WriteLine("\t\treturn nil, err");
         WriteLine("\t}");
         WriteLine("\tclient.OnDisconnect(func() { os.Exit(1) })");
@@ -819,6 +826,8 @@ public sealed class AtsGoCodeGenerator : ICodeGenerator
         var sanitized = builder.ToString();
         return s_goKeywords.Contains(sanitized) ? sanitized + "_" : sanitized;
     }
+
+    private static string GetLocalIdentifier(string name) => SanitizeIdentifier(ToCamelCase(name));
 
     /// <summary>
     /// Converts a name to PascalCase for Go exported identifiers.

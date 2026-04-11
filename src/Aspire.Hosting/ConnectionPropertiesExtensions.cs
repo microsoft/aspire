@@ -16,6 +16,7 @@ public static class ConnectionPropertiesExtensions
     /// <param name="source">The resource that exposes the base connection properties.</param>
     /// <param name="additional">The additional connection properties to merge into the values supplied by <paramref name="source"/>.</param>
     /// <returns>A sequence that contains the combined set of connection properties with duplicate keys resolved in favor of <paramref name="additional"/>.</returns>
+    [AspireExportIgnore(Reason = "Connection property merging is an internal helper and is not part of the ATS surface.")]
     public static IEnumerable<KeyValuePair<string, ReferenceExpression>> CombineProperties(this IResourceWithConnectionString source, IEnumerable<KeyValuePair<string, ReferenceExpression>> additional)
     {
         ArgumentNullException.ThrowIfNull(source);

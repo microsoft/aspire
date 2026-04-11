@@ -352,10 +352,12 @@ internal class ConsoleInteractionService : IInteractionService
         target.Profile.Out.Writer.WriteLine(text);
     }
 
-    public void DisplayMarkdown(string markdown)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
     {
+        var effectiveConsole = consoleOverride ?? Console;
+        var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
         var spectreMarkup = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
-        MessageConsole.MarkupLine(spectreMarkup);
+        target.MarkupLine(spectreMarkup);
     }
 
     public void DisplayMarkupLine(string markup)
@@ -386,15 +388,24 @@ internal class ConsoleInteractionService : IInteractionService
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
-        foreach (var (stream, line) in lines)
+        var linesArray = lines.ToArray();
+
+        // Special case one stderr line to include error icon.
+        if (linesArray.Length == 1 && linesArray[0].Stream == OutputLineStream.StdErr)
+        {
+            DisplayError(linesArray[0].Line);
+            return;
+        }
+
+        foreach (var (stream, line) in linesArray)
         {
             if (stream == OutputLineStream.StdOut)
             {
-                MessageConsole.MarkupLineInterpolated($"{line.EscapeMarkup()}");
+                MessageConsole.MarkupLine(line.EscapeMarkup());
             }
             else
             {
-                MessageConsole.MarkupLineInterpolated($"[red]{line.EscapeMarkup()}[/]");
+                MessageConsole.MarkupLine($"[red]{line.EscapeMarkup()}[/]");
             }
         }
     }
@@ -428,7 +439,20 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         MessageLogger.LogInformation("Confirm: {PromptText} (default: {DefaultValue})", promptText, defaultValue);
-        var result = await MessageConsole.ConfirmAsync(promptText, defaultValue, cancellationToken);
+
+        // Use [Y/n] or [y/N] convention where the capitalized letter indicates the default value.
+        var yesChoice = defaultValue ? 'Y' : 'y';
+        var noChoice = defaultValue ? 'n' : 'N';
+
+        var prompt = new ConfirmationPrompt(promptText)
+        {
+            Yes = yesChoice,
+            No = noChoice,
+            ShowDefaultValue = false,
+            DefaultValue = defaultValue,
+        };
+
+        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Confirm result: {Result}", result);
         return result;
     }

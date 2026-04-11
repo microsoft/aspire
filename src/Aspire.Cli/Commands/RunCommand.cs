@@ -165,8 +165,12 @@ internal sealed class RunCommand : BaseCommand
         }
 
         // A user may run `aspire run` in an Aspire terminal in VS Code. In this case, intercept and prompt
-        // VS Code to start a debug session using the current directory
-        if (ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
+        // VS Code to start a debug session using the current directory.
+        // Skip this when running in non-interactive mode (e.g. as a child of `aspire start`)
+        // to avoid delegating back to the extension instead of launching the AppHost directly.
+        var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
+        if (!nonInteractive
+            && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
             extensionInteractionService.DisplayConsolePlainText(RunCommandStrings.StartingDebugSessionInExtension);
@@ -463,8 +467,12 @@ internal sealed class RunCommand : BaseCommand
         var logsLabel = RunCommandStrings.Logs;
         var pidLabel = RunCommandStrings.ProcessId;
 
-        // Calculate column width based on all possible labels
-        var labels = new List<string> { appHostLabel, dashboardLabel, logsLabel };
+        // Calculate column width based on labels that will actually be displayed
+        var labels = new List<string> { appHostLabel, logsLabel };
+        if (!isExtensionHost)
+        {
+            labels.Add(dashboardLabel);
+        }
         if (pid.HasValue)
         {
             labels.Add(pidLabel);

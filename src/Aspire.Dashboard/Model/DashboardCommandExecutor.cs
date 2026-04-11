@@ -18,7 +18,8 @@ public sealed class DashboardCommandExecutor(
     IToastService toastService,
     IStringLocalizer<Dashboard.Resources.Resources> loc,
     NavigationManager navigationManager,
-    DashboardTelemetryService telemetryService)
+    DashboardTelemetryService telemetryService,
+    INotificationService notificationService)
 {
     private readonly HashSet<(string ResourceName, string CommandName)> _executingCommands = [];
     private readonly object _lock = new object();
@@ -95,7 +96,15 @@ public sealed class DashboardCommandExecutor(
             }
         }
 
-        var messageResourceName = getResourceName(resource);
+        var messageBarStartingTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandStarting)], command.GetDisplayName());
+        var toastStartingTitle = $"{getResourceName(resource)} {messageBarStartingTitle}";
+
+        // Add a notification to the notification center for the in-progress command.
+        var progressNotificationId = notificationService.AddNotification(new NotificationEntry
+        {
+            Title = messageBarStartingTitle,
+            Intent = MessageIntent.Info,
+        });
 
         // When a resource command starts a toast is immediately shown.
         // The toast is open for a certain amount of time and then automatically closed.
@@ -106,7 +115,7 @@ public sealed class DashboardCommandExecutor(
         {
             Id = Guid.NewGuid().ToString(),
             Intent = ToastIntent.Progress,
-            Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandStarting)], messageResourceName, command.GetDisplayName()),
+            Title = toastStartingTitle,
             Content = new CommunicationToastContent(),
             Timeout = 0 // App logic will handle closing the toast
         };
@@ -122,14 +131,16 @@ public sealed class DashboardCommandExecutor(
         };
 
         ResourceCommandResponseViewModel response;
-        CancellationTokenSource closeToastCts;
+        // The CTS intentionally outlives the command execution to ensure we can close the toast in all scenarios
+        // e.g., even if the command execution fails or the toast is still open when the command finishes.
+        // It's ok to let it be cleaned up by GC when the short CancelAfter completes.
+        var closeToastCts = new CancellationTokenSource();
         try
         {
             toastService.OnClose += closeCallback;
             // Show a toast immediately to indicate the command is starting.
             toastService.ShowCommunicationToast(toastParameters);
 
-            closeToastCts = new CancellationTokenSource();
             closeToastCts.Token.Register(() =>
             {
                 toastService.CloseToast(toastParameters.Id);
@@ -143,42 +154,73 @@ public sealed class DashboardCommandExecutor(
             toastService.OnClose -= closeCallback;
         }
 
-        // Update toast with the result;
+        // Update toast and notification with the result.
         if (response.Kind == ResourceCommandResponseKind.Succeeded)
         {
-            toastParameters.Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandSuccess)], messageResourceName, command.GetDisplayName());
+            var successTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandSuccess)], command.GetDisplayName());
+            toastParameters.Title = $"{getResourceName(resource)} {successTitle}";
             toastParameters.Intent = ToastIntent.Success;
             toastParameters.Icon = GetIntentIcon(ToastIntent.Success);
+
+            if (response.Result is not null)
+            {
+                toastParameters.PrimaryAction = loc[nameof(Dashboard.Resources.Resources.ResourceCommandViewResponse)];
+                toastParameters.OnPrimaryAction = EventCallback.Factory.Create<ToastResult>(this, () => OpenViewResponseDialogAsync(command, response));
+            }
+
+            notificationService.ReplaceNotification(progressNotificationId, new NotificationEntry
+            {
+                Title = successTitle,
+                Body = response.Message,
+                Intent = MessageIntent.Success,
+                PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(command, response) : null
+            });
+
+            if (response.Result?.DisplayImmediately == true)
+            {
+                await OpenViewResponseDialogAsync(command, response).ConfigureAwait(false);
+            }
         }
         else if (response.Kind == ResourceCommandResponseKind.Cancelled)
         {
-            // For cancelled commands, just close the existing toast and don't show any success or error message
+            // For cancelled commands, just close the existing toast and don't show any success or error message.
             if (!toastClosed)
             {
                 toastService.CloseToast(toastParameters.Id);
             }
+
+            notificationService.RemoveNotification(progressNotificationId);
+            closeToastCts.Dispose();
             return;
         }
         else
         {
-            toastParameters.Title = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandFailed)], messageResourceName, command.GetDisplayName());
+            var failedTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandFailed)], command.GetDisplayName());
+            toastParameters.Title = $"{getResourceName(resource)} {failedTitle}";
             toastParameters.Intent = ToastIntent.Error;
             toastParameters.Icon = GetIntentIcon(ToastIntent.Error);
-            toastParameters.Content.Details = response.ErrorMessage;
             toastParameters.PrimaryAction = loc[nameof(Dashboard.Resources.Resources.ResourceCommandToastViewLogs)];
             toastParameters.OnPrimaryAction = EventCallback.Factory.Create<ToastResult>(this, () => navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: getResourceName(resource))));
-        }
+            toastParameters.Content.Details = response.Message;
 
-        if (response.Result is not null)
-        {
-            var fixedFormat = response.ResultFormat == CommandResultFormat.Json ? DashboardUIHelpers.JsonFormat : null;
-            await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+            if (response.Result is not null)
             {
-                DialogService = dialogService,
-                ValueDescription = command.GetDisplayName(),
-                Value = response.Result,
-                FixedFormat = fixedFormat
-            }).ConfigureAwait(false);
+                toastParameters.SecondaryAction = loc[nameof(Dashboard.Resources.Resources.ResourceCommandViewResponse)];
+                toastParameters.OnSecondaryAction = EventCallback.Factory.Create<ToastResult>(this, () => OpenViewResponseDialogAsync(command, response));
+            }
+
+            notificationService.ReplaceNotification(progressNotificationId, new NotificationEntry
+            {
+                Title = failedTitle,
+                Body = response.Message,
+                Intent = MessageIntent.Error,
+                PrimaryAction = response.Result is not null ? CreateViewResponseNotificationAction(command, response) : null
+            });
+
+            if (response.Result?.DisplayImmediately == true)
+            {
+                await OpenViewResponseDialogAsync(command, response).ConfigureAwait(false);
+            }
         }
 
         if (!toastClosed)
@@ -195,6 +237,8 @@ public sealed class DashboardCommandExecutor(
 
             // Show toast to display result.
             toastService.ShowCommunicationToast(toastParameters);
+
+            closeToastCts.Dispose();
         }
     }
 
@@ -215,5 +259,32 @@ public sealed class DashboardCommandExecutor(
             ToastIntent.Custom => null,
             _ => throw new InvalidOperationException()
         };
+    }
+
+    private NotificationAction CreateViewResponseNotificationAction(CommandViewModel command, ResourceCommandResponseViewModel response)
+    {
+        return new NotificationAction
+        {
+            Text = loc[nameof(Dashboard.Resources.Resources.ResourceCommandViewResponse)],
+            OnClick = () => OpenViewResponseDialogAsync(command, response)
+        };
+    }
+
+    private async Task OpenViewResponseDialogAsync(CommandViewModel command, ResourceCommandResponseViewModel response)
+    {
+        var fixedFormat = response.Result!.Format switch
+        {
+            CommandResultFormat.Json => DashboardUIHelpers.JsonFormat,
+            CommandResultFormat.Markdown => DashboardUIHelpers.MarkdownFormat,
+            _ => null
+        };
+
+        await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        {
+            DialogService = dialogService,
+            ValueDescription = command.GetDisplayName(),
+            Value = response.Result.Value,
+            FixedFormat = fixedFormat
+        }).ConfigureAwait(false);
     }
 }

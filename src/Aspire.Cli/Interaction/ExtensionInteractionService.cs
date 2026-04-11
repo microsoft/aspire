@@ -391,13 +391,13 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         _consoleInteractionService.DisplayRawText(text, consoleOverride);
     }
 
-    public void DisplayMarkdown(string markdown)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
     {
         // Send raw markdown to extension (it can handle markdown natively)
         // Convert to Spectre markup for console display
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.LogMessageAsync(LogLevel.Information, markdown, _cancellationToken));
         Debug.Assert(result);
-        _consoleInteractionService.DisplayMarkdown(markdown);
+        _consoleInteractionService.DisplayMarkdown(markdown, consoleOverride);
     }
 
     public void DisplayMarkupLine(string markup)

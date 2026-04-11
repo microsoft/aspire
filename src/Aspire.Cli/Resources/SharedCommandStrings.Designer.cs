@@ -122,5 +122,17 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PipelineEnvironmentOptionDescription", resourceCulture);
             }
         }
+
+        internal static string PipelineStepTimelineLabel {
+            get {
+                return ResourceManager.GetString("PipelineStepTimelineLabel", resourceCulture);
+            }
+        }
+
+        internal static string PipelineStepsSummaryTitle {
+            get {
+                return ResourceManager.GetString("PipelineStepsSummaryTitle", resourceCulture);
+            }
+        }
     }
 }

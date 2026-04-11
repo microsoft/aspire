@@ -97,29 +97,21 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task RunWithMissingAwaitShowsHelpfulError()
+    [CaptureWorkspaceOnFailure]
+    public async Task UnAwaitedChainsCompileWithAutoResolvePromises()
     {
-        using var workspace = TemporaryWorkspace.Create(output);
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        // PrepareEnvironment
-        await auto.PrepareEnvironmentAsync(workspace, counter);
-
-        if (isCI)
-        {
-            await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireBundleEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
@@ -142,24 +134,47 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
             const builder = await createBuilder();
 
+            // None of these are awaited — they return PromiseLike wrappers whose
+            // underlying RPC calls are tracked by trackPromise().
             const postgres = builder.addPostgres("postgres");
             const db = postgres.addDatabase("db");
 
-            await builder.addContainer("consumer", "nginx")
+            // This chain is also NOT awaited. The withReference(db) call accepts
+            // db as a PromiseLike<T> and resolves it internally, but the outer
+            // addContainer().withReference() promise itself stays un-awaited.
+            // This is the key scenario: build() must call flushPendingPromises()
+            // to ensure this chain's RPC calls actually execute.
+            builder.addContainer("consumer", "nginx")
                 .withReference(db);
 
+            // build() flushes all pending promises before proceeding. If the
+            // flush implementation deadlocks (e.g. re-awaiting a promise tracked
+            // after flush starts), this line hangs and the test times out.
             await builder.build().run();
             """;
 
         File.WriteAllText(appHostPath, newContent);
 
-        await auto.TypeAsync("aspire run");
+        // Validate that un-awaited chains compile without type errors.
+        // withReference(db) should accept PromiseLike<T> from the un-awaited addDatabase().
+        await auto.TypeAsync("npx tsc --noEmit --project tsconfig.apphost.json");
         await auto.EnterAsync();
-        await auto.WaitUntilAsync(s =>
-            s.ContainsText("❌ AppHost Error:") &&
-            s.ContainsText("Did you forget 'await'"),
-            timeout: TimeSpan.FromMinutes(3), description: "waiting for AppHost error with await hint");
-        await auto.WaitForAnyPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+
+        // Validate runtime behavior: aspire start launches the apphost, which calls
+        // build() and triggers flushPendingPromises(). If the flush deadlocks (e.g. the
+        // build promise is re-awaited in a while loop), the process hangs and this test
+        // times out. A successful start proves un-awaited chains execute their RPC calls.
+        await auto.AspireStartAsync(counter);
+
+        // Verify the un-awaited resources were actually materialized — not silently dropped.
+        // If flushPendingPromises skipped the pending chains, these resources wouldn't exist.
+        await auto.AssertResourcesExistAsync(counter, "postgres", "db", "consumer");
+
+        await auto.AspireStopAsync(counter);
+
+        await auto.CaptureAspireDiagnosticsAsync(counter, workspace);
+
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
 

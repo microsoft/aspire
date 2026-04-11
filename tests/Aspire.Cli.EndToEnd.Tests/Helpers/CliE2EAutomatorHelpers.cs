@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 
@@ -12,6 +13,8 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class CliE2EAutomatorHelpers
 {
+    private static readonly string s_expectedStableVersionMarker = GetExpectedStableVersionMarker();
+
     /// <summary>
     /// Prepares the Docker environment by setting up prompt counting, umask, and environment variables.
     /// </summary>
@@ -98,6 +101,28 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Mounts the workspace-local Aspire package hive into the standard local hive path inside Docker.
+    /// Used for SourceBuild E2E runs where the CLI binary is local but package resolution still needs
+    /// locally packed Aspire packages.
+    /// </summary>
+    internal static async Task MountLocalChannelPackagesAsync(
+        this Hex1bTerminalAutomator auto,
+        CliE2ETestHelpers.LocalChannelInfo? localChannel,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter)
+    {
+        if (localChannel is null)
+        {
+            return;
+        }
+
+        var containerLocalChannelPackagesPath = CliE2ETestHelpers.ToContainerPath(localChannel.PackagesPath, workspace);
+        await auto.TypeAsync($"mkdir -p ~/.aspire/hives/local && rm -rf ~/.aspire/hives/local/packages && ln -s '{containerLocalChannelPackagesPath}' ~/.aspire/hives/local/packages");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
     /// Prepares a non-Docker terminal environment with prompt counting and workspace navigation.
     /// Used by tests that run with <see cref="CliE2ETestHelpers.CreateTestTerminal"/> (bare bash, no Docker).
     /// </summary>
@@ -152,7 +177,9 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
-    /// Verifies the installed Aspire CLI version matches the expected commit SHA.
+    /// Verifies the installed Aspire CLI version matches the expected build.
+    /// Always checks the dynamic version prefix from eng/Versions.props.
+    /// For non-stabilized builds (all normal PR builds), also verifies the commit SHA suffix.
     /// </summary>
     internal static async Task VerifyAspireCliVersionAsync(
         this Hex1bTerminalAutomator auto,
@@ -165,11 +192,31 @@ internal static class CliE2EAutomatorHelpers
         }
 
         var shortCommitSha = commitSha[..8];
-        var expectedVersionSuffix = $"g{shortCommitSha}";
+
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(expectedVersionSuffix, timeout: TimeSpan.FromSeconds(10));
+
+        // Stabilized PR builds can omit the commit SHA from the printed version, so accept
+        // either the expected major/minor marker from eng/Versions.props or the PR commit SHA.
+        await auto.WaitUntilAsync(
+            snapshot => snapshot.ContainsText(s_expectedStableVersionMarker) || snapshot.ContainsText($"g{shortCommitSha}"),
+            timeout: TimeSpan.FromSeconds(10),
+            description: $"Aspire CLI version containing '{s_expectedStableVersionMarker}' or 'g{shortCommitSha}'");
+
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    private static string GetExpectedStableVersionMarker()
+    {
+        var versionsPropsPath = Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "Versions.props");
+        var document = XDocument.Load(versionsPropsPath);
+
+        var majorVersion = document.Descendants("MajorVersion").FirstOrDefault()?.Value;
+        var minorVersion = document.Descendants("MinorVersion").FirstOrDefault()?.Value;
+
+        return !string.IsNullOrEmpty(majorVersion) && !string.IsNullOrEmpty(minorVersion)
+            ? $"{majorVersion}.{minorVersion}."
+            : throw new InvalidOperationException($"Could not determine Aspire version marker from '{versionsPropsPath}'.");
     }
 
     /// <summary>
@@ -346,6 +393,57 @@ internal static class CliE2EAutomatorHelpers
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Asserts that the specified resources exist in the running AppHost by running
+    /// <c>aspire describe &lt;resource&gt; --format json</c> for each expected resource.
+    /// The CLI handles name/displayName resolution internally.
+    /// On failure, the error output from the CLI is visible in the terminal recording.
+    /// </summary>
+    internal static async Task AssertResourcesExistAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        params string[] expectedResourceNames)
+    {
+        foreach (var resource in expectedResourceNames)
+        {
+            var expectedCounter = counter.Value;
+            await auto.TypeAsync($"aspire describe {resource} --format json");
+            await auto.EnterAsync();
+
+            var succeeded = false;
+            await auto.WaitUntilAsync(s =>
+            {
+                var successSearcher = new CellPatternSearcher()
+                    .FindPattern(expectedCounter.ToString())
+                    .RightText(" OK] $ ");
+                if (successSearcher.Search(s).Count > 0)
+                {
+                    succeeded = true;
+                    return true;
+                }
+
+                var errorSearcher = new CellPatternSearcher()
+                    .FindPattern(expectedCounter.ToString())
+                    .RightText(" ERR:");
+                return errorSearcher.Search(s).Count > 0;
+            }, timeout: TimeSpan.FromSeconds(30), description: $"aspire describe {resource}");
+
+            counter.Increment();
+
+            if (!succeeded)
+            {
+                // Dump all resources so we can see what's actually running
+                await auto.TypeAsync("aspire describe --format json");
+                await auto.EnterAsync();
+                await auto.WaitForAnyPromptAsync(counter);
+
+                throw new InvalidOperationException(
+                    $"Resource '{resource}' not found. 'aspire describe {resource}' exited with an error. " +
+                    "Check the terminal recording for the full resource list above.");
+            }
+        }
     }
 
     /// <summary>

@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../PublishCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Generate deployment artifacts for an apphost (Preview)</source>
+        <source>Generate deployment artifacts for an AppHost (Preview)</source>
         <target state="needs-review-translation">为 Aspire 应用主机生成部署项目。(预览版)</target>
         <note />
       </trans-unit>
@@ -38,7 +38,7 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file</source>
+        <source>The path to the Aspire AppHost project file</source>
         <target state="needs-review-translation">Aspire AppHost 项目文件的路径。</target>
         <note />
       </trans-unit>

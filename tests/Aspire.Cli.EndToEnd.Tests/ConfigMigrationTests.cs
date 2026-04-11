@@ -517,6 +517,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// old format, then upgrades to the new CLI and verifies all settings are migrated.
     /// </summary>
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15937")]
     [OuterloopTest("Requires downloading two separate CLI versions from GitHub")]
     public async Task FullUpgrade_LegacyCliToNewCli_MigratesGlobalSettings()
     {

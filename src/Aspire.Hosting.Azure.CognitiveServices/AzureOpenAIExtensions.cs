@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.CognitiveServices;
@@ -28,7 +30,7 @@ public static class AzureOpenAIExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureOpenAIResource}, CognitiveServicesBuiltInRole[])"/>.
     /// </remarks>
-    [AspireExport("addAzureOpenAI", Description = "Adds an Azure OpenAI resource")]
+    [AspireExport(Description = "Adds an Azure OpenAI resource")]
     public static IResourceBuilder<AzureOpenAIResource> AddAzureOpenAI(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -38,6 +40,11 @@ public static class AzureOpenAIExtensions
 
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
         {
+            var azureResource = (AzureOpenAIResource)infrastructure.AspireResource;
+
+            // Check if this Azure OpenAI has a private endpoint (via annotation)
+            var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
             var cogServicesAccount = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -55,7 +62,9 @@ public static class AzureOpenAIExtensions
                     Properties = new CognitiveServicesAccountProperties()
                     {
                         CustomSubDomainName = ToLower(Take(Concat(infrastructure.AspireResource.Name, GetUniqueString(GetResourceGroup().Id)), 24)),
-                        PublicNetworkAccess = ServiceAccountPublicNetworkAccess.Enabled,
+                        PublicNetworkAccess = hasPrivateEndpoint
+                            ? ServiceAccountPublicNetworkAccess.Disabled
+                            : ServiceAccountPublicNetworkAccess.Enabled,
                         // Disable local auth for AOAI since managed identity is used
                         DisableLocalAuth = true
                     },
@@ -74,6 +83,8 @@ public static class AzureOpenAIExtensions
 
             // We need to output name to externalize role assignments.
             infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = cogServicesAccount.Name.ToBicepExpression() });
+
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = cogServicesAccount.Id.ToBicepExpression() });
 
             var resource = (AzureOpenAIResource)infrastructure.AspireResource;
 
@@ -171,7 +182,7 @@ public static class AzureOpenAIExtensions
     /// <param name="modelName">The name of the model to deploy.</param>
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("addDeployment", Description = "Adds an Azure OpenAI deployment resource")]
+    [AspireExport(Description = "Adds an Azure OpenAI deployment resource")]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> AddDeployment(this IResourceBuilder<AzureOpenAIResource> builder, [ResourceName] string name, string modelName, string modelVersion)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -191,7 +202,7 @@ public static class AzureOpenAIExtensions
     /// <param name="builder">The Azure OpenAI Deployment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureOpenAIDeploymentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withProperties", Description = "Configures properties of an Azure OpenAI deployment", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Configures properties of an Azure OpenAI deployment", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> WithProperties(this IResourceBuilder<AzureOpenAIDeploymentResource> builder, Action<AzureOpenAIDeploymentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);

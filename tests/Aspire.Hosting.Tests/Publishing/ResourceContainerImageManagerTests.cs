@@ -92,7 +92,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var servicea = builder.AddDockerfile("container", tempContextPath, tempDockerfilePath);
 
         using var app = builder.Build();
@@ -223,7 +225,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var tempOutputPath = Path.GetTempPath();
         var container = builder.AddDockerfile("container", tempContextPath, tempDockerfilePath)
             .WithContainerBuildOptions(ctx =>
@@ -261,7 +265,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         using var tempDir = new TestTempDirectory();
         var container = builder.AddDockerfile("container", tempContextPath, tempDockerfilePath)
             .WithContainerBuildOptions(ctx =>
@@ -411,8 +417,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         // Add trailing slashes to simulate the issue scenario
         var contextPathWithTrailingSlash = tempContextPath + Path.DirectorySeparatorChar;
         var servicea = builder.AddDockerfile("container", contextPathWithTrailingSlash, tempDockerfilePath);
@@ -533,7 +540,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
         builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var dockerfileResource = builder.AddDockerfile("test-dockerfile", tempContextPath, tempDockerfilePath);
 
         using var app = builder.Build();
@@ -562,8 +571,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
         builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         // Add trailing slashes to context path to test normalization
         var contextPathWithTrailingSlash = tempContextPath + Path.DirectorySeparatorChar + Path.DirectorySeparatorChar;
         var dockerfileResource = builder.AddDockerfile("test-dockerfile", contextPathWithTrailingSlash, tempDockerfilePath);
@@ -601,7 +611,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", new FakeContainerRuntime(shouldFail: true));
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddDockerfile("container", tempContextPath, tempDockerfilePath);
 
         using var app = builder.Build();
@@ -622,6 +634,39 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task BuildImageAsync_ProjectBuildFailureIncludesResourceName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddFakeLogging();
+            logging.AddXunit(output);
+        });
+
+        using var tempDir = new TestTempDirectory();
+
+        var project = builder.AddResource(new ProjectResource("broken-project"))
+            .WithAnnotation(new TestProjectMetadata(Path.Combine(tempDir.Path, "missing.csproj")))
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.Destination = ContainerImageDestination.Archive;
+                ctx.ImageFormat = ContainerImageFormat.Oci;
+                ctx.OutputPath = tempDir.Path;
+            });
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            imageBuilder.BuildImageAsync(project.Resource, cts.Token));
+
+        Assert.Contains("broken-project", exception.Message);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task CanBuildImageFromDockerfileWithBuildArgsSecretsAndStage()
     {
@@ -637,8 +682,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
         builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         // Add parameters for build args and secrets
         builder.Configuration["Parameters:goversion"] = "1.22";
         builder.Configuration["Parameters:secret"] = "mysecret";
@@ -698,8 +744,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
         builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         // Add parameters for different value types
         builder.Configuration["Parameters:stringparam"] = "test-value";
         builder.Configuration["Parameters:valueprovider"] = "provider-value";
@@ -807,8 +854,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
         builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         // Add parameters for different value types
         builder.Configuration["Parameters:stringsecret"] = "secret-value";
         builder.Configuration["Parameters:nullsecret"] = null;
@@ -853,8 +901,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
         builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         // Create a temporary file to use as a file-based secret
         using var tempDir = new TestTempDirectory();
         var tempSecretFile = System.IO.Path.Combine(tempDir.Path, ".npmrc");
@@ -1056,7 +1105,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddDockerfile("mycontainer", tempContextPath, tempDockerfilePath);
 
         using var app = builder.Build();
@@ -1086,8 +1137,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
-
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var dockerfileBuildAnnotation = new DockerfileBuildAnnotation(tempContextPath, tempDockerfilePath, null)
         {
             ImageName = "custom-image",
@@ -1289,7 +1341,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
         builder.Services.AddKeyedSingleton<IContainerRuntime>("docker", fakeContainerRuntime);
 
-        var (tempContextPath, tempDockerfilePath) = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        var tempContextPath = tempDockerfileContext.ContextPath;
+        var tempDockerfilePath = tempDockerfileContext.DockerfilePath;
         var container = builder.AddDockerfile("container", tempContextPath, tempDockerfilePath);
 
         using var app = builder.Build();
@@ -1382,4 +1436,11 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         // Verify CheckIfRunningAsync was called
         Assert.Equal(1, fakeContainerRuntime.CheckIfRunningCallCount);
     }
+}
+
+file sealed class TestProjectMetadata(string projectPath) : IProjectMetadata
+{
+    public string ProjectPath { get; } = projectPath;
+
+    public LaunchSettings LaunchSettings { get; } = new();
 }

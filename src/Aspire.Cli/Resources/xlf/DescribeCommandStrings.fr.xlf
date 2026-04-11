@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="fr" original="../DescribeCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Describe resources in a running apphost</source>
-        <target state="needs-review-translation">Afficher les instantanés de ressource d’un Apphost Aspire en cours d’exécution.</target>
+        <source>Describe resources in a running AppHost</source>
+        <target state="needs-review-translation">Afficher les instantanés de ressource d’un AppHost Aspire en cours d’exécution.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
@@ -43,7 +43,7 @@
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">
-        <source>No apphost project found.</source>
+        <source>No AppHost project found.</source>
         <target state="needs-review-translation">Désolé, aucun projet AppHost n’a été trouvé.</target>
         <note />
       </trans-unit>

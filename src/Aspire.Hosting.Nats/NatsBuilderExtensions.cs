@@ -143,7 +143,7 @@ public static class NatsBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withJetStream", Description = "Configures the NATS resource to enable JetStream.")]
+    [AspireExport(Description = "Configures the NATS resource to enable JetStream.")]
     public static IResourceBuilder<NatsServerResource> WithJetStream(this IResourceBuilder<NatsServerResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -158,7 +158,7 @@ public static class NatsBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataVolume", Description = "Adds a persistent data volume to the NATS resource.")]
+    [AspireExport(Description = "Adds a persistent data volume to the NATS resource.")]
     public static IResourceBuilder<NatsServerResource> WithDataVolume(this IResourceBuilder<NatsServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -175,7 +175,7 @@ public static class NatsBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDataBindMount", Description = "Mounts a host directory as the NATS data directory.")]
+    [AspireExport(Description = "Mounts a host directory as the NATS data directory.")]
     public static IResourceBuilder<NatsServerResource> WithDataBindMount(this IResourceBuilder<NatsServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);

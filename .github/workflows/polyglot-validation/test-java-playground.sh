@@ -1,12 +1,12 @@
 #!/bin/bash
-# Polyglot SDK Validation - Java Playground Apps
-# Iterates all Java playground apps under playground/polyglot/Java/,
-# runs 'aspire restore' to regenerate the .modules/ SDK, and compiles the
-# compact AppHost plus generated Java SDK sources to verify there are no
-# regressions in the codegen API surface.
+# Polyglot SDK Validation - Java validation AppHosts
+# Iterates all Java validation AppHosts under tests/PolyglotAppHosts/*/Java,
+# runs 'aspire restore --apphost' to regenerate the per-integration .modules/ SDK, and
+# compiles each AppHost plus the generated Java SDK sources to verify there are
+# no regressions in the codegen API surface.
 set -euo pipefail
 
-echo "=== Java Playground Codegen Validation ==="
+echo "=== Java Validation AppHost Codegen Validation ==="
 
 if ! command -v aspire &> /dev/null; then
     echo "❌ Aspire CLI not found in PATH"
@@ -26,34 +26,32 @@ javac -version
 
 SCRIPT_SOURCE="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
-if [ -d "/workspace/playground/polyglot/Java" ]; then
-    PLAYGROUND_ROOT="/workspace/playground/polyglot/Java"
-elif [ -d "$PWD/playground/polyglot/Java" ]; then
-    PLAYGROUND_ROOT="$(cd "$PWD/playground/polyglot/Java" && pwd)"
-elif [ -d "$SCRIPT_DIR/../../../playground/polyglot/Java" ]; then
-    PLAYGROUND_ROOT="$(cd "$SCRIPT_DIR/../../../playground/polyglot/Java" && pwd)"
+if [ -d "/workspace/tests/PolyglotAppHosts" ]; then
+    VALIDATION_ROOT="/workspace/tests/PolyglotAppHosts"
+elif [ -d "$PWD/tests/PolyglotAppHosts" ]; then
+    VALIDATION_ROOT="$(cd "$PWD/tests/PolyglotAppHosts" && pwd)"
+elif [ -d "$SCRIPT_DIR/../../../tests/PolyglotAppHosts" ]; then
+    VALIDATION_ROOT="$(cd "$SCRIPT_DIR/../../../tests/PolyglotAppHosts" && pwd)"
 else
-    echo "❌ Cannot find playground/polyglot/Java directory"
+    echo "❌ Cannot find tests/PolyglotAppHosts directory"
     exit 1
 fi
 
-echo "Playground root: $PLAYGROUND_ROOT"
+echo "Validation root: $VALIDATION_ROOT"
 
 APP_DIRS=()
-for integration_dir in "$PLAYGROUND_ROOT"/*/; do
-    if [ -f "$integration_dir/ValidationAppHost/AppHost.java" ]; then
-        APP_DIRS+=("$integration_dir/ValidationAppHost")
-    fi
-done
+while IFS= read -r app_dir; do
+    APP_DIRS+=("$app_dir")
+done < <(find "$VALIDATION_ROOT" -mindepth 2 -maxdepth 2 -type d -name 'Java' | sort)
 
 if [ ${#APP_DIRS[@]} -eq 0 ]; then
-    echo "❌ No Java playground apps found"
+    echo "❌ No Java validation AppHosts found"
     exit 1
 fi
 
-echo "Found ${#APP_DIRS[@]} Java playground apps:"
-for dir in "${APP_DIRS[@]}"; do
-    echo "  - $(basename "$(dirname "$dir")")/$(basename "$dir")"
+echo "Found ${#APP_DIRS[@]} Java validation AppHosts:"
+for app_dir in "${APP_DIRS[@]}"; do
+    echo "  - $(basename "$(dirname "$app_dir")")"
 done
 echo ""
 
@@ -61,17 +59,19 @@ FAILED=()
 PASSED=()
 
 for app_dir in "${APP_DIRS[@]}"; do
-    app_name="$(basename "$(dirname "$app_dir")")/$(basename "$app_dir")"
+    integration_name="$(basename "$(dirname "$app_dir")")"
+
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "Testing: $app_name"
+    echo "Testing: $integration_name"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
     cd "$app_dir"
 
-    echo "  → aspire restore..."
-    if ! aspire restore --non-interactive 2>&1; then
-        echo "  ❌ aspire restore failed for $app_name"
-        FAILED+=("$app_name (aspire restore)")
+    echo "  → aspire restore --apphost AppHost.java..."
+    if ! aspire restore --non-interactive --apphost AppHost.java 2>&1; then
+        echo "  ❌ aspire restore failed for $integration_name"
+        FAILED+=("$integration_name (aspire restore)")
+        echo ""
         continue
     fi
 
@@ -81,28 +81,30 @@ for app_dir in "${APP_DIRS[@]}"; do
     mkdir -p "$build_dir"
 
     if [ ! -f ".modules/sources.txt" ]; then
-        echo "  ❌ No generated Java source list found for $app_name"
-        FAILED+=("$app_name (generated sources missing)")
+        echo "  ❌ No generated Java source list found for $integration_name"
+        FAILED+=("$integration_name (generated sources missing)")
         rm -rf "$build_dir"
+        echo ""
         continue
     fi
 
     if ! javac --enable-preview --source 25 -d "$build_dir" @.modules/sources.txt AppHost.java 2>&1; then
-        echo "  ❌ javac compilation failed for $app_name"
-        FAILED+=("$app_name (javac)")
+        echo "  ❌ javac compilation failed for $integration_name"
+        FAILED+=("$integration_name (javac)")
         rm -rf "$build_dir"
+        echo ""
         continue
     fi
 
     rm -rf "$build_dir"
-    echo "  ✅ $app_name passed"
-    PASSED+=("$app_name")
+    echo "  ✅ $integration_name passed"
+    PASSED+=("$integration_name")
     echo ""
 done
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Results: ${#PASSED[@]} passed, ${#FAILED[@]} failed out of ${#APP_DIRS[@]} apps"
+echo "Results: ${#PASSED[@]} passed, ${#FAILED[@]} failed out of ${#APP_DIRS[@]} AppHosts"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [ ${#FAILED[@]} -gt 0 ]; then
@@ -114,5 +116,5 @@ if [ ${#FAILED[@]} -gt 0 ]; then
     exit 1
 fi
 
-echo "✅ All Java playground apps validated successfully!"
+echo "✅ All Java validation AppHosts validated successfully!"
 exit 0

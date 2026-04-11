@@ -12,7 +12,7 @@ namespace Aspire.Hosting.CodeGeneration.Java;
 /// Generates a Java SDK using the ATS (Aspire Type System) capability-based API.
 /// Produces wrapper classes that proxy capabilities via JSON-RPC.
 /// </summary>
-public sealed class AtsJavaCodeGenerator : ICodeGenerator
+internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 {
     private static readonly HashSet<string> s_javaKeywords = new(StringComparer.Ordinal)
     {
@@ -756,6 +756,11 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
 
         var wrapperType = MapInputTypeToJava(parameter.Type, parameter.IsOptional || parameter.IsNullable);
+        return GetResourceBuilderWrapperType(wrapperType);
+    }
+
+    private (string? ResourceWrapperType, string? ResourceWrapperParameterType) GetResourceBuilderWrapperType(string wrapperType)
+    {
         if (!wrapperType.StartsWith("I", StringComparison.Ordinal))
         {
             return (null, null);
@@ -953,12 +958,25 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
     private void GenerateUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters)
     {
         var unionParameters = parameters.Where(p => IsUnionType(p.Type)).ToList();
-        if (unionParameters.Count != 1)
+        if (unionParameters.Count == 0)
         {
             return;
         }
 
-        var unionParameter = unionParameters[0];
+        if (unionParameters.Count == 1)
+        {
+            GenerateSingleUnionOverloads(returnInfo, methodName, parameters, unionParameters[0]);
+            return;
+        }
+
+        // Multiple union parameters: generate overloads for each combination of concrete types.
+        // E.g. runAsExisting(AspireUnion name, AspireUnion resourceGroup) where both are string|ParameterResource
+        // generates 4 overloads: (String,String), (String,ParameterResource), (ParameterResource,String), (ParameterResource,ParameterResource)
+        GenerateMultiUnionOverloads(returnInfo, methodName, parameters, unionParameters);
+    }
+
+    private void GenerateSingleUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters, AtsParameterInfo unionParameter)
+    {
         var unionTypes = unionParameter.Type?.UnionTypes;
         if (unionTypes is null || unionTypes.Count == 0)
         {
@@ -1001,7 +1019,84 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             }
             WriteLine("    }");
             WriteLine();
+
+            GenerateResourceBuilderOverloads(
+                returnInfo.ReturnType,
+                methodName,
+                CreateUnionMethodParameters(parameters, unionParameter, unionType),
+                returnInfo.HasReturn);
         }
+    }
+
+    private void GenerateMultiUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters, List<AtsParameterInfo> unionParameters)
+    {
+        // Build the list of distinct Java types for each union parameter.
+        var unionTypesByParam = unionParameters
+            .Select(up => up.Type?.UnionTypes?
+                .Select(t => new { Type = t, JavaType = MapInputTypeToJava(t, up.IsOptional || up.IsNullable) })
+                .DistinctBy(x => x.JavaType, StringComparer.Ordinal)
+                .Select(x => x.Type)
+                .ToList() ?? [])
+            .ToList();
+
+        // Generate the Cartesian product of all union type combinations.
+        var combinations = CartesianProduct(unionTypesByParam);
+
+        foreach (var combination in combinations)
+        {
+            // Build parameter list for this overload.
+            var overloadParameters = new StringBuilder();
+            foreach (var parameter in parameters)
+            {
+                if (overloadParameters.Length > 0)
+                {
+                    overloadParameters.Append(", ");
+                }
+
+                var unionIndex = unionParameters.IndexOf(parameter);
+                var parameterType = unionIndex >= 0
+                    ? MapInputTypeToJava(combination[unionIndex], parameter.IsOptional || parameter.IsNullable)
+                    : MapParameterToJava(parameter);
+                overloadParameters.Append(CultureInfo.InvariantCulture, $"{parameterType} {ToCamelCase(parameter.Name)}");
+            }
+
+            // Build call arguments, wrapping union parameters with AspireUnion.of().
+            var callArguments = string.Join(", ", parameters.Select(parameter =>
+                unionParameters.Contains(parameter)
+                    ? $"AspireUnion.of({ToCamelCase(parameter.Name)})"
+                    : ToCamelCase(parameter.Name)));
+
+            WriteLine($"    public {returnInfo.ReturnType} {methodName}({overloadParameters}) {{");
+            if (returnInfo.HasReturn)
+            {
+                WriteLine($"        return {methodName}({callArguments});");
+            }
+            else
+            {
+                WriteLine($"        {methodName}({callArguments});");
+            }
+            WriteLine("    }");
+            WriteLine();
+        }
+    }
+
+    private static List<List<AtsTypeRef>> CartesianProduct(List<List<AtsTypeRef>> lists)
+    {
+        var result = new List<List<AtsTypeRef>> { new() };
+        foreach (var list in lists)
+        {
+            var temp = new List<List<AtsTypeRef>>();
+            foreach (var existing in result)
+            {
+                foreach (var item in list)
+                {
+                    var combined = new List<AtsTypeRef>(existing) { item };
+                    temp.Add(combined);
+                }
+            }
+            result = temp;
+        }
+        return result;
     }
 
     private void GenerateOptionalOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters)
@@ -1112,6 +1207,14 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine("    }");
             WriteLine();
 
+            var bridgeParameters = CreateUnionMethodParameters(requiredParameters, unionParameter, unionType);
+            bridgeParameters.Add(new JavaMethodParameter(optionsClassName, "options"));
+            GenerateResourceBuilderOverloads(
+                returnInfo.ReturnType,
+                methodName,
+                bridgeParameters,
+                returnInfo.HasReturn);
+
             WriteLine($"    public {returnInfo.ReturnType} {methodName}({string.Join(", ", requiredParameters.Select(parameter => ReferenceEquals(parameter, unionParameter) ? $"{MapInputTypeToJava(unionType, unionParameter.IsOptional || unionParameter.IsNullable)} {ToCamelCase(parameter.Name)}" : $"{MapParameterToJava(parameter)} {ToCamelCase(parameter.Name)}"))}) {{");
             if (returnInfo.HasReturn)
             {
@@ -1124,6 +1227,40 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine("    }");
             WriteLine();
         }
+    }
+
+    private List<JavaMethodParameter> CreateUnionMethodParameters(
+        List<AtsParameterInfo> parameters,
+        AtsParameterInfo unionParameter,
+        AtsTypeRef unionType)
+    {
+        var result = new List<JavaMethodParameter>(parameters.Count);
+
+        foreach (var parameter in parameters)
+        {
+            var parameterName = ToCamelCase(parameter.Name);
+
+            if (!ReferenceEquals(parameter, unionParameter))
+            {
+                var (parameterResourceWrapperType, parameterResourceWrapperParameterType) = GetResourceBuilderWrapperType(parameter);
+                result.Add(new JavaMethodParameter(
+                    MapParameterToJava(parameter),
+                    parameterName,
+                    parameterResourceWrapperType,
+                    parameterResourceWrapperParameterType));
+                continue;
+            }
+
+            var parameterType = MapInputTypeToJava(unionType, unionParameter.IsOptional || unionParameter.IsNullable);
+            var (resourceWrapperType, resourceWrapperParameterType) = GetResourceBuilderWrapperType(parameterType);
+            result.Add(new JavaMethodParameter(
+                parameterType,
+                parameterName,
+                resourceWrapperType,
+                resourceWrapperParameterType));
+        }
+
+        return result;
     }
 
     private void GenerateOptionsOverloads(
@@ -1530,6 +1667,11 @@ public sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("        }");
         WriteLine("        AspireClient client = new AspireClient(socketPath);");
         WriteLine("        client.connect();");
+        WriteLine("        String authToken = System.getenv(\"ASPIRE_REMOTE_APPHOST_TOKEN\");");
+        WriteLine("        if (authToken == null || authToken.isEmpty()) {");
+        WriteLine("            throw new RuntimeException(\"ASPIRE_REMOTE_APPHOST_TOKEN environment variable not set. Run this application using `aspire run`.\");");
+        WriteLine("        }");
+        WriteLine("        client.authenticate(authToken);");
         WriteLine("        client.onDisconnect(() -> System.exit(1));");
         WriteLine("        return client;");
         WriteLine("    }");

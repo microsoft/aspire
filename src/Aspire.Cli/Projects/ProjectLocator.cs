@@ -410,6 +410,47 @@ internal sealed class ProjectLocator(
 
     private async Task CreateSettingsFileAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
+        // Search from the apphost's directory upward for an existing config file.
+        // This handles the case where "aspire new" created a project in a subdirectory
+        // and the user runs "aspire run" from the parent without cd-ing first.
+        if (projectFile.Directory is { } appHostDir)
+        {
+            var nearAppHost = ConfigurationHelper.FindNearestConfigFilePath(appHostDir);
+            if (nearAppHost is not null)
+            {
+                var configDir = Path.GetDirectoryName(nearAppHost)!;
+
+                // For legacy .aspire/settings.json, the config root is the parent of .aspire/
+                var trimmedConfigDir = configDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (string.Equals(Path.GetFileName(trimmedConfigDir), ".aspire", StringComparison.OrdinalIgnoreCase))
+                {
+                    var parentDir = Directory.GetParent(trimmedConfigDir);
+                    if (parentDir is not null)
+                    {
+                        configDir = parentDir.FullName;
+                    }
+                }
+
+                var existingConfig = AspireConfigFile.Load(configDir);
+                if (existingConfig?.AppHost?.Path is { } existingPath)
+                {
+                    // Resolve the stored path relative to the config file's directory.
+                    var resolvedPath = Path.GetFullPath(
+                        Path.IsPathRooted(existingPath) ? existingPath : Path.Combine(configDir, existingPath));
+
+                    // Only skip creation if the config already points to the discovered apphost.
+                    // If the path is stale/invalid, fall through so the config gets healed.
+                    if (string.Equals(resolvedPath, projectFile.FullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        logger.LogDebug(
+                            "Config at {Path} already references apphost {AppHost}, skipping creation",
+                            nearAppHost, projectFile.FullName);
+                        return;
+                    }
+                }
+            }
+        }
+
         var settingsFile = GetOrCreateLocalAspireConfigFile();
         var fileExisted = settingsFile.Exists;
 

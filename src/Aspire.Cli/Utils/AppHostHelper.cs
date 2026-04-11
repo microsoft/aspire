@@ -5,7 +5,6 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting.Backchannel;
-using Semver;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Resources;
@@ -37,7 +36,7 @@ internal static class AppHostHelper
         }
 
         var minimumVersion = SemVersion.Parse("9.2.0");
-        if (aspireVersion.ComparePrecedenceTo(minimumVersion) < 0)
+        if (aspireVersion.IsOlderThan(minimumVersion))
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.AspireSDKVersionNotSupported, appHostInformation.AspireHostingVersion));
             return (false, false, appHostInformation.AspireHostingVersion);
@@ -59,14 +58,14 @@ internal static class AppHostHelper
             $"{InteractionServiceStrings.CheckingProjectType}: {relativePath}",
             () => runner.GetAppHostInformationAsync(
                 projectFile,
-                new DotNetCliRunnerInvocationOptions(),
+                new ProcessInvocationOptions(),
                 cancellationToken),
             emoji: KnownEmojis.Microscope);
 
         return appHostInformationResult;
     }
 
-    internal static async Task<int> BuildAppHostAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, bool noRestore, DotNetCliRunnerInvocationOptions options, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    internal static async Task<int> BuildAppHostAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, bool noRestore, ProcessInvocationOptions options, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         var relativePath = Path.GetRelativePath(workingDirectory.FullName, projectFile.FullName);
         return await interactionService.ShowStatusAsync(
@@ -83,7 +82,8 @@ internal static class AppHostHelper
     /// Computes the auxiliary backchannel socket path prefix for a given AppHost project file.
     /// </summary>
     /// <remarks>
-    /// Since socket names now include the AppHost's PID (e.g., <c>auxi.sock.{hash}.{pid}</c>),
+    /// Since socket names now include a randomized instance hash and the AppHost's PID
+    /// (e.g., <c>auxi.sock.{hash}.{instanceHash}.{pid}</c>),
     /// the CLI cannot compute the exact socket path. Use this prefix with a glob pattern
     /// to find matching sockets, or use <see cref="FindMatchingSockets"/> instead.
     /// </remarks>
@@ -106,15 +106,16 @@ internal static class AppHostHelper
     /// Extracts the hash portion from an auxiliary socket path.
     /// </summary>
     /// <remarks>
-    /// Works with both old format (<c>auxi.sock.{hash}</c>) and new format (<c>auxi.sock.{hash}.{pid}</c>).
+    /// Works with old format (<c>auxi.sock.{hash}</c>), previous format (<c>auxi.sock.{hash}.{pid}</c>),
+    /// and current format (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
     /// </remarks>
-    /// <param name="socketPath">The full socket path (e.g., "/path/to/auxi.sock.b67075ff12d56865.12345").</param>
+    /// <param name="socketPath">The full socket path (e.g., "/path/to/auxi.sock.b67075ff12d56865.a1b2c3d4e5f6.12345").</param>
     /// <returns>The hash portion (e.g., "b67075ff12d56865"), or null if the format is unrecognized.</returns>
     internal static string? ExtractHashFromSocketPath(string socketPath)
         => BackchannelConstants.ExtractHash(socketPath);
 
     /// <summary>
-    /// Extracts the PID from an auxiliary socket path (new format only).
+    /// Extracts the PID from an auxiliary socket path when one is present.
     /// </summary>
     /// <param name="socketPath">The full socket path.</param>
     /// <returns>The PID if present and valid, or null for old format sockets.</returns>

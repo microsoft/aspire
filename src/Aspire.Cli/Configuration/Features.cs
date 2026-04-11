@@ -11,20 +11,29 @@ internal sealed class Features(IConfiguration configuration, ILogger<Features> l
     public bool IsFeatureEnabled(string feature, bool defaultValue)
     {
         var configKey = $"features:{feature}";
-        
+
         var value = configuration[configKey];
-        
-        logger.LogDebug("Feature check: {Feature}, ConfigKey: {ConfigKey}, Value: '{Value}', DefaultValue: {DefaultValue}",
+
+        logger.LogTrace("Feature check: {Feature}, ConfigKey: {ConfigKey}, Value: '{Value}', DefaultValue: {DefaultValue}",
             feature, configKey, value ?? "(null)", defaultValue);
-        
+
         if (string.IsNullOrEmpty(value))
         {
-            logger.LogDebug("Feature {Feature} using default value: {DefaultValue}", feature, defaultValue);
+            logger.LogTrace("Feature {Feature} using default value: {DefaultValue}", feature, defaultValue);
             return defaultValue;
         }
-        
+
         var enabled = bool.TryParse(value, out var parsed) && parsed;
         logger.LogDebug("Feature {Feature} parsed value: {Enabled}", feature, enabled);
         return enabled;
+    }
+
+    public void LogFeatureState()
+    {
+        foreach (var metadata in KnownFeatures.GetAllFeatureMetadata())
+        {
+            var value = IsFeatureEnabled(metadata.Name, metadata.DefaultValue);
+            logger.LogDebug("Feature {Feature} = {Value} (default: {DefaultValue})", metadata.Name, value, metadata.DefaultValue);
+        }
     }
 }
