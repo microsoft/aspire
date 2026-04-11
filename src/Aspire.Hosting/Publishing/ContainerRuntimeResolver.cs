@@ -20,7 +20,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver
     private readonly IServiceProvider _serviceProvider;
     private readonly IOptions<DcpOptions> _dcpOptions;
     private readonly ILogger _logger;
-    private Task<IContainerRuntime>? _cachedTask;
+    private readonly Lazy<Task<IContainerRuntime>> _lazyRuntime;
 
     public ContainerRuntimeResolver(
         IServiceProvider serviceProvider,
@@ -30,14 +30,15 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver
         _serviceProvider = serviceProvider;
         _dcpOptions = dcpOptions;
         _logger = loggerFactory.CreateLogger("Aspire.Hosting.ContainerRuntime");
+        _lazyRuntime = new Lazy<Task<IContainerRuntime>>(ResolveInternalAsync);
     }
 
     public Task<IContainerRuntime> ResolveAsync(CancellationToken cancellationToken = default)
     {
-        return _cachedTask ??= ResolveInternalAsync(cancellationToken);
+        return _lazyRuntime.Value;
     }
 
-    private async Task<IContainerRuntime> ResolveInternalAsync(CancellationToken cancellationToken)
+    private async Task<IContainerRuntime> ResolveInternalAsync()
     {
         var configuredRuntime = _dcpOptions.Value.ContainerRuntime;
 
@@ -49,7 +50,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver
 
         // Auto-detect: probe available runtimes asynchronously.
         // See https://github.com/microsoft/dcp/blob/main/internal/containers/runtimes/runtime.go
-        var detected = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(logger: _logger, cancellationToken: cancellationToken).ConfigureAwait(false);
+        var detected = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(logger: _logger).ConfigureAwait(false);
         var runtimeKey = detected?.Executable ?? "docker";
 
         if (detected is { IsHealthy: true })

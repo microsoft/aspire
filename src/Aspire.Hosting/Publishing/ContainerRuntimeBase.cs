@@ -439,7 +439,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// <summary>
     /// Parses Docker Compose ps JSON output, handling both NDJSON (one object per line) and JSON array formats.
     /// </summary>
-    private static List<ComposeServiceInfo> ParseComposeServiceEntries(List<string> outputLines)
+    internal static List<ComposeServiceInfo> ParseComposeServiceEntries(List<string> outputLines)
     {
         var results = new List<ComposeServiceInfo>();
 

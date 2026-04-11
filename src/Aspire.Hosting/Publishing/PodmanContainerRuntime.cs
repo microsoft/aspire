@@ -74,7 +74,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
     /// Parses native <c>podman ps --format json</c> output into normalized <see cref="ComposeServiceInfo"/> entries.
     /// Podman returns a JSON array. Containers are aggregated by compose service name.
     /// </summary>
-    private static List<ComposeServiceInfo> ParsePodmanPsOutput(List<string> outputLines)
+    internal static List<ComposeServiceInfo> ParsePodmanPsOutput(List<string> outputLines)
     {
         var allText = string.Join("", outputLines);
         if (string.IsNullOrWhiteSpace(allText))
