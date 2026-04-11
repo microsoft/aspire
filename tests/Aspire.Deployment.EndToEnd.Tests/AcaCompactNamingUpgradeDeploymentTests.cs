@@ -98,15 +98,107 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
 
             // Step 5: Create single-file AppHost with GA CLI
             output.WriteLine("Step 5: Creating single-file AppHost with GA CLI...");
+            var waitingForLanguageSelectionPrompt = new CellPatternSearcher()
+                .Find("Which language would you like to use?");
+            var waitingForTemplateVersionPrompt = new CellPatternSearcher()
+                .Find("NuGet.config");
+            var waitingForAgentInitPrompt = new CellPatternSearcher()
+                .Find("configure AI agent environments");
+            var waitingForSuccessPrompt = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+
             await auto.TypeAsync("aspire init");
             await auto.EnterAsync();
-            // Wait for and dismiss the language selection (auto-selected or prompt)
-            await auto.WaitAsync(TimeSpan.FromSeconds(5));
-            await auto.EnterAsync();
-            // The CLI may show a "Select a template version" prompt — dismiss it
-            await auto.WaitUntilTextAsync("based on NuGet.config", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync();
-            await auto.DeclineAgentInitPromptAsync(counter);
+
+            var initState = "success";
+            await auto.WaitUntilAsync(s =>
+            {
+                if (waitingForLanguageSelectionPrompt.Search(s).Count > 0)
+                {
+                    initState = "language";
+                    return true;
+                }
+
+                if (waitingForTemplateVersionPrompt.Search(s).Count > 0)
+                {
+                    initState = "template-version";
+                    return true;
+                }
+
+                if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                {
+                    initState = "agent-init";
+                    return true;
+                }
+
+                if (waitingForSuccessPrompt.Search(s).Count > 0)
+                {
+                    initState = "success";
+                    return true;
+                }
+
+                return false;
+            }, timeout: TimeSpan.FromMinutes(2), description: "language prompt, template version prompt, agent init prompt, or init success prompt");
+
+            if (initState == "language")
+            {
+                await auto.EnterAsync();
+
+                await auto.WaitUntilAsync(s =>
+                {
+                    if (waitingForTemplateVersionPrompt.Search(s).Count > 0)
+                    {
+                        initState = "template-version";
+                        return true;
+                    }
+
+                    if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                    {
+                        initState = "agent-init";
+                        return true;
+                    }
+
+                    if (waitingForSuccessPrompt.Search(s).Count > 0)
+                    {
+                        initState = "success";
+                        return true;
+                    }
+
+                    return false;
+                }, timeout: TimeSpan.FromMinutes(2), description: "template version prompt, agent init prompt, or init success prompt");
+            }
+
+            if (initState == "template-version")
+            {
+                await auto.EnterAsync();
+
+                await auto.WaitUntilAsync(s =>
+                {
+                    if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                    {
+                        initState = "agent-init";
+                        return true;
+                    }
+
+                    if (waitingForSuccessPrompt.Search(s).Count > 0)
+                    {
+                        initState = "success";
+                        return true;
+                    }
+
+                    return false;
+                }, timeout: TimeSpan.FromMinutes(2), description: "agent init prompt or init success prompt");
+            }
+
+            if (initState == "agent-init")
+            {
+                await auto.DeclineAgentInitPromptAsync(counter);
+            }
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter);
+            }
 
             // Step 6: Add ACA package using GA CLI (uses GA NuGet packages)
             output.WriteLine("Step 6: Adding Azure Container Apps package (GA)...");

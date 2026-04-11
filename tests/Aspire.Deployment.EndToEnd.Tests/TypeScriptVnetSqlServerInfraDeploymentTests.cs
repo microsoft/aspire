@@ -86,13 +86,60 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
             // Step 3: Create TypeScript AppHost using aspire init
             output.WriteLine("Step 3: Creating TypeScript AppHost with aspire init...");
 
+            var waitingForTemplateVersionPrompt = new CellPatternSearcher()
+                .Find("NuGet.config");
+            var waitingForAgentInitPrompt = new CellPatternSearcher()
+                .Find("configure AI agent environments");
+            var waitingForSuccessPrompt = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+
             await auto.TypeAsync("aspire init --language typescript");
             await auto.EnterAsync();
 
-            // When using bundle install, the CLI auto-selects the package version
-            // from the local hive without showing a NuGet.config prompt.
-            // Go straight to waiting for the agent init prompt / success prompt.
-            await auto.DeclineAgentInitPromptAsync(counter);
+            var sawTemplateVersionPrompt = false;
+            var sawAgentInitPrompt = false;
+            await auto.WaitUntilAsync(s =>
+            {
+                if (waitingForTemplateVersionPrompt.Search(s).Count > 0)
+                {
+                    sawTemplateVersionPrompt = true;
+                    return true;
+                }
+
+                if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                {
+                    sawAgentInitPrompt = true;
+                    return true;
+                }
+
+                return waitingForSuccessPrompt.Search(s).Count > 0;
+            }, timeout: TimeSpan.FromMinutes(2), description: "template version prompt, agent init prompt, or init success prompt");
+
+            if (sawTemplateVersionPrompt)
+            {
+                await auto.EnterAsync();
+
+                await auto.WaitUntilAsync(s =>
+                {
+                    if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                    {
+                        sawAgentInitPrompt = true;
+                        return true;
+                    }
+
+                    return waitingForSuccessPrompt.Search(s).Count > 0;
+                }, timeout: TimeSpan.FromMinutes(2), description: "agent init prompt or init success prompt");
+            }
+
+            if (sawAgentInitPrompt)
+            {
+                await auto.DeclineAgentInitPromptAsync(counter);
+            }
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter);
+            }
 
             // Step 4a: Add Aspire.Hosting.Azure.AppContainers
             output.WriteLine("Step 4a: Adding Azure Container Apps hosting package...");
