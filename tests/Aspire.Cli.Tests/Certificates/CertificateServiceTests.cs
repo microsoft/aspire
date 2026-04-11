@@ -92,7 +92,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true), isWindows: () => true);
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true));
             };
         });
 
@@ -190,7 +190,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true), isWindows: () => true);
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true));
             };
         });
 
@@ -239,7 +239,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EnsureCertificatesTrustedAsync_OnWindowsCi_WithNotTrustedCert_SkipsTrustOperation()
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_WithNotTrustedCert_SkipsTrustOperation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var trustCalled = false;
@@ -277,7 +277,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isWindows: () => true);
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment());
             };
         });
 
@@ -287,12 +287,14 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(result);
-        Assert.False(trustCalled);
+        // On Linux, trust proceeds even in non-interactive mode because it doesn't require UI.
+        // On macOS/Windows, trust is skipped in non-interactive mode.
+        Assert.Equal(OperatingSystem.IsLinux(), trustCalled);
         Assert.False(ensureCalled);
     }
 
     [Fact]
-    public async Task EnsureCertificatesTrustedAsync_OnWindowsCi_WithNoCertificates_EnsuresCertificateExistsWithoutTrust()
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_WithNoCertificates_EnsuresCertificateExistsWithoutTrust()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var trustCalled = false;
@@ -330,7 +332,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isWindows: () => true);
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment());
             };
         });
 
@@ -340,8 +342,75 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(result);
-        Assert.False(trustCalled);
-        Assert.True(ensureCalled);
+        if (OperatingSystem.IsLinux())
+        {
+            // On Linux, trust proceeds in non-interactive mode (no UI needed), so
+            // TrustHttpCertificate is called which also creates the cert internally.
+            Assert.True(trustCalled);
+            Assert.False(ensureCalled);
+        }
+        else
+        {
+            // On macOS/Windows, trust is skipped but cert creation is attempted.
+            Assert.False(trustCalled);
+            Assert.True(ensureCalled);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_NonInteractiveNonWindows_WithNotTrustedCert_SkipsTrustOperation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var trustCalled = false;
+        var ensureCalled = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = sp =>
+            {
+                return new TestCertificateToolRunner
+                {
+                    CheckHttpCertificateCallback = () =>
+                    {
+                        return new CertificateTrustResult
+                        {
+                            HasCertificates = true,
+                            TrustLevel = CertificateManager.TrustLevel.None,
+                            Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.None, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                        };
+                    },
+                    TrustHttpCertificateCallback = () =>
+                    {
+                        trustCalled = true;
+                        return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+                    },
+                    EnsureHttpCertificateExistsCallback = () =>
+                    {
+                        ensureCalled = true;
+                        return EnsureCertificateResult.ValidCertificatePresent;
+                    }
+                };
+            };
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                // Simulate macOS CI: non-interactive, non-Windows, non-Linux
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment());
+            };
+        });
+
+        var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.NotNull(result);
+        // On Linux, trust proceeds in non-interactive mode (no UI needed).
+        // On macOS/Windows, trust is skipped to avoid blocking UI prompts.
+        Assert.Equal(OperatingSystem.IsLinux(), trustCalled);
+        Assert.False(ensureCalled);
     }
 
     private sealed class TestCertificateToolRunner : ICertificateToolRunner
