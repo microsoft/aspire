@@ -38,6 +38,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("bash", _testOutput, label: "curl|bash:release");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
         var result = await cmd.ExecuteAsync(
             "-c",
@@ -58,6 +59,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("bash", _testOutput, label: "curl|bash:pr");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
         var result = await cmd.ExecuteAsync(
             "-c",
@@ -75,6 +77,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("bash", _testOutput, label: "curl|bash:release-err");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
         var result = await cmd.ExecuteAsync(
             "-c",
@@ -94,6 +97,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("bash", _testOutput, label: "curl|bash:spaces");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
         // Use --dry-run if available, or --help with --install-path to verify argument parsing
         var result = await cmd.ExecuteAsync(
@@ -123,6 +127,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("bash", _testOutput, label: "cat|bash:release");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
         var result = await cmd.ExecuteAsync(
             "-c",
@@ -144,6 +149,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("bash", _testOutput, label: "cat|bash:pr");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
         var result = await cmd.ExecuteAsync(
             "-c",
@@ -167,11 +173,15 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("pwsh", _testOutput, label: "irm|iex:release");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
+        // Outer quotes group the entire expression as a single process argument;
+        // inner \" are literal quotes that survive Windows command-line parsing,
+        // so pwsh -Command receives: iex "& { $(irm URL) } -Help"
         var result = await cmd.ExecuteAsync(
             "-NoProfile",
             "-Command",
-            $"iex \"& {{ $(irm {_host.BaseUrl}/get-aspire-cli.ps1) }} -Help\"");
+            $"\"iex \\\"& {{ $(irm {_host.BaseUrl}/get-aspire-cli.ps1) }} -Help\\\"\"");
 
         result.EnsureSuccessful();
         Assert.Contains("Aspire CLI", result.Output);
@@ -186,11 +196,12 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("pwsh", _testOutput, label: "irm|iex:pr");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
         var result = await cmd.ExecuteAsync(
             "-NoProfile",
             "-Command",
-            $"iex \"& {{ $(irm {_host.BaseUrl}/get-aspire-cli-pr.ps1) }} -Help\"");
+            $"\"iex \\\"& {{ $(irm {_host.BaseUrl}/get-aspire-cli-pr.ps1) }} -Help\\\"\"");
 
         result.EnsureSuccessful();
         Assert.Contains("Usage", result.Output, StringComparison.OrdinalIgnoreCase);
@@ -210,7 +221,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         var result = await cmd.ExecuteAsync(
             "-NoProfile",
             "-Command",
-            $"try {{ iex \"& {{ $(irm {_host.BaseUrl}/get-aspire-cli.ps1) }} -Quality bogus\" }} catch {{ exit 1 }}");
+            $"\"try {{ iex \\\"& {{ $(irm {_host.BaseUrl}/get-aspire-cli.ps1) }} -Quality bogus\\\" }} catch {{ exit 1 }}\"");
 
         Assert.NotEqual(0, result.ExitCode);
     }
@@ -223,12 +234,13 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
         using var cmd = new ToolCommand("pwsh", _testOutput, label: "irm|iex:spaces");
         cmd.WithEnvironmentVariable("HOME", env.MockHome);
         cmd.WithEnvironmentVariable("USERPROFILE", env.MockHome);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
 
         // Quote the path in the iex expression
         var result = await cmd.ExecuteAsync(
             "-NoProfile",
             "-Command",
-            $"iex \"& {{ $(irm {_host.BaseUrl}/get-aspire-cli.ps1) }} -InstallPath '{installPath}' -Help\"");
+            $"\"iex \\\"& {{ $(irm {_host.BaseUrl}/get-aspire-cli.ps1) }} -InstallPath '{installPath}' -Help\\\"\"");
 
         result.EnsureSuccessful();
         Assert.Contains("Aspire CLI", result.Output);
