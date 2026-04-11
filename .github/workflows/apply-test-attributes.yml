@@ -27,6 +27,13 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+    - name: Checkout workflow helpers
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        sparse-checkout: .github/workflows/workflow-command-helpers.js
+        sparse-checkout-cone-mode: false
+        persist-credentials: false
+
     - name: Extract command and arguments
       uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
       id: extract-command
@@ -69,19 +76,34 @@ jobs:
           const args = match[2].trim();
           const matched = commandConfig[commandName];
 
-          // Parse arguments - extract --target-pr option first
-          let targetPrUrl = '';
-          let remainingArgs = args;
+          // Parse arguments using shared quote-aware tokenizer
+          const { tokenizeArguments } = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/workflow-command-helpers.js`);
 
-          // Extract --target-pr <url> if present
-          const targetPrPattern = /--target-pr\s+(\S+)/;
-          const targetPrMatch = targetPrPattern.exec(args);
-          if (targetPrMatch) {
-            targetPrUrl = targetPrMatch[1];
-            remainingArgs = args.replace(targetPrPattern, '').trim();
+          let allTokens;
+          try {
+            allTokens = tokenizeArguments(args);
+          }
+          catch (error) {
+            failWithError(error.message);
+            return;
           }
 
-          const parts = remainingArgs.split(/\s+/).filter(p => p.length > 0);
+          // Extract --target-pr option first
+          let targetPrUrl = '';
+          const filteredTokens = [];
+          for (let i = 0; i < allTokens.length; i++) {
+            if (allTokens[i] === '--target-pr') {
+              if (i + 1 >= allTokens.length) {
+                failWithError('Missing value for --target-pr.');
+                return;
+              }
+              targetPrUrl = allTokens[++i];
+            } else {
+              filteredTokens.push(allTokens[i]);
+            }
+          }
+
+          const parts = filteredTokens;
 
           // Check for unknown arguments (anything starting with - or --)
           const unknownArgs = parts.filter(p => p.startsWith('-'));
@@ -132,8 +154,12 @@ jobs:
               return;
             }
           } else {
-            // For unquarantine/enable: test names only
-            testNames = parts;
+            // For unquarantine/enable: test names only, ignore any trailing URLs
+            testNames = parts.filter(p => !urlPattern.test(p));
+            if (testNames.length === 0) {
+              failWithError('No test name(s) provided. Only URLs were found in the arguments.');
+              return;
+            }
           }
 
           // Validate target PR URL is from the same repo if provided

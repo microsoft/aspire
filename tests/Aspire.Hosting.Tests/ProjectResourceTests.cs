@@ -930,6 +930,21 @@ public class ProjectResourceTests
         Assert.Equal("project", annotation.LaunchConfigurationType);
     }
 
+    [Fact]
+    public void AddProjectCreatesRebuilderWithNameValidationPolicyAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.AddProject<TestProject>("projectName", options => { options.ExcludeLaunchProfile = true; });
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var rebuilder = appModel.Resources.OfType<ProjectRebuilderResource>().SingleOrDefault();
+        Assert.NotNull(rebuilder);
+        Assert.True(rebuilder.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
+    }
+
     internal static IDistributedApplicationBuilder CreateBuilder(string[]? args = null, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)
     {
         var resolvedArgs = new List<string>();

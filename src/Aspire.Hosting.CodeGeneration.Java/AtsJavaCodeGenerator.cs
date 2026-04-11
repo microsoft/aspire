@@ -958,12 +958,25 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
     private void GenerateUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters)
     {
         var unionParameters = parameters.Where(p => IsUnionType(p.Type)).ToList();
-        if (unionParameters.Count != 1)
+        if (unionParameters.Count == 0)
         {
             return;
         }
 
-        var unionParameter = unionParameters[0];
+        if (unionParameters.Count == 1)
+        {
+            GenerateSingleUnionOverloads(returnInfo, methodName, parameters, unionParameters[0]);
+            return;
+        }
+
+        // Multiple union parameters: generate overloads for each combination of concrete types.
+        // E.g. runAsExisting(AspireUnion name, AspireUnion resourceGroup) where both are string|ParameterResource
+        // generates 4 overloads: (String,String), (String,ParameterResource), (ParameterResource,String), (ParameterResource,ParameterResource)
+        GenerateMultiUnionOverloads(returnInfo, methodName, parameters, unionParameters);
+    }
+
+    private void GenerateSingleUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters, AtsParameterInfo unionParameter)
+    {
         var unionTypes = unionParameter.Type?.UnionTypes;
         if (unionTypes is null || unionTypes.Count == 0)
         {
@@ -1013,6 +1026,77 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 CreateUnionMethodParameters(parameters, unionParameter, unionType),
                 returnInfo.HasReturn);
         }
+    }
+
+    private void GenerateMultiUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters, List<AtsParameterInfo> unionParameters)
+    {
+        // Build the list of distinct Java types for each union parameter.
+        var unionTypesByParam = unionParameters
+            .Select(up => up.Type?.UnionTypes?
+                .Select(t => new { Type = t, JavaType = MapInputTypeToJava(t, up.IsOptional || up.IsNullable) })
+                .DistinctBy(x => x.JavaType, StringComparer.Ordinal)
+                .Select(x => x.Type)
+                .ToList() ?? [])
+            .ToList();
+
+        // Generate the Cartesian product of all union type combinations.
+        var combinations = CartesianProduct(unionTypesByParam);
+
+        foreach (var combination in combinations)
+        {
+            // Build parameter list for this overload.
+            var overloadParameters = new StringBuilder();
+            foreach (var parameter in parameters)
+            {
+                if (overloadParameters.Length > 0)
+                {
+                    overloadParameters.Append(", ");
+                }
+
+                var unionIndex = unionParameters.IndexOf(parameter);
+                var parameterType = unionIndex >= 0
+                    ? MapInputTypeToJava(combination[unionIndex], parameter.IsOptional || parameter.IsNullable)
+                    : MapParameterToJava(parameter);
+                overloadParameters.Append(CultureInfo.InvariantCulture, $"{parameterType} {ToCamelCase(parameter.Name)}");
+            }
+
+            // Build call arguments, wrapping union parameters with AspireUnion.of().
+            var callArguments = string.Join(", ", parameters.Select(parameter =>
+                unionParameters.Contains(parameter)
+                    ? $"AspireUnion.of({ToCamelCase(parameter.Name)})"
+                    : ToCamelCase(parameter.Name)));
+
+            WriteLine($"    public {returnInfo.ReturnType} {methodName}({overloadParameters}) {{");
+            if (returnInfo.HasReturn)
+            {
+                WriteLine($"        return {methodName}({callArguments});");
+            }
+            else
+            {
+                WriteLine($"        {methodName}({callArguments});");
+            }
+            WriteLine("    }");
+            WriteLine();
+        }
+    }
+
+    private static List<List<AtsTypeRef>> CartesianProduct(List<List<AtsTypeRef>> lists)
+    {
+        var result = new List<List<AtsTypeRef>> { new() };
+        foreach (var list in lists)
+        {
+            var temp = new List<List<AtsTypeRef>>();
+            foreach (var existing in result)
+            {
+                foreach (var item in list)
+                {
+                    var combined = new List<AtsTypeRef>(existing) { item };
+                    temp.Add(combined);
+                }
+            }
+            result = temp;
+        }
+        return result;
     }
 
     private void GenerateOptionalOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters)

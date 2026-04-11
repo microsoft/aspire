@@ -214,13 +214,29 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
         var result = await resourceCommandService.ExecuteCommandAsync(request.ResourceName, request.CommandName, cancellationToken).ConfigureAwait(false);
 
+#pragma warning disable CS0618 // Type or member is obsolete
+        var resolvedMessage = result.Message ?? result.ErrorMessage;
+#pragma warning restore CS0618 // Type or member is obsolete
+
         return new ExecuteResourceCommandResponse
         {
             Success = result.Success,
             Canceled = result.Canceled,
-            ErrorMessage = result.ErrorMessage,
-            Result = result.Result,
-            ResultFormat = result.ResultFormat?.ToString().ToLowerInvariant()
+#pragma warning disable CS0618 // Type or member is obsolete
+            ErrorMessage = resolvedMessage,
+#pragma warning restore CS0618 // Type or member is obsolete
+            Message = resolvedMessage,
+            Value = result.Data is { } v ? new ExecuteResourceCommandResult
+            {
+                Value = v.Value,
+                Format = v.Format switch
+                {
+                    ApplicationModel.CommandResultFormat.Json => CommandResultFormat.Json,
+                    ApplicationModel.CommandResultFormat.Markdown => CommandResultFormat.Markdown,
+                    _ => CommandResultFormat.Text
+                },
+                DisplayImmediately = v.DisplayImmediately
+            } : null
         };
     }
 
@@ -350,13 +366,20 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             cliProcessId = parsedCliPid;
         }
+        DateTimeOffset? cliStartedAt = null;
+        var cliStartedAtString = configuration[KnownConfigNames.CliProcessStarted];
+        if (!string.IsNullOrEmpty(cliStartedAtString) && long.TryParse(cliStartedAtString, out var parsedCliStartedAt))
+        {
+            cliStartedAt = DateTimeOffset.FromUnixTimeSeconds(parsedCliStartedAt);
+        }
 
         return Task.FromResult(new AppHostInformation
         {
             AppHostPath = appHostPath,
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
-            StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime)
+            StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
+            CliStartedAt = cliStartedAt
         });
     }
 

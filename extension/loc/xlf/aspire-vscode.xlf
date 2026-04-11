@@ -46,6 +46,9 @@
     <trans-unit id="aspire-vscode.strings.aspireRestoreCompleted">
       <source xml:lang="en">Aspire restore completed for {0}.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireRestoreFailedStatusBar">
+      <source xml:lang="en">Aspire restore failed (click to retry)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireTerminalName">
       <source xml:lang="en">Aspire terminal</source>
     </trans-unit>
@@ -343,8 +346,11 @@
     <trans-unit id="command.openGlobalSettings">
       <source xml:lang="en">Open global Aspire settings</source>
     </trans-unit>
-    <trans-unit id="command.openInSimpleBrowser">
+    <trans-unit id="command.openInIntegratedBrowser">
       <source xml:lang="en">Open in VS Code</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.dashboardBrowser.integratedBrowser">
+      <source xml:lang="en">Open in VS Code&apos;s integrated browser (does not auto-close).</source>
     </trans-unit>
     <trans-unit id="command.openInExternalBrowser">
       <source xml:lang="en">Open in browser</source>
@@ -381,6 +387,9 @@
     </trans-unit>
     <trans-unit id="command.restartResource">
       <source xml:lang="en">Restart</source>
+    </trans-unit>
+    <trans-unit id="command.restore">
+      <source xml:lang="en">Restore packages</source>
     </trans-unit>
     <trans-unit id="command.codeLensRevealResource">
       <source xml:lang="en">Reveal resource in Aspire panel</source>

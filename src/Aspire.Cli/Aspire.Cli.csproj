@@ -56,7 +56,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="Semver" />
+
     <PackageReference Include="Sigstore" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
@@ -74,6 +74,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)SmolSemVer.cs" Link="SmolSemVer.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
@@ -128,6 +129,8 @@
     <Compile Include="$(SharedDir)ConsoleLogs\SharedAIHelpers.cs" Link="ConsoleLogs\SharedAIHelpers.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="ConsoleLogs\UrlParser.cs" />
+    <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
+    <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="Utils\NpmVersionHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

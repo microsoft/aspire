@@ -241,6 +241,15 @@
   <data name="NuGetConfigCreatedConfirmationMessage" xml:space="preserve">
     <value>Created NuGet.config for the selected package channel.</value>
   </data>
+  <data name="UpdateNuGetConfigConfirmation" xml:space="preserve">
+    <value>Update NuGet.config to add missing package sources for the selected channel?</value>
+  </data>
+  <data name="NuGetConfigUpdatedConfirmationMessage" xml:space="preserve">
+    <value>Updated NuGet.config with required package sources.</value>
+  </data>
+  <data name="NuGetConfigCreatedOrUpdatedConfirmationMessage" xml:space="preserve">
+    <value>Created or updated NuGet.config in the project directory with required package sources.</value>
+  </data>
   <data name="UseLocalhostTld_Prompt" xml:space="preserve">
     <value>Use *.dev.localhost URLs</value>
   </data>

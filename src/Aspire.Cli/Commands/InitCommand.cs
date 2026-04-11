@@ -18,7 +18,6 @@ using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -925,7 +924,7 @@ internal sealed class InitContext
 
                     if (SemVersion.TryParse(versionString, SemVersionStyles.Strict, out var version))
                     {
-                        if (highestVersion is null || SemVersion.ComparePrecedence(version, highestVersion) > 0)
+                        if (highestVersion is null || version.IsNewerThan(highestVersion))
                         {
                             highestVersion = version;
                             highestTfm = tfm;

@@ -76,7 +76,7 @@ public class PackageChannelTests
     {
         // Arrange
         var cache = new FakeNuGetPackageCache();
-        var stagingUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-48a11dae/nuget/v3/index.json";
+        var stagingUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-48a11dae/nuget/v3/index.json";
         var mappings = new[]
         {
             new PackageMapping("Aspire*", stagingUrl),

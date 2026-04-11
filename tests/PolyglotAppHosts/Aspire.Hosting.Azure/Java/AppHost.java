@@ -21,9 +21,9 @@ void main() throws Exception {
         fileBicep.getBicepIdentifier();
         fileBicep.isExisting();
         fileBicep.runAsExisting("file-bicep-existing", "rg-bicep");
-        fileBicep.runAsExistingFromParameters(existingName, existingResourceGroup);
+        fileBicep.runAsExisting(existingName, existingResourceGroup);
         fileBicep.publishAsExisting("file-bicep-existing", "rg-bicep");
-        fileBicep.publishAsExistingFromParameters(existingName, existingResourceGroup);
+        fileBicep.publishAsExisting(existingName, existingResourceGroup);
         fileBicep.asExisting(existingName, existingResourceGroup);
         var inlineBicep = builder.addBicepTemplateString("inline-bicep", """
         output inlineUrl string = "https://inline.example.com"
@@ -50,9 +50,9 @@ void main() throws Exception {
         infrastructure.getBicepIdentifier();
         infrastructure.isExisting();
         infrastructure.runAsExisting("infra-existing", "rg-infra");
-        infrastructure.runAsExistingFromParameters(existingName, existingResourceGroup);
+        infrastructure.runAsExisting(existingName, existingResourceGroup);
         infrastructure.publishAsExisting("infra-existing", "rg-infra");
-        infrastructure.publishAsExistingFromParameters(existingName, existingResourceGroup);
+        infrastructure.publishAsExisting(existingName, existingResourceGroup);
         infrastructure.asExisting(existingName, existingResourceGroup);
         var identity = builder.addAzureUserAssignedIdentity("identity");
         identity.configureInfrastructure((infrastructureContext) -> { });
@@ -69,9 +69,9 @@ void main() throws Exception {
         identity.getBicepIdentifier();
         identity.isExisting();
         identity.runAsExisting("identity-existing", "rg-identity");
-        identity.runAsExistingFromParameters(existingName, existingResourceGroup);
+        identity.runAsExisting(existingName, existingResourceGroup);
         identity.publishAsExisting("identity-existing", "rg-identity");
-        identity.publishAsExistingFromParameters(existingName, existingResourceGroup);
+        identity.publishAsExisting(existingName, existingResourceGroup);
         identity.asExisting(existingName, existingResourceGroup);
         container.withEnvironment("INFRA_URL", infrastructureOutput);
         container.withEnvironment("SECRET_FROM_IDENTITY", identity);

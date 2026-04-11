@@ -320,8 +320,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
                 var packages = await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken);
                 var package = packages
-                    .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
-                    .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
+                    .Where(p => SemVersion.TryParse(p.Version, SemVersionStyles.Strict, out _))
+                    .OrderByDescending(p => SemVersion.Parse(p.Version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
                     .FirstOrDefault();
 
                 if (package is null)
@@ -441,7 +441,7 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
         if (explicitGroups.Length == 0 && implicitGroup is not null)
         {
             // Return the highest version from the implicit channel
-            return implicitGroup.OrderByDescending(p => Semver.SemVersion.Parse(p.Package.Version), Semver.SemVersion.PrecedenceComparer).First();
+            return implicitGroup.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer).First();
         }
 
         // Create a hierarchical selection experience:

@@ -17,6 +17,7 @@ public interface INuGetService
     /// </summary>
     /// <param name="packages">The packages to restore.</param>
     /// <param name="targetFramework">The target framework.</param>
+    /// <param name="runtimeIdentifier">The runtime identifier used to prefer runtime-specific assets in the generated layout.</param>
     /// <param name="sources">Additional NuGet sources.</param>
     /// <param name="workingDirectory">Working directory for nuget.config discovery.</param>
     /// <param name="ct">Cancellation token.</param>
@@ -24,6 +25,7 @@ public interface INuGetService
     Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string targetFramework = "net10.0",
+        string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         string? workingDirectory = null,
         CancellationToken ct = default);
@@ -53,6 +55,7 @@ internal sealed class BundleNuGetService : INuGetService
     public async Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
         string targetFramework = "net10.0",
+        string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
         string? workingDirectory = null,
         CancellationToken ct = default)
@@ -76,7 +79,7 @@ internal sealed class BundleNuGetService : INuGetService
         }
 
         // Compute a hash for the package set to create a unique restore location
-        var packageHash = ComputePackageHash(packageList, targetFramework);
+        var packageHash = ComputePackageHash(packageList, targetFramework, runtimeIdentifier, managedPath);
         var restoreDir = Path.Combine(_cacheDirectory, "restore", packageHash);
         var objDir = Path.Combine(restoreDir, "obj");
         var libsDir = Path.Combine(restoreDir, "libs");
@@ -100,6 +103,12 @@ internal sealed class BundleNuGetService : INuGetService
             "--output", objDir,
             "--framework", targetFramework
         };
+
+        if (!string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            restoreArgs.Add("--runtime-identifier");
+            restoreArgs.Add(runtimeIdentifier);
+        }
 
         foreach (var (id, version) in packageList)
         {
@@ -163,6 +172,12 @@ internal sealed class BundleNuGetService : INuGetService
             "--framework", targetFramework
         };
 
+        if (!string.IsNullOrEmpty(runtimeIdentifier))
+        {
+            layoutArgs.Add("--runtime-identifier");
+            layoutArgs.Add(runtimeIdentifier);
+        }
+
         // Enable verbose output for debugging
         if (_logger.IsEnabled(LogLevel.Debug))
         {
@@ -195,14 +210,47 @@ internal sealed class BundleNuGetService : INuGetService
         return libsDir;
     }
 
-    private static string ComputePackageHash(List<(string Id, string Version)> packages, string tfm)
+    internal static string ComputePackageHash(List<(string Id, string Version)> packages, string tfm, string? runtimeIdentifier, string? managedPath = null)
     {
         var content = string.Join(";", packages.OrderBy(p => p.Id).Select(p => $"{p.Id}:{p.Version}"));
         content += $";tfm:{tfm}";
+        content += $";rid:{runtimeIdentifier ?? "<none>"}";
+        content += $";managed:{GetManagedToolFingerprint(managedPath)}";
 
         // Use SHA256 for stable hash across processes/runtimes
         var hashBytes = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content));
         return Convert.ToHexString(hashBytes)[..16]; // Use first 16 chars (64 bits) for reasonable uniqueness
+    }
+
+    private static string GetManagedToolFingerprint(string? managedPath)
+    {
+        if (string.IsNullOrEmpty(managedPath))
+        {
+            return "<none>";
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(managedPath);
+            if (!fileInfo.Exists)
+            {
+                return "<missing>";
+            }
+
+            return $"{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}";
+        }
+        catch (IOException)
+        {
+            return "<error>";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return "<error>";
+        }
+        catch (NotSupportedException)
+        {
+            return "<error>";
+        }
     }
 
     private static string GetCacheDirectory()
@@ -211,4 +259,3 @@ internal sealed class BundleNuGetService : INuGetService
         return Path.Combine(home, ".aspire", "packages");
     }
 }
-

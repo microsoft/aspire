@@ -21,7 +21,8 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     IResourceWithConnectionString,
     IResourceWithEndpoints,
     IResourceWithAzureFunctionsConfig,
-    IAzurePrivateEndpointTarget
+    IAzurePrivateEndpointTarget,
+    IAzureNspAssociationTarget
 {
     internal List<AzureCosmosDBDatabaseResource> Databases { get; } = [];
 

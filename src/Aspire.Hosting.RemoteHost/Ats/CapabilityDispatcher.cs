@@ -28,6 +28,7 @@ internal delegate Task<JsonNode?> CapabilityHandler(
 internal sealed class CapabilityDispatcher
 {
     private readonly ConcurrentDictionary<string, CapabilityRegistration> _capabilities = new();
+    private readonly Dictionary<string, HashSet<string>> _polyglotMethodNamesByClrName = new(StringComparer.Ordinal);
     private readonly HandleRegistry _handles;
     private readonly AtsMarshaller _marshaller;
     private readonly ILogger _logger;
@@ -41,6 +42,8 @@ internal sealed class CapabilityDispatcher
         public required string CapabilityId { get; init; }
         public required CapabilityHandler Handler { get; init; }
         public string? Description { get; init; }
+        public AtsCapabilityInfo? Capability { get; init; }
+        public string? ClrMemberName { get; init; }
     }
 
     /// <summary>
@@ -177,7 +180,13 @@ internal sealed class CapabilityDispatcher
                 // Bridge builder -> resource: if the handle contains an IResourceBuilder<T>
                 // but the property is declared on the resource type T, unwrap to the
                 // correct target object. See AtsCapabilityScanner.MapToAtsTypeId.
-                var target = ResolveContextTarget(contextObj!, prop.DeclaringType!);
+                var target = ResolveContextTarget(
+                    capability,
+                    capabilityId,
+                    args,
+                    handles,
+                    contextObj!,
+                    prop.DeclaringType!);
 
                 var value = prop.GetValue(target);
                 return Task.FromResult(_marshaller.MarshalToJson(value, capability.ReturnType));
@@ -187,8 +196,12 @@ internal sealed class CapabilityDispatcher
             {
                 CapabilityId = capabilityId,
                 Handler = getterHandler,
-                Description = capability.Description ?? $"Gets the {property.Name} property"
+                Description = capability.Description ?? $"Gets the {property.Name} property",
+                Capability = capability,
+                ClrMemberName = property.Name
             };
+
+            RegisterMethodAlias(property.Name, capability.MethodName);
         }
         else if (capability.CapabilityKind == AtsCapabilityKind.PropertySetter)
         {
@@ -221,10 +234,23 @@ internal sealed class CapabilityDispatcher
                     CapabilityId = capabilityId,
                     ParameterName = "value"
                 };
-                var value = _marshaller.UnmarshalFromJson(valueNode, prop.PropertyType, unmarshalContext);
+                var value = UnmarshalArgument(
+                    capability,
+                    "value",
+                    prop.PropertyType,
+                    valueNode,
+                    unmarshalContext,
+                    handles,
+                    args);
 
                 // Bridge builder -> resource for setter as well.
-                var setTarget = ResolveContextTarget(contextObj!, prop.DeclaringType!);
+                var setTarget = ResolveContextTarget(
+                    capability,
+                    capabilityId,
+                    args,
+                    handles,
+                    contextObj!,
+                    prop.DeclaringType!);
                 prop.SetValue(setTarget, value);
 
                 // Return the context handle for fluent chaining
@@ -239,8 +265,12 @@ internal sealed class CapabilityDispatcher
             {
                 CapabilityId = capabilityId,
                 Handler = setterHandler,
-                Description = capability.Description ?? $"Sets the {property.Name} property"
+                Description = capability.Description ?? $"Sets the {property.Name} property",
+                Capability = capability,
+                ClrMemberName = property.Name
             };
+
+            RegisterMethodAlias(property.Name, capability.MethodName);
         }
     }
 
@@ -285,7 +315,14 @@ internal sealed class CapabilityDispatcher
                         CapabilityId = capabilityId,
                         ParameterName = paramName
                     };
-                    methodArgs[i] = _marshaller.UnmarshalFromJson(argNode, param.ParameterType, context);
+                    methodArgs[i] = UnmarshalArgument(
+                        capability,
+                        paramName,
+                        param.ParameterType,
+                        argNode,
+                        context,
+                        handles,
+                        args);
                 }
                 else if (param.HasDefaultValue)
                 {
@@ -308,7 +345,13 @@ internal sealed class CapabilityDispatcher
             // Bridge builder -> resource: if the handle contains an IResourceBuilder<T>
             // but the method is declared on the resource type T, unwrap to the
             // correct target object. See AtsCapabilityScanner.MapToAtsTypeId.
-            var invokeTarget = ResolveContextTarget(contextObj!, methodToInvoke.DeclaringType!);
+            var invokeTarget = ResolveContextTarget(
+                capability,
+                capabilityId,
+                args,
+                handles,
+                contextObj!,
+                methodToInvoke.DeclaringType!);
 
             object? result;
             try
@@ -334,8 +377,12 @@ internal sealed class CapabilityDispatcher
         {
             CapabilityId = capabilityId,
             Handler = handler,
-            Description = capability.Description ?? $"Invokes the {method.Name} method"
+            Description = capability.Description ?? $"Invokes the {method.Name} method",
+            Capability = capability,
+            ClrMemberName = method.Name
         };
+
+        RegisterMethodAlias(method.Name, capability.MethodName);
     }
 
     /// <summary>
@@ -364,7 +411,14 @@ internal sealed class CapabilityDispatcher
                         CapabilityId = capabilityId,
                         ParameterName = paramName
                     };
-                    methodArgs[i] = _marshaller.UnmarshalFromJson(argNode, param.ParameterType, context);
+                    methodArgs[i] = UnmarshalArgument(
+                        capability,
+                        paramName,
+                        param.ParameterType,
+                        argNode,
+                        context,
+                        handles,
+                        args);
                 }
                 else if (param.HasDefaultValue)
                 {
@@ -409,8 +463,28 @@ internal sealed class CapabilityDispatcher
         {
             CapabilityId = capabilityId,
             Handler = handler,
-            Description = capability.Description
+            Description = capability.Description,
+            Capability = capability,
+            ClrMemberName = method.Name
         };
+
+        RegisterMethodAlias(method.Name, capability.MethodName);
+    }
+
+    private void RegisterMethodAlias(string? clrMemberName, string? polyglotMethodName)
+    {
+        if (string.IsNullOrEmpty(clrMemberName) || string.IsNullOrEmpty(polyglotMethodName))
+        {
+            return;
+        }
+
+        if (!_polyglotMethodNamesByClrName.TryGetValue(clrMemberName, out var names))
+        {
+            names = new(StringComparer.Ordinal);
+            _polyglotMethodNamesByClrName[clrMemberName] = names;
+        }
+
+        names.Add(polyglotMethodName);
     }
 
     /// <summary>
@@ -453,19 +527,52 @@ internal sealed class CapabilityDispatcher
         {
             return await registration.Handler(args, _handles).ConfigureAwait(false);
         }
+        catch (PolyglotCapabilityInvocationException ex)
+        {
+            throw ex.ToCapabilityException();
+        }
         catch (CapabilityException)
         {
             throw;
         }
+        catch (ArgumentException ex) when (IsTypeMismatchException(ex))
+        {
+            throw PolyglotCapabilityErrorFormatter.CreateInternalError(
+                capabilityId,
+                registration.Capability?.MethodName,
+                registration.ClrMemberName,
+                args,
+                _handles,
+                ex,
+                _polyglotMethodNamesByClrName,
+                registration.Capability?.TargetParameterName,
+                errorCode: AtsErrorCodes.TypeMismatch).ToCapabilityException();
+        }
         catch (InvalidCastException ex)
         {
-            // Convert CLR cast failures to ATS error
-            throw CapabilityException.TypeMismatch(capabilityId, "unknown", "unknown", ex.Message);
+            throw PolyglotCapabilityErrorFormatter.CreateInternalError(
+                capabilityId,
+                registration.Capability?.MethodName,
+                registration.ClrMemberName,
+                args,
+                _handles,
+                ex,
+                _polyglotMethodNamesByClrName,
+                registration.Capability?.TargetParameterName,
+                errorCode: AtsErrorCodes.TypeMismatch).ToCapabilityException();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Capability {CapabilityId} failed with {ExceptionType}: {Message}", capabilityId, ex.GetType().Name, ex.Message);
-            throw CapabilityException.InternalError(capabilityId, ex.Message, ex);
+            throw PolyglotCapabilityErrorFormatter.CreateInternalError(
+                capabilityId,
+                registration.Capability?.MethodName,
+                registration.ClrMemberName,
+                args,
+                _handles,
+                ex,
+                _polyglotMethodNamesByClrName,
+                registration.Capability?.TargetParameterName).ToCapabilityException();
         }
     }
 
@@ -562,6 +669,18 @@ internal sealed class CapabilityDispatcher
     }
 
     /// <summary>
+    /// Checks if an exception indicates a type mismatch.
+    /// </summary>
+    private static bool IsTypeMismatchException(ArgumentException ex)
+    {
+        var message = ex.Message;
+        return message.Contains("cannot be converted") ||
+               message.Contains("could not be converted") ||
+               message.Contains("is not assignable") ||
+               message.Contains("type mismatch", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Finds the mismatched parameter by comparing actual argument types against expected parameter types.
     /// Falls back to parsing the exception message if no mismatch is found by inspection.
     /// </summary>
@@ -605,9 +724,54 @@ internal sealed class CapabilityDispatcher
     /// member is declared on the resource type <c>T</c>, since
     /// <c>AtsCapabilityScanner.MapToAtsTypeId</c> maps both to the same type ID.
     /// </summary>
-    private static object ResolveContextTarget(object contextObj, Type declaringType)
+    private object? UnmarshalArgument(
+        AtsCapabilityInfo capability,
+        string parameterName,
+        Type parameterType,
+        JsonNode? argNode,
+        AtsMarshaller.UnmarshalContext context,
+        HandleRegistry handles,
+        JsonObject? args)
+    {
+        var handleRef = HandleRef.FromJsonNode(argNode);
+        if (handleRef is null)
+        {
+            return _marshaller.UnmarshalFromJson(argNode, parameterType, context);
+        }
+
+        if (!handles.TryGet(handleRef.HandleId, out var handleObject, out _))
+        {
+            throw CapabilityException.HandleNotFound(handleRef.HandleId, capability.CapabilityId);
+        }
+
+        return PolyglotCapabilityErrorFormatter.ResolveHandleArgument(
+            capability.CapabilityId,
+            capability.MethodName,
+            args,
+            handles,
+            parameterName,
+            parameterType,
+            handleObject!,
+            capability.TargetParameterName);
+    }
+
+    private static object ResolveContextTarget(
+        AtsCapabilityInfo capability,
+        string capabilityId,
+        JsonObject? args,
+        HandleRegistry handles,
+        object contextObj,
+        Type declaringType)
     {
         if (declaringType.IsInstanceOfType(contextObj))
+        {
+            return contextObj;
+        }
+
+        // Handle is an open-generic builder (e.g., IResourceBuilder<T>) and the context is also a builder
+        if (declaringType.ContainsGenericParameters &&
+            HostingTypeHelpers.IsResourceBuilderType(declaringType) &&
+            PolyglotCapabilityErrorFormatter.CanUseOpenGenericResourceBuilder(declaringType, contextObj))
         {
             return contextObj;
         }
@@ -625,9 +789,15 @@ internal sealed class CapabilityDispatcher
             }
         }
 
-        // No bridge matched — return as-is; the CLR will throw TargetException if the
-        // object truly doesn't match the declaring type.
-        return contextObj;
+        throw PolyglotCapabilityErrorFormatter.CreateTypeMismatch(
+            capabilityId,
+            capability.MethodName,
+            args,
+            handles,
+            capability.TargetParameterName ?? "context",
+            declaringType,
+            contextObj,
+            capability.TargetParameterName);
     }
 
     /// <summary>

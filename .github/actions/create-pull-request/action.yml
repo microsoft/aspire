@@ -1,0 +1,134 @@
+name: 'Create Pull Request'
+description: 'Creates or updates a pull request for changes to the repository'
+inputs:
+  token:
+    description: 'GitHub token for authentication'
+    required: true
+  branch:
+    description: 'The pull request branch name'
+    required: true
+  base:
+    description: 'The base branch for the pull request'
+    required: false
+    default: 'main'
+  title:
+    description: 'The title of the pull request'
+    required: true
+  body:
+    description: 'The body of the pull request'
+    required: true
+  labels:
+    description: 'A newline-separated list of labels'
+    required: false
+    default: ''
+  commit-message:
+    description: 'The commit message to use when committing changes'
+    required: false
+    default: '[create-pull-request] automated change'
+  branch-already-exists:
+    description: 'Set to true if the branch is already pushed remotely (skips commit/push)'
+    required: false
+    default: 'false'
+outputs:
+  pull-request-number:
+    description: 'The pull request number'
+    value: ${{ steps.create-pr.outputs.pull-request-number }}
+  pull-request-url:
+    description: 'The URL of the pull request'
+    value: ${{ steps.create-pr.outputs.pull-request-url }}
+  pull-request-operation:
+    description: 'The pull request operation performed (created, updated, none)'
+    value: ${{ steps.create-pr.outputs.pull-request-operation }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure git authentication
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        # Use the provided token for both git and gh operations
+        gh auth setup-git
+
+    - name: Commit and push changes
+      if: inputs.branch-already-exists != 'true'
+      id: commit-and-push
+      shell: bash
+      env:
+        BRANCH: ${{ inputs.branch }}
+        COMMIT_MESSAGE: ${{ inputs.commit-message }}
+      run: |
+        # Check for any changes (staged, unstaged, or untracked)
+        if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+          echo "No changes to commit"
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          exit 0
+        fi
+
+        echo "has_changes=true" >> $GITHUB_OUTPUT
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        # Create or reset branch
+        git checkout -B "$BRANCH"
+        git add -A
+        git commit -m "$COMMIT_MESSAGE"
+        git push -f origin "$BRANCH"
+
+    - name: Create or update pull request
+      id: create-pr
+      if: inputs.branch-already-exists == 'true' || steps.commit-and-push.outputs.has_changes == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        BRANCH: ${{ inputs.branch }}
+        BASE: ${{ inputs.base }}
+        PR_TITLE: ${{ inputs.title }}
+        PR_BODY: ${{ inputs.body }}
+        LABELS: ${{ inputs.labels }}
+      run: |
+        # Check if a PR already exists for this branch
+        EXISTING_PR=$(gh pr list --head "$BRANCH" --base "$BASE" --json number,url --jq '.[0] // empty')
+
+        if [ -n "$EXISTING_PR" ]; then
+          PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.number')
+          PR_URL=$(echo "$EXISTING_PR" | jq -r '.url')
+          echo "Pull request #$PR_NUMBER already exists: $PR_URL"
+          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "pull-request-url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "pull-request-operation=none" >> $GITHUB_OUTPUT
+        else
+          # Build label arguments as a bash array (avoids eval/injection)
+          LABEL_ARGS=()
+          if [ -n "$LABELS" ]; then
+            while IFS= read -r label; do
+              label=$(echo "$label" | xargs)  # trim whitespace
+              if [ -n "$label" ]; then
+                LABEL_ARGS+=(--label "$label")
+              fi
+            done <<< "$LABELS"
+          fi
+
+          # Write body to a temp file to avoid shell quoting issues with special characters
+          BODY_FILE=$(mktemp)
+          trap 'rm -f "$BODY_FILE"' EXIT
+          printf '%s\n' "$PR_BODY" > "$BODY_FILE"
+
+          # Create the pull request without eval — all args are properly quoted
+          PR_URL=$(gh pr create \
+            --title "$PR_TITLE" \
+            --body-file "$BODY_FILE" \
+            --base "$BASE" \
+            --head "$BRANCH" \
+            "${LABEL_ARGS[@]}")
+
+          rm -f "$BODY_FILE"
+          trap - EXIT
+
+          PR_NUMBER=$(gh pr view "$BRANCH" --json number --jq '.number')
+          echo "Created pull request #$PR_NUMBER: $PR_URL"
+          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "pull-request-url=$PR_URL" >> $GITHUB_OUTPUT
+          echo "pull-request-operation=created" >> $GITHUB_OUTPUT
+        fi

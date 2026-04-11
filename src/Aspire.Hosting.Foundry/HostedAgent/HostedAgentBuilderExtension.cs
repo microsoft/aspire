@@ -310,28 +310,4 @@ public static class HostedAgentResourceBuilderExtensions
 
         return builder;
     }
-
-    /// <summary>
-    /// Publish a simple prompt agent in Microsoft Foundry.
-    ///
-    /// If a project resource is not provided, the method will attempt to find an existing
-    /// Microsoft Foundry project resource in the application model.
-    /// </summary>
-    [AspireExport(Description = "Adds and publishes a prompt agent to a Microsoft Foundry project.")]
-    public static IResourceBuilder<AzurePromptAgentResource> AddAndPublishPromptAgent(
-        this IResourceBuilder<AzureCognitiveServicesProjectResource> project, IResourceBuilder<FoundryDeploymentResource> model, [ResourceName] string name, string? instructions)
-    {
-        ArgumentNullException.ThrowIfNull(project);
-        ArgumentNullException.ThrowIfNull(model);
-        var agent = new AzurePromptAgentResource(name, model.Resource.DeploymentName, instructions);
-        return project.ApplicationBuilder.AddResource(agent)
-            .WithReferenceRelationship(project)
-            .WithArgs([
-                // TODO: actually execute the prompt agent locally
-                "-c",
-                "--project", project.Resource.Endpoint,
-                "--model", model.Resource.DeploymentName,
-                "--instructions", instructions ?? string.Empty,
-            ]);
-    }
 }

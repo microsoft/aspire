@@ -143,7 +143,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     {
     }
 
-    public void DisplayMarkdown(string markdown)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
     {
     }
 

@@ -18,6 +18,8 @@ await containerCache.runAsContainer({
 
 const _connectionString = await cache.connectionStringExpression.get();
 const _hostName = await cache.hostName.get();
+const _nameOutputReference = await cache.nameOutputReference.get();
+const _resourceId = await cache.id.get();
 const _port = await cache.port.get();
 const _uri = await cache.uriExpression.get();
 const _useAccessKeyAuthentication: boolean = await cache.useAccessKeyAuthentication.get();

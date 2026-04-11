@@ -1040,7 +1040,7 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) => _innerService.DisplayMessage(emoji, message, allowMarkup);
     public void DisplayPlainText(string text) => _innerService.DisplayPlainText(text);
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) => _innerService.DisplayRawText(text, consoleOverride);
-    public void DisplayMarkdown(string markdown) => _innerService.DisplayMarkdown(markdown);
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null) => _innerService.DisplayMarkdown(markdown, consoleOverride);
     public void DisplayMarkupLine(string markup) => _innerService.DisplayMarkupLine(markup);
     public void DisplaySuccess(string message, bool allowMarkup = false) => _innerService.DisplaySuccess(message, allowMarkup);
     public void DisplaySubtleMessage(string message, bool allowMarkup = false) => _innerService.DisplaySubtleMessage(message, allowMarkup);

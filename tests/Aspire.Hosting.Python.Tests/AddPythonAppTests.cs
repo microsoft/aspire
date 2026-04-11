@@ -2389,6 +2389,51 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         Assert.Empty(waitAnnotations);
     }
 
+    [Fact]
+    public void InstallerResourceHasNameValidationPolicyAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
+        using var tempDir = new TestTempDirectory();
+
+        var scriptName = "main.py";
+
+        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+            .WithPip();
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var installerResource = appModel.Resources.OfType<PythonInstallerResource>().Single();
+        Assert.True(installerResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
+    }
+
+    [Fact]
+    public void VenvCreatorResourceHasNameValidationPolicyAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
+        using var tempDir = new TestTempDirectory();
+        using var tempVenvDir = new TestTempDirectory();
+
+        var scriptName = "main.py";
+        var scriptPath = Path.Combine(tempDir.Path, scriptName);
+        File.WriteAllText(scriptPath, "print('Hello')");
+
+        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        File.WriteAllText(requirementsPath, "requests");
+
+        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+            .WithVirtualEnvironment(tempVenvDir.Path, createIfNotExists: true);
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var venvCreatorResource = appModel.Resources.OfType<PythonVenvCreatorResource>().SingleOrDefault();
+        Assert.NotNull(venvCreatorResource);
+        Assert.True(venvCreatorResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
+    }
+
     /// <summary>
     /// Helper method to manually trigger BeforeStartEvent for tests.
     /// This is needed because BeforeStartEvent is normally triggered during StartAsync(),

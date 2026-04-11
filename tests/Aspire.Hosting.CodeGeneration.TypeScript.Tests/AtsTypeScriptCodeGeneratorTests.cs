@@ -591,7 +591,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        Assert.Contains("withDependency(dependency: ResourceWithConnectionString | TestRedisResource)", aspireTs);
+        Assert.Contains("withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>)", aspireTs);
         Assert.DoesNotContain("withDependency(dependency: HandleReference)", aspireTs);
     }
 
@@ -603,7 +603,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireTs = files["aspire.ts"];
 
-        Assert.Contains("withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource)", aspireTs);
+        Assert.Contains("withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>)", aspireTs);
     }
 
     [Fact]

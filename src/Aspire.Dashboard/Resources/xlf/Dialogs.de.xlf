@@ -457,6 +457,21 @@
         <target state="translated">Ablaufverfolgungen</target>
         <note />
       </trans-unit>
+      <trans-unit id="NotificationCenterDismissAll">
+        <source>Dismiss all</source>
+        <target state="new">Dismiss all</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NotificationCenterEmpty">
+        <source>No notifications</source>
+        <target state="new">No notifications</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NotificationEntryDismiss">
+        <source>Dismiss notification</source>
+        <target state="new">Dismiss notification</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OpenInTextVisualizer">
         <source>Open in text visualizer</source>
         <target state="translated">In Textschnellansicht öffnen</target>
@@ -578,8 +593,13 @@
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogJsonFormat">
-        <source>Format JSON</source>
-        <target state="translated">JSON formatieren</target>
+        <source>JSON</source>
+        <target state="needs-review-translation">JSON formatieren</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TextVisualizerDialogMarkdownFormat">
+        <source>Markdown</source>
+        <target state="new">Markdown</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogPlaintextFormat">
@@ -588,8 +608,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogXmlFormat">
-        <source>Format XML</source>
-        <target state="translated">XML formatieren</target>
+        <source>XML</source>
+        <target state="needs-review-translation">XML formatieren</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningAcknowledge">

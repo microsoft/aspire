@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Agents;
@@ -680,6 +681,13 @@ public class Program
             cts.Cancel();
             eventArgs.Cancel = true;
         };
+        using var sigTermRegistration = OperatingSystem.IsWindows()
+            ? null
+            : PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
+            {
+                cts.Cancel();
+                context.Cancel = true;
+            });
 
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -695,6 +703,7 @@ public class Program
         // Logging the log file path is useful so that when console logging is enabled (for example with --log-level debug),
         // the path is written to the console logger (stderr) for easier discovery.
         logger.LogInformation("Log file: {LogFilePath}", loggingOptions.LogFilePath);
+        logger.LogInformation("CLI process ID: {ProcessId}", Environment.ProcessId);
 
         IHost? app = null;
         try
@@ -717,6 +726,9 @@ public class Program
         // Immediately get telemetry and telemetry manager so they are created by DI and telemetry is configured.
         var telemetry = app.Services.GetRequiredService<AspireCliTelemetry>();
         var telemetryManager = app.Services.GetRequiredService<TelemetryManager>();
+
+        // Log feature state at startup for diagnostics
+        app.Services.GetRequiredService<IFeatures>().LogFeatureState();
 
         // Display first run experience if this is the first time the CLI is run on this machine
         await DisplayFirstTimeUseNoticeIfNeededAsync(app.Services, args, cts.Token);

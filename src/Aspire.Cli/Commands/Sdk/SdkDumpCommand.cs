@@ -12,7 +12,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
-using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands.Sdk;
@@ -87,7 +86,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 }
 
                 integrations.Add(IntegrationReference.FromProject(
-                    Path.GetFileNameWithoutExtension(projectFile.FullName),
+                    IntegrationAssemblyNameResolver.Resolve(projectFile),
                     projectFile.FullName));
             }
             else if (arg.Contains('@'))
@@ -173,8 +172,14 @@ internal sealed class SdkDumpCommand : BaseCommand
             // Connect and get capabilities
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
+            var exportAssemblyNames = integrations.Count > 0
+                ? integrations.Select(i => i.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToArray()
+                : null;
+
             _logger.LogDebug("Fetching capabilities via RPC");
-            var capabilities = await rpcClient.GetCapabilitiesAsync(cancellationToken);
+            var capabilities = exportAssemblyNames is not null
+                ? await rpcClient.GetCapabilitiesForAssembliesAsync(exportAssemblyNames, cancellationToken)
+                : await rpcClient.GetCapabilitiesAsync(cancellationToken);
 
             // Output Info-level diagnostics to stderr via logger (shown with -d flag)
             var infoDiagnostics = capabilities.Diagnostics.Where(d => d.Severity == "Info").ToList();

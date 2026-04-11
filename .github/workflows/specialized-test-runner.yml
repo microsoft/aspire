@@ -132,6 +132,8 @@ jobs:
       requiresNugets: ${{ matrix.tests.requiresNugets == true }}
       requiresTestSdk: ${{ matrix.tests.requiresTestSdk == true }}
       os: ${{ matrix.tests.os }}
+      testSessionTimeout: ${{ matrix.tests.testSessionTimeout }}
+      testHangTimeout: ${{ matrix.tests.testHangTimeout }}
       enablePlaywrightInstall: ${{ inputs.enablePlaywrightInstall }}
       extraTestArgs: ${{ inputs.extraTestArgs }}
       ignoreTestFailures: ${{ inputs.ignoreTestFailures }}

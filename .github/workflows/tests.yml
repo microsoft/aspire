@@ -7,6 +7,9 @@ on:
       versionOverrideArg:
         required: false
         type: string
+      extensionVersionOverride:
+        required: false
+        type: string
 
 jobs:
   setup_for_tests:
@@ -47,6 +50,13 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "ubuntu-latest", "runner": "8-core-ubuntu-latest", "rids": "linux-x64"}]'
 
+  build_cli_archive_linux_arm64:
+    name: Build native CLI archive (Linux ARM64)
+    uses: ./.github/workflows/build-cli-native-archives.yml
+    with:
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      targets: '[{"os": "ubuntu-latest", "runner": "ubuntu-24.04-arm", "rids": "linux-arm64"}]'
+
   # Per-OS CLI archive builds produce RID-specific DCP and Dashboard NuGets.
   # Split by OS so that test jobs can depend on just their platform's archive,
   # allowing Linux tests to start as soon as the Linux archive completes
@@ -58,13 +68,12 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"}]'
 
-  build_cli_archive_windows_arm:
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+  build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      targets: '[{"os": "windows-11-arm", "runner": "windows-11-arm", "rids": "win-arm64"}]'
+      targets: '[{"os": "windows-latest", "runner": "windows-11-arm", "rids": "win-arm64"}]'
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
@@ -201,7 +210,7 @@ jobs:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 15
-    needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm]
+    needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm64]
     if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
     strategy:
       fail-fast: false
@@ -294,6 +303,11 @@ jobs:
         run: npm install
       - name: Run tests
         run: npm test
+      - name: Override extension version for PR builds
+        if: ${{ inputs.extensionVersionOverride != '' }}
+        env:
+          EXTENSION_VERSION: ${{ inputs.extensionVersionOverride }}
+        run: npm version "$EXTENSION_VERSION" --no-git-tag-version
       - name: Package VSIX
         run: npm exec @vscode/vsce -- package --pre-release -o out/aspire-extension.vsix
       - name: Upload VSIX
@@ -322,7 +336,9 @@ jobs:
       setup_for_tests,
       build_packages,
       build_cli_archive_linux,
+      build_cli_archive_linux_arm64,
       build_cli_archive_windows,
+      build_cli_archive_windows_arm64,
       build_cli_archive_macos,
       extension_tests_win,
       cli_starter_validation_windows,

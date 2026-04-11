@@ -15,7 +15,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Templating;
@@ -616,7 +615,28 @@ internal class DotNetTemplateFactory(
             outputPath = await prompter.PromptForOutputPath(pathDeriver(projectName), cancellationToken);
         }
 
-        return Path.GetFullPath(outputPath);
+        outputPath = Path.GetFullPath(outputPath);
+
+        // When running in extension mode (VS Code), the folder picker returns the parent
+        // directory the user selected. Append the project name as a subdirectory so the
+        // project gets its own clean folder, matching the git-clone convention.
+        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _)
+            && !projectName.Equals(".", StringComparison.Ordinal)
+            && !projectName.Equals("..", StringComparison.Ordinal))
+        {
+            var normalizedOutputPath = Path.TrimEndingDirectorySeparator(outputPath);
+
+            if (!string.Equals(Path.GetFileName(normalizedOutputPath), projectName, StringComparison.OrdinalIgnoreCase))
+            {
+                outputPath = Path.Combine(normalizedOutputPath, projectName);
+            }
+            else
+            {
+                outputPath = normalizedOutputPath;
+            }
+        }
+
+        return outputPath;
     }
 
     private async Task<(NuGetPackage Package, PackageChannel Channel)> GetProjectTemplatesVersionAsync(TemplateInputs inputs, CancellationToken cancellationToken)

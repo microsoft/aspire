@@ -84,6 +84,9 @@ serviceBuilder.WithHttpCommand("/trace-limit", "Trace limit", commandOptions: ne
 serviceBuilder.WithHttpCommand("/log-message", "Log message", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
 serviceBuilder.WithHttpCommand("/log-message-limit", "Log message limit", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
 serviceBuilder.WithHttpCommand("/log-message-limit-large", "Log message limit large", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+serviceBuilder.WithHttpCommand("/http-command-auto-result", "HTTP command auto result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Auto, Description = "Run an HTTP command and infer the result format from the response content type" });
+serviceBuilder.WithHttpCommand("/http-command-json-result", "HTTP command JSON result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Json, Description = "Run an HTTP command and flow the JSON response back to the caller" });
+serviceBuilder.WithHttpCommand("/http-command-text-result", "HTTP command text result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Text, Description = "Run an HTTP command and flow the plain-text response back to the caller" });
 serviceBuilder.WithHttpCommand("/multiple-traces-linked", "Multiple traces linked", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
 serviceBuilder.WithHttpCommand("/overflow-counter", "Overflow counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
 serviceBuilder.WithHttpCommand("/nested-trace-spans", "Out of order nested spans", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
@@ -140,7 +143,12 @@ builder.AddProject<Projects.Stress_TelemetryService>("stress-telemetryservice")
                    issuedAt = DateTime.UtcNow
                };
                var json = JsonSerializer.Serialize(token, new JsonSerializerOptions { WriteIndented = true });
-               return Task.FromResult(CommandResults.Success(json, CommandResultFormat.Json));
+               var resultData = new CommandResultData
+               {
+                   Value = json,
+                   Format = CommandResultFormat.Json
+               };
+               return Task.FromResult(CommandResults.Success("Generated token.", resultData));
            },
            commandOptions: new() { IconName = "Key", Description = "Generate a temporary access token" })
        .WithCommand(
@@ -149,7 +157,18 @@ builder.AddProject<Projects.Stress_TelemetryService>("stress-telemetryservice")
            executeCommand: (c) =>
            {
                var connectionString = $"Server=localhost,1433;Database=StressDb;User Id=sa;Password={Guid.NewGuid():N};TrustServerCertificate=true";
-               return Task.FromResult(CommandResults.Success(connectionString, CommandResultFormat.Text));
+               var message = """
+                   Retrieved connection string. The database connection was established successfully
+                   after verifying TLS certificates and negotiating encryption parameters.
+
+                   The server responded with protocol version 7.4 and confirmed support for multiple
+                   active result sets. Connection pooling is enabled with a maximum pool size of 100
+                   connections and a minimum of 10 idle connections maintained.
+
+                   The login handshake completed in 42ms with SSPI authentication. All pre-login
+                   checks passed including network library validation and instance name resolution.
+                   """;
+               return Task.FromResult(CommandResults.Success(message, new CommandResultData { Value = connectionString, DisplayImmediately = true }));
            },
            commandOptions: new() { IconName = "LinkMultiple", Description = "Get the connection string for this resource" })
        .WithCommand(
@@ -169,7 +188,33 @@ builder.AddProject<Projects.Stress_TelemetryService>("stress-telemetryservice")
            {
                return Task.FromResult(CommandResults.Failure("Health check failed", "Connection refused: ECONNREFUSED 127.0.0.1:5432\nRetries exhausted after 3 attempts", CommandResultFormat.Text));
            },
-           commandOptions: new() { IconName = "HeartBroken", Description = "Check resource health (always fails with details)" });
+           commandOptions: new() { IconName = "HeartBroken", Description = "Check resource health (always fails with details)" })
+       .WithCommand(
+           name: "migrate-database",
+           displayName: "Migrate Database",
+           executeCommand: (c) =>
+           {
+               var markdown = """
+                   # ⚙️ Database Migration Summary
+
+                   | Table      | Result                     |
+                   |------------|----------------------------|
+                   | Customers  | ✅ 1,200 rows              |
+                   | Products   | ✅ 850 rows                |
+                   | Orders     | ✅ 3,400 rows              |
+                   | OrderItems | ✅ 8,750 rows              |
+                   | Categories | ✅ 45 rows                 |
+                   | Reviews    | ❌ FK constraint violation |
+                   | Inventory  | ✅ 850 rows                |
+                   | Shipping   | ✅ 3,400 rows              |
+                   | Payments   | ❌ Timeout after 30s       |
+                   | Coupons    | ✅ 120 rows                |
+
+                   **Summary:** 8 of 10 tables migrated successfully. 2 tables failed.
+                   """;
+               return Task.FromResult(CommandResults.Success("Database migrated.", new CommandResultData { Value = markdown, Format = CommandResultFormat.Markdown }));
+           },
+           commandOptions: new() { IconName = "CloudDatabase", Description = "Migrate the database with sample store data" });
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

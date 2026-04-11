@@ -6,7 +6,7 @@ using System.Xml.Linq;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Configuration;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Tests.Packaging;
@@ -30,14 +30,9 @@ public class NuGetConfigMergerSnapshotTests
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
     }
 
-    private sealed class FakeFeatures : IFeatures
-    {
-        public bool IsFeatureEnabled(string featureFlag, bool defaultValue) => defaultValue;
-    }
-
     private static PackagingService CreatePackagingService(CliExecutionContext executionContext)
     {
-        var features = new FakeFeatures();
+        var features = new TestFeatures();
         var configuration = new ConfigurationBuilder().Build();
         return new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
     }

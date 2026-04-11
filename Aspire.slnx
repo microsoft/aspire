@@ -408,6 +408,7 @@
     <Project Path="tests/Aspire.Hosting.Sdk.Tests/Aspire.Hosting.Sdk.Tests.csproj" />
     <Project Path="tests/Aspire.Managed.Tests/Aspire.Managed.Tests.csproj" />
     <Project Path="tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj" />
+    <Project Path="tests/Aspire.SmolSemVer.Tests/Aspire.SmolSemVer.Tests.csproj" />
     <Project Path="tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj" />
     <Project Path="tests/Aspire.TestUtilities/Aspire.TestUtilities.csproj" />
     <Project Path="tests/ConfigurationSchemaGenerator.Tests/ConfigurationSchemaGenerator.Tests.csproj" />
@@ -520,6 +521,8 @@
   <Folder Name="/Tools/">
     <Project Path="src/Tools/ConfigurationSchemaGenerator/ConfigurationSchemaGenerator.csproj" />
     <Project Path="tools/AspireMcpTools/AspireMcpTools.csproj" />
+    <Project Path="tools/Aspire.TestTools/Aspire.TestTools.csproj" />
+    <Project Path="tools/CreateFailingTestIssue/CreateFailingTestIssue.csproj" />
     <Project Path="tools/CreateLayout/CreateLayout.csproj" />
     <Project Path="tools/GenerateTestSummary/GenerateTestSummary.csproj" />
   </Folder>

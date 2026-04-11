@@ -114,6 +114,8 @@ internal sealed class SdkGenerateCommand : BaseCommand
         DirectoryInfo outputDir,
         CancellationToken cancellationToken)
     {
+        var integrationAssemblyName = IntegrationAssemblyNameResolver.Resolve(integrationProject);
+
         // Use a temporary directory for the AppHost server
         var tempDir = Path.Combine(Path.GetTempPath(), "aspire-sdk-gen", Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(tempDir);
@@ -135,7 +137,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 
             // Add the integration project as a project reference
             integrations.Add(IntegrationReference.FromProject(
-                Path.GetFileNameWithoutExtension(integrationProject.FullName),
+                integrationAssemblyName,
                 integrationProject.FullName));
 
             _logger.LogDebug("Building AppHost server for SDK generation");
@@ -168,7 +170,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
             _logger.LogDebug("Generating {Language} SDK via RPC", languageInfo.CodeGenerator);
-            var generatedFiles = await rpcClient.GenerateCodeAsync(languageInfo.CodeGenerator, cancellationToken);
+            var generatedFiles = await rpcClient.GenerateCodeForAssemblyAsync(languageInfo.CodeGenerator, integrationAssemblyName, cancellationToken);
 
             // Write generated files
             var outputDirFullPath = Path.GetFullPath(outputDir.FullName);

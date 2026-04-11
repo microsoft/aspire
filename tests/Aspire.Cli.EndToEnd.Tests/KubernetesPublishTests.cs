@@ -27,7 +27,8 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
         $"{ClusterNamePrefix}-{Guid.NewGuid():N}"[..32]; // KinD cluster names max 32 chars
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15511")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15930")]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15870")]
     public async Task CreateAndPublishToKubernetes()
     {
         using var workspace = TemporaryWorkspace.Create(output);

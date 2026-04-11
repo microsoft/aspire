@@ -160,6 +160,9 @@ with create_builder() as builder:
     container.with_http_health_check()
     # withCommand
     container.with_command("command", "Command", lambda *_args, **_kwargs: {"success": True})
+    # withHttpCommand
+    container.with_http_command("/health", "Health Check")
+    container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})
     app = builder.build()
     _distributed_app_connection_string = app.get_connection_string()
     _distributed_app_endpoint = app.get_endpoint("default")

@@ -95,6 +95,11 @@ void main() throws Exception {
             result.setSuccess(true);
             return result;
         });
+        container.withHttpCommand("/health", "Health Check");
+        var httpCmdOptions = new HttpCommandExportOptions();
+        httpCmdOptions.setMethodName("POST");
+        httpCmdOptions.setConfirmationMessage("Are you sure?");
+        container.withHttpCommand("/api/reset", "Reset", httpCmdOptions);
         var app = builder.build();
         app.run();
     }

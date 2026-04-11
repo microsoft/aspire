@@ -308,7 +308,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 paramList.Append(", ");
             }
-            var paramName = ToCamelCase(parameter.Name);
+            var paramName = GetLocalIdentifier(parameter.Name);
             var paramType = parameter.IsCallback
                 ? "func(...any) any"
                 : IsCancellationToken(parameter)
@@ -331,7 +331,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         foreach (var parameter in parameters)
         {
-            var paramName = ToCamelCase(parameter.Name);
+            var paramName = GetLocalIdentifier(parameter.Name);
             if (parameter.IsCallback)
             {
                 WriteLine($"\tif {paramName} != nil {{");
@@ -826,6 +826,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var sanitized = builder.ToString();
         return s_goKeywords.Contains(sanitized) ? sanitized + "_" : sanitized;
     }
+
+    private static string GetLocalIdentifier(string name) => SanitizeIdentifier(ToCamelCase(name));
 
     /// <summary>
     /// Converts a name to PascalCase for Go exported identifiers.

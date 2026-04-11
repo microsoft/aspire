@@ -989,7 +989,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             return name;
         }
 
-        return JsonNamingPolicy.SnakeCaseLower.ConvertName(name);
+        return SanitizeIdentifier(JsonNamingPolicy.SnakeCaseLower.ConvertName(name));
     }
 
     private void WriteLine(string value = "")

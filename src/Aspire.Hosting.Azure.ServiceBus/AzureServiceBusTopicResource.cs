@@ -37,15 +37,11 @@ public class AzureServiceBusTopicResource(string name, string topicName, AzureSe
     /// <summary>
     /// Gets the parent Azure Service Bus resource.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public AzureServiceBusResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
     /// <summary>
     /// Gets the connection string expression for the Azure Service Bus Topic.
     /// </summary>
-    /// <remarks>This property is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore]
     public ReferenceExpression ConnectionStringExpression => Parent.GetConnectionString(TopicName, null);
 
     /// <summary>

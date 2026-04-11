@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
@@ -174,6 +175,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return await _nugetService.RestorePackagesAsync(
             packages,
             DotNetBasedAppHostServerProject.TargetFramework,
+            runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             workingDirectory: _appDirectoryPath,
             ct: cancellationToken);
@@ -330,13 +332,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     }
 
     /// <summary>
-    /// Resolves the configured channel name from local settings.json or global config.
+    /// Resolves the configured channel name from local project config or global config.
     /// </summary>
     private async Task<string?> ResolveChannelNameAsync(CancellationToken cancellationToken)
     {
-        // Check local settings.json first
-        var localConfig = AspireJsonConfiguration.Load(_appDirectoryPath);
-        var channelName = localConfig?.Channel;
+        // Check aspire.config.json first, then fall back to legacy .aspire/settings.json.
+        var channelName = AspireConfigFile.Load(_appDirectoryPath)?.Channel
+            ?? AspireJsonConfiguration.Load(_appDirectoryPath)?.Channel;
 
         // Fall back to global config
         if (string.IsNullOrEmpty(channelName))

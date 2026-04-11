@@ -283,7 +283,7 @@ internal sealed class ExportCommand : BaseCommand
         IReadOnlyList<IOtlpResource> allOtlpResources,
         CancellationToken cancellationToken)
     {
-        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources);
+        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
         var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 
@@ -314,7 +314,7 @@ internal sealed class ExportCommand : BaseCommand
         IReadOnlyList<IOtlpResource> allOtlpResources,
         CancellationToken cancellationToken)
     {
-        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources);
+        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, limit: TelemetryCommandHelpers.MaxTelemetryLimit);
         var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
 

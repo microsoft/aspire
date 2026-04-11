@@ -130,6 +130,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
         // If no specific filter is specified we use the fallback filter which is useful in most circumstances
         // other that aspire update which really needs to see all the packages to work effectively.
+        var showDeprecatedPackages = features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
         var effectiveFilter = (NuGetPackage p) => 
         {
             if (filter is not null)
@@ -140,7 +141,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
             var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
             
             // Apply deprecated package filter unless the user wants to show deprecated packages
-            if (isOfficialPackage && !features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
+            if (isOfficialPackage && !showDeprecatedPackages)
             {
                 return !DeprecatedPackages.IsDeprecated(p.Id);
             }

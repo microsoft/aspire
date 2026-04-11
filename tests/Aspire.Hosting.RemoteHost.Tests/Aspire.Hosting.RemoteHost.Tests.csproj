@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Go\Aspire.Hosting.CodeGeneration.Go.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Java\Aspire.Hosting.CodeGeneration.Java.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Python\Aspire.Hosting.CodeGeneration.Python.csproj" />

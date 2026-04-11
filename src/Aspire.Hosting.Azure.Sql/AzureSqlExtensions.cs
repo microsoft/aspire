@@ -373,9 +373,6 @@ public static class AzureSqlExtensions
     /// Ensure the subnet has outbound network security rules allowing access to Azure Active Directory (port 443)
     /// and SQL (port 443) service tags.
     /// </para>
-    /// <para>
-    /// This method is not available in polyglot app hosts.
-    /// </para>
     /// </remarks>
     /// <example>
     /// Provide a custom ACI subnet for the deployment script:

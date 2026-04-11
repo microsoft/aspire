@@ -11,19 +11,29 @@
 
     <Error Text="$(_PackageJsonPath) not found. Cannot package the extension." Condition="!Exists('$(_PackageJsonPath)')" />
 
-    <!-- Extract version from package.json using Node.js -->
+    <!-- Extract version from package.json using Node.js (skip when override is provided) -->
     <Exec Command="node -p &quot;require('./package.json').version&quot;"
           ConsoleToMSBuild="true"
           IgnoreStandardErrorWarningFormat="true"
+          Condition="'$(ExtensionVersionOverride)' == ''"
           WorkingDirectory="$(ExtensionSrcDir)">
       <Output TaskParameter="ConsoleOutput" PropertyName="_ExtractedVersion" />
     </Exec>
 
     <PropertyGroup>
+      <_EffectiveVersion Condition="'$(ExtensionVersionOverride)' != ''">$(ExtensionVersionOverride)</_EffectiveVersion>
+      <_EffectiveVersion Condition="'$(ExtensionVersionOverride)' == ''">$(_ExtractedVersion)</_EffectiveVersion>
       <_VscodeOutputDir>$(ArtifactsPackagesDir)vscode</_VscodeOutputDir>
-      <_VsixPath>$(_VscodeOutputDir)\aspire-vscode-$(_ExtractedVersion).vsix</_VsixPath>
-      <_ManifestPath>$(_VscodeOutputDir)\aspire-vscode-$(_ExtractedVersion).manifest</_ManifestPath>
+      <_VsixPath>$(_VscodeOutputDir)\aspire-vscode-$(_EffectiveVersion).vsix</_VsixPath>
+      <_ManifestPath>$(_VscodeOutputDir)\aspire-vscode-$(_EffectiveVersion).manifest</_ManifestPath>
     </PropertyGroup>
+
+    <!-- Override package.json version if ExtensionVersionOverride is set, saving original first -->
+    <Copy SourceFiles="$(_PackageJsonPath)" DestinationFiles="$(_PackageJsonPath).bak"
+          Condition="'$(ExtensionVersionOverride)' != ''" />
+    <Exec Command="npm version &quot;$(ExtensionVersionOverride)&quot; --no-git-tag-version"
+          Condition="'$(ExtensionVersionOverride)' != ''"
+          WorkingDirectory="$(ExtensionSrcDir)" />
 
     <!-- Install dependencies and compile -->
     <Exec Command="yarn install" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
@@ -37,7 +47,7 @@
           IgnoreStandardErrorWarningFormat="true"
           WorkingDirectory="$(ExtensionSrcDir)" />
 
-    <!-- 
+    <!--
       VS Code extension signing for marketplace verification:
       Generate manifest from the VSIX using vsce. The signing project (signing/signVsix.proj)
       will copy this to .signature.p7s and sign it with the VSCodePublisher certificate.
@@ -46,6 +56,10 @@
     <Exec Command="vsce generate-manifest -i $(_VsixPath) -o $(_ManifestPath)"
           IgnoreStandardErrorWarningFormat="true"
           WorkingDirectory="$(ExtensionSrcDir)" />
+
+    <!-- Restore original package.json if it was overridden -->
+    <Move SourceFiles="$(_PackageJsonPath).bak" DestinationFiles="$(_PackageJsonPath)"
+          Condition="Exists('$(_PackageJsonPath).bak')" />
 
     <Message Importance="high" Text="VS Code extension artifacts created in $(_VscodeOutputDir):" />
     <Message Importance="high" Text="  VSIX: $(_VsixPath)" />

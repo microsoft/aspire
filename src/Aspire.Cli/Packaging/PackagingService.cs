@@ -124,7 +124,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         }
 
         // Extract commit hash from assembly version to build staging feed URL
-        // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-{commitHash}/nuget/v3/index.json
+        // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{commitHash}/nuget/v3/index.json
         var assembly = Assembly.GetExecutingAssembly();
         var informationalVersion = assembly
             .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
@@ -145,7 +145,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         var commitHash = informationalVersion[(plusIndex + 1)..];
         var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
         
-        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-{truncatedHash}/nuget/v3/index.json";
+        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
     }
 
     private PackageChannelQuality GetStagingQuality()

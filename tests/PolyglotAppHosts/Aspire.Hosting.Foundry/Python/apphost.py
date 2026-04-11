@@ -27,8 +27,7 @@ with create_builder() as builder:
     builder_project_foundry = builder.add_foundry("resource")
     builder_project = builder_project_foundry.add_project("resource", ".", "default")
     _builder_project_model = builder_project.add_model_deployment("resource")
-    project_model = project.add_model_deployment_from_model("resource")
-    _prompt_agent = project.add_and_publish_prompt_agent("resource")
+    _project_model = project.add_model_deployment_from_model("resource")
     hosted_agent = builder.add_executable("resource", "echo", ".", [])
     http = None
     port = None

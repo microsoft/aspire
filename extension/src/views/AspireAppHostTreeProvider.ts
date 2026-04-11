@@ -25,6 +25,7 @@ import {
     resourceDescriptionHealth,
     resourceDescriptionExitCode,
 } from '../loc/strings';
+import { isLinkableUrl } from '../utils/urlSchemes';
 import {
     AppHostDataRepository,
     AppHostDisplayInfo,
@@ -94,8 +95,7 @@ class EndpointUrlItem extends vscode.TreeItem {
         this.tooltip = url;
 
         const uri = vscode.Uri.parse(url);
-        const isHttpUrl = uri.scheme.toLowerCase() === 'http' || uri.scheme.toLowerCase() === 'https';
-        if (isHttpUrl) {
+        if (isLinkableUrl(url)) {
             this.iconPath = new vscode.ThemeIcon('link-external');
             this.contextValue = 'endpointUrl';
             this.command = {
@@ -297,7 +297,7 @@ function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownString {
             }
         }
     }
-    const urls = resource.urls?.filter(u => !u.isInternal && typeof u.url === 'string' && (u.url.startsWith('http://') || u.url.startsWith('https://'))) ?? [];
+    const urls = resource.urls?.filter(u => !u.isInternal && typeof u.url === 'string' && isLinkableUrl(u.url)) ?? [];
     if (urls.length > 0) {
         md.appendMarkdown(`**${tooltipEndpoints}**\n\n`);
         for (const url of urls) {
@@ -702,7 +702,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         vscode.env.openExternal(vscode.Uri.parse(element.url));
     }
 
-    openInSimpleBrowser(element: EndpointUrlItem): void {
+    openInIntegratedBrowser(element: EndpointUrlItem): void {
         vscode.commands.executeCommand('simpleBrowser.show', element.url);
     }
 

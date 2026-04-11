@@ -99,7 +99,7 @@ public static class AzurePrivateEndpointExtensions
             var dnsZone = azureResource.DnsZone!;
             var dnsZoneIdentifier = dnsZone.GetBicepIdentifier();
             var privateDnsZone = PrivateDnsZone.FromExisting(dnsZoneIdentifier);
-            privateDnsZone.Name = dnsZone.NameOutput.AsProvisioningParameter(infra);
+            privateDnsZone.Name = dnsZone.NameOutputReference.AsProvisioningParameter(infra);
             infra.Add(privateDnsZone);
 
             // Create the Private Endpoint

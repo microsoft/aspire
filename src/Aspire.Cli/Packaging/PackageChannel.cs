@@ -3,7 +3,6 @@
 
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
-using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;

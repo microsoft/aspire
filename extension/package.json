@@ -311,8 +311,8 @@
         "icon": "$(link-external)"
       },
       {
-        "command": "aspire-vscode.openInSimpleBrowser",
-        "title": "%command.openInSimpleBrowser%",
+        "command": "aspire-vscode.openInIntegratedBrowser",
+        "title": "%command.openInIntegratedBrowser%",
         "category": "Aspire",
         "icon": "$(browser)"
       },
@@ -505,7 +505,7 @@
           "when": "false"
         },
         {
-          "command": "aspire-vscode.openInSimpleBrowser",
+          "command": "aspire-vscode.openInIntegratedBrowser",
           "when": "false"
         },
         {
@@ -599,7 +599,7 @@
           "group": "1_open@1"
         },
         {
-          "command": "aspire-vscode.openInSimpleBrowser",
+          "command": "aspire-vscode.openInIntegratedBrowser",
           "when": "view == aspire-vscode.runningAppHosts && viewItem == endpointUrl",
           "group": "1_open@2"
         },
@@ -679,14 +679,16 @@
           "type": "string",
           "enum": [
             "openExternalBrowser",
+            "integratedBrowser",
             "debugChrome",
             "debugEdge",
             "debugFirefox"
           ],
-          "default": "openExternalBrowser",
+          "default": "integratedBrowser",
           "description": "%configuration.aspire.dashboardBrowser%",
           "enumDescriptions": [
             "%configuration.aspire.dashboardBrowser.openExternalBrowser%",
+            "%configuration.aspire.dashboardBrowser.integratedBrowser%",
             "%configuration.aspire.dashboardBrowser.debugChrome%",
             "%configuration.aspire.dashboardBrowser.debugEdge%",
             "%configuration.aspire.dashboardBrowser.debugFirefox%"
@@ -828,8 +830,10 @@
     "l10n:export": "gulp prepare",
     "l10n:import": "gulp localizationBundle",
     "generate-schema": "node scripts/generate-schema.js",
-    "precompile": "npm run generate-schema && npm run l10n:export && npm run l10n:import",
-    "prewatch": "npm run generate-schema && npm run l10n:export && npm run l10n:import",
+    "generate-version": "node scripts/generate-version.js",
+    "precompile": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
+    "prepackage": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
+    "prewatch": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
     "localize": "npm run l10n:export && npm run l10n:import"
   },
   "devDependencies": {

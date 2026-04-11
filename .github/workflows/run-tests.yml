@@ -16,11 +16,11 @@ on:
       testSessionTimeout:
         required: false
         type: string
-        default: "15m"
+        default: "20m"
       testHangTimeout:
         required: false
         type: string
-        default: "7m"
+        default: "10m"
       extraTestArgs:
         required: false
         type: string
@@ -67,6 +67,11 @@ jobs:
     name: ${{ inputs.testShortName }} (${{ inputs.os }})
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      # Resolve once so the fallback isn't duplicated across all four test-runner steps.
+      # The '|| default' is needed because GitHub Actions passes empty strings for
+      # unset workflow_call inputs, bypassing the input-level default: values.
+      EFFECTIVE_TEST_SESSION_TIMEOUT: ${{ inputs.testSessionTimeout || '20m' }}
+      EFFECTIVE_TEST_HANG_TIMEOUT: ${{ inputs.testHangTimeout || '10m' }}
     steps:
       - name: Validate arguments
         shell: pwsh
@@ -159,11 +164,15 @@ jobs:
         shell: pwsh
         run: |
           $runnerOs = "${{ runner.os }}"
-          switch ($runnerOs) {
-            'Linux'   { $rid = 'linux-x64' }
-            'macOS'   { $rid = 'osx-arm64' }
-            'Windows' { $rid = 'win-x64' }
-            Default { Write-Error "Unknown runner.os '$runnerOs' for RID mapping"; exit 1 }
+          $runnerArch = "${{ runner.arch }}"
+          $rid = switch ("$runnerOs-$runnerArch") {
+            'Linux-X64'     { 'linux-x64' }
+            'Linux-ARM64'   { 'linux-arm64' }
+            'Windows-X64'   { 'win-x64' }
+            'Windows-ARM64' { 'win-arm64' }
+            'macOS-ARM64'   { 'osx-arm64' }
+            'macOS-X64'     { 'osx-x64' }
+            Default { Write-Error "Unknown runner OS/arch '$runnerOs-$runnerArch' for RID mapping"; exit 1 }
           }
           Write-Host "Using RID=$rid"
           "RID=$rid"    | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -257,6 +266,8 @@ jobs:
       # Workaround for bug in Azure Functions Worker SDK. See https://github.com/Azure/azure-functions-dotnet-worker/issues/2969.
       - name: Rebuild for Azure Functions project
         if: inputs.testShortName == 'Playground'
+        env:
+          UseSharedCompilation: ${{ runner.os == 'Windows' && 'false' || '' }}
         run: |
           ${{ env.DOTNET_SCRIPT }} build ${{ github.workspace }}/playground/AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj /p:SkipUnstableEmulators=true
 
@@ -301,6 +312,15 @@ jobs:
         if: runner.os == 'macOS'
         uses: ./.github/actions/unlock-macos-keychain
 
+      # Shut down the Roslyn compiler server before running tests. On resource-constrained
+      # runners (e.g. 2-core windows-latest), VBCSCompiler stays resident and consumes
+      # ~150% CPU / 700MB RAM, starving the runner agent and causing "lost communication"
+      # crashes. This is fast and idempotent (no-op if no server is running).
+      # See https://github.com/microsoft/aspire/issues/15832
+      - name: Shutdown build server
+        if: runner.os == 'Windows'
+        run: ${{ env.DOTNET_SCRIPT }} build-server shutdown
+
       - name: Run nuget dependent tests (Linux/macOS)
         if: ${{ inputs.requiresNugets && runner.os != 'Windows' }}
         working-directory: ${{ github.workspace }}/run-tests/
@@ -317,8 +337,8 @@ jobs:
           GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
           GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
-          # Start heartbeat monitor in background
-          ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
+          # Start heartbeat monitor in background (60s interval to reduce log noise)
+          ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
 
           # Run tests
@@ -327,11 +347,10 @@ jobs:
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
             --crashdump \
             --hangdump \
-            --hangdump-filename ${{ github.workspace }}/testresults/${{ inputs.testShortName }}.hangdump \
-            --hangdump-timeout ${{ inputs.testHangTimeout }} \
+            --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
-            --timeout ${{ inputs.testSessionTimeout }} \
+            --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
             ${{ inputs.extraTestArgs }} \
             ${{ inputs.ignoreTestFailures && '|| true' || '' }}
           TEST_EXIT_CODE=$?
@@ -354,14 +373,17 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+          # Prevent VBCSCompiler from starting during tests. See #15832
+          UseSharedCompilation: false
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
           GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
+          # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
           $heartbeatProcess = Start-Process -FilePath "dotnet" `
-            -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs" `
+            -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs 60" `
             -NoNewWindow -PassThru
 
           try {
@@ -372,9 +394,11 @@ jobs:
               --ignore-exit-code 8 `
               --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
               --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
               --filter-not-trait "category=failing" `
-              --timeout ${{ inputs.testSessionTimeout }} `
+              --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }
@@ -405,8 +429,8 @@ jobs:
           GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
           GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
-          # Start heartbeat monitor in background
-          ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs &
+          # Start heartbeat monitor in background (60s interval to reduce log noise)
+          ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
 
           # Run tests
@@ -421,8 +445,10 @@ jobs:
             --ignore-exit-code 8 \
             --report-trx \
             --crashdump \
+            --hangdump \
+            --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
-            --timeout ${{ inputs.testSessionTimeout }} \
+            --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
             ${{ inputs.extraTestArgs }} \
             ${{ inputs.ignoreTestFailures && '|| true' || '' }}
           TEST_EXIT_CODE=$?
@@ -442,14 +468,21 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+          # Prevent the Roslyn compiler server (VBCSCompiler) from starting during tests.
+          # On 2-core runners, VBCSCompiler consumes ~150% CPU / 700MB RAM and starves the
+          # runner agent, causing "lost communication" crashes. Projects are already pre-built,
+          # so any rebuild triggered by DCP's "dotnet run" should be minimal.
+          # See https://github.com/microsoft/aspire/issues/15832
+          UseSharedCompilation: false
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
           GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
+          # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
           $heartbeatProcess = Start-Process -FilePath "${{ env.DOTNET_SCRIPT }}" `
-            -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs" `
+            -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs 60" `
             -NoNewWindow -PassThru
 
           try {
@@ -467,8 +500,10 @@ jobs:
               --ignore-exit-code 8 `
               --report-trx `
               --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
-              --timeout ${{ inputs.testSessionTimeout }} `
+              --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }
@@ -529,6 +564,28 @@ jobs:
           }
 
           Write-Host "✓ Test execution completed successfully (found $validFileCount valid .trx file(s))"
+
+      - name: Check for hang dump files
+        if: always()
+        shell: pwsh
+        run: |
+          $testResultsDir = "${{ github.workspace }}/testresults"
+          if (-not (Test-Path $testResultsDir)) {
+            Write-Host "No test results directory found, skipping dump file check"
+            return
+          }
+
+          # Only check for hang dump files — these indicate a test timed out.
+          # Crash dumps (e.g. *_crash.dmp) can be produced during process cleanup
+          # even when all tests passed, so we don't fail on those.
+          $hangDumpFiles = Get-ChildItem -Path $testResultsDir -Filter *hangdump* -Recurse -ErrorAction SilentlyContinue
+          if ($hangDumpFiles.Count -gt 0) {
+            Write-Host "::error::Hang dump file(s) detected — the test runner timed out:"
+            foreach ($df in $hangDumpFiles) { Write-Host "  - $($df.FullName)" }
+            exit 1
+          }
+
+          Write-Host "✓ No hang dump files detected"
 
       - name: Dump docker info
         if: ${{ always() && runner.os == 'Linux' }}

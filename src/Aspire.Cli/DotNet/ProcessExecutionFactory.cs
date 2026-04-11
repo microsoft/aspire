@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.DotNet;
 
@@ -14,18 +15,15 @@ internal sealed class ProcessExecutionFactory(
 {
     public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
     {
-        var suppressLogging = options.SuppressLogging;
+        var effectiveLogger = options.SuppressLogging ? (ILogger)NullLogger.Instance : logger;
 
-        if (!suppressLogging)
+        effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", fileName, workingDirectory.FullName, string.Join(" ", args));
+
+        if (env is not null)
         {
-            logger.LogDebug("Running {FullName} with args: {Args}", workingDirectory.FullName, string.Join(" ", args));
-
-            if (env is not null)
+            foreach (var envKvp in env)
             {
-                foreach (var envKvp in env)
-                {
-                    logger.LogDebug("Running {FullName} with env: {EnvKey}={EnvValue}", workingDirectory.FullName, envKvp.Key, envKvp.Value);
-                }
+                effectiveLogger.LogDebug("{FileName} env: {EnvKey}={EnvValue}", fileName, envKvp.Key, envKvp.Value);
             }
         }
 
@@ -53,6 +51,6 @@ internal sealed class ProcessExecutionFactory(
         }
 
         var process = new Process { StartInfo = startInfo };
-        return new ProcessExecution(process, logger, options);
+        return new ProcessExecution(process, effectiveLogger, options);
     }
 }

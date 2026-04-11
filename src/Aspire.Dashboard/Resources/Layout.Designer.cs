@@ -97,6 +97,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Notifications.
+        /// </summary>
+        public static string MainLayoutLaunchNotifications {
+            get {
+                return ResourceManager.GetString("MainLayoutLaunchNotifications", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Notifications.
+        /// </summary>
+        public static string MainLayoutNotificationCenterTitle {
+            get {
+                return ResourceManager.GetString("MainLayoutNotificationCenterTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
         public static string MainLayoutSettingsDialogClose {

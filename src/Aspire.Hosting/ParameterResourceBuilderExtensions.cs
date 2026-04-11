@@ -160,6 +160,16 @@ public static class ParameterResourceBuilderExtensions
             });
     }
 
+    [AspireExport("addParameterWithGeneratedValue", Description = "Adds a parameter with a generated default value")]
+    internal static IResourceBuilder<ParameterResource> AddParameterWithGeneratedValueForPolyglot(this IDistributedApplicationBuilder builder, [ResourceName] string name, GenerateParameterDefault value, bool secret = false, bool persist = false)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return builder.AddParameter(name, (ParameterDefault)value, secret, persist);
+    }
+
     /// <summary>
     /// Sets the description of the parameter resource.
     /// </summary>

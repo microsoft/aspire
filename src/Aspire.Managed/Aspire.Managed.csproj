@@ -27,6 +27,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Provided by the .NET SDK and points to the SDK's RuntimeIdentifierGraph.json file. -->
+    <EmbeddedResource Include="$(BundledRuntimeIdentifierGraphFile)" LogicalName="Aspire.Managed.RuntimeIdentifierGraph.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="NuGet.Commands" />
     <PackageReference Include="NuGet.Protocol" />
     <PackageReference Include="NuGet.Resolver" />

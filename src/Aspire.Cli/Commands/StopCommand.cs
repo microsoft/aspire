@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -193,16 +192,12 @@ internal sealed class StopCommand : BaseCommand
 
         _interactionService.DisplayMessage(KnownEmojis.StopSign, "Sending stop signal...");
 
-        // Get the CLI process ID - this is the process we need to kill
-        // Killing the CLI process will tear down everything including the AppHost
-        var cliProcessId = appHostInfo?.CliProcessId;
-
-        if (cliProcessId is int cliPid)
+        if (appHostInfo?.CliProcessId is int cliPid)
         {
             _logger.LogDebug("Sending stop signal to CLI process (PID {Pid})", cliPid);
             try
             {
-                SendStopSignal(cliPid);
+                SendStopSignal(cliPid, appHostInfo?.CliStartedAt);
             }
             catch (Exception ex)
             {
@@ -213,7 +208,7 @@ internal sealed class StopCommand : BaseCommand
         }
         else
         {
-            // Fallback: Try the RPC method if we don't have CLI process ID
+            // Fallback: Try the RPC method if we don't have CLI process ID.
             _logger.LogDebug("No CLI process ID available, trying RPC stop");
             var rpcSucceeded = false;
             try
@@ -228,10 +223,10 @@ internal sealed class StopCommand : BaseCommand
             // If RPC didn't work, try sending SIGINT to AppHost process directly
             if (!rpcSucceeded && appHostInfo?.ProcessId is int appHostPid)
             {
-                _logger.LogDebug("RPC stop not available, sending SIGINT to AppHost PID {Pid}", appHostPid);
+                _logger.LogDebug("RPC stop not available, sending SIGTERM to AppHost PID {Pid}", appHostPid);
                 try
                 {
-                    SendStopSignal(appHostPid);
+                    SendStopSignal(appHostPid, appHostInfo?.StartedAt);
                 }
                 catch (Exception ex)
                 {
@@ -247,21 +242,37 @@ internal sealed class StopCommand : BaseCommand
             }
         }
 
+        var manager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
         var stopped = await _interactionService.ShowStatusAsync(
             StopCommandStrings.StoppingAppHost,
             async () =>
             {
                 try
                 {
-                    // Wait for processes to terminate
-                    var manager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
-
-                    if (appHostInfo is not null)
+                    if (appHostInfo is null)
                     {
-                        return await manager.MonitorProcessesForTerminationAsync(appHostInfo, cancellationToken).ConfigureAwait(false);
+                        return true;
                     }
 
-                    return true;
+                    if (await manager.MonitorProcessesForTerminationAsync(appHostInfo, cancellationToken).ConfigureAwait(false))
+                    {
+                        return true;
+                    }
+
+                    var procsToKill = new HashSet<(int, DateTimeOffset?)> { (appHostInfo.ProcessId, appHostInfo.StartedAt) };
+
+                    if (appHostInfo.CliProcessId is int cliPid)
+                    {
+                        procsToKill.Add((cliPid, appHostInfo.CliStartedAt));
+                    }
+
+                    foreach (var (pid, startTime) in procsToKill)
+                    {
+                        _logger.LogWarning("AppHost did not stop gracefully within timeout. Forcing process {Pid} to terminate.", pid);
+                        ForceKillProcess(pid, startTime);
+                    }
+
+                    return await manager.MonitorProcessesForTerminationAsync(appHostInfo, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -286,28 +297,21 @@ internal sealed class StopCommand : BaseCommand
     }
 
     /// <summary>
-    /// Sends a stop signal to a process to terminate it and its process tree.
-    /// Uses Process.Kill(entireProcessTree: true) to ensure all child processes are terminated.
+    /// Sends a best-effort graceful shutdown signal to the target process.
+    /// Uses Ctrl-Break on Windows and SIGTERM on non-Windows.
     /// </summary>
-    private static void SendStopSignal(int pid)
+    private void SendStopSignal(int pid, DateTimeOffset? startTime)
     {
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            process.Kill(entireProcessTree: true);
-        }
-        catch (ArgumentException)
-        {
-            // Process doesn't exist - already terminated
-        }
-        catch (InvalidOperationException)
-        {
-            // Process has already exited
-        }
-        catch (Exception)
-        {
-            // Some other error (e.g., permission denied) - ignore
-        }
+        ProcessSignaler.RequestGracefulShutdown(pid, startTime, _logger);
+    }
+
+    /// <summary>
+    /// Forcefully kills the target process after the graceful shutdown timeout elapses.
+    /// This does not terminate the entire process tree.
+    /// </summary>
+    private void ForceKillProcess(int pid, DateTimeOffset? startTime)
+    {
+        ProcessSignaler.ForceKill(pid, startTime, _logger);
     }
 
 }

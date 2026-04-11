@@ -34,51 +34,45 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithNoResources_ReturnsEmptyString()
+    public void TelemetryLogsApiUrl_WithNoParams_ReturnsBaseUrl()
     {
-        var result = DashboardUrls.BuildResourceQueryString(null);
-        Assert.Equal("", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000");
+        Assert.Equal("https://localhost:5000/api/telemetry/logs", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithSingleResource_ReturnsCorrectQueryString()
+    public void TelemetryLogsApiUrl_WithSingleResource_ReturnsCorrectUrl()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["frontend"]);
-        Assert.Equal("?resource=frontend", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithMultipleResources_ReturnsAllResourceParams()
+    public void TelemetryLogsApiUrl_WithMultipleResources_ReturnsAllResourceParams()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["frontend-abc123", "frontend-xyz789"]);
-        Assert.Equal("?resource=frontend-abc123&resource=frontend-xyz789", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend-abc123", "frontend-xyz789"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend-abc123&resource=frontend-xyz789", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithResourcesAndAdditionalParams_CombinesCorrectly()
+    public void TelemetryLogsApiUrl_WithAllParams_CombinesCorrectly()
     {
-        var result = DashboardUrls.BuildResourceQueryString(
-            ["frontend"],
-            ("traceId", "abc123"),
-            ("limit", "10"));
-        Assert.Equal("?resource=frontend&traceId=abc123&limit=10", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"], traceId: "abc123", severity: "Error", limit: 10, follow: true);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend&traceId=abc123&severity=Error&limit=10&follow=true", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithNullAdditionalParams_SkipsNullValues()
+    public void TelemetryLogsApiUrl_WithNullParams_SkipsNullValues()
     {
-        var result = DashboardUrls.BuildResourceQueryString(
-            ["frontend"],
-            ("traceId", null),
-            ("limit", "10"));
-        Assert.Equal("?resource=frontend&limit=10", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"], traceId: null, limit: 10);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend&limit=10", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithSpecialCharacters_EncodesCorrectly()
+    public void TelemetryLogsApiUrl_WithSpecialCharacters_EncodesCorrectly()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["service with spaces"]);
-        Assert.Equal("?resource=service%20with%20spaces", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["service with spaces"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=service%20with%20spaces", result);
     }
 
     [Fact]
