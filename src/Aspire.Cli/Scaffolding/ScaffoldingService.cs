@@ -316,7 +316,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         foreach (var fileName in scaffoldFileNames)
         {
-            if (IsGitIgnoreFile(fileName))
+            if (IsGitIgnoreFile(fileName) || IsPackageJsonFile(fileName))
             {
                 continue;
             }
@@ -363,6 +363,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
     private static bool IsGitIgnoreFile(string fileName)
         => Path.GetFileName(fileName).Equals(".gitignore", StringComparison.Ordinal);
+
+    private static bool IsPackageJsonFile(string fileName)
+        => Path.GetFileName(fileName).Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<string> ReadGitIgnoreEntries(string content)
     {
