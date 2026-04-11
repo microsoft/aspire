@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.Dcp.Process;
@@ -140,7 +141,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             Publishers = g.Value
         }).ToList();
     }
-    private async Task<int> RunPodmanBuildAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
+    private async Task RunPodmanBuildAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
         var imageName = !string.IsNullOrEmpty(options?.Tag)
             ? $"{options.ImageName}:{options.Tag}"
@@ -195,18 +196,26 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             }
         }
 
-        return await ExecuteContainerCommandWithExitCodeAsync(
+        var buildOutput = new ConcurrentQueue<string>();
+
+        var exitCode = await ExecuteContainerCommandWithExitCodeAsync(
             arguments,
             "Podman build for {ImageName} failed with exit code {ExitCode}.",
             "Podman build for {ImageName} succeeded.",
             cancellationToken,
             new object[] { imageName },
-            environmentVariables).ConfigureAwait(false);
+            environmentVariables,
+            buildOutput).ConfigureAwait(false);
+
+        if (exitCode != 0)
+        {
+            throw new ProcessFailedException($"Podman build failed with exit code {exitCode}.", exitCode, buildOutput.ToArray());
+        }
     }
 
     public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
-        var exitCode = await RunPodmanBuildAsync(
+        await RunPodmanBuildAsync(
             contextPath,
             dockerfilePath,
             options,
@@ -214,11 +223,6 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             buildSecrets,
             stage,
             cancellationToken).ConfigureAwait(false);
-
-        if (exitCode != 0)
-        {
-            throw new DistributedApplicationException($"Podman build failed with exit code {exitCode}.");
-        }
     }
 
     public override async Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)

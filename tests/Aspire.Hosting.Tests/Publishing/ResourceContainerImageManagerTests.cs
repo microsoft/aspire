@@ -1436,6 +1436,40 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         // Verify CheckIfRunningAsync was called
         Assert.Equal(1, fakeContainerRuntime.CheckIfRunningCallCount);
     }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    public async Task DockerBuildFailureIncludesBuildOutputInException()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddXunit(output);
+        });
+
+        // Create a Dockerfile that will fail — references a nonexistent file
+        var tempDir = new TestTempDirectory();
+        var dockerfilePath = Path.Combine(tempDir.Path, "Dockerfile");
+        await File.WriteAllTextAsync(dockerfilePath, """
+            FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
+            COPY nonexistent-file-12345.txt /app/
+            """);
+
+        var container = builder.AddDockerfile("broken-container", tempDir.Path, dockerfilePath);
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var ex = await Assert.ThrowsAsync<ProcessFailedException>(
+            () => imageBuilder.BuildImageAsync(container.Resource, cts.Token));
+
+        Assert.NotEqual(0, ex.ExitCode);
+        Assert.NotEmpty(ex.BuildOutput);
+        Assert.Contains(ex.BuildOutput, line => line.Contains("nonexistent-file-12345.txt"));
+    }
 }
 
 file sealed class TestProjectMetadata(string projectPath) : IProjectMetadata
