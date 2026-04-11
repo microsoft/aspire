@@ -46,11 +46,3 @@ internal class ConfigureDefaultDashboardOptions(IConfiguration configuration, IO
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }
-
-internal class ValidateDashboardOptions : IValidateOptions<DashboardOptions>
-{
-    public ValidateOptionsResult Validate(string? name, DashboardOptions options)
-    {
-        return ValidateOptionsResult.Success;
-    }
-}

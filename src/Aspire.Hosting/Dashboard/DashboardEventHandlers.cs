@@ -407,25 +407,27 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             }
         });
 
-        foreach (var d in dashboardUrls?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [])
-        {
-            var address = BindingAddress.Parse(d);
-
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: address.Scheme, port: address.Port, isProxied: true)
-            {
-                TargetHost = address.Host
-            });
-        }
-
         if (string.IsNullOrWhiteSpace(dashboardUrls))
         {
             var uriScheme = allowUnsecureTransport ? "http" : "https";
             var endpointName = allowUnsecureTransport ? "http" : "https";
             dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true));
         }
+        else
+        {
+            foreach (var d in dashboardUrls.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var address = BindingAddress.Parse(d.Trim());
 
-        dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, transport: "http2"));
-        dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName));
+                dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: address.Scheme, port: address.Port, isProxied: true)
+                {
+                    TargetHost = address.Host
+                });
+            }
+        }
+
+        dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, allowUnsecureTransport, transport: "http2"));
+        dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, allowUnsecureTransport));
 
         // Determine whether any HTTPS endpoints are configured
         var hasHttpsEndpoint = dashboardResource.TryGetAnnotationsOfType<EndpointAnnotation>(out var endpoints) && endpoints.Any(e => e.UriScheme is "https");
@@ -519,8 +521,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         }
 
         var options = dashboardOptions.Value;
-
-        // Options should have been validated these should not be null
 
         var environment = options.AspNetCoreEnvironment;
         var browserToken = options.DashboardToken;
@@ -635,11 +635,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
     }
 
-    private static EndpointAnnotation CreateDashboardOtlpEndpointAnnotation(string? endpointUrl, string endpointName, string? transport = null)
+    private static EndpointAnnotation CreateDashboardOtlpEndpointAnnotation(string? endpointUrl, string endpointName, bool allowUnsecureTransport, string? transport = null)
     {
         if (string.IsNullOrWhiteSpace(endpointUrl))
         {
-            return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: "https", isProxied: true, transport: transport);
+            var uriScheme = allowUnsecureTransport ? "http" : "https";
+            return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true, transport: transport);
         }
 
         if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out var endpointUri))

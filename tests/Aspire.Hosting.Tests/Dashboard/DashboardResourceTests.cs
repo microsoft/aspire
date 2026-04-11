@@ -219,6 +219,38 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         Assert.Null(otlpHttpEndpoint.Port);
     }
 
+    [Fact]
+    public async Task DashboardWithBlankOtlpEndpointAndUnsecuredTransport_UsesHttpScheme()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false,
+            testOutputHelper: testOutputHelper);
+
+        builder.Configuration.Sources.Clear();
+
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.AllowUnsecuredTransport] = "true",
+        });
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources);
+        var otlpGrpcEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        var otlpHttpEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+
+        Assert.Equal("http", otlpGrpcEndpoint.UriScheme);
+        Assert.Equal("localhost", otlpGrpcEndpoint.TargetHost);
+        Assert.Null(otlpGrpcEndpoint.Port);
+
+        Assert.Equal("http", otlpHttpEndpoint.UriScheme);
+        Assert.Equal("localhost", otlpHttpEndpoint.TargetHost);
+        Assert.Null(otlpHttpEndpoint.Port);
+    }
+
     [Theory]
     [InlineData(false, "https")]
     [InlineData(true, "http")]
