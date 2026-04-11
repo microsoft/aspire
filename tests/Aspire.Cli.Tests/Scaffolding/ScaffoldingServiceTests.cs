@@ -8,7 +8,7 @@ namespace Aspire.Cli.Tests.Scaffolding;
 public class ScaffoldingServiceTests
 {
     [Fact]
-    public void GetConflictingScaffoldFiles_IgnoresGitIgnoreButReturnsOtherExistingFiles()
+    public void GetConflictingScaffoldFiles_IgnoresMergeableFilesButReturnsOtherExistingFiles()
     {
         var rootDirectory = Directory.CreateTempSubdirectory();
 
@@ -16,12 +16,13 @@ public class ScaffoldingServiceTests
         {
             File.WriteAllText(Path.Combine(rootDirectory.FullName, ".gitignore"), "node_modules/\n");
             File.WriteAllText(Path.Combine(rootDirectory.FullName, "package.json"), "{}");
+            File.WriteAllText(Path.Combine(rootDirectory.FullName, "apphost.ts"), string.Empty);
 
             var conflicts = ScaffoldingService.GetConflictingScaffoldFiles(
                 rootDirectory.FullName,
                 [".gitignore", "package.json", "apphost.ts"]);
 
-            Assert.Equal(["package.json"], conflicts);
+            Assert.Equal(["apphost.ts"], conflicts);
         }
         finally
         {
