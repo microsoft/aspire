@@ -92,7 +92,7 @@ steps:
               /p:BuildExtension=true
       displayName: 🟣Build
 
-    # Verify the signed win-x64 CLI archive works (version check + project creation + build)
+    # Verify the signed win-x64 CLI archive works (version check + project creation)
     - pwsh: |
         $ErrorActionPreference = 'Stop'
         $archiveDir = "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}"

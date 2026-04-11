@@ -115,19 +115,20 @@ export DOTNET_CLI_TELEMETRY_OPTOUT=true
 export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
 export DOTNET_GENERATE_ASPNET_CERTIFICATE=false
 
+VERIFY_TMPDIR="$(mktemp -d)"
+
 # Step 1: Back up and clean ~/.aspire
 log_step "Cleaning ~/.aspire state..."
 ASPIRE_BACKUP=""
 if [[ -d "$HOME/.aspire" ]]; then
-    ASPIRE_BACKUP="$(mktemp -d)"
-    mv "$HOME/.aspire" "${ASPIRE_BACKUP}/.aspire"
-    ASPIRE_BACKUP="${ASPIRE_BACKUP}/.aspire"
+    ASPIRE_BACKUP="${VERIFY_TMPDIR}/aspire-backup/.aspire"
+    mkdir -p "${VERIFY_TMPDIR}/aspire-backup"
+    mv "$HOME/.aspire" "${ASPIRE_BACKUP}"
     log_step "Backed up existing ~/.aspire to ${ASPIRE_BACKUP}"
 fi
 log_ok "Clean ~/.aspire state"
 
 # Step 2: Extract the archive
-VERIFY_TMPDIR="$(mktemp -d)"
 EXTRACT_DIR="${VERIFY_TMPDIR}/cli"
 mkdir -p "$EXTRACT_DIR"
 

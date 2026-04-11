@@ -277,7 +277,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment());
+                // Simulate a platform where non-interactive trust is NOT supported (e.g. macOS/Windows)
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => false);
             };
         });
 
@@ -287,9 +288,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(result);
-        // On Linux, trust proceeds even in non-interactive mode because it doesn't require UI.
-        // On macOS/Windows, trust is skipped in non-interactive mode.
-        Assert.Equal(OperatingSystem.IsLinux(), trustCalled);
+        // Non-interactive trust is not supported, so trust is skipped.
+        Assert.False(trustCalled);
         Assert.False(ensureCalled);
     }
 
@@ -332,7 +332,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment());
+                // Simulate a platform where non-interactive trust is NOT supported (e.g. macOS/Windows)
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => false);
             };
         });
 
@@ -342,23 +343,13 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(result);
-        if (OperatingSystem.IsLinux())
-        {
-            // On Linux, trust proceeds in non-interactive mode (no UI needed), so
-            // TrustHttpCertificate is called which also creates the cert internally.
-            Assert.True(trustCalled);
-            Assert.False(ensureCalled);
-        }
-        else
-        {
-            // On macOS/Windows, trust is skipped but cert creation is attempted.
-            Assert.False(trustCalled);
-            Assert.True(ensureCalled);
-        }
+        // Non-interactive trust is not supported, so trust is skipped but cert creation is attempted.
+        Assert.False(trustCalled);
+        Assert.True(ensureCalled);
     }
 
     [Fact]
-    public async Task EnsureCertificatesTrustedAsync_NonInteractiveNonWindows_WithNotTrustedCert_SkipsTrustOperation()
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_WithNonInteractiveTrustSupported_ProceedsWithTrust()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var trustCalled = false;
@@ -396,8 +387,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                // Simulate macOS CI: non-interactive, non-Windows, non-Linux
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment());
+                // Simulate a platform where non-interactive trust IS supported (e.g. Linux)
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => true);
             };
         });
 
@@ -407,9 +398,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
 
         Assert.NotNull(result);
-        // On Linux, trust proceeds in non-interactive mode (no UI needed).
-        // On macOS/Windows, trust is skipped to avoid blocking UI prompts.
-        Assert.Equal(OperatingSystem.IsLinux(), trustCalled);
+        // Non-interactive trust is supported (like Linux), so trust proceeds.
+        Assert.True(trustCalled);
         Assert.False(ensureCalled);
     }
 
