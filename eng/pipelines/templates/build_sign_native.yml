@@ -140,6 +140,29 @@ jobs:
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
 
+          # Verify the signed CLI archive can execute and create a project.
+          # Run for RIDs that can fully execute on the build agent:
+          #   macOS (Apple Silicon): osx-arm64 only (osx-x64 via Rosetta can run the CLI
+          #     but aspire-managed template resolution fails)
+          #   Linux (amd64): linux-x64 only (linux-arm64/linux-musl-x64 are cross-compiled)
+          - ${{ if or(and(eq(parameters.agentOs, 'macos'), eq(targetRid, 'osx-arm64')), and(eq(parameters.agentOs, 'linux'), eq(targetRid, 'linux-x64'))) }}:
+            - script: |
+                set -euo pipefail
+                echo "Finding CLI archive for ${{ targetRid }}..."
+                ARCHIVE=$(find "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)" -name "aspire-cli-${{ targetRid }}-*.tar.gz" -type f | head -1)
+                if [ -z "$ARCHIVE" ]; then
+                  echo "##[error]No CLI archive found for ${{ targetRid }}"
+                  exit 1
+                fi
+                echo "Found archive: $ARCHIVE"
+                chmod +x "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.sh"
+                "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.sh" "$ARCHIVE"
+              displayName: 🟣Verify CLI archive (${{ targetRid }})
+              condition: succeeded()
+              env:
+                ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
+                DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
           - task: 1ES.PublishBuildArtifacts@1
             displayName: 🟣Publish Artifacts
             condition: always()
