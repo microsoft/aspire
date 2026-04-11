@@ -49,6 +49,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         var dashboard = Assert.Single(model.Resources.OfType<ExecutableResource>());
         var initialSnapshot = Assert.Single(dashboard.Annotations.OfType<ResourceSnapshotAnnotation>());
+        var hiddenAnnotation = Assert.Single(dashboard.Annotations.OfType<HiddenAnnotation>());
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(dashboard).DefaultTimeout();
 
@@ -56,7 +57,8 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("aspire-dashboard", dashboard.Name);
         Assert.Equal("dotnet", dashboard.Command);
         Assert.Equal(args[3], $"{dashboardPath}.dll");
-        Assert.True(initialSnapshot.InitialSnapshot.IsHidden);
+        Assert.Equal(HiddenBehavior.Always, hiddenAnnotation.Behavior);
+        Assert.False(initialSnapshot.InitialSnapshot.IsHidden);
     }
 
     [Fact]

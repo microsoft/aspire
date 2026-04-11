@@ -656,6 +656,8 @@ public class ResourceNotificationService : IDisposable
 
             newState = UpdateIcons(resource, newState);
 
+            newState = UpdateDashboardVisibility(resource, newState);
+
             if (resource.TryGetAnnotationsOfType<ExcludeFromMcpAnnotation>(out _))
             {
                 newState = newState with
@@ -832,6 +834,30 @@ public class ResourceNotificationService : IDisposable
             IconName = newIconName,
             IconVariant = newIconVariant
         };
+    }
+
+    /// <summary>
+    /// Use dashboard visibility annotations to update resource snapshot.
+    /// </summary>
+    private static CustomResourceSnapshot UpdateDashboardVisibility(IResource resource, CustomResourceSnapshot previousState)
+    {
+        if (!resource.TryGetLastAnnotation<HiddenAnnotation>(out var annotation))
+        {
+            return previousState;
+        }
+
+        var isHidden = annotation.Behavior switch
+        {
+            HiddenBehavior.Always => true,
+            HiddenBehavior.OnCompletion => IsCompletionState(previousState.State?.Text)
+                && (previousState.ExitCode is null || annotation.SuccessfulExitCodes.Contains(previousState.ExitCode.Value)),
+            _ => previousState.IsHidden
+        };
+
+        return previousState with { IsHidden = isHidden };
+
+        static bool IsCompletionState(string? state) =>
+            state == KnownResourceStates.Finished || state == KnownResourceStates.Exited;
     }
 
     /// <summary>

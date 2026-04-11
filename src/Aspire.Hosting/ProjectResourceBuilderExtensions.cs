@@ -932,12 +932,12 @@ public static class ProjectResourceBuilderExtensions
             .WithAnnotation(new ExplicitStartupAnnotation())
             .WithAnnotation(new ExcludeLifecycleCommandsAnnotation())
             .ExcludeFromManifest()
+            .WithHidden()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = "Executable",
                 State = KnownResourceStates.NotStarted,
                 Properties = [],
-                IsHidden = true,
             });
     }
 

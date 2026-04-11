@@ -298,11 +298,11 @@ public static class EFResourceBuilderExtensions
             .WithParentRelationship(migrationBuilder)
             .WithWorkingDirectory(startupProjectDir)
             .WithExplicitStart()
+            .WithHidden()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = "Tool",
-                Properties = [],
-                IsHidden = true
+                Properties = []
             });
 
         migrationResource.ConfigureToolResource?.Invoke(toolBuilder);

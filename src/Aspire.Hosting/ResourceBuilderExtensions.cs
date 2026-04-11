@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
@@ -3924,6 +3925,62 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder.WithAnnotation(new ExcludeFromMcpAnnotation());
+    }
+
+    /// <summary>
+    /// Excludes the resource from the dashboard.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Use this method to hide resources that are implementation details and should never be displayed in the dashboard.
+    /// </remarks>
+    [AspireExport(Description = "Excludes the resource from the dashboard")]
+    public static IResourceBuilder<T> WithHidden<T>(this IResourceBuilder<T> builder) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.Always), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Excludes the resource from the dashboard after it completes successfully.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="exitCode">The completion exit code to treat as successful. Defaults to <c>0</c>.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This method is useful for one-off resources such as setup scripts, migrations, or build steps that should remain visible while running
+    /// and then be hidden after successful completion.
+    /// </remarks>
+    [AspireExport(Description = "Excludes the resource from the dashboard after successful completion")]
+    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode = 0) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = [exitCode] }, ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Excludes the resource from the dashboard after it completes with one of the specified successful exit codes.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="exitCodes">Completion exit codes to treat as successful. If no values are provided, <c>0</c> is used.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExportIgnore(Reason = "Uses params array overload; use single-exit-code overload for ATS compatibility.")]
+    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, params int[] exitCodes) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(exitCodes);
+
+        var successfulExitCodes = exitCodes.Length == 0
+            ? ImmutableHashSet.Create(0)
+            : [.. exitCodes];
+
+        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = successfulExitCodes }, ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>

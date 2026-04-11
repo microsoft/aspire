@@ -29,11 +29,11 @@ for (var i = 0; i < 2; i++)
 
 builder.AddParameter("testParameterResource", () => "value", secret: true);
 builder.AddContainer("hiddenContainer", "alpine")
+    .WithHidden()
     .WithInitialState(new CustomResourceSnapshot
     {
         ResourceType = "CustomHiddenContainerType",
-        Properties = [],
-        IsHidden = true
+        Properties = []
     });
 
 // TODO: OTEL env var can be removed when OTEL libraries are updated to 1.9.0
