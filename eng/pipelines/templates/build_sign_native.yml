@@ -104,6 +104,15 @@ jobs:
               env:
                 SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
+          # On macOS/Linux, restore the execute bit after Arcade signing.
+          # MicroBuild rewrites the binary file during signing, which resets permissions
+          # to the default umask (typically 644). The execute bit must be restored before
+          # CreateLayout packs the binary into the bundle archive.
+          - ${{ if and(eq(parameters.codeSign, true), ne(parameters.agentOs, 'windows')) }}:
+            - script: >-
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
+              displayName: 🟣Restore execute permission on aspire-managed
+
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
               msbuild
