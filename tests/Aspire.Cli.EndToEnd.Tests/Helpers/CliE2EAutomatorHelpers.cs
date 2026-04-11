@@ -361,7 +361,7 @@ internal static class CliE2EAutomatorHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // If DASHBOARD_URL is empty, the apphost likely crashed — dump logs for diagnostics
+        // If DASHBOARD_URL is empty, the apphost likely crashed — dump logs for diagnostics and fail
         await auto.TypeAsync(
             "if [ -z \"$DASHBOARD_URL\" ]; then " +
             "echo 'dashboard-url-empty'; " +
@@ -373,7 +373,34 @@ internal static class CliE2EAutomatorHelpers
             "echo \"=== CLI LOG: $CLI_LOG ===\"; [ -n \"$CLI_LOG\" ] && tail -100 \"$CLI_LOG\"; echo '=== END CLI ==='; " +
             "fi");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Wait for the prompt then check whether $DASHBOARD_URL was set. If it's empty,
+        // fail immediately with a clear message instead of letting curl produce the cryptic
+        // "curl: (3) URL rejected: Malformed input to a URL function" error.
+        var dashboardUrlEmpty = false;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            var emptySearcher = new CellPatternSearcher().FindPattern("dashboard-url-empty");
+            if (emptySearcher.Search(snapshot).Count > 0)
+            {
+                dashboardUrlEmpty = true;
+                return true;
+            }
+
+            var promptSearcher = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+            return promptSearcher.Search(snapshot).Count > 0;
+        }, timeout: TimeSpan.FromSeconds(30), description: $"dashboard URL check [{counter.Value} OK]");
+        counter.Increment();
+
+        if (dashboardUrlEmpty)
+        {
+            throw new InvalidOperationException(
+                "Dashboard URL was empty after aspire start. " +
+                "The sed extraction failed to find a dashboardUrl in the JSON output. " +
+                "Check terminal output for CLI logs and JSON content.");
+        }
 
         await auto.TypeAsync(
             "curl -ksSL -o /dev/null -w 'dashboard-http-%{http_code}' \"$DASHBOARD_URL\" " +
