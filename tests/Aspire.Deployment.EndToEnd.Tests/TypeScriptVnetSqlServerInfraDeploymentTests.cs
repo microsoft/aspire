@@ -86,27 +86,12 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
             // Step 3: Create TypeScript AppHost using aspire init
             output.WriteLine("Step 3: Creating TypeScript AppHost with aspire init...");
 
-            var waitingForNuGetConfigPrompt = new CellPatternSearcher()
-                .Find("NuGet.config");
-            var waitingForInitComplete = new CellPatternSearcher()
-                .Find("Aspire initialization complete");
-
             await auto.TypeAsync("aspire init --language typescript");
             await auto.EnterAsync();
 
-            // NuGet.config prompt may or may not appear depending on environment.
-            await auto.WaitUntilAsync(
-                s => waitingForNuGetConfigPrompt.Search(s).Count > 0
-                    || waitingForInitComplete.Search(s).Count > 0,
-                timeout: TimeSpan.FromMinutes(2),
-                description: "NuGet.config prompt or init completion");
-            await auto.EnterAsync(); // Dismiss NuGet.config prompt if present
-
-            await auto.WaitUntilAsync(
-                s => waitingForInitComplete.Search(s).Count > 0,
-                timeout: TimeSpan.FromMinutes(2),
-                description: "aspire initialization complete");
-
+            // When using bundle install, the CLI auto-selects the package version
+            // from the local hive without showing a NuGet.config prompt.
+            // Go straight to waiting for the agent init prompt / success prompt.
             await auto.DeclineAgentInitPromptAsync(counter);
 
             // Step 4a: Add Aspire.Hosting.Azure.AppContainers

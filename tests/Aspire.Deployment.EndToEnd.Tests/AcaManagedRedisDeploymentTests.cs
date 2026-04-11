@@ -75,7 +75,7 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
                 .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
 
             var waitingForOutputPathPrompt = new CellPatternSearcher()
-                .Find("Enter the output path:");
+                .Find("Enter the output path");
 
             var waitingForUrlsPrompt = new CellPatternSearcher()
                 .Find("Use *.dev.localhost URLs");

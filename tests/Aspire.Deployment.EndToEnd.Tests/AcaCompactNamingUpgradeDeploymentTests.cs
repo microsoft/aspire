@@ -100,9 +100,12 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
             output.WriteLine("Step 5: Creating single-file AppHost with GA CLI...");
             await auto.TypeAsync("aspire init");
             await auto.EnterAsync();
+            // Wait for and dismiss the language selection (auto-selected or prompt)
             await auto.WaitAsync(TimeSpan.FromSeconds(5));
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Aspire initialization complete", timeout: TimeSpan.FromMinutes(2));
+            // The CLI may show a "Select a template version" prompt — dismiss it
+            await auto.WaitUntilTextAsync("based on NuGet.config", timeout: TimeSpan.FromSeconds(60));
+            await auto.EnterAsync();
             await auto.DeclineAgentInitPromptAsync(counter);
 
             // Step 6: Add ACA package using GA CLI (uses GA NuGet packages)
