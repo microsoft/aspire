@@ -13,9 +13,15 @@ namespace Aspire.Hosting;
 /// <param name="name">The name of the resource.</param>
 /// <param name="projectResource">The parent project resource that contains the DbContext.</param>
 /// <param name="contextTypeName">The fully qualified name of the DbContext type, or null to auto-detect.</param>
+/// <remarks>
+/// The resource inherits from <see cref="ContainerResource"/> so it can be published as a container image
+/// that runs the migration bundle at deploy time when
+/// <see cref="EFMigrationResourceBuilderExtensions.PublishAsMigrationBundle(ApplicationModel.IResourceBuilder{EFMigrationResource}, string?, bool, bool, string?)"/>
+/// is called with <c>publishContainer: true</c>.
+/// </remarks>
 [AspireExport(ExposeProperties = true)]
 public class EFMigrationResource(string name, ProjectResource projectResource, string? contextTypeName)
-    : Resource(name), IResourceWithWaitSupport
+    : ContainerResource(name)
 {
     /// <summary>
     /// Gets the parent project resource that contains the DbContext.
@@ -60,6 +66,42 @@ public class EFMigrationResource(string name, ProjectResource projectResource, s
     /// Gets or sets whether the migration bundle should be self-contained.
     /// </summary>
     public bool BundleSelfContained { get; set; }
+
+    /// <summary>
+    /// Gets or sets the base container image for the migration bundle container.
+    /// </summary>
+    /// <remarks>
+    /// When set, this overrides the default base image selection entirely. Use this when the
+    /// default image (derived from the project's target framework) isn't suitable — for example
+    /// when targeting a preview SDK or a custom base image with extra dependencies.
+    /// Example: <c>"mcr.microsoft.com/dotnet/runtime:11.0-preview"</c>.
+    /// </remarks>
+    public string? BundleBaseImage { get; set; }
+
+    /// <summary>
+    /// Gets or sets the target framework resolved from the project during bundle generation.
+    /// </summary>
+    /// <remarks>
+    /// Populated by the generate pipeline step after <c>dotnet-ef</c> resolves the project's
+    /// build settings. Used to derive the Docker base image tag so the container runtime matches
+    /// the framework the bundle was compiled against. Not intended for user assignment — set
+    /// <see cref="BundleBaseImage"/> instead to override the base image.
+    /// </remarks>
+    internal string? ResolvedFramework { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the migration bundle should be published as a container image that applies
+    /// the migrations to the database at deploy time.
+    /// </summary>
+    /// <remarks>
+    /// When <see langword="true"/>, the resource is materialized as a <see cref="ContainerResource"/>
+    /// carrying a generated <c>Dockerfile</c> that wraps the migration bundle. The compute environment
+    /// (Docker Compose, Azure Container Apps, Kubernetes, Azure App Service, Azure Functions, etc.)
+    /// deploys it alongside the other compute resources and supplies the connection string from any
+    /// <see cref="IResourceWithConnectionString"/> dependency declared via <c>WithReference</c> or
+    /// <c>WaitFor</c>.
+    /// </remarks>
+    public bool PublishBundleContainer { get; set; }
 
     /// <summary>
     /// Gets or sets the output directory for new migrations. Used by the Add Migration command.

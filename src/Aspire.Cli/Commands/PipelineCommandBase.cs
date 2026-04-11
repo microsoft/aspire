@@ -688,9 +688,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                                 break;
                             case LogLevel.Debug:
                             case LogLevel.Trace:
-                                // Use a more subtle approach for debug/trace - prefix with dim formatting
-                                var subtleMessage = $"[dim]{prefixedMessage}[/]";
-                                logger.Info(stepInfo.Id, subtleMessage);
+                                logger.Info(stepInfo.Id, prefixedMessage, dim: true);
                                 break;
                             case LogLevel.Information:
                             default:
