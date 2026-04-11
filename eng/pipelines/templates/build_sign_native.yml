@@ -81,6 +81,18 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
             displayName: 🟣Publish aspire-managed
 
+          # On macOS, ad-hoc codesign aspire-managed with JIT entitlements BEFORE Arcade signing.
+          # MicroBuild (MacDeveloperHardenWithNotarization) preserves entitlements from the prior
+          # ad-hoc signature when re-signing with the real certificate. Without this step,
+          # hardened runtime blocks CoreCLR JIT (W^X memory mapping) causing HRESULT: 0x80070008.
+          # This follows the same pattern used by dotnet/sdk for managed binaries (roslyn-entitlements.plist).
+          - ${{ if eq(parameters.agentOs, 'macos') }}:
+            - script: >-
+                codesign --sign - --force
+                --entitlements $(Build.SourcesDirectory)/eng/aspire-managed-entitlements.plist
+                $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
+              displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
+
           - ${{ if eq(parameters.codeSign, true) }}:
             - script: >-
                 $(Build.SourcesDirectory)/$(scriptName)
