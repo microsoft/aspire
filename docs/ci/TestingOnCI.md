@@ -56,7 +56,7 @@ This invokes `eng/TestEnumerationRunsheetBuilder/TestEnumerationRunsheetBuilder.
 - Writes a `.tests-metadata.json` file to `artifacts/helix/` containing:
   - `projectName`, `shortName`, `testProjectPath`
   - `supportedOSes` array (e.g., `["windows", "linux", "macos"]`)
-  - `properties` object with boolean flags: `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `enablePlaywrightInstall`
+  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `enablePlaywrightInstall`
   - `testSessionTimeout`, `testHangTimeout` values
   - `uncollectedTestsSessionTimeout`, `uncollectedTestsHangTimeout` values
   - `splitTests` flag
@@ -283,6 +283,49 @@ For tests that require Playwright browser automation:
 
 This flag is tracked in the test metadata and controls whether Playwright browsers are installed during the test build step.
 
+## CI Test Property Registry
+
+All boolean test properties (such as `RequiresNugets`, `RequiresTestSdk`, `RequiresCliArchive`, `EnablePlaywrightInstall`) are defined in a single source of truth:
+
+**`eng/testing/CITestsProperties.props`**
+
+```xml
+<ItemGroup>
+  <CITestsProperty Include="requiresNugets" MSBuildProp="RequiresNugets" Default="false" />
+  <CITestsProperty Include="requiresTestSdk" MSBuildProp="RequiresTestSdk" Default="false" />
+  <CITestsProperty Include="requiresCliArchive" MSBuildProp="RequiresCliArchive" Default="false" />
+  <CITestsProperty Include="enablePlaywrightInstall" MSBuildProp="EnablePlaywrightInstall" Default="false" />
+</ItemGroup>
+```
+
+Each `CITestsProperty` item has three attributes:
+
+| Attribute | Description |
+|-----------|-------------|
+| `Include` | The JSON key name used in metadata files and workflow properties (camelCase) |
+| `MSBuildProp` | The MSBuild property name read from test project `.csproj` files (PascalCase) |
+| `Default` | The default value when the property is not set in a test project |
+
+### How it flows through the system
+
+1. **MSBuild targets** (`TestEnumerationRunsheetBuilder.targets`, `SpecializedTestRunsheetBuilderBase.targets`) import this file and iterate `@(CITestsProperty)` to dynamically resolve property values and emit the `"properties"` JSON object — no hardcoded property names in the targets.
+2. **PowerShell scripts** (`build-test-matrix.ps1`) parse the `.props` XML at startup to build the defaults dictionary and copy properties generically — no per-property code blocks.
+3. **GitHub Actions workflows** (`run-tests.yml`) read properties from the opaque `properties` JSON string with bespoke `if:` conditions for each property that controls unique workflow behavior.
+
+### Adding a new boolean test property
+
+1. Add one line to `eng/testing/CITestsProperties.props`:
+   ```xml
+   <CITestsProperty Include="myNewFlag" MSBuildProp="MyNewFlag" Default="false" />
+   ```
+2. Set the MSBuild property in the test project's `.csproj`:
+   ```xml
+   <PropertyGroup>
+     <MyNewFlag>true</MyNewFlag>
+   </PropertyGroup>
+   ```
+3. Add behavioral logic in the GitHub Actions workflow YAML (e.g., `if:` conditions in `run-tests.yml`) to act on the new property.
+
 ## Custom GitHub Actions Runners
 
 By default, tests run on `ubuntu-latest`, `windows-latest`, and `macos-latest`. To override the runner for a specific OS (e.g., to use larger runners or specific OS versions), set the corresponding property in the test project's `.csproj`:
@@ -321,10 +364,11 @@ During enumeration, these files are generated in `artifacts/`:
 | `helix/<ProjectName>.tests-partitions.json` | Partition/class list for split projects |
 | `canonical-test-matrix.json` | Canonical matrix (platform-agnostic) |
 
-## Scripts Reference
+## Scripts and Configuration Reference
 
-| Script | Purpose |
-|--------|---------|
+| File | Purpose |
+|------|---------|
+| `eng/testing/CITestsProperties.props` | Single source of truth for CI test property names, defaults, and MSBuild mappings |
 | `eng/scripts/build-test-matrix.ps1` | Generates canonical matrix from metadata files |
 | `eng/scripts/expand-test-matrix-github.ps1` | Expands canonical matrix for GitHub Actions |
 | `eng/scripts/split-test-projects-for-ci.ps1` | Discovers test partitions/classes for splitting |
