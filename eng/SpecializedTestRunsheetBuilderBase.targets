@@ -1,6 +1,7 @@
 <Project>
   <Import Project="$(MSBuildThisFileDirectory)/testing/CITestsProperties.props" />
   <!--
+    This file contains the shared logic for generating specialized test runsheets (quarantined and outerloop tests).
 
     It is imported by:
     - OuterloopTestRunsheetBuilder/OuterloopTestRunsheetBuilder.targets
