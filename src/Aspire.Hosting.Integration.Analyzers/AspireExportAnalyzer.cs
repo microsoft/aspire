@@ -262,6 +262,9 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         {
             AnalyzeExportNameUniqueness(context, method, effectiveExportId, wellKnownTypes, location);
         }
+
+        // Rule 8 (ASPIREEXPORT012): Check that callback parameter types (Action<T>/Func<T>) have [AspireExport]
+        AnalyzeCallbackContextTypes(context, method, aspireExportAttribute, location);
     }
 
     private static void AnalyzeMissingExportAttribute(
@@ -395,6 +398,90 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             method.Name,
             concreteTargetTypeName,
             suggestedName));
+    }
+
+    /// <summary>
+    /// Checks that callback parameter types (e.g., Action&lt;HelmChartOptions&gt;) in exported methods
+    /// have [AspireExport] so their members are visible to TypeScript.
+    /// </summary>
+    private static void AnalyzeCallbackContextTypes(
+        SymbolAnalysisContext context,
+        IMethodSymbol method,
+        INamedTypeSymbol aspireExportAttribute,
+        Location location)
+    {
+        foreach (var parameter in method.Parameters)
+        {
+            var paramType = parameter.Type;
+
+            // Unwrap nullable (Action<T>? → Action<T>)
+            if (paramType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            {
+                paramType = nullable.TypeArguments[0];
+            }
+
+            // Check if this is a delegate type (Action<T>, Func<T, ...>, custom delegate)
+            if (paramType is not INamedTypeSymbol namedType || !IsDelegateType(namedType))
+            {
+                continue;
+            }
+
+            // Extract the type arguments of the delegate (Action<T> → T, Func<T, R> → T)
+            var invokeMethod = namedType.DelegateInvokeMethod;
+            if (invokeMethod is null)
+            {
+                continue;
+            }
+
+            foreach (var delegateParam in invokeMethod.Parameters)
+            {
+                var contextType = delegateParam.Type;
+                if (contextType is not INamedTypeSymbol contextNamedType)
+                {
+                    continue;
+                }
+
+                // Skip primitive types, string, well-known framework types
+                if (contextNamedType.SpecialType != SpecialType.None ||
+                    contextNamedType.TypeKind is TypeKind.Enum or TypeKind.Interface)
+                {
+                    continue;
+                }
+
+                // Check if the type has [AspireExport] (ExposeProperties or ExposeMethods)
+                var hasExport = false;
+                foreach (var attr in contextNamedType.GetAttributes())
+                {
+                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, aspireExportAttribute))
+                    {
+                        hasExport = true;
+                        break;
+                    }
+                }
+
+                if (!hasExport)
+                {
+                    // Only warn for types defined in the same compilation (same assembly).
+                    // We can't add attributes to types from external packages.
+                    if (!SymbolEqualityComparer.Default.Equals(contextNamedType.ContainingAssembly, method.ContainingAssembly))
+                    {
+                        continue;
+                    }
+
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.s_callbackContextTypeMissingExport,
+                        location,
+                        contextNamedType.Name,
+                        method.Name));
+                }
+            }
+        }
+    }
+
+    private static bool IsDelegateType(INamedTypeSymbol type)
+    {
+        return type.TypeKind == TypeKind.Delegate ||
+               type.BaseType?.SpecialType == SpecialType.System_MulticastDelegate;
     }
 
     private static void AnalyzeInlineSynchronousDelegateInvocation(

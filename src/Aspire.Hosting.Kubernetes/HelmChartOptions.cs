@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <see cref="KubernetesEnvironmentExtensions.WithHelm(IResourceBuilder{KubernetesEnvironmentResource}, Action{HelmChartOptions})"/>.
 /// Each method adds a corresponding annotation to the environment resource.
 /// </remarks>
+[AspireExport(ExposeMethods = true)]
 public sealed partial class HelmChartOptions
 {
     private const int KubernetesNamespaceMaxLength = 63;
