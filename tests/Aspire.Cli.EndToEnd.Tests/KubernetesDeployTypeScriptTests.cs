@@ -99,14 +99,16 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
 const registryEndpoint = await builder.addParameter("registryendpoint");
 await builder.addContainerRegistry("registry", registryEndpoint);
 
+// Register parameters before using them in the Helm callback
+const k8sNamespace = await builder.addParameter("namespace");
+const chartVersion = await builder.addParameter("chartversion");
+
 // Add Kubernetes environment with Helm deployment
-await builder.addKubernetesEnvironment("env")
-    .withHelm(async (helm) => {
-        const ns = await builder.addParameter("namespace");
-        await helm.withNamespace(ns);
-        const ver = await builder.addParameter("chartversion");
-        await helm.withChartVersion(ver);
-    });
+const k8sEnv = await builder.addKubernetesEnvironment("env");
+await k8sEnv.withHelm(async (helm) => {
+    await helm.withNamespace(k8sNamespace);
+    await helm.withChartVersion(chartVersion);
+});
 
 await builder.build().run();
 """);
