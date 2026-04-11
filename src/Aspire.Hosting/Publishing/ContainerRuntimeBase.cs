@@ -299,7 +299,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
     public virtual async Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken)
     {
-        EnsureRuntimeAvailable();
+        await EnsureRuntimeAvailableAsync().ConfigureAwait(false);
 
         var arguments = BuildComposeArguments(context);
         arguments += " up -d --remove-orphans";
@@ -333,17 +333,21 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
             if (processResult.ExitCode != 0)
             {
+                var envHint = Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME") is not null
+                    ? $"The container runtime is configured via ASPIRE_CONTAINER_RUNTIME (current: '{RuntimeExecutable}')."
+                    : $"The container runtime was auto-detected as '{RuntimeExecutable}'. Set ASPIRE_CONTAINER_RUNTIME to override (e.g., 'docker' or 'podman').";
+
                 throw new DistributedApplicationException(
                     $"'{RuntimeExecutable} compose up' failed with exit code {processResult.ExitCode}. " +
                     $"Ensure '{RuntimeExecutable}' is installed and available on PATH. " +
-                    $"The container runtime is configured via the ASPIRE_CONTAINER_RUNTIME environment variable (current: '{RuntimeExecutable}').");
+                    envHint);
             }
         }
     }
 
     public virtual async Task ComposeDownAsync(ComposeOperationContext context, CancellationToken cancellationToken)
     {
-        EnsureRuntimeAvailable();
+        await EnsureRuntimeAvailableAsync().ConfigureAwait(false);
 
         var arguments = BuildComposeArguments(context);
         arguments += " down";
@@ -385,7 +389,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
     public virtual async Task<IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, CancellationToken cancellationToken)
     {
-        EnsureRuntimeAvailable();
+        await EnsureRuntimeAvailableAsync().ConfigureAwait(false);
 
         var arguments = BuildComposeArguments(context);
         arguments += " ps --format json";
@@ -521,7 +525,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// Validates that the container runtime binary is available on the system PATH.
     /// Fails fast with an actionable error message instead of a cryptic exit code.
     /// </summary>
-    private void EnsureRuntimeAvailable()
+    private async Task EnsureRuntimeAvailableAsync()
     {
         try
         {
@@ -533,10 +537,10 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
                 InheritEnv = true
             };
 
-            var (pendingResult, disposable) = ProcessUtil.Run(spec);
-            using (disposable as IDisposable)
+            var (pendingResult, processDisposable) = ProcessUtil.Run(spec);
+            await using (processDisposable)
             {
-                var result = pendingResult.GetAwaiter().GetResult();
+                var result = await pendingResult.ConfigureAwait(false);
                 if (result.ExitCode != 0)
                 {
                     throw new DistributedApplicationException(

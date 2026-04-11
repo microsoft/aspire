@@ -402,12 +402,14 @@ fi
 
 # Create archive if requested
 if [[ $ARCHIVE -eq 1 ]]; then
+  # Resolve to absolute path before cd to avoid relative path issues
+  ARCHIVE_BASE="$(cd "$(dirname "$OUTPUT_DIR")" && pwd)/$(basename "$OUTPUT_DIR")"
   if [[ "$BUNDLE_RID" == win-* ]]; then
-    ARCHIVE_PATH="${OUTPUT_DIR}.zip"
+    ARCHIVE_PATH="${ARCHIVE_BASE}.zip"
     log "Creating archive: $ARCHIVE_PATH"
     (cd "$OUTPUT_DIR" && zip -r "$ARCHIVE_PATH" .)
   else
-    ARCHIVE_PATH="${OUTPUT_DIR}.tar.gz"
+    ARCHIVE_PATH="${ARCHIVE_BASE}.tar.gz"
     log "Creating archive: $ARCHIVE_PATH"
     tar -czf "$ARCHIVE_PATH" -C "$OUTPUT_DIR" .
   fi

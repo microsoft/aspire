@@ -133,11 +133,20 @@ internal sealed partial class ContainerRuntimeCheck(ILogger<ContainerRuntimeChec
 
             var minimumVersion = GetMinimumVersion(runtime);
 
-            // Check minimum version
+            // Check minimum client version
             if (clientVersion is not null && minimumVersion is not null && clientVersion < minimumVersion)
             {
                 return WarningResult(
-                    $"{runtime} version {clientVersion} is below minimum required {GetMinimumVersionString(runtime)}",
+                    $"{runtime} client version {clientVersion} is below minimum required {GetMinimumVersionString(runtime)}",
+                    GetContainerRuntimeUpgradeAdvice(runtime));
+            }
+
+            // Check minimum server version (Docker only)
+            var serverVersion = versionInfo.ServerVersion;
+            if (runtime == "Docker" && serverVersion is not null && minimumVersion is not null && serverVersion < minimumVersion)
+            {
+                return WarningResult(
+                    $"{runtime} server version {serverVersion} is below minimum required {GetMinimumVersionString(runtime)}",
                     GetContainerRuntimeUpgradeAdvice(runtime));
             }
 

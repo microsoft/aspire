@@ -238,6 +238,25 @@ if (-not $packages -or $packages.Count -eq 0) {
 }
 Write-Log ("Found {0} packages in {1}" -f $packages.Count, $pkgDir)
 
+# Determine the RID for the target platform (or auto-detect from host)
+if ($Rid) {
+  $bundleRid = $Rid
+  Write-Log "Using target RID: $bundleRid"
+} elseif ($IsWindows) {
+  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'win-arm64' } else { 'win-x64' }
+} elseif ($IsMacOS) {
+  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'osx-arm64' } else { 'osx-x64' }
+} else {
+  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'linux-arm64' } else { 'linux-x64' }
+}
+
+if ($Output) {
+  $aspireRoot = $Output
+} else {
+  $aspireRoot = Join-Path $HOME '.aspire'
+}
+$cliBinDir = Join-Path $aspireRoot 'bin'
+
 $hivesRoot = Join-Path $aspireRoot 'hives'
 $hiveRoot  = Join-Path $hivesRoot $Name
 $hivePath  = Join-Path $hiveRoot 'packages'
@@ -283,25 +302,6 @@ else {
     }
   }
 }
-
-# Determine the RID for the target platform (or auto-detect from host)
-if ($Rid) {
-  $bundleRid = $Rid
-  Write-Log "Using target RID: $bundleRid"
-} elseif ($IsWindows) {
-  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'win-arm64' } else { 'win-x64' }
-} elseif ($IsMacOS) {
-  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'osx-arm64' } else { 'osx-x64' }
-} else {
-  $bundleRid = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'linux-arm64' } else { 'linux-x64' }
-}
-
-if ($Output) {
-  $aspireRoot = $Output
-} else {
-  $aspireRoot = Join-Path $HOME '.aspire'
-}
-$cliBinDir = Join-Path $aspireRoot 'bin'
 
 # Build the bundle (aspire-managed + DCP, and optionally native AOT CLI)
 if (-not $SkipBundle) {
