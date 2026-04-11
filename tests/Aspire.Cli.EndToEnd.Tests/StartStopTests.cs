@@ -20,6 +20,8 @@ public sealed class StartStopTests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"StarterApp_{projectSuffix}";
 
         var workspace = TemporaryWorkspace.Create(output);
 
@@ -37,10 +39,10 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.InstallAspireCliInDockerAsync(installMode, counter);
 
         // Create a new project using aspire new
-        await auto.AspireNewAsync("AspireStarterApp", counter);
+        await auto.AspireNewAsync(projectName, counter);
 
         // Navigate to the AppHost directory
-        await auto.TypeAsync("cd AspireStarterApp/AspireStarterApp.AppHost");
+        await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -58,9 +60,8 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         await auto.ClearScreenAsync(counter);
 
-        // Ensure application container is cleaned up (zero containers running)
-        // We expect one container left because the test is running in a container itself
-        await auto.ExecuteCommandUntilOutputAsync(counter, "docker ps --all --format json | wc -l", "1", timeout: TimeSpan.FromMinutes(2));
+        // Ensure the test-specific Docker network is cleaned up (which signifies end of container cleanup) 
+        await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(2));
 
         // Exit the shell
         await auto.TypeAsync("exit");
