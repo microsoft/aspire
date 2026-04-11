@@ -3,11 +3,7 @@
 
 using Aspire.Templates.Tests;
 
-public class ToolCommandException : Exception
+public class ToolCommandException(string message, CommandResult? result) : Exception(message)
 {
-    public CommandResult? Result { get; }
-    public ToolCommandException(string message, CommandResult? result) : base(message)
-    {
-        Result = result;
-    }
+    public CommandResult? Result { get; } = result;
 }
