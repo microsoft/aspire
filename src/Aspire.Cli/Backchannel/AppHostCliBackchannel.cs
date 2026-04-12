@@ -24,6 +24,7 @@ internal interface IAppHostCliBackchannel
     Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     IAsyncEnumerable<CommandOutput> ExecAsync(CancellationToken cancellationToken);
+    Task<PipelineStepInfo[]> GetPipelineStepsAsync(CancellationToken cancellationToken);
 }
 
 internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logger, AspireCliTelemetry telemetry) : IAppHostCliBackchannel
@@ -478,6 +479,23 @@ internal sealed class AppHostCliBackchannel(ILogger<AppHostCliBackchannel> logge
         {
             yield return commandOutput;
         }
+    }
+
+    public async Task<PipelineStepInfo[]> GetPipelineStepsAsync(CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Requesting pipeline steps.");
+
+        var steps = await rpc.InvokeWithCancellationAsync<PipelineStepInfo[]>(
+            "GetPipelineStepsAsync",
+            [],
+            cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Received {StepCount} pipeline steps.", steps.Length);
+
+        return steps;
     }
 
 }

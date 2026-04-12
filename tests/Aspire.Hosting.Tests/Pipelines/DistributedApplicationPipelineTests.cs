@@ -2269,4 +2269,127 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     private sealed class CustomResource(string name) : Resource(name)
     {
     }
+
+    [Fact]
+    public async Task ResolveStepsAsync_ReturnsAllSteps()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("custom-step", _ => Task.CompletedTask);
+
+        var context = CreateDeployingContext(builder.Build());
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        // Should include built-in steps + our custom step
+        Assert.Contains(steps, s => s.Name == "custom-step");
+        Assert.Contains(steps, s => s.Name == "deploy");
+        Assert.Contains(steps, s => s.Name == "process-parameters");
+    }
+
+    [Fact]
+    public async Task ResolveStepsAsync_NormalizesRequiredByToDependsOn()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        var pipeline = new DistributedApplicationPipeline();
+        var step = new PipelineStep
+        {
+            Name = "my-step",
+            Action = _ => Task.CompletedTask,
+        };
+        step.RequiredBy("deploy");
+        pipeline.AddStep(step);
+
+        var context = CreateDeployingContext(builder.Build());
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        // "deploy" should now depend on "my-step" due to RequiredBy normalization
+        var deployStep = steps.Single(s => s.Name == "deploy");
+        Assert.Contains("my-step", deployStep.DependsOnSteps);
+    }
+
+    [Fact]
+    public async Task ResolveStepsAsync_PreservesTags()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep(new PipelineStep
+        {
+            Name = "tagged-step",
+            Action = _ => Task.CompletedTask,
+            Tags = ["build-compute", "custom-tag"]
+        });
+
+        var context = CreateDeployingContext(builder.Build());
+        var steps = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        var taggedStep = steps.Single(s => s.Name == "tagged-step");
+        Assert.Contains("build-compute", taggedStep.Tags);
+        Assert.Contains("custom-tag", taggedStep.Tags);
+    }
+
+    [Fact]
+    public async Task ResolveStepsAsync_DoesNotExecuteStepActions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        var stepExecuted = false;
+        var pipeline = new DistributedApplicationPipeline();
+        pipeline.AddStep("should-not-execute", _ =>
+        {
+            stepExecuted = true;
+            return Task.CompletedTask;
+        });
+
+        var context = CreateDeployingContext(builder.Build());
+        await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        Assert.False(stepExecuted, "Step action should not be executed during resolution");
+    }
+
+    [Fact]
+    public void GetTopologicalOrder_ReturnsStepsInDependencyOrder()
+    {
+        var steps = new List<PipelineStep>
+        {
+            new() { Name = "deploy", Action = _ => Task.CompletedTask, DependsOnSteps = { "build" } },
+            new() { Name = "build", Action = _ => Task.CompletedTask, DependsOnSteps = { "init" } },
+            new() { Name = "init", Action = _ => Task.CompletedTask }
+        };
+
+        var ordered = DistributedApplicationPipeline.GetTopologicalOrder(steps);
+
+        var initIndex = ordered.FindIndex(s => s.Name == "init");
+        var buildIndex = ordered.FindIndex(s => s.Name == "build");
+        var deployIndex = ordered.FindIndex(s => s.Name == "deploy");
+
+        Assert.True(initIndex < buildIndex, "init should come before build");
+        Assert.True(buildIndex < deployIndex, "build should come before deploy");
+    }
+
+    [Fact]
+    public void GetTopologicalOrder_IsDeterministic()
+    {
+        var steps = new List<PipelineStep>
+        {
+            new() { Name = "c-step", Action = _ => Task.CompletedTask },
+            new() { Name = "a-step", Action = _ => Task.CompletedTask },
+            new() { Name = "b-step", Action = _ => Task.CompletedTask }
+        };
+
+        var ordered1 = DistributedApplicationPipeline.GetTopologicalOrder(steps);
+        var ordered2 = DistributedApplicationPipeline.GetTopologicalOrder(steps);
+
+        Assert.Equal(ordered1.Select(s => s.Name), ordered2.Select(s => s.Name));
+    }
 }

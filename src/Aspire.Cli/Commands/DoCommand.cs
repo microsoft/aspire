@@ -24,11 +24,10 @@ internal sealed class DoCommand : PipelineCommandBase
     public DoCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DoCommand> logger, IAnsiConsole ansiConsole)
         : base("do", DoCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
     {
-        var isExtensionHost = ExtensionHelper.IsExtensionHost(interactionService, out _, out _);
         _stepArgument = new Argument<string>("step")
         {
             Description = DoCommandStrings.StepArgumentDescription,
-            Arity = isExtensionHost ? ArgumentArity.ZeroOrOne : ArgumentArity.ExactlyOne
+            Arity = ArgumentArity.ZeroOrOne
         };
         Arguments.Add(_stepArgument);
     }
@@ -54,6 +53,12 @@ internal sealed class DoCommand : PipelineCommandBase
                 DoCommandStrings.StepArgumentDescription,
                 required: true,
                 cancellationToken: cancellationToken);
+        }
+
+        // Step is required when not using --list-steps
+        if (string.IsNullOrEmpty(step) && !parseResult.GetValue(s_listStepsOption))
+        {
+            throw new InvalidOperationException("The 'step' argument is required when not using --list-steps.");
         }
 
         if (!string.IsNullOrEmpty(step))
@@ -94,6 +99,11 @@ internal sealed class DoCommand : PipelineCommandBase
 
     protected override string GetProgressMessage(ParseResult parseResult)
     {
+        if (parseResult.GetValue(s_listStepsOption))
+        {
+            return "Listing pipeline steps";
+        }
+
         var step = parseResult.GetValue(_stepArgument);
         return $"Executing step {step}";
     }

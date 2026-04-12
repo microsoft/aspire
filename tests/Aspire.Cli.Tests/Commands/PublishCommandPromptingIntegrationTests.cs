@@ -837,6 +837,9 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
         await Task.CompletedTask; // Suppress CS1998
         yield break;
     }
+
+    public Task<PipelineStepInfo[]> GetPipelineStepsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(Array.Empty<PipelineStepInfo>());
 }
 
 // Data structures for tracking prompts

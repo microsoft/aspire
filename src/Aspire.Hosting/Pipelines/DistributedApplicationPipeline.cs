@@ -380,6 +380,26 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
     public async Task ExecuteAsync(PipelineContext context)
     {
+        var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
+
+        if (allSteps.Count == 0)
+        {
+            return;
+        }
+
+        var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
+
+        // Build dependency graph and execute with readiness-based scheduler
+        await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Resolves all pipeline steps (from built-in steps and resource annotations),
+    /// normalizes dependencies, validates, and returns the steps in topological order
+    /// without executing them.
+    /// </summary>
+    internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context)
+    {
         var annotationSteps = await CollectStepsFromAnnotationsAsync(context).ConfigureAwait(false);
         var allSteps = _steps.Concat(annotationSteps).ToList();
 
@@ -389,7 +409,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         if (allSteps.Count == 0)
         {
-            return;
+            return allSteps;
         }
 
         ValidateSteps(allSteps);
@@ -401,10 +421,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Capture resolved pipeline data for diagnostics (before filtering)
         _lastResolvedSteps = allSteps;
 
-        var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
-
-        // Build dependency graph and execute with readiness-based scheduler
-        await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
+        return allSteps;
     }
 
     /// <summary>
@@ -1199,7 +1216,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     /// <summary>
     /// Gets the topological order of steps for execution.
     /// </summary>
-    private static List<PipelineStep> GetTopologicalOrder(List<PipelineStep> steps)
+    internal static List<PipelineStep> GetTopologicalOrder(List<PipelineStep> steps)
     {
         var stepsByName = steps.ToDictionary(s => s.Name, StringComparer.Ordinal);
         var visited = new HashSet<string>(StringComparer.Ordinal);

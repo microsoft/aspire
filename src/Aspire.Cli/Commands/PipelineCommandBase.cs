@@ -60,6 +60,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         Description = PublishCommandStrings.NoBuildArgumentDescription
     };
 
+    protected static readonly Option<bool> s_listStepsOption = new("--list-steps")
+    {
+        Description = "List the pipeline steps that would be executed, without running them."
+    };
+
     protected abstract string OperationCompletedPrefix { get; }
     protected abstract string OperationFailedPrefix { get; }
 
@@ -95,6 +100,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         Options.Add(s_environmentOption);
         Options.Add(s_includeExceptionDetailsOption);
         Options.Add(s_noBuildOption);
+        Options.Add(s_listStepsOption);
 
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
@@ -250,6 +256,20 @@ internal abstract class PipelineCommandBase : BaseCommand
                 throw new InvalidOperationException("Run completed without returning a backchannel.", innerException);
             }, emoji: KnownEmojis.HammerAndWrench);
 
+            // If --list-steps was specified, get pipeline steps and print them instead of executing
+            var listSteps = parseResult.GetValue(s_listStepsOption);
+            if (listSteps)
+            {
+                StopTerminalProgressBar();
+
+                var steps = await backchannel.GetPipelineStepsAsync(cancellationToken);
+                PrintPipelineSteps(steps);
+
+                await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
+                await pendingRun;
+                return ExitCodeConstants.Success;
+            }
+
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
 
             // Check if debug or trace logging is enabled
@@ -358,6 +378,53 @@ internal abstract class PipelineCommandBase : BaseCommand
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
             return ExitCodeConstants.FailedToBuildArtifacts;
+        }
+    }
+
+    /// <summary>
+    /// Prints pipeline steps in a numbered tree format showing dependencies and tags.
+    /// </summary>
+    internal void PrintPipelineSteps(PipelineStepInfo[] steps)
+    {
+        if (steps.Length == 0)
+        {
+            _ansiConsole.MarkupLine("[dim]No pipeline steps found.[/]");
+            return;
+        }
+
+        for (var i = 0; i < steps.Length; i++)
+        {
+            var step = steps[i];
+
+            _ansiConsole.MarkupLine($"[bold]{i + 1}. {step.Name.EscapeMarkup()}[/]");
+
+            var hasDeps = step.DependsOn.Length > 0;
+            var hasTags = step.Tags.Length > 0;
+
+            if (!hasDeps && !hasTags)
+            {
+                _ansiConsole.MarkupLine("   └─ No dependencies");
+            }
+            else
+            {
+                if (hasDeps)
+                {
+                    var depsText = string.Join(", ", step.DependsOn);
+                    var connector = hasTags ? "├" : "└";
+                    _ansiConsole.MarkupLine($"   {connector}─ Depends on: {depsText.EscapeMarkup()}");
+                }
+
+                if (hasTags)
+                {
+                    var tagsText = string.Join(", ", step.Tags);
+                    _ansiConsole.MarkupLine($"   └─ Tags: {tagsText.EscapeMarkup()}");
+                }
+            }
+
+            if (i < steps.Length - 1)
+            {
+                _ansiConsole.WriteLine();
+            }
         }
     }
 
