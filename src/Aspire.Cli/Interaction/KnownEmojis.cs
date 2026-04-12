@@ -29,7 +29,7 @@ internal readonly struct KnownEmoji(string name, string? textColor = null)
 /// </summary>
 internal static class KnownEmojis
 {
-    public static readonly KnownEmoji Bug = new("bug", "green");
+    public static readonly KnownEmoji Bug = new("bug", "red");
     public static readonly KnownEmoji CheckMark = new("check_mark", "green");
     public static readonly KnownEmoji CheckMarkButton = new("check_mark_button", "green");
     public static readonly KnownEmoji CrossMark = new("cross_mark", "red");

@@ -31,6 +31,7 @@ internal sealed class RenderCommand : BaseCommand
     private static readonly Dictionary<string, string> s_choices = new()
     {
         ["displaymessage"] = "Display message (all emojis)",
+        ["displaystyles"] = "Display error, success, subtle, and cancellation messages",
         ["showstatus"] = "Show status spinner (first 5 emojis)",
         ["showstatus-markup"] = "Show status with markup rendered",
         ["showstatus-escaped"] = "Show status with markup escaped",
@@ -136,6 +137,8 @@ internal sealed class RenderCommand : BaseCommand
             {
                 case "displaymessage":
                     return TestDisplayMessage();
+                case "displaystyles":
+                    return TestDisplayStyles();
                 case "showstatus":
                     return await TestShowStatusAsync(cancellationToken);
                 case "showstatus-markup":
@@ -188,6 +191,15 @@ internal sealed class RenderCommand : BaseCommand
             InteractionService.DisplayMessage(emoji, $"DisplayMessage with {emoji.Name}");
         }
 
+        return ExitCodeConstants.Success;
+    }
+
+    private int TestDisplayStyles()
+    {
+        InteractionService.DisplayError("This is an error message.");
+        InteractionService.DisplaySuccess("Operation completed successfully.");
+        InteractionService.DisplaySubtleMessage("This is a subtle hint.");
+        InteractionService.DisplayCancellationMessage();
         return ExitCodeConstants.Success;
     }
 
