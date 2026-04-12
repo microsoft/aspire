@@ -149,8 +149,7 @@ public sealed class AzureEnvironmentResource : Resource
         var location = provisioningContext.Location.Name;
 
         var tenantId = provisioningContext.Tenant.TenantId;
-        var tenantSegment = tenantId.HasValue ? $"#@{tenantId.Value}" : "#";
-        var portalUrl = $"https://portal.azure.com/{tenantSegment}/resource/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/overview";
+        var portalUrl = AzurePortalUrls.GetResourceGroupUrl(subscriptionId, resourceGroupName, tenantId);
         var resourceGroupValue = $"[{resourceGroupName}]({portalUrl})";
 
         ctx.Summary.Add("☁️ Target", "Azure");
@@ -340,8 +339,7 @@ public sealed class AzureEnvironmentResource : Resource
         {
             await resourceGroup.DeleteAsync(WaitUntil.Started, context.CancellationToken).ConfigureAwait(false);
 
-            var tenantSegment = subscription.TenantId.HasValue ? $"#@{subscription.TenantId.Value}" : "#";
-            var portalUrl = $"https://portal.azure.com/{tenantSegment}/resource/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/overview";
+            var portalUrl = AzurePortalUrls.GetResourceGroupUrl(subscriptionId, resourceGroupName, subscription.TenantId);
             context.Summary.Add("🗑️ Resource Group", new MarkdownString($"[{resourceGroupName}]({portalUrl})"));
             context.Summary.Add("🔑 Subscription", subscriptionId);
 
