@@ -62,10 +62,11 @@ internal sealed class AzureKubernetesInfrastructure(
                     r.Annotations.Add(new AksNodePoolAffinityAnnotation(defaultUserPool));
                 }
 
-                r.Annotations.Add(new DeploymentTargetAnnotation(environment)
-                {
-                    ComputeEnvironment = environment
-                });
+                // NOTE: We do NOT add DeploymentTargetAnnotation here.
+                // The inner KubernetesEnvironmentResource is in the model, so
+                // KubernetesInfrastructure will handle Helm chart generation
+                // and add the DeploymentTargetAnnotation with the correct
+                // KubernetesResource deployment target.
             }
         }
 

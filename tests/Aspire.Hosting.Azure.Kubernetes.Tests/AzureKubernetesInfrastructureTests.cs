@@ -84,7 +84,7 @@ public class AzureKubernetesInfrastructureTests
     }
 
     [Fact]
-    public async Task ComputeResource_GetsDeploymentTargetAnnotation()
+    public async Task ComputeResource_GetsDeploymentTargetFromKubernetesInfrastructure()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
@@ -95,8 +95,13 @@ public class AzureKubernetesInfrastructureTests
         await using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
+        // DeploymentTargetAnnotation comes from KubernetesInfrastructure (via the inner
+        // KubernetesEnvironmentResource), not from AzureKubernetesInfrastructure.
         Assert.True(container.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target));
-        Assert.Same(aks.Resource, target.DeploymentTarget);
+        Assert.NotNull(target.DeploymentTarget);
+
+        // The compute environment should be the inner K8s environment
+        Assert.Same(aks.Resource.KubernetesEnvironment, target.ComputeEnvironment);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

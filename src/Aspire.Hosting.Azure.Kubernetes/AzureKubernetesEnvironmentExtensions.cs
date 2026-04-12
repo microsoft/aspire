@@ -57,16 +57,24 @@ public static class AzureKubernetesEnvironmentExtensions
         // Create the unified environment resource
         var resource = new AzureKubernetesEnvironmentResource(name, ConfigureAksInfrastructure);
 
-        // Create the inner KubernetesEnvironmentResource (for Helm deployment)
-        resource.KubernetesEnvironment = new KubernetesEnvironmentResource($"{name}-k8s")
+        // Create the inner KubernetesEnvironmentResource (for Helm deployment).
+        // This must be added to the application model so that KubernetesInfrastructure
+        // can discover it and generate Helm charts for compute resources.
+        var k8sEnv = new KubernetesEnvironmentResource($"{name}-k8s")
         {
             HelmChartName = builder.Environment.ApplicationName.ToHelmChartName(),
         };
+        resource.KubernetesEnvironment = k8sEnv;
 
         if (builder.ExecutionContext.IsRunMode)
         {
             return builder.CreateResourceBuilder(resource);
         }
+
+        // Add the inner K8s environment to the model so KubernetesInfrastructure
+        // generates Helm charts. Exclude from manifest since it's an internal detail.
+        var k8sEnvBuilder = builder.AddResource(k8sEnv).ExcludeFromManifest();
+        KubernetesEnvironmentExtensions.EnsureDefaultHelmEngine(k8sEnvBuilder);
 
         return builder.AddResource(resource);
     }
