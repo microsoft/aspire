@@ -20,7 +20,8 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver
     private readonly IServiceProvider _serviceProvider;
     private readonly IOptions<DcpOptions> _dcpOptions;
     private readonly ILogger _logger;
-    private readonly Lazy<Task<IContainerRuntime>> _lazyRuntime;
+    private readonly object _lock = new();
+    private Task<IContainerRuntime>? _cachedTask;
 
     public ContainerRuntimeResolver(
         IServiceProvider serviceProvider,
@@ -30,15 +31,39 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver
         _serviceProvider = serviceProvider;
         _dcpOptions = dcpOptions;
         _logger = loggerFactory.CreateLogger("Aspire.Hosting.ContainerRuntime");
-        _lazyRuntime = new Lazy<Task<IContainerRuntime>>(ResolveInternalAsync);
     }
 
     public Task<IContainerRuntime> ResolveAsync(CancellationToken cancellationToken = default)
     {
-        return _lazyRuntime.Value;
+        // Caching behavior:
+        // - Completed successfully: return cached result. Caller's token is irrelevant.
+        // - In-progress: return the in-flight task (started with a previous caller's token).
+        //   If this caller is cancelled, their await throws but the detection continues.
+        // - Faulted (e.g. bad ASPIRE_CONTAINER_RUNTIME value): return faulted task.
+        //   Config won't change mid-process, so retry won't help.
+        // - Cancelled: discard and retry with the new caller's token, since a different
+        //   caller may have a valid token.
+        // - Null: first call, start detection with this caller's token.
+        var task = _cachedTask;
+        if (task is not null && !task.IsCanceled)
+        {
+            return task;
+        }
+
+        lock (_lock)
+        {
+            task = _cachedTask;
+            if (task is not null && !task.IsCanceled)
+            {
+                return task;
+            }
+
+            _cachedTask = ResolveInternalAsync(cancellationToken);
+            return _cachedTask;
+        }
     }
 
-    private async Task<IContainerRuntime> ResolveInternalAsync()
+    private async Task<IContainerRuntime> ResolveInternalAsync(CancellationToken cancellationToken)
     {
         var configuredRuntime = _dcpOptions.Value.ContainerRuntime;
 
@@ -50,7 +75,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver
 
         // Auto-detect: probe available runtimes asynchronously.
         // See https://github.com/microsoft/dcp/blob/main/internal/containers/runtimes/runtime.go
-        var detected = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(logger: _logger).ConfigureAwait(false);
+        var detected = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(logger: _logger, cancellationToken: cancellationToken).ConfigureAwait(false);
         var runtimeKey = detected?.Executable ?? "docker";
 
         if (detected is { IsHealthy: true })

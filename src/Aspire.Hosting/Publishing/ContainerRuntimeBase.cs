@@ -536,7 +536,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// Validates that the container runtime binary is available on the system PATH.
     /// Fails fast with an actionable error message instead of a cryptic exit code.
     /// </summary>
-    private async Task EnsureRuntimeAvailableAsync()
+    protected async Task EnsureRuntimeAvailableAsync()
     {
         try
         {

@@ -26,6 +26,8 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
     /// </summary>
     public override async Task<IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, CancellationToken cancellationToken)
     {
+        await EnsureRuntimeAvailableAsync().ConfigureAwait(false);
+
         var arguments = $"ps --filter label=com.docker.compose.project={context.ProjectName} --format json";
 
         var outputLines = new List<string>();
