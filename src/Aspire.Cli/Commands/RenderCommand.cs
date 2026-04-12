@@ -333,9 +333,9 @@ internal sealed class RenderCommand : BaseCommand
         "publish-summary-markup" => new(
             "Markup characters in names and failures",
             [
-                new("root", "Build [[web]] frontend", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(120), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromMilliseconds(120)),
-                new("child", "Deploy [[api]] service", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromMilliseconds(35), "Failure while parsing [[resource]] => {bad}", "root", 1, 2, TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(95)),
-                new("sibling", "Notify [[observers]]", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromMilliseconds(12), null, "root", 1, 3, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(112)),
+                new("root", "Build [web] frontend", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(120), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromMilliseconds(120)),
+                new("child", "Deploy [api] service", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromMilliseconds(35), "Failure while parsing [[resource]] => [bold]{bad}[/]", "root", 1, 2, TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(95)),
+                new("sibling", "Notify [observers]", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromMilliseconds(12), null, "root", 1, 3, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(112)),
             ], false),
         "publish-summary-mixed-hierarchy" => new(
             "Mixed roots and orphaned parents",
