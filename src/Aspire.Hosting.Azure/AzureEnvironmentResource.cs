@@ -11,6 +11,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
+using Azure;
 using Azure.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -117,12 +118,6 @@ public sealed class AzureEnvironmentResource : Resource
 
             provisionStep.DependsOn(createContextStep);
 
-            return [publishStep, validateStep, createContextStep, provisionStep];
-        }));
-
-        // Add destroy step for tearing down Azure resources
-        Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
-        {
             var destroyStep = new PipelineStep
             {
                 Name = $"destroy-azure-{Name}",
@@ -132,7 +127,7 @@ public sealed class AzureEnvironmentResource : Resource
                 DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
             };
 
-            return [destroyStep];
+            return [publishStep, validateStep, createContextStep, provisionStep, destroyStep];
         }));
 
         Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
@@ -248,7 +243,7 @@ public sealed class AzureEnvironmentResource : Resource
             var rgResponse = await resourceGroups.GetAsync(resourceGroupName, context.CancellationToken).ConfigureAwait(false);
             resourceGroup = rgResponse.Value;
         }
-        catch (global::Azure.RequestFailedException ex) when (ex.Status == 404)
+        catch (RequestFailedException ex) when (ex.Status == 404)
         {
             // Resource group already deleted
             await context.ReportingStep.CompleteAsync(
@@ -264,47 +259,46 @@ public sealed class AzureEnvironmentResource : Resource
             context.CancellationToken).ConfigureAwait(false);
 
         var resources = new List<(string Name, string ResourceType)>();
-        await using (discoveryTask.ConfigureAwait(false))
+        await using var _ = discoveryTask.ConfigureAwait(false);
+
+        try
         {
-            try
+            await foreach (var resource in resourceGroup.GetResourcesAsync(context.CancellationToken).ConfigureAwait(false))
             {
-                await foreach (var resource in resourceGroup.GetResourcesAsync(context.CancellationToken).ConfigureAwait(false))
-                {
-                    resources.Add(resource);
-                }
-
-                if (resources.Count == 0)
-                {
-                    await discoveryTask.CompleteAsync(
-                        new MarkdownString($"Resource group **{resourceGroupName}** is empty"),
-                        CompletionState.Completed,
-                        context.CancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    foreach (var (name, type) in resources)
-                    {
-                        var shortType = type.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)
-                            ? type["Microsoft.".Length..]
-                            : type;
-                        context.Logger.LogInformation("  {Type}: {Name}", shortType, name);
-                    }
-
-                    await discoveryTask.CompleteAsync(
-                        new MarkdownString($"Found **{resources.Count}** resource(s) in **{resourceGroupName}**"),
-                        CompletionState.Completed,
-                        context.CancellationToken).ConfigureAwait(false);
-                }
+                resources.Add(resource);
             }
-            catch (Exception ex)
+
+            if (resources.Count == 0)
             {
-                // Non-fatal — proceed with deletion even if enumeration fails
-                context.Logger.LogWarning(ex, "Failed to enumerate resources in resource group '{ResourceGroupName}'", resourceGroupName);
                 await discoveryTask.CompleteAsync(
-                    "Could not enumerate resources (will proceed with deletion)",
+                    new MarkdownString($"Resource group **{resourceGroupName}** is empty"),
                     CompletionState.Completed,
                     context.CancellationToken).ConfigureAwait(false);
             }
+            else
+            {
+                foreach (var (name, type) in resources)
+                {
+                    var shortType = type.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)
+                        ? type["Microsoft.".Length..]
+                        : type;
+                    context.Logger.LogInformation("  {Type}: {Name}", shortType, name);
+                }
+
+                await discoveryTask.CompleteAsync(
+                    new MarkdownString($"Found **{resources.Count}** resource(s) in **{resourceGroupName}**"),
+                    CompletionState.Completed,
+                    context.CancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal — proceed with deletion even if enumeration fails
+            context.Logger.LogWarning(ex, "Failed to enumerate resources in resource group '{ResourceGroupName}'", resourceGroupName);
+            await discoveryTask.CompleteAsync(
+                "Could not enumerate resources (will proceed with deletion)",
+                CompletionState.Completed,
+                context.CancellationToken).ConfigureAwait(false);
         }
 
         // Confirm destruction with the user (unless --yes was specified)
@@ -340,25 +334,24 @@ public sealed class AzureEnvironmentResource : Resource
         var deleteTask = await context.ReportingStep.CreateTaskAsync(
             new MarkdownString($"Deleting resource group **{resourceGroupName}** ({resources.Count} resource(s))"),
             context.CancellationToken).ConfigureAwait(false);
-        await using (deleteTask.ConfigureAwait(false))
-        {
-            try
-            {
-                await resourceGroup.DeleteAsync(global::Azure.WaitUntil.Started, context.CancellationToken).ConfigureAwait(false);
+        await using var __ = deleteTask.ConfigureAwait(false);
 
-                await deleteTask.CompleteAsync(
-                    new MarkdownString($"Resource group **{resourceGroupName}** deletion initiated successfully"),
-                    CompletionState.Completed,
-                    context.CancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                await deleteTask.CompleteAsync(
-                    $"Failed to delete resource group '{resourceGroupName}': {ex.Message}",
-                    CompletionState.CompletedWithError,
-                    context.CancellationToken).ConfigureAwait(false);
-                throw;
-            }
+        try
+        {
+            await resourceGroup.DeleteAsync(WaitUntil.Started, context.CancellationToken).ConfigureAwait(false);
+
+            await deleteTask.CompleteAsync(
+                new MarkdownString($"Resource group **{resourceGroupName}** deletion initiated successfully"),
+                CompletionState.Completed,
+                context.CancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await deleteTask.CompleteAsync(
+                $"Failed to delete resource group '{resourceGroupName}': {ex.Message}",
+                CompletionState.CompletedWithError,
+                context.CancellationToken).ConfigureAwait(false);
+            throw;
         }
     }
 }

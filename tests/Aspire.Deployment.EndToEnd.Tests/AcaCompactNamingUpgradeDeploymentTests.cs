@@ -363,10 +363,7 @@ builder.Build().Run();
 
             // Step 15: Clean up Azure resources using aspire destroy
             output.WriteLine("Step 15: Destroying Azure deployment...");
-            await auto.TypeAsync("aspire destroy --yes");
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(5));
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+            await auto.AspireDestroyAsync(counter);
 
             // Step 16: Exit
             await auto.TypeAsync("exit");

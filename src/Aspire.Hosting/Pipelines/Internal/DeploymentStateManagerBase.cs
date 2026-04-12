@@ -307,4 +307,24 @@ internal abstract class DeploymentStateManagerBase<T>(ILogger<T> logger) : IDepl
             current[segments[^1]] = value;
         }
     }
+
+    /// <inheritdoc/>
+    public Task ClearAllStateAsync(CancellationToken cancellationToken = default)
+    {
+        if (StateFilePath is string stateFilePath && File.Exists(stateFilePath))
+        {
+            File.Delete(stateFilePath);
+            logger.LogInformation("Deployment state cleared: {Path}", stateFilePath);
+        }
+
+        // Reset in-memory state
+        lock (_sectionsLock)
+        {
+            _sections.Clear();
+        }
+        _state = null;
+        _isStateLoaded = false;
+
+        return Task.CompletedTask;
+    }
 }

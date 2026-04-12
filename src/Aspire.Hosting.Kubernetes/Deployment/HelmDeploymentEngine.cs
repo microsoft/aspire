@@ -181,6 +181,9 @@ internal static partial class HelmDeploymentEngine
                 var @namespace = savedNamespace ?? "default";
                 await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{savedReleaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
                 await HelmUninstallAsync(ctx, environment).ConfigureAwait(false);
+
+                // Clean up deployment state for this environment
+                await deploymentStateManager.DeleteSectionAsync(stateSection, ctx.CancellationToken).ConfigureAwait(false);
             },
             DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
         };

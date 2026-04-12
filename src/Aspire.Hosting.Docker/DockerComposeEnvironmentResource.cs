@@ -146,7 +146,19 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                     }
 
                     await ConfirmDestroyAsync(ctx, $"Shut down Docker Compose environment '{Name}'? This will stop and remove all containers, networks, and volumes.").ConfigureAwait(false);
-                    await DockerComposeDownAsync(ctx).ConfigureAwait(false);
+
+                    // If the compose file no longer exists, treat as already cleaned up
+                    if (File.Exists(savedComposeFilePath))
+                    {
+                        await DockerComposeDownAsync(ctx).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        ctx.Logger.LogInformation("Compose file '{Path}' no longer exists, skipping compose down.", savedComposeFilePath);
+                    }
+
+                    // Clean up deployment state for this environment
+                    await deploymentStateManager.DeleteSectionAsync(stateSection, ctx.CancellationToken).ConfigureAwait(false);
                 },
                 DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
             };

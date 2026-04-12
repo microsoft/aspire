@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 
@@ -110,5 +111,20 @@ internal static class DeploymentE2EAutomatorHelpers
         await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH ASPIRE_PLAYGROUND=true TERM=xterm DOTNET_CLI_TELEMETRY_OPTOUT=true DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true DOTNET_GENERATE_ASPNET_CERTIFICATE=false");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Destroys the current deployment using <c>aspire destroy --yes</c> and waits for pipeline success.
+    /// </summary>
+    internal static async Task AspireDestroyAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        timeout ??= TimeSpan.FromMinutes(5);
+        await auto.TypeAsync("aspire destroy --yes");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(Aspire.Cli.Resources.ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: timeout.Value);
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 }

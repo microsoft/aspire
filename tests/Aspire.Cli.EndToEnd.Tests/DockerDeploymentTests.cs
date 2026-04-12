@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.TestUtilities;
 using Hex1b.Automation;
@@ -132,10 +131,7 @@ builder.Build().Run();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Step 11: Clean up - destroy the deployment using aspire destroy
-        await auto.TypeAsync("aspire destroy --yes");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
+        await auto.AspireDestroyAsync(counter);
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
@@ -257,10 +253,7 @@ builder.Build().Run();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Step 11: Clean up - destroy the deployment using aspire destroy
-        await auto.TypeAsync("aspire destroy --yes");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
+        await auto.AspireDestroyAsync(counter);
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();

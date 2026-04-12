@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Xml.Linq;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 
@@ -464,5 +465,20 @@ internal static class CliE2EAutomatorHelpers
                              "echo done");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Destroys the current deployment using <c>aspire destroy --yes</c> and waits for pipeline success.
+    /// </summary>
+    internal static async Task AspireDestroyAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        timeout ??= TimeSpan.FromMinutes(2);
+        await auto.TypeAsync("aspire destroy --yes");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: timeout.Value);
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
     }
 }
