@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Exec;
@@ -209,10 +207,13 @@ internal class AppHostRpcTarget(
         await activityReporter.CompleteInteractionAsync(promptId, answers, updateResponse: true, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<PipelineStepInfo[]> GetPipelineStepsAsync(CancellationToken cancellationToken)
+    public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(GetPipelineStepsRequest? request = null, CancellationToken cancellationToken = default)
     {
+        _ = request; // Reserved for future filtering options
+
         logger.LogDebug("Resolving pipeline steps for list-steps request.");
 
+#pragma warning disable ASPIREPIPELINES001
         var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>() as DistributedApplicationPipeline
             ?? throw new InvalidOperationException("Pipeline is not a DistributedApplicationPipeline.");
 
@@ -223,14 +224,18 @@ internal class AppHostRpcTarget(
 
         var resolvedSteps = await pipeline.ResolveStepsAsync(pipelineContext).ConfigureAwait(false);
         var orderedSteps = DistributedApplicationPipeline.GetTopologicalOrder(resolvedSteps);
+#pragma warning restore ASPIREPIPELINES001
 
-        return orderedSteps.Select(step => new PipelineStepInfo
+        return new GetPipelineStepsResponse
         {
-            Name = step.Name,
-            Description = step.Description,
-            DependsOn = [.. step.DependsOnSteps],
-            Tags = [.. step.Tags],
-            ResourceName = step.Resource?.Name
-        }).ToArray();
+            Steps = orderedSteps.Select(step => new PipelineStepInfo
+            {
+                Name = step.Name,
+                Description = step.Description,
+                DependsOn = [.. step.DependsOnSteps],
+                Tags = [.. step.Tags],
+                ResourceName = step.Resource?.Name
+            }).ToArray()
+        };
     }
 }

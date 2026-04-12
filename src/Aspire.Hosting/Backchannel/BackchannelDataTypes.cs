@@ -720,6 +720,22 @@ internal sealed class PipelineStepInfo
 }
 
 /// <summary>
+/// Request for getting pipeline step metadata.
+/// </summary>
+internal sealed class GetPipelineStepsRequest { }
+
+/// <summary>
+/// Response containing pipeline step metadata.
+/// </summary>
+internal sealed class GetPipelineStepsResponse
+{
+    /// <summary>
+    /// Gets the pipeline steps in topological (execution) order.
+    /// </summary>
+    public required PipelineStepInfo[] Steps { get; init; }
+}
+
+/// <summary>
 /// Represents the connection information for the Dashboard MCP server.
 /// </summary>
 internal sealed class DashboardMcpConnectionInfo

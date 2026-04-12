@@ -263,8 +263,17 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 StopTerminalProgressBar();
 
-                var steps = await backchannel.GetPipelineStepsAsync(cancellationToken);
-                PrintPipelineSteps(steps);
+                // Check that the AppHost supports this capability before calling
+                var capabilities = await backchannel.GetCapabilitiesAsync(cancellationToken);
+                if (!capabilities.Contains("pipeline-steps.v1"))
+                {
+                    throw new AppHostIncompatibleException(
+                        "The AppHost does not support --list-steps. Update the AppHost to a newer version of Aspire.",
+                        "pipeline-steps.v1");
+                }
+
+                var response = await backchannel.GetPipelineStepsAsync(cancellationToken);
+                PrintPipelineSteps(response.Steps);
 
                 await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
                 await pendingRun;

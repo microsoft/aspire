@@ -466,12 +466,14 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                         var backchannel = new TestAppHostBackchannel
                         {
                             RequestStopAsyncCalled = requestStopCalled,
-                            GetPipelineStepsAsyncCallback = (ct) => Task.FromResult(new PipelineStepInfo[]
+                            GetPipelineStepsAsyncCallback = (ct) => Task.FromResult(new GetPipelineStepsResponse
                             {
-                                new() { Name = "parameter-prompt" },
-                                new() { Name = "provision-redis-infra", DependsOn = ["parameter-prompt"], Tags = ["provision-infra"] },
-                                new() { Name = "build-webapi", DependsOn = ["parameter-prompt"], Tags = ["build-compute"] },
-                                new() { Name = "deploy-webapi", DependsOn = ["provision-redis-infra", "build-webapi"], Tags = ["deploy-compute"] }
+                                Steps = [
+                                    new() { Name = "parameter-prompt" },
+                                    new() { Name = "provision-redis-infra", DependsOn = ["parameter-prompt"], Tags = ["provision-infra"] },
+                                    new() { Name = "build-webapi", DependsOn = ["parameter-prompt"], Tags = ["build-compute"] },
+                                    new() { Name = "deploy-webapi", DependsOn = ["provision-redis-infra", "build-webapi"], Tags = ["deploy-compute"] }
+                                ]
                             })
                         };
                         backchannelCompletionSource?.SetResult(backchannel);

@@ -30,7 +30,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public Func<CancellationToken, Task<string[]>>? GetCapabilitiesAsyncCallback { get; set; }
 
     public TaskCompletionSource? GetPipelineStepsAsyncCalled { get; set; }
-    public Func<CancellationToken, Task<PipelineStepInfo[]>>? GetPipelineStepsAsyncCallback { get; set; }
+    public Func<CancellationToken, Task<GetPipelineStepsResponse>>? GetPipelineStepsAsyncCallback { get; set; }
 
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
@@ -222,7 +222,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2"];
+            return ["baseline.v2", "pipeline-steps.v1"];
         }
     }
 
@@ -254,7 +254,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         yield return new CommandOutput { Text = "test", IsErrorMessage = false, LineNumber = 0 };
     }
 
-    public async Task<PipelineStepInfo[]> GetPipelineStepsAsync(CancellationToken cancellationToken)
+    public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(CancellationToken cancellationToken)
     {
         GetPipelineStepsAsyncCalled?.SetResult();
         if (GetPipelineStepsAsyncCallback is not null)
@@ -262,10 +262,13 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
             return await GetPipelineStepsAsyncCallback(cancellationToken).ConfigureAwait(false);
         }
 
-        return [
-            new PipelineStepInfo { Name = "process-parameters", Description = "Prompts for parameter values" },
-            new PipelineStepInfo { Name = "build-webapi", DependsOn = ["process-parameters"], Tags = ["build-compute"] },
-            new PipelineStepInfo { Name = "deploy-webapi", DependsOn = ["build-webapi"], Tags = ["deploy-compute"] }
-        ];
+        return new GetPipelineStepsResponse
+        {
+            Steps = [
+                new PipelineStepInfo { Name = "process-parameters", Description = "Prompts for parameter values" },
+                new PipelineStepInfo { Name = "build-webapi", DependsOn = ["process-parameters"], Tags = ["build-compute"] },
+                new PipelineStepInfo { Name = "deploy-webapi", DependsOn = ["build-webapi"], Tags = ["deploy-compute"] }
+            ]
+        };
     }
 }

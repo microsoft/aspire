@@ -838,8 +838,8 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
         yield break;
     }
 
-    public Task<PipelineStepInfo[]> GetPipelineStepsAsync(CancellationToken cancellationToken) =>
-        Task.FromResult(Array.Empty<PipelineStepInfo>());
+    public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(CancellationToken cancellationToken) =>
+        Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
 }
 
 // Data structures for tracking prompts

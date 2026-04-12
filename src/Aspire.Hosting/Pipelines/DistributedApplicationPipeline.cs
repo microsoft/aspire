@@ -395,8 +395,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
     /// <summary>
     /// Resolves all pipeline steps (from built-in steps and resource annotations),
-    /// normalizes dependencies, validates, and returns the steps in topological order
-    /// without executing them.
+    /// normalizes RequiredBy relationships to DependsOn, and validates the steps
+    /// without executing them. The returned list is in collection order; use
+    /// <see cref="GetTopologicalOrder"/> to obtain execution order.
     /// </summary>
     internal async Task<List<PipelineStep>> ResolveStepsAsync(PipelineContext context)
     {
