@@ -198,6 +198,12 @@ function Get-PackagesPath {
   Join-Path (Join-Path (Join-Path (Join-Path $RepoRoot 'artifacts') 'packages') $Config) 'Shipping'
 }
 
+function Get-AllPackagePaths {
+  param([Parameter(Mandatory)][string]$Config)
+  $basePath = Join-Path (Join-Path (Join-Path $RepoRoot 'artifacts') 'packages') $Config
+  @('Shipping', 'NonShipping') | ForEach-Object { Join-Path $basePath $_ } | Where-Object { Test-Path -LiteralPath $_ }
+}
+
 $effectiveConfig = if ($Configuration) { $Configuration } else { 'Release' }
 
 # Skip native AOT during pack unless user will build it separately via -NativeAot + Bundle.proj
@@ -230,13 +236,14 @@ else {
   }
 }
 
-# Ensure there are .nupkg files
-$packages = Get-ChildItem -LiteralPath $pkgDir -Filter *.nupkg -File -ErrorAction SilentlyContinue
-if (-not $packages -or $packages.Count -eq 0) {
-  Write-Err "No .nupkg files found in $pkgDir. Did the pack step succeed?"
+# Ensure there are .nupkg files (collect from both Shipping and NonShipping)
+$allPkgDirs = Get-AllPackagePaths -Config $effectiveConfig
+$packages = $allPkgDirs | ForEach-Object { Get-ChildItem -LiteralPath $_ -Filter *.nupkg -File -ErrorAction SilentlyContinue } | Where-Object { $_ }
+if (-not $packages -or @($packages).Count -eq 0) {
+  Write-Err "No .nupkg files found in package directories. Did the pack step succeed?"
   exit 1
 }
-Write-Log ("Found {0} packages in {1}" -f $packages.Count, $pkgDir)
+Write-Log ("Found {0} packages across {1}" -f @($packages).Count, ($allPkgDirs -join ', '))
 
 # Determine the RID for the target platform (or auto-detect from host)
 if ($Rid) {
@@ -271,33 +278,37 @@ if (Test-Path -LiteralPath $hiveRoot) {
 }
 
 function Copy-PackagesToHive {
-  param([string]$Source,[string]$Destination)
+  param([string[]]$Sources,[string]$Destination)
   New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-  Get-ChildItem -LiteralPath $Source -Filter *.nupkg -File | Copy-Item -Destination $Destination -Force
+  foreach ($src in $Sources) {
+    Get-ChildItem -LiteralPath $src -Filter *.nupkg -File -ErrorAction SilentlyContinue | Copy-Item -Destination $Destination -Force
+  }
 }
 
-if ($Copy) {
+if ($Copy -or @($allPkgDirs).Count -gt 1) {
+  # Copy mode: always used when packages span Shipping + NonShipping
   Write-Log "Populating hive '$Name' by copying .nupkg files"
-  Copy-PackagesToHive -Source $pkgDir -Destination $hivePath
+  Copy-PackagesToHive -Sources $allPkgDirs -Destination $hivePath
   Write-Log "Created/updated hive '$Name' at $hivePath (copied packages)."
 }
 else {
-  Write-Log "Linking hive '$Name/packages' to $pkgDir"
+  $linkTarget = $allPkgDirs[0]
+  Write-Log "Linking hive '$Name/packages' to $linkTarget"
   New-Item -ItemType Directory -Path $hiveRoot -Force | Out-Null
   try {
     # Try symlink first (requires Developer Mode or elevated privilege)
-    New-Item -Path $hivePath -ItemType SymbolicLink -Target $pkgDir -Force | Out-Null
-    Write-Log "Created/updated hive '$Name/packages' -> $pkgDir (symlink)"
+    New-Item -Path $hivePath -ItemType SymbolicLink -Target $linkTarget -Force | Out-Null
+    Write-Log "Created/updated hive '$Name/packages' -> $linkTarget (symlink)"
   }
   catch {
     Write-Warn "Symlink not supported; attempting junction, else copying .nupkg files"
     try {
-      New-Item -Path $hivePath -ItemType Junction -Target $pkgDir -Force | Out-Null
-      Write-Log "Created/updated hive '$Name/packages' -> $pkgDir (junction)"
+      New-Item -Path $hivePath -ItemType Junction -Target $linkTarget -Force | Out-Null
+      Write-Log "Created/updated hive '$Name/packages' -> $linkTarget (junction)"
     }
     catch {
       Write-Warn "Link creation failed; copying .nupkg files instead"
-      Copy-PackagesToHive -Source $pkgDir -Destination $hivePath
+      Copy-PackagesToHive -Sources $allPkgDirs -Destination $hivePath
       Write-Log "Created/updated hive '$Name' at $hivePath (copied packages)."
     }
   }
