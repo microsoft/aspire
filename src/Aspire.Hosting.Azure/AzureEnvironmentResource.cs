@@ -303,30 +303,33 @@ public sealed class AzureEnvironmentResource : Resource
         {
             var interactionService = context.Services.GetRequiredService<IInteractionService>();
 
-            if (interactionService.IsAvailable)
+            if (!interactionService.IsAvailable)
             {
-                var confirmMessage = resources.Count > 0
-                    ? $"Delete resource group '{resourceGroupName}' with {resources.Count} resource(s)? This action cannot be undone."
-                    : $"Delete resource group '{resourceGroupName}'? This action cannot be undone.";
+                throw new InvalidOperationException(
+                    "Cannot perform destructive operation without confirmation. Use --yes to skip the confirmation prompt in non-interactive mode.");
+            }
 
-                var result = await interactionService.PromptNotificationAsync(
-                    "Destroy Azure Resources",
-                    confirmMessage,
-                    new NotificationInteractionOptions
-                    {
-                        Intent = MessageIntent.Confirmation,
-                        ShowSecondaryButton = true,
-                        ShowDismiss = false,
-                        PrimaryButtonText = "Yes, destroy",
-                        SecondaryButtonText = "Cancel"
-                    },
-                    context.CancellationToken).ConfigureAwait(false);
+            var confirmMessage = resources.Count > 0
+                ? $"Delete resource group '{resourceGroupName}' with {resources.Count} resource(s)? This action cannot be undone."
+                : $"Delete resource group '{resourceGroupName}'? This action cannot be undone.";
 
-                if (result.Canceled || !result.Data)
+            var result = await interactionService.PromptNotificationAsync(
+                "Destroy Azure Resources",
+                confirmMessage,
+                new NotificationInteractionOptions
                 {
-                    context.Logger.LogInformation("User canceled the destroy operation.");
-                    throw new OperationCanceledException("Destroy operation canceled by user.");
-                }
+                    Intent = MessageIntent.Confirmation,
+                    ShowSecondaryButton = true,
+                    ShowDismiss = false,
+                    PrimaryButtonText = "Yes, destroy",
+                    SecondaryButtonText = "Cancel"
+                },
+                context.CancellationToken).ConfigureAwait(false);
+
+            if (result.Canceled || !result.Data)
+            {
+                context.Logger.LogInformation("User canceled the destroy operation.");
+                throw new OperationCanceledException("Destroy operation canceled by user.");
             }
         }
 

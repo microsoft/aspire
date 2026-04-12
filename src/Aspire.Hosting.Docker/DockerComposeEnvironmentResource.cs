@@ -124,6 +124,20 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             dockerComposeUpStep.RequiredBy(WellKnownPipelineSteps.Deploy);
             steps.Add(dockerComposeUpStep);
 
+            var dockerComposeDestroyStep = new PipelineStep
+            {
+                Name = $"destroy-compose-{Name}",
+                Description = $"Confirms and destroys the Docker Compose environment {Name}.",
+                Action = async ctx =>
+                {
+                    await ConfirmDestroyAsync(ctx, $"Shut down Docker Compose environment '{Name}'? This will stop and remove all containers, networks, and volumes.").ConfigureAwait(false);
+                    await DockerComposeDownAsync(ctx).ConfigureAwait(false);
+                },
+                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+            };
+            dockerComposeDestroyStep.RequiredBy(WellKnownPipelineSteps.Destroy);
+            steps.Add(dockerComposeDestroyStep);
+
             var dockerComposeDownStep = new PipelineStep
             {
                 Name = $"docker-compose-down-{Name}",
@@ -131,17 +145,6 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 Tags = ["docker-compose-down"]
             };
             steps.Add(dockerComposeDownStep);
-
-            var dockerComposeDestroyStep = new PipelineStep
-            {
-                Name = $"destroy-compose-{Name}",
-                Description = $"Confirms and destroys the Docker Compose environment {Name}.",
-                Action = ctx => ConfirmDestroyAsync(ctx, $"Shut down Docker Compose environment '{Name}'? This will stop and remove all containers, networks, and volumes."),
-                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
-            };
-            dockerComposeDestroyStep.RequiredBy(WellKnownPipelineSteps.Destroy);
-            dockerComposeDownStep.DependsOn(dockerComposeDestroyStep);
-            steps.Add(dockerComposeDestroyStep);
 
             return steps;
         }));
@@ -307,26 +310,29 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         {
             var interactionService = context.Services.GetRequiredService<IInteractionService>();
 
-            if (interactionService.IsAvailable)
+            if (!interactionService.IsAvailable)
             {
-                var result = await interactionService.PromptNotificationAsync(
-                    "Destroy Environment",
-                    message,
-                    new NotificationInteractionOptions
-                    {
-                        Intent = MessageIntent.Confirmation,
-                        ShowSecondaryButton = true,
-                        ShowDismiss = false,
-                        PrimaryButtonText = "Yes, destroy",
-                        SecondaryButtonText = "Cancel"
-                    },
-                    context.CancellationToken).ConfigureAwait(false);
+                throw new InvalidOperationException(
+                    "Cannot perform destructive operation without confirmation. Use --yes to skip the confirmation prompt in non-interactive mode.");
+            }
 
-                if (result.Canceled || !result.Data)
+            var result = await interactionService.PromptNotificationAsync(
+                "Destroy Environment",
+                message,
+                new NotificationInteractionOptions
                 {
-                    context.Logger.LogInformation("User canceled the destroy operation.");
-                    throw new OperationCanceledException("Destroy operation canceled by user.");
-                }
+                    Intent = MessageIntent.Confirmation,
+                    ShowSecondaryButton = true,
+                    ShowDismiss = false,
+                    PrimaryButtonText = "Yes, destroy",
+                    SecondaryButtonText = "Cancel"
+                },
+                context.CancellationToken).ConfigureAwait(false);
+
+            if (result.Canceled || !result.Data)
+            {
+                context.Logger.LogInformation("User canceled the destroy operation.");
+                throw new OperationCanceledException("Destroy operation canceled by user.");
             }
         }
     }

@@ -154,7 +154,24 @@ internal static partial class HelmDeploymentEngine
         instructionsStep.RequiredBy(WellKnownPipelineSteps.Deploy);
         steps.Add(instructionsStep);
 
-        // Step 4: Helm uninstall (teardown, callable via aspire do)
+        // Step 4: Destroy confirmation + uninstall (used by aspire destroy)
+        var helmDestroyStep = new PipelineStep
+        {
+            Name = $"destroy-helm-{environment.Name}",
+            Description = $"Confirms and destroys the Helm deployment for {environment.Name}.",
+            Action = async ctx =>
+            {
+                var @namespace = await ResolveNamespaceAsync(ctx, environment).ConfigureAwait(false);
+                var releaseName = await ResolveReleaseNameAsync(ctx, environment).ConfigureAwait(false);
+                await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{releaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
+                await HelmUninstallAsync(ctx, environment).ConfigureAwait(false);
+            },
+            DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+        };
+        helmDestroyStep.RequiredBy(WellKnownPipelineSteps.Destroy);
+        steps.Add(helmDestroyStep);
+
+        // Step 5: Helm uninstall (teardown, callable directly via aspire do without confirmation)
         var helmUninstallStep = new PipelineStep
         {
             Name = $"helm-uninstall-{environment.Name}",
@@ -163,23 +180,6 @@ internal static partial class HelmDeploymentEngine
             Action = ctx => HelmUninstallAsync(ctx, environment)
         };
         steps.Add(helmUninstallStep);
-
-        // Step 5: Destroy confirmation (prompts before uninstalling, used by aspire destroy)
-        var helmDestroyStep = new PipelineStep
-        {
-            Name = $"destroy-helm-{environment.Name}",
-            Description = $"Confirms destruction of the Helm deployment for {environment.Name}.",
-            Action = async ctx =>
-            {
-                var @namespace = await ResolveNamespaceAsync(ctx, environment).ConfigureAwait(false);
-                var releaseName = await ResolveReleaseNameAsync(ctx, environment).ConfigureAwait(false);
-                await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{releaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
-            },
-            DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
-        };
-        helmDestroyStep.RequiredBy(WellKnownPipelineSteps.Destroy);
-        helmUninstallStep.DependsOn(helmDestroyStep);
-        steps.Add(helmDestroyStep);
 
         return Task.FromResult<IReadOnlyList<PipelineStep>>(steps);
     }
@@ -596,26 +596,29 @@ internal static partial class HelmDeploymentEngine
         {
             var interactionService = context.Services.GetRequiredService<IInteractionService>();
 
-            if (interactionService.IsAvailable)
+            if (!interactionService.IsAvailable)
             {
-                var result = await interactionService.PromptNotificationAsync(
-                    "Destroy Environment",
-                    message,
-                    new NotificationInteractionOptions
-                    {
-                        Intent = MessageIntent.Confirmation,
-                        ShowSecondaryButton = true,
-                        ShowDismiss = false,
-                        PrimaryButtonText = "Yes, destroy",
-                        SecondaryButtonText = "Cancel"
-                    },
-                    context.CancellationToken).ConfigureAwait(false);
+                throw new InvalidOperationException(
+                    "Cannot perform destructive operation without confirmation. Use --yes to skip the confirmation prompt in non-interactive mode.");
+            }
 
-                if (result.Canceled || !result.Data)
+            var result = await interactionService.PromptNotificationAsync(
+                "Destroy Environment",
+                message,
+                new NotificationInteractionOptions
                 {
-                    context.Logger.LogInformation("User canceled the destroy operation.");
-                    throw new OperationCanceledException("Destroy operation canceled by user.");
-                }
+                    Intent = MessageIntent.Confirmation,
+                    ShowSecondaryButton = true,
+                    ShowDismiss = false,
+                    PrimaryButtonText = "Yes, destroy",
+                    SecondaryButtonText = "Cancel"
+                },
+                context.CancellationToken).ConfigureAwait(false);
+
+            if (result.Canceled || !result.Data)
+            {
+                context.Logger.LogInformation("User canceled the destroy operation.");
+                throw new OperationCanceledException("Destroy operation canceled by user.");
             }
         }
     }
