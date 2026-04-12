@@ -71,6 +71,10 @@ public static class AzureKubernetesEnvironmentExtensions
             return builder.CreateResourceBuilder(resource);
         }
 
+        // Auto-create a default Azure Container Registry for image push/pull
+        var defaultRegistry = builder.AddAzureContainerRegistry($"{name}-acr");
+        resource.DefaultContainerRegistry = defaultRegistry.Resource;
+
         // Add the inner K8s environment to the model so KubernetesInfrastructure
         // generates Helm charts. Exclude from manifest since it's an internal detail.
         var k8sEnvBuilder = builder.AddResource(k8sEnv).ExcludeFromManifest();
@@ -205,6 +209,39 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.IsPrivateCluster = true;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the AKS environment to use a specific Azure Container Registry for image storage.
+    /// When set, this replaces the auto-created default container registry.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="registry">The Azure Container Registry resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// If not called, a default Azure Container Registry is automatically created.
+    /// The registry endpoint is flowed to the inner Kubernetes environment so that
+    /// Helm deployments can push and pull images.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "AKS hosting is not yet supported in ATS")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithContainerRegistry(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        IResourceBuilder<AzureContainerRegistryResource> registry)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(registry);
+
+        // Remove the default registry from the model if one was auto-created
+        if (builder.Resource.DefaultContainerRegistry is not null)
+        {
+            builder.ApplicationBuilder.Resources.Remove(builder.Resource.DefaultContainerRegistry);
+            builder.Resource.DefaultContainerRegistry = null;
+        }
+
+        // Set the explicit registry via annotation (same pattern as Container Apps)
+        builder.WithAnnotation(new ContainerRegistryReferenceAnnotation(registry.Resource));
+
         return builder;
     }
 

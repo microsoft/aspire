@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Utils;
@@ -297,4 +299,56 @@ public class AzureKubernetesEnvironmentExtensionsTests
         Assert.Equal("cpu", pool1.Resource.Name);
         Assert.Equal("gpu", pool2.Resource.Name);
     }
+
+    [Fact]
+    public void AddAzureKubernetesEnvironment_AutoCreatesDefaultRegistry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        Assert.NotNull(aks.Resource.DefaultContainerRegistry);
+        Assert.Equal("aks-acr", aks.Resource.DefaultContainerRegistry.Name);
+    }
+
+    [Fact]
+    public void WithContainerRegistry_ReplacesDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var explicitAcr = builder.AddAzureContainerRegistry("my-acr");
+
+        aks.WithContainerRegistry(explicitAcr);
+
+        // Default registry should be removed
+        Assert.Null(aks.Resource.DefaultContainerRegistry);
+
+        // Explicit registry should be set via annotation
+        Assert.True(aks.Resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
+        Assert.Same(explicitAcr.Resource, annotation.Registry);
+    }
+
+    [Fact]
+    public async Task ContainerRegistry_FlowsToInnerKubernetesEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var container = builder.AddContainer("myapi", "myimage");
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        // The inner K8s environment should have the registry annotation
+        Assert.True(aks.Resource.KubernetesEnvironment
+            .TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
+        Assert.Same(aks.Resource.DefaultContainerRegistry, annotation.Registry);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }

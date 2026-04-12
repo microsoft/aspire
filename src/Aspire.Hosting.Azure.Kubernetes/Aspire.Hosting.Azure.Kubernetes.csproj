@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <EnablePackageValidation>false</EnablePackageValidation>
     <PackageTags>aspire integration hosting azure kubernetes aks</PackageTags>
     <Description>Azure Kubernetes Service (AKS) resource types for Aspire.</Description>

@@ -111,6 +111,11 @@ public class AzureKubernetesEnvironmentResource(
     /// </summary>
     internal bool IsPrivateCluster { get; set; }
 
+    /// <summary>
+    /// Gets or sets the default container registry auto-created for this AKS environment.
+    /// </summary>
+    internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
+
     /// <inheritdoc />
     public override string GetBicepTemplateString()
     {
