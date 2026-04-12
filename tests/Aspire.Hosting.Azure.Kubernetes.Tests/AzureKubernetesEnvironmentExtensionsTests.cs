@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Utils;
 
@@ -186,5 +189,80 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
         Assert.Throws<ArgumentException>(() =>
             aks.WithVersion(""));
+    }
+
+    [Fact]
+    public void WithWorkloadIdentity_EnablesOidcAndWorkloadIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithWorkloadIdentity();
+
+        Assert.True(aks.Resource.OidcIssuerEnabled);
+        Assert.True(aks.Resource.WorkloadIdentityEnabled);
+    }
+
+    [Fact]
+    public void WithAzureWorkloadIdentity_AddsAnnotations()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var identity = builder.AddAzureUserAssignedIdentity("myIdentity");
+
+        var project = builder.AddContainer("myapi", "myimage")
+            .WithAzureWorkloadIdentity(identity);
+
+        Assert.True(project.Resource.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity));
+        Assert.Same(identity.Resource, appIdentity.IdentityResource);
+
+        Assert.True(project.Resource.TryGetLastAnnotation<AksWorkloadIdentityAnnotation>(out var aksIdentity));
+        Assert.Same(identity.Resource, aksIdentity.IdentityResource);
+    }
+
+    [Fact]
+    public void WithAzureWorkloadIdentity_AutoCreatesIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        var project = builder.AddContainer("myapi", "myimage")
+            .WithAzureWorkloadIdentity();
+
+        Assert.True(project.Resource.TryGetLastAnnotation<AppIdentityAnnotation>(out _));
+        Assert.True(project.Resource.TryGetLastAnnotation<AksWorkloadIdentityAnnotation>(out var aksIdentity));
+        Assert.NotNull(aksIdentity.IdentityResource);
+    }
+
+    [Fact]
+    public void AzureKubernetesEnvironment_ImplementsIAzureComputeEnvironmentResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        Assert.IsAssignableFrom<IAzureComputeEnvironmentResource>(aks.Resource);
+    }
+
+    [Fact]
+    public void AzureKubernetesEnvironment_ImplementsIAzureNspAssociationTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        Assert.IsAssignableFrom<IAzureNspAssociationTarget>(aks.Resource);
+    }
+
+    [Fact]
+    public void AsExisting_WorksOnAksResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var nameParam = builder.AddParameter("aks-name");
+        var rgParam = builder.AddParameter("aks-rg");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .AsExisting(nameParam, rgParam);
+
+        Assert.NotNull(aks);
     }
 }
