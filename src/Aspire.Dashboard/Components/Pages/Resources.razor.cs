@@ -607,7 +607,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 Logger.LogDebug("Can't navigate to {ResourceName} from URL. Resource not found.", ResourceName);
             }
 
-            // Navigate to remove ?resource=xxx in the URL.
+            // Navigate to remove ?resource=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
+            await Task.Delay(200);
+
             NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
         }
 
