@@ -74,8 +74,8 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
-            // Python apphosts need the full bundle because
-            // the prebuilt AppHost server is required for aspire new with Python templates.
+            // Python templates need the full bundle (not just the CLI binary) because
+            // the prebuilt AppHost server is required for aspire new with non-C# templates.
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 var prNumber = DeploymentE2ETestHelpers.GetPrNumber();
@@ -102,6 +102,8 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
+            // When running from a PR bundle, the NuGet.config version selection prompt doesn't appear
+            // because the bundle already has the correct package versions.
             if (DeploymentE2ETestHelpers.IsRunningInCI && DeploymentE2ETestHelpers.GetPrNumber() <= 0)
             {
                 await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));

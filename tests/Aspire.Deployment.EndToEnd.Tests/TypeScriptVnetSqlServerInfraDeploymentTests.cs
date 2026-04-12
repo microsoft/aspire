@@ -97,6 +97,10 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
             await auto.TypeAsync("aspire init --language typescript");
             await auto.EnterAsync();
 
+            // The init flow may show different prompts depending on environment:
+            // - Template version prompt (NuGet.config) — dismiss if shown
+            // - Agent init prompt — decline
+            // - Success prompt — init completed silently
             var sawTemplateVersionPrompt = false;
             var sawAgentInitPrompt = false;
             await auto.WaitUntilAsync(s =>
@@ -145,39 +149,18 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
             output.WriteLine("Step 4a: Adding Azure Container Apps hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
-
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 4b: Add Aspire.Hosting.Azure.Network
             output.WriteLine("Step 4b: Adding Azure Network hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Network");
             await auto.EnterAsync();
-
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 4c: Add Aspire.Hosting.Azure.Sql
             output.WriteLine("Step 4c: Adding Azure SQL hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Sql");
             await auto.EnterAsync();
-
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 5: Modify apphost.ts to add VNet + PE + SQL infrastructure
