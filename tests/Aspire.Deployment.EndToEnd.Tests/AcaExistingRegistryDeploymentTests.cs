@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -185,12 +186,12 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitUntilAsync(s =>
             {
-                if (s.ContainsText("PIPELINE SUCCEEDED"))
+                if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
                 {
                     pipelineSucceeded = true;
                     return true;
                 }
-                return s.ContainsText("PIPELINE FAILED");
+                return s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed);
             }, timeout: TimeSpan.FromMinutes(35), description: "pipeline succeeded or failed");
 
             if (!pipelineSucceeded)

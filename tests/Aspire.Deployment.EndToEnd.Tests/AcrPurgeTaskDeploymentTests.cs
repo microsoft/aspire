@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -140,12 +141,12 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitUntilAsync(s =>
             {
-                if (s.ContainsText("PIPELINE SUCCEEDED"))
+                if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
                 {
                     pipelineSucceeded = true;
                     return true;
                 }
-                return s.ContainsText("PIPELINE FAILED");
+                return s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed);
             }, timeout: TimeSpan.FromMinutes(30), description: "pipeline succeeded or failed");
 
             if (!pipelineSucceeded)
@@ -183,7 +184,7 @@ builder.Build().Run();
             output.WriteLine("Modified main.py to force a new container image build");
 
             // Step 11: Second deployment to push new images
-            // Clear the terminal so WaitUntilTextAsync doesn't match "PIPELINE SUCCEEDED" from the first deploy
+            // Clear the terminal so WaitUntilTextAsync doesn't match the pipeline succeeded text from the first deploy
             output.WriteLine("Step 11: Starting second Azure deployment...");
             var pipeline2Succeeded = false;
             await auto.TypeAsync("export TERM=xterm && clear");
@@ -193,12 +194,12 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitUntilAsync(s =>
             {
-                if (s.ContainsText("PIPELINE SUCCEEDED"))
+                if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
                 {
                     pipeline2Succeeded = true;
                     return true;
                 }
-                return s.ContainsText("PIPELINE FAILED");
+                return s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed);
             }, timeout: TimeSpan.FromMinutes(30), description: "pipeline succeeded or failed");
 
             if (!pipeline2Succeeded)
