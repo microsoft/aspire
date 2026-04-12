@@ -340,7 +340,9 @@ public sealed class AzureEnvironmentResource : Resource
         {
             await resourceGroup.DeleteAsync(WaitUntil.Started, context.CancellationToken).ConfigureAwait(false);
 
-            context.Summary.Add("🗑️ Resource Group", resourceGroupName);
+            var tenantSegment = subscription.TenantId.HasValue ? $"#@{subscription.TenantId.Value}" : "#";
+            var portalUrl = $"https://portal.azure.com/{tenantSegment}/resource/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/overview";
+            context.Summary.Add("🗑️ Resource Group", new MarkdownString($"[{resourceGroupName}]({portalUrl})"));
             context.Summary.Add("🔑 Subscription", subscriptionId);
 
             await deleteTask.CompleteAsync(
