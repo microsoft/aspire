@@ -226,17 +226,17 @@ internal sealed class ConsoleActivityLogger
                 : string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryStepsSucceeded, succeededSteps);
             if (_enableColor)
             {
-                summaryParts.Add($"{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CheckMarkButton, _console)}[green]{succeededSegment}[/]");
+                summaryParts.Add($"[green]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CheckMarkButton, _console)}{succeededSegment}[/]");
                 if (warningSteps > 0)
                 {
                     var warningText = warningSteps == 1
                         ? string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryWarningsSingular, warningSteps)
                         : string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryWarningsPlural, warningSteps);
-                    summaryParts.Add($"{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.Warning, _console)}[yellow]{warningText}[/]");
+                    summaryParts.Add($"[yellow]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.Warning, _console)}{warningText}[/]");
                 }
                 if (failedSteps > 0)
                 {
-                    summaryParts.Add($"{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CrossMark, _console)}[red]{string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryFailed, failedSteps)}[/]");
+                    summaryParts.Add($"[red]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CrossMark, _console)}{string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryFailed, failedSteps)}[/]");
                 }
             }
             else
@@ -333,13 +333,13 @@ internal sealed class ConsoleActivityLogger
         if (succeeded)
         {
             _finalStatusHeader = _enableColor
-                ? $"{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CheckMarkButton, _console)}[green]{ConsoleActivityLoggerStrings.PipelineSucceeded}[/]"
+                ? $"[green]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CheckMarkButton, _console)}{ConsoleActivityLoggerStrings.PipelineSucceeded}[/]"
                 : $"{SuccessSymbol} {ConsoleActivityLoggerStrings.PipelineSucceeded}";
         }
         else
         {
             _finalStatusHeader = _enableColor
-                ? $"{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CrossMark, _console)}[red]{ConsoleActivityLoggerStrings.PipelineFailed}[/]"
+                ? $"[red]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CrossMark, _console)}{ConsoleActivityLoggerStrings.PipelineFailed}[/]"
                 : $"{FailureSymbol} {ConsoleActivityLoggerStrings.PipelineFailed}";
         }
     }

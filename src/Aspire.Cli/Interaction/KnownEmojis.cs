@@ -21,7 +21,6 @@ internal readonly struct KnownEmoji(string name)
 internal static class KnownEmojis
 {
     public static readonly KnownEmoji Bug = new("bug");
-    public static readonly KnownEmoji CheckBoxWithCheck = new("check_box_with_check");
     public static readonly KnownEmoji CheckMark = new("check_mark");
     public static readonly KnownEmoji CheckMarkButton = new("check_mark_button");
     public static readonly KnownEmoji CrossMark = new("cross_mark");
