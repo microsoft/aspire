@@ -615,13 +615,20 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
             .WithHttpEndpoint(targetPort: 8000)
             .WithExternalHttpEndpoints();
 
+        // Add a second project that references project1 so we can verify
+        // the resolved endpoint URLs use http:// (not upgraded to https://)
+        var project2 = builder.AddProject<Project>("project2", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 9000)
+            .WithExternalHttpEndpoints()
+            .WithReference(project1);
+
         using var app = builder.Build();
 
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        project1.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+        project2.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
 
         var resource = target?.DeploymentTarget as AzureProvisioningResource;
 
