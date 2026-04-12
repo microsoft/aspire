@@ -838,7 +838,7 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
         yield break;
     }
 
-    public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(CancellationToken cancellationToken) =>
+    public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
         Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
 }
 

@@ -482,7 +482,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         return (stepsToExecute, filteredStepsByName);
     }
 
-    private static List<PipelineStep> ComputeTransitiveDependencies(
+    internal static List<PipelineStep> ComputeTransitiveDependencies(
         PipelineStep step,
         Dictionary<string, PipelineStep> stepsByName)
     {

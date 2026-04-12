@@ -722,7 +722,14 @@ internal sealed class PipelineStepInfo
 /// <summary>
 /// Request for getting pipeline step metadata.
 /// </summary>
-internal sealed class GetPipelineStepsRequest { }
+internal sealed class GetPipelineStepsRequest
+{
+    /// <summary>
+    /// Gets or sets the target step name to filter to (including transitive dependencies).
+    /// When null, all steps are returned.
+    /// </summary>
+    public string? Step { get; init; }
+}
 
 /// <summary>
 /// Response containing pipeline step metadata.

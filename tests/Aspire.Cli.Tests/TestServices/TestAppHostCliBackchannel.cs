@@ -30,7 +30,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public Func<CancellationToken, Task<string[]>>? GetCapabilitiesAsyncCallback { get; set; }
 
     public TaskCompletionSource? GetPipelineStepsAsyncCalled { get; set; }
-    public Func<CancellationToken, Task<GetPipelineStepsResponse>>? GetPipelineStepsAsyncCallback { get; set; }
+    public Func<string?, CancellationToken, Task<GetPipelineStepsResponse>>? GetPipelineStepsAsyncCallback { get; set; }
 
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
@@ -254,12 +254,12 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         yield return new CommandOutput { Text = "test", IsErrorMessage = false, LineNumber = 0 };
     }
 
-    public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(CancellationToken cancellationToken)
+    public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken)
     {
         GetPipelineStepsAsyncCalled?.SetResult();
         if (GetPipelineStepsAsyncCallback is not null)
         {
-            return await GetPipelineStepsAsyncCallback(cancellationToken).ConfigureAwait(false);
+            return await GetPipelineStepsAsyncCallback(step, cancellationToken).ConfigureAwait(false);
         }
 
         return new GetPipelineStepsResponse

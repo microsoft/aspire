@@ -123,6 +123,12 @@ internal abstract class PipelineCommandBase : BaseCommand
     protected abstract string GetProgressMessage(ParseResult parseResult);
 
     /// <summary>
+    /// Gets the target pipeline step name for this command, used for --list-steps filtering.
+    /// Returns null to show all steps.
+    /// </summary>
+    protected virtual string? GetTargetStepName(ParseResult parseResult) => null;
+
+    /// <summary>
     /// Gets command-specific arguments to forward when starting a debug session from the extension context.
     /// Subclasses should override to include their specific positional arguments.
     /// Unmatched tokens are always included automatically.
@@ -272,7 +278,8 @@ internal abstract class PipelineCommandBase : BaseCommand
                         "pipeline-steps.v1");
                 }
 
-                var response = await backchannel.GetPipelineStepsAsync(cancellationToken);
+                var targetStep = GetTargetStepName(parseResult);
+                var response = await backchannel.GetPipelineStepsAsync(targetStep, cancellationToken);
                 PrintPipelineSteps(response.Steps);
 
                 await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);

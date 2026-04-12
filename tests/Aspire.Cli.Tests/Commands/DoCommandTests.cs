@@ -466,7 +466,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
                         var backchannel = new TestAppHostBackchannel
                         {
                             RequestStopAsyncCalled = requestStopCalled,
-                            GetPipelineStepsAsyncCallback = (ct) => Task.FromResult(new GetPipelineStepsResponse
+                            GetPipelineStepsAsyncCallback = (step, ct) => Task.FromResult(new GetPipelineStepsResponse
                             {
                                 Steps = [
                                     new() { Name = "parameter-prompt" },

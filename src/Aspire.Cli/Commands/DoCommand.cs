@@ -97,6 +97,8 @@ internal sealed class DoCommand : PipelineCommandBase
 
     protected override string GetCanceledMessage() => DoCommandStrings.OperationCanceled;
 
+    protected override string? GetTargetStepName(ParseResult parseResult) => parseResult.GetValue(_stepArgument);
+
     protected override string GetProgressMessage(ParseResult parseResult)
     {
         if (parseResult.GetValue(s_listStepsOption))

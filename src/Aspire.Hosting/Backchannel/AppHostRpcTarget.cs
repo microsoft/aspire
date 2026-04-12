@@ -209,8 +209,6 @@ internal class AppHostRpcTarget(
 
     public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(GetPipelineStepsRequest? request = null, CancellationToken cancellationToken = default)
     {
-        _ = request; // Reserved for future filtering options
-
         logger.LogDebug("Resolving pipeline steps for list-steps request.");
 
 #pragma warning disable ASPIREPIPELINES001
@@ -223,6 +221,23 @@ internal class AppHostRpcTarget(
         var pipelineContext = new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken);
 
         var resolvedSteps = await pipeline.ResolveStepsAsync(pipelineContext).ConfigureAwait(false);
+
+        // If a target step is specified, filter to its transitive dependencies
+        if (!string.IsNullOrEmpty(request?.Step))
+        {
+            var stepsByName = resolvedSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+            if (stepsByName.TryGetValue(request.Step, out var targetStep))
+            {
+                resolvedSteps = DistributedApplicationPipeline.ComputeTransitiveDependencies(targetStep, stepsByName);
+            }
+            else
+            {
+                var availableSteps = string.Join(", ", resolvedSteps.Select(s => $"'{s.Name}'"));
+                throw new InvalidOperationException(
+                    $"Step '{request.Step}' not found in pipeline. Available steps: {availableSteps}");
+            }
+        }
+
         var orderedSteps = DistributedApplicationPipeline.GetTopologicalOrder(resolvedSteps);
 #pragma warning restore ASPIREPIPELINES001
 
