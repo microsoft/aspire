@@ -33,7 +33,6 @@ internal static class KnownEmojis
     public static readonly KnownEmoji CheckMark = new("check_mark", "green");
     public static readonly KnownEmoji CheckMarkButton = new("check_mark_button", "green");
     public static readonly KnownEmoji CrossMark = new("cross_mark", "red");
-    public static readonly KnownEmoji FileCabinet = new("file_cabinet");
     public static readonly KnownEmoji FileFolder = new("file_folder", "yellow");
     public static readonly KnownEmoji FloppyDisk = new("floppy_disk", "blue");
     public static readonly KnownEmoji Gear = new("gear");
@@ -47,7 +46,7 @@ internal static class KnownEmojis
     public static readonly KnownEmoji MagnifyingGlassTiltedLeft = new("magnifying_glass_tilted_left", "blue");
     public static readonly KnownEmoji Microscope = new("microscope", "blue");
     public static readonly KnownEmoji Package = new("package", "yellow");
-    public static readonly KnownEmoji PageFacingUp = new("page_facing_up");
+    public static readonly KnownEmoji PageFacingUp = new("page_facing_up", "white");
     public static readonly KnownEmoji Rocket = new("rocket", "darkorange");
     public static readonly KnownEmoji RunningShoe = new("running_shoe", "green");
     public static readonly KnownEmoji StopSign = new("stop_sign", "red");
