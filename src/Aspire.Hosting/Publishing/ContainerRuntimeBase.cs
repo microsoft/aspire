@@ -354,6 +354,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
         _logger.LogDebug("Running {Runtime} compose down with arguments: {Arguments}", RuntimeExecutable, arguments);
 
+        var stderrLines = new List<string>();
         var spec = new ProcessSpec(RuntimeExecutable)
         {
             Arguments = arguments,
@@ -367,6 +368,10 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             OnErrorData = error =>
             {
                 _logger.LogDebug("{Runtime} compose down (stderr): {Error}", RuntimeExecutable, error);
+                if (!string.IsNullOrWhiteSpace(error))
+                {
+                    stderrLines.Add(error);
+                }
             },
         };
 
@@ -380,9 +385,12 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
 
             if (processResult.ExitCode != 0)
             {
+                var stderrOutput = stderrLines.Count > 0
+                    ? " " + string.Join(" ", stderrLines)
+                    : "";
+
                 throw new DistributedApplicationException(
-                    $"'{RuntimeExecutable} compose down' failed with exit code {processResult.ExitCode}. " +
-                    $"Ensure '{RuntimeExecutable}' is installed and available on PATH.");
+                    $"'{RuntimeExecutable} compose down' failed with exit code {processResult.ExitCode}.{stderrOutput}");
             }
         }
     }
