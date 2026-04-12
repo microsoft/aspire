@@ -1168,6 +1168,8 @@ public class ParameterProcessorTests
             return Task.CompletedTask;
         }
 
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;
@@ -1601,6 +1603,8 @@ public class ParameterProcessorTests
 
             return Task.CompletedTask;
         }
+
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {

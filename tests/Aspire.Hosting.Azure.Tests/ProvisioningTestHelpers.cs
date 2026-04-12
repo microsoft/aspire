@@ -640,6 +640,8 @@ internal sealed class TestUserSecretsManager : IDeploymentStateManager
         _state[section.SectionName] = section.Data;
         return Task.CompletedTask;
     }
+
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
 internal sealed class TestUserPrincipalProvider : IUserPrincipalProvider
