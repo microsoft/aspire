@@ -111,4 +111,43 @@ internal static class DeploymentE2EAutomatorHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }
+
+    /// <summary>
+    /// Runs <c>aspire deploy</c> interactively, answering parameter prompts via terminal automation.
+    /// The deploy pipeline handles image building, pushing, Helm chart generation, and deployment.
+    /// </summary>
+    /// <param name="auto">The terminal automator.</param>
+    /// <param name="counter">Sequence counter for prompt tracking.</param>
+    /// <param name="parameterResponses">
+    /// Ordered list of (promptSubstring, valueToType) tuples.
+    /// Each entry matches by the parameter name appearing in the prompt text.
+    /// Entries are consumed in order — first match wins.
+    /// </param>
+    /// <param name="pipelineTimeout">Timeout for the entire deploy pipeline. Defaults to 15 minutes.</param>
+    internal static async Task AspireDeployInteractiveAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        IReadOnlyList<(string PromptText, string Value)> parameterResponses,
+        TimeSpan? pipelineTimeout = null)
+    {
+        var timeout = pipelineTimeout ?? TimeSpan.FromMinutes(15);
+
+        await auto.TypeAsync("aspire deploy");
+        await auto.EnterAsync();
+
+        // Answer each parameter prompt in order.
+        // The CLI shows parameter prompts via Spectre.Console TextPrompt with the parameter name as the label.
+        for (var i = 0; i < parameterResponses.Count; i++)
+        {
+            var (promptText, value) = parameterResponses[i];
+
+            await auto.WaitUntilTextAsync(promptText, timeout: TimeSpan.FromMinutes(5));
+            await auto.TypeAsync(value);
+            await auto.EnterAsync();
+        }
+
+        // Wait for pipeline completion
+        await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: timeout);
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+    }
 }
