@@ -4,8 +4,6 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Kubernetes;
-using Aspire.Hosting.Kubernetes;
-using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Lifecycle;
 using Azure.Provisioning;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,20 +49,15 @@ public static class AzureKubernetesEnvironmentExtensions
         // Register the AKS-specific infrastructure eventing subscriber
         builder.Services.TryAddEventingSubscriber<AzureKubernetesInfrastructure>();
 
-        // Also register the generic K8s infrastructure (for Helm chart generation)
-        builder.AddKubernetesInfrastructureCore();
+        // Create the inner KubernetesEnvironmentResource via the public API.
+        // This registers KubernetesInfrastructure, creates the resource with
+        // Helm chart name/dashboard, adds it to the model, and sets up the
+        // default Helm deployment engine.
+        var k8sEnvBuilder = builder.AddKubernetesEnvironment($"{name}-k8s");
 
-        // Create the unified environment resource
+        // Create the unified AKS environment resource
         var resource = new AzureKubernetesEnvironmentResource(name, ConfigureAksInfrastructure);
-
-        // Create the inner KubernetesEnvironmentResource (for Helm deployment).
-        // This must be added to the application model so that KubernetesInfrastructure
-        // can discover it and generate Helm charts for compute resources.
-        var k8sEnv = new KubernetesEnvironmentResource($"{name}-k8s")
-        {
-            HelmChartName = builder.Environment.ApplicationName.ToHelmChartName(),
-        };
-        resource.KubernetesEnvironment = k8sEnv;
+        resource.KubernetesEnvironment = k8sEnvBuilder.Resource;
 
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -74,11 +67,6 @@ public static class AzureKubernetesEnvironmentExtensions
         // Auto-create a default Azure Container Registry for image push/pull
         var defaultRegistry = builder.AddAzureContainerRegistry($"{name}-acr");
         resource.DefaultContainerRegistry = defaultRegistry.Resource;
-
-        // Add the inner K8s environment to the model so KubernetesInfrastructure
-        // generates Helm charts. Exclude from manifest since it's an internal detail.
-        var k8sEnvBuilder = builder.AddResource(k8sEnv).ExcludeFromManifest();
-        KubernetesEnvironmentExtensions.EnsureDefaultHelmEngine(k8sEnvBuilder);
 
         return builder.AddResource(resource);
     }
