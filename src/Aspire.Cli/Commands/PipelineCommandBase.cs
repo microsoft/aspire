@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -396,28 +397,31 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             var step = steps[i];
 
-            _ansiConsole.MarkupLine($"[bold]{i + 1}. {step.Name.EscapeMarkup()}[/]");
+            _ansiConsole.MarkupLine($"[bold green]{i + 1}.[/] [bold]{step.Name.EscapeMarkup()}[/]");
 
             var hasDeps = step.DependsOn.Length > 0;
             var hasTags = step.Tags.Length > 0;
 
             if (!hasDeps && !hasTags)
             {
-                _ansiConsole.MarkupLine("   └─ No dependencies");
+                _ansiConsole.MarkupLine("[dim]   └─ No dependencies[/]");
             }
             else
             {
                 if (hasDeps)
                 {
-                    var depsText = string.Join(", ", step.DependsOn);
                     var connector = hasTags ? "├" : "└";
-                    _ansiConsole.MarkupLine($"   {connector}─ Depends on: {depsText.EscapeMarkup()}");
+                    var continuation = hasTags ? "│" : " ";
+                    // "   ├─ Depends on: " is 19 chars; hanging indent aligns continuation items
+                    const string hangingIndent = "                   ";
+                    var wrappedDeps = FormatWithHangingIndent(step.DependsOn, $"   {connector}─ [blue]Depends on:[/] ", $"   {continuation}  {hangingIndent}");
+                    _ansiConsole.MarkupLine(wrappedDeps);
                 }
 
                 if (hasTags)
                 {
                     var tagsText = string.Join(", ", step.Tags);
-                    _ansiConsole.MarkupLine($"   └─ Tags: {tagsText.EscapeMarkup()}");
+                    _ansiConsole.MarkupLine($"   └─ [yellow]Tags:[/] {tagsText.EscapeMarkup()}");
                 }
             }
 
@@ -426,6 +430,50 @@ internal abstract class PipelineCommandBase : BaseCommand
                 _ansiConsole.WriteLine();
             }
         }
+    }
+
+    /// <summary>
+    /// Formats a list of items with a prefix on the first line and hanging indent on continuation lines.
+    /// Items are comma-separated and wrapped so each line stays readable.
+    /// </summary>
+    private static string FormatWithHangingIndent(string[] items, string firstLinePrefix, string continuationPrefix, int maxLineLength = 100)
+    {
+        if (items.Length == 0)
+        {
+            return firstLinePrefix;
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(firstLinePrefix);
+
+        // Track visible length (without markup tags) for line wrapping
+        var visiblePrefixLength = StripMarkup(firstLinePrefix).Length;
+        var currentLineLength = visiblePrefixLength;
+
+        for (var i = 0; i < items.Length; i++)
+        {
+            var item = items[i].EscapeMarkup();
+            var separator = i < items.Length - 1 ? ", " : "";
+            var chunk = item + separator;
+
+            if (i > 0 && currentLineLength + chunk.Length > maxLineLength)
+            {
+                sb.AppendLine();
+                sb.Append(continuationPrefix);
+                currentLineLength = StripMarkup(continuationPrefix).Length;
+            }
+
+            sb.Append(chunk);
+            currentLineLength += chunk.Length;
+        }
+
+        return sb.ToString();
+    }
+
+    private static string StripMarkup(string text)
+    {
+        // Remove Spectre markup tags like [bold], [/], [blue], etc.
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\[/?[^\]]*\]", "");
     }
 
     /// <summary>
