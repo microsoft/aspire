@@ -30,9 +30,9 @@ internal static class ConsoleHelpers
         // Wrap in a color tag so monochrome text-presentation glyphs get a visible tint.
         // Terminals that render full-color emoji glyphs ignore ANSI foreground color, so this is always safe.
         // There is an option to suppress it in scenarios where the emoji is added to text inside an existing color.
-        if (!suppressColor)
+        if (!suppressColor && emoji.TextColor is { } color)
         {
-            return $"[{emoji.TextColor}]{spectreEmojiText}[/]" + new string(' ', padding);
+            return $"[{color}]{spectreEmojiText}[/]" + new string(' ', padding);
         }
 
         return spectreEmojiText + new string(' ', padding);

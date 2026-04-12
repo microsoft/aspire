@@ -4,10 +4,10 @@
 namespace Aspire.Cli.Interaction;
 
 /// <summary>
-/// Represents an emoji by its Spectre.Console name, with a fallback color
+/// Represents an emoji by its Spectre.Console name, with an optional fallback color
 /// for terminals that render the emoji as a monochrome text character.
 /// </summary>
-internal readonly struct KnownEmoji(string name, string textColor)
+internal readonly struct KnownEmoji(string name, string? textColor = null)
 {
     /// <summary>
     /// Gets the Spectre.Console emoji name (e.g. "rocket", "check_mark").
@@ -18,8 +18,9 @@ internal readonly struct KnownEmoji(string name, string textColor)
     /// Gets the Spectre.Console color name applied when the emoji is rendered as a
     /// monochrome text character. ANSI foreground color is ignored by terminals that
     /// render full-color emoji glyphs, so this is always safe to apply.
+    /// When <see langword="null"/>, no color is applied.
     /// </summary>
-    public string TextColor { get; } = textColor;
+    public string? TextColor { get; } = textColor;
 }
 
 /// <summary>
@@ -28,30 +29,29 @@ internal readonly struct KnownEmoji(string name, string textColor)
 /// </summary>
 internal static class KnownEmojis
 {
-    public static readonly KnownEmoji Bug = new("bug", "red");
+    public static readonly KnownEmoji Bug = new("bug", "green");
     public static readonly KnownEmoji CheckMark = new("check_mark", "green");
     public static readonly KnownEmoji CheckMarkButton = new("check_mark_button", "green");
     public static readonly KnownEmoji CrossMark = new("cross_mark", "red");
-    public static readonly KnownEmoji FileCabinet = new("file_cabinet", "grey");
+    public static readonly KnownEmoji FileCabinet = new("file_cabinet");
     public static readonly KnownEmoji FileFolder = new("file_folder", "yellow");
     public static readonly KnownEmoji FloppyDisk = new("floppy_disk", "blue");
-    public static readonly KnownEmoji Gear = new("gear", "grey");
-    public static readonly KnownEmoji Hammer = new("hammer", "grey");
+    public static readonly KnownEmoji Gear = new("gear");
+    public static readonly KnownEmoji Hammer = new("hammer");
     public static readonly KnownEmoji Ice = new("ice", "cyan");
-    public static readonly KnownEmoji HammerAndWrench = new("hammer_and_wrench", "grey");
+    public static readonly KnownEmoji HammerAndWrench = new("hammer_and_wrench");
     public static readonly KnownEmoji Information = new("information", "blue");
     public static readonly KnownEmoji Key = new("key", "yellow");
-    public static readonly KnownEmoji LinkedPaperclips = new("linked_paperclips", "grey");
+    public static readonly KnownEmoji LinkedPaperclips = new("linked_paperclips");
     public static readonly KnownEmoji LockedWithKey = new("locked_with_key", "yellow");
     public static readonly KnownEmoji MagnifyingGlassTiltedLeft = new("magnifying_glass_tilted_left", "blue");
-    public static readonly KnownEmoji MagnifyingGlassTiltedRight = new("magnifying_glass_tilted_right", "blue");
     public static readonly KnownEmoji Microscope = new("microscope", "blue");
     public static readonly KnownEmoji Package = new("package", "yellow");
-    public static readonly KnownEmoji PageFacingUp = new("page_facing_up", "grey");
+    public static readonly KnownEmoji PageFacingUp = new("page_facing_up");
     public static readonly KnownEmoji Rocket = new("rocket", "darkorange");
     public static readonly KnownEmoji RunningShoe = new("running_shoe", "green");
     public static readonly KnownEmoji StopSign = new("stop_sign", "red");
     public static readonly KnownEmoji UpButton = new("up_button", "green");
     public static readonly KnownEmoji Warning = new("warning", "yellow");
-    public static readonly KnownEmoji Wrench = new("wrench", "grey");
+    public static readonly KnownEmoji Wrench = new("wrench");
 }
