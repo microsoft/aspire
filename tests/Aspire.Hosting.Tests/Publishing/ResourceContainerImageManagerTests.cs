@@ -1449,7 +1449,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         });
 
         // Create a Dockerfile that will fail — references a nonexistent file
-        var tempDir = new TestTempDirectory();
+        using var tempDir = new TestTempDirectory();
         var dockerfilePath = Path.Combine(tempDir.Path, "Dockerfile");
         await File.WriteAllTextAsync(dockerfilePath, """
             FROM mcr.microsoft.com/cbl-mariner/base/core:2.0

@@ -302,12 +302,20 @@ internal sealed class ResourceContainerImageManager(
 
         try
         {
-
             logger.LogInformation("Building image: {ResourceName}", resource.Name);
 
             await ExecuteDotnetPublishAsync(resource, options, cancellationToken).ConfigureAwait(false);
 
             logger.LogInformation("Building image for {ResourceName} completed", resource.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Building image for {ResourceName} failed", resource.Name);
+            throw;
         }
         finally
         {
