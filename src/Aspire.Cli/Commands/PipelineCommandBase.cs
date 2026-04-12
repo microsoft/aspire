@@ -412,27 +412,14 @@ internal abstract class PipelineCommandBase : BaseCommand
             else if (activity.Type == PublishingActivityTypes.Log)
             {
                 // Log activity - display the log message
-                var logLevel = activity.Data.LogLevel ?? "Information";
+                var (parsedLogLevel, logPrefix) = ParseLogLevel(activity.Data.LogLevel);
                 var message = ConvertTextWithMarkdownFlag(activity.Data.StatusText, activity.Data);
                 var timestamp = activity.Data.Timestamp?.ToString("HH:mm:ss", CultureInfo.InvariantCulture) ?? DateTimeOffset.UtcNow.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 
-                // Use 3-letter prefixes for log levels
-                var logPrefix = logLevel.ToUpperInvariant() switch
-                {
-                    "DEBUG" => "DBG",
-                    "TRACE" => "TRC",
-                    "INFORMATION" => "INF",
-                    "WARNING" => "WRN",
-                    "ERROR" => "ERR",
-                    "CRITICAL" => "CRT",
-                    _ => "INF"
-                };
-
                 // Make debug and trace logs more subtle
-                var formattedMessage = logLevel.ToUpperInvariant() switch
+                var formattedMessage = parsedLogLevel switch
                 {
-                    "DEBUG" => $"[[{timestamp}]] [dim][[{logPrefix}]] {message}[/]",
-                    "TRACE" => $"[[{timestamp}]] [dim][[{logPrefix}]] {message}[/]",
+                    LogLevel.Debug or LogLevel.Trace => $"[[{timestamp}]] [dim][[{logPrefix}]] {message}[/]",
                     _ => $"[[{timestamp}]] [[{logPrefix}]] {message}"
                 };
 
@@ -550,42 +537,27 @@ internal abstract class PipelineCommandBase : BaseCommand
                     var stepId = activity.Data.StepId;
                     if (stepId != null && steps.TryGetValue(stepId, out var stepInfo))
                     {
-                        var logLevel = activity.Data.LogLevel ?? "Information";
+                        var (parsedLogLevel, logPrefix) = ParseLogLevel(activity.Data.LogLevel);
                         var message = ConvertTextWithMarkdownFlag(activity.Data.StatusText, activity.Data);
-
-                        // Add 3-letter prefix to message for consistency
-                        var logPrefix = logLevel.ToUpperInvariant() switch
-                        {
-                            "DEBUG" => "DBG",
-                            "TRACE" => "TRC",
-                            "INFORMATION" => "INF",
-                            "WARNING" => "WRN",
-                            "ERROR" => "ERR",
-                            "CRITICAL" => "CRT",
-                            _ => "INF"
-                        };
 
                         var prefixedMessage = $"[[{logPrefix}]] {message}";
 
-                        // Map log levels to appropriate console logger methods
-                        switch (logLevel.ToUpperInvariant())
+                        switch (parsedLogLevel)
                         {
-                            case "ERROR":
-                            case "CRITICAL":
+                            case LogLevel.Error:
+                            case LogLevel.Critical:
                                 logger.Failure(stepInfo.Id, prefixedMessage);
                                 break;
-                            case "WARNING":
-                            case "WARN":
+                            case LogLevel.Warning:
                                 logger.Warning(stepInfo.Id, prefixedMessage);
                                 break;
-                            case "DEBUG":
-                            case "TRACE":
+                            case LogLevel.Debug:
+                            case LogLevel.Trace:
                                 // Use a more subtle approach for debug/trace - prefix with dim formatting
                                 var subtleMessage = $"[dim]{prefixedMessage}[/]";
                                 logger.Info(stepInfo.Id, subtleMessage);
                                 break;
-                            case "INFORMATION":
-                            case "INFO":
+                            case LogLevel.Information:
                             default:
                                 logger.Info(stepInfo.Id, prefixedMessage);
                                 break;
@@ -907,6 +879,17 @@ internal abstract class PipelineCommandBase : BaseCommand
     {
         return bool.TryParse(value, out var result) && result;
     }
+
+    private static (LogLevel Level, string Prefix) ParseLogLevel(string? logLevel) => logLevel?.ToUpperInvariant() switch
+    {
+        "TRACE" => (LogLevel.Trace, "TRC"),
+        "DEBUG" => (LogLevel.Debug, "DBG"),
+        "INFORMATION" or "INFO" => (LogLevel.Information, "INF"),
+        "WARNING" or "WARN" => (LogLevel.Warning, "WRN"),
+        "ERROR" => (LogLevel.Error, "ERR"),
+        "CRITICAL" => (LogLevel.Critical, "CRT"),
+        null or _ => (LogLevel.Information, "INF")
+    };
 
     private class StepInfo
     {

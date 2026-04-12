@@ -47,10 +47,10 @@ internal sealed class ConsoleActivityLogger
 
     // No raw ANSI escape codes; rely on Spectre.Console markup tokens.
 
-    private const string SuccessSymbol = "✓";
-    private const string FailureSymbol = "✗";
-    private const string WarningSymbol = "⚠";
-    private const string InProgressSymbol = "→";
+    private const string SuccessSymbol = "✓\uFE0E";
+    private const string FailureSymbol = "✗\uFE0E";
+    private const string WarningSymbol = "△";
+    private const string InProgressSymbol = "→\uFE0E";
     private const string InfoSymbol = "i";
     private const int SummaryTimelineWidth = 28;
     private const int SummaryTimelineTicks = 4;
@@ -410,10 +410,10 @@ internal sealed class ConsoleActivityLogger
                 ActivityState.Failure => _enableColor ? "[red]" + FailureSymbol + "[/]" : FailureSymbol,
                 _ => _enableColor ? "[cyan]" + InProgressSymbol + "[/]" : InProgressSymbol
             };
-            // DisplayName and FailureReason are already Spectre-safe (pre-processed
-            // through ConvertTextWithMarkdownFlag which escapes or converts markdown).
             var displayName = GetIndentedDisplayName(rec);
             var name = (renderTimeline ? displayName.PadRight(nameWidth) : displayName).EscapeMarkup();
+
+            // FailureReason is already Spectre-safe (pre-processed through ConvertTextWithMarkdownFlag which escapes or converts markdown).
             var reason = rec.State == ActivityState.Failure && !string.IsNullOrEmpty(rec.FailureReason)
                 ? (_enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!)}[/]" : $" — {rec.FailureReason!}")
                 : string.Empty;

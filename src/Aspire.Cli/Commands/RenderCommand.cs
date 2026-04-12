@@ -333,8 +333,8 @@ internal sealed class RenderCommand : BaseCommand
         "publish-summary-markup" => new(
             "Markup characters in names and failures",
             [
-                new("root", "Build [web] frontend", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(120), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromMilliseconds(120)),
-                new("child", "Deploy [api] service", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromMilliseconds(35), "Failure while parsing [resource] => {bad}", "root", 1, 2, TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(95)),
+                new("root", "Build [[web]] frontend", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(120), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromMilliseconds(120)),
+                new("child", "Deploy [[api]] service", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromMilliseconds(35), "Failure while parsing [[resource]] => {bad}", "root", 1, 2, TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(95)),
                 new("sibling", "Notify [[observers]]", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromMilliseconds(12), null, "root", 1, 3, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(112)),
             ], false),
         "publish-summary-mixed-hierarchy" => new(
@@ -344,7 +344,8 @@ internal sealed class RenderCommand : BaseCommand
                 new("orphan", "Orphaned child falls back to root ordering", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "missing-parent", 1, 2, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)),
                 new("root-b", "Publish", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromSeconds(4), null, null, 0, 3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(9)),
                 new("child-b", "Package", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(1), null, "root-b", 1, 4, TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(7)),
-                new("root-c", "Validate", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, null, 0, 5, TimeSpan.FromSeconds(9), TimeSpan.FromSeconds(11)),
+                new("info-step", "Using cached configuration", ConsoleActivityLogger.ActivityState.Info, TimeSpan.FromSeconds(0), null, "root-b", 1, 5, TimeSpan.FromSeconds(7), TimeSpan.FromSeconds(7)),
+                new("root-c", "Validate", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, null, 0, 6, TimeSpan.FromSeconds(9), TimeSpan.FromSeconds(11)),
             ]),
         "publish-summary-duration-extremes" => new(
             "Duration extremes",
