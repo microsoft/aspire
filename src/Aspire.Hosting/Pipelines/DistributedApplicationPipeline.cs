@@ -108,7 +108,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
                             // User confirmed - delete the deployment state file
                             context.Logger.LogInformation("Deleting deployment state file at {Path} due to --clear-cache flag", stateFilePath);
-                            File.Delete(stateFilePath);
+                            await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
                         }
                     }
                 }
