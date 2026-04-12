@@ -7,9 +7,11 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Publishing;
 
@@ -160,12 +162,17 @@ internal sealed class ResourceContainerImageManager(
     ILogger<ResourceContainerImageManager> logger,
     IContainerRuntime containerRuntime,
     IServiceProvider serviceProvider,
-    DistributedApplicationExecutionContext? executionContext = null) : IResourceContainerImageManager
+    IOptions<ContainerRegistryMirrorOptions>? registryMirrorOptions = null,
+    DistributedApplicationExecutionContext? executionContext = null) : IResourceContainerImageManager, IDisposable
 {
     // Disable concurrent builds for project resources to avoid issues with overlapping msbuild projects
     private readonly SemaphoreSlim _throttle = new(1);
 
     private IContainerRuntime ContainerRuntime { get; } = containerRuntime;
+    private ContainerRegistryMirrorOptions? RegistryMirrorOptions { get; } = registryMirrorOptions?.Value;
+
+    private readonly object _registryMirrorTargetsFileLock = new();
+    private string? _registryMirrorTargetsFilePath;
 
     private sealed class ResolvedContainerBuildOptions
     {
@@ -375,6 +382,13 @@ internal sealed class ResourceContainerImageManager(
         }
 #pragma warning restore ASPIREDOCKERFILEBUILDER001
 
+        // Inject registry mirror targets if configured
+        if (GetRegistryMirrorTargetsFilePath() is string registryMirrorTargetsFile)
+        {
+            arguments += $" /p:CustomAfterMicrosoftCommonTargets=\"{registryMirrorTargetsFile}\"";
+            logger.LogDebug("Injecting registry mirror targets from {TargetsFile}", registryMirrorTargetsFile);
+        }
+
         var spec = new ProcessSpec("dotnet")
         {
             Arguments = arguments,
@@ -548,6 +562,83 @@ internal sealed class ResourceContainerImageManager(
         }
 
         return false;
+    }
+
+    internal string? GetRegistryMirrorTargetsFilePath()
+    {
+        if (RegistryMirrorOptions is not { Mirrors.Count: > 0 } options)
+        {
+            return null;
+        }
+
+        lock (_registryMirrorTargetsFileLock)
+        {
+            _registryMirrorTargetsFilePath ??= WriteRegistryMirrorTargetsFile(options);
+            return _registryMirrorTargetsFilePath;
+        }
+    }
+
+    /// <summary>
+    /// Writes a temporary MSBuild targets file for registry mirror rewriting.
+    /// </summary>
+    internal static string WriteRegistryMirrorTargetsFile(ContainerRegistryMirrorOptions options)
+    {
+        var targetsPath = Path.Combine(Path.GetTempPath(), $"aspire-registry-mirror-{Guid.NewGuid():N}.targets");
+
+        var sb = new StringBuilder();
+        sb.AppendLine("<Project>");
+        sb.AppendLine("  <Target Name=\"_AspireOverrideContainerBaseRegistry\"");
+        sb.AppendLine("          AfterTargets=\"ComputeContainerBaseImage\"");
+        sb.AppendLine("          BeforeTargets=\"ComputeContainerConfig\">");
+        sb.AppendLine("    <PropertyGroup>");
+
+        foreach (var mirror in options.Mirrors)
+        {
+            // Escape single quotes for MSBuild
+            var sourceRegistry = EscapeXmlText(mirror.Key.Replace("'", "''"));
+            var mirrorRegistry = EscapeXmlText(mirror.Value.Replace("'", "''"));
+            sb.AppendLine(CultureInfo.InvariantCulture, $"      <ContainerBaseImage>$(ContainerBaseImage.Replace('{sourceRegistry}', '{mirrorRegistry}'))</ContainerBaseImage>");
+        }
+
+        sb.AppendLine("    </PropertyGroup>");
+        sb.AppendLine("  </Target>");
+        sb.AppendLine("</Project>");
+
+        File.WriteAllText(targetsPath, sb.ToString());
+        return targetsPath;
+    }
+
+    private static string EscapeXmlText(string value)
+        => value.Replace("&", "&amp;", StringComparison.Ordinal)
+                .Replace("<", "&lt;", StringComparison.Ordinal)
+                .Replace(">", "&gt;", StringComparison.Ordinal);
+
+    public void Dispose()
+    {
+        string? path;
+
+        lock (_registryMirrorTargetsFileLock)
+        {
+            path = _registryMirrorTargetsFilePath;
+            _registryMirrorTargetsFilePath = null;
+        }
+
+        if (path is not string)
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to delete registry mirror targets file '{TargetsFile}'.", path);
+        }
     }
 
 }
