@@ -394,6 +394,42 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task HelmUninstallStep_RequiredByDestroy()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Diagnostics);
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var logs = mockActivityReporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .ToList();
+
+        output.WriteLine("Diagnostics logs:");
+        foreach (var log in logs)
+        {
+            output.WriteLine($"  {log}");
+        }
+
+        // Verify helm-uninstall-env depends on destroy-prereq (because it's RequiredBy destroy)
+        var helmUninstallLines = logs.Where(l => l.Contains("helm-uninstall-env")).ToList();
+        Assert.Contains(helmUninstallLines, msg => msg.Contains("destroy-prereq"));
+    }
+
+    [Fact]
     public async Task MultipleContainersGenerateMultiplePrintSummarySteps()
     {
         using var tempDir = new TestTempDirectory();
