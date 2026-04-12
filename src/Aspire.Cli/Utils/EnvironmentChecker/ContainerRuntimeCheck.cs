@@ -50,17 +50,23 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
 
             var results = new List<EnvironmentCheckResult>();
 
-            // Report each runtime's status
+            // Only report runtimes that are installed (or explicitly configured)
             foreach (var info in runtimes)
             {
+                if (!info.IsInstalled && (configuredRuntime is null ||
+                    !string.Equals(info.Executable, configuredRuntime, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
                 var isSelected = selected is not null &&
                     string.Equals(info.Executable, selected.Executable, StringComparison.OrdinalIgnoreCase);
 
                 results.Add(BuildRuntimeResult(info, isSelected, configuredRuntime, cancellationToken));
             }
 
-            // If nothing is available, add an overall failure
-            if (!runtimes.Any(r => r.IsInstalled))
+            // If nothing is available, show a single failure
+            if (results.Count == 0)
             {
                 results.Add(new EnvironmentCheckResult
                 {
@@ -171,12 +177,13 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
 
         if (!info.IsInstalled)
         {
+            // Only reached for explicitly configured runtimes
             return new EnvironmentCheckResult
             {
                 Category = "container",
                 Name = info.Executable,
                 Status = EnvironmentCheckStatus.Fail,
-                Message = $"{info.Name}: not found",
+                Message = $"{info.Name}: not found (configured via ASPIRE_CONTAINER_RUNTIME={configuredRuntime})",
                 Fix = GetContainerRuntimeInstallationLink(info.Name)
             };
         }
