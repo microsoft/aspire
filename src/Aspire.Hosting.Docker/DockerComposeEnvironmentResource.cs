@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREINTERACTION001
@@ -130,6 +131,20 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 Description = $"Confirms and destroys the Docker Compose environment {Name}.",
                 Action = async ctx =>
                 {
+                    // Check deployment state to verify this environment was actually deployed
+                    var deploymentStateManager = ctx.Services.GetRequiredService<IDeploymentStateManager>();
+                    var stateSection = await deploymentStateManager.AcquireSectionAsync($"DockerCompose:{Name}", ctx.CancellationToken).ConfigureAwait(false);
+                    var savedComposeFilePath = stateSection.Data["ComposeFilePath"]?.ToString();
+
+                    if (string.IsNullOrEmpty(savedComposeFilePath))
+                    {
+                        await ctx.ReportingStep.CompleteAsync(
+                            $"No Docker Compose deployment state found for '{Name}'. Nothing to destroy.",
+                            CompletionState.Completed,
+                            ctx.CancellationToken).ConfigureAwait(false);
+                        return;
+                    }
+
                     await ConfirmDestroyAsync(ctx, $"Shut down Docker Compose environment '{Name}'? This will stop and remove all containers, networks, and volumes.").ConfigureAwait(false);
                     await DockerComposeDownAsync(ctx).ConfigureAwait(false);
                 },
@@ -252,6 +267,14 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                 var composeContext = CreateComposeOperationContext(context);
 
                 await runtime.ComposeUpAsync(composeContext, context.CancellationToken).ConfigureAwait(false);
+
+                // Persist deployment state so destroy can find the compose file and project name
+                var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+                var stateSection = await deploymentStateManager.AcquireSectionAsync($"DockerCompose:{Name}", context.CancellationToken).ConfigureAwait(false);
+                stateSection.Data["OutputPath"] = outputPath;
+                stateSection.Data["ProjectName"] = composeContext.ProjectName;
+                stateSection.Data["ComposeFilePath"] = composeContext.ComposeFilePath;
+                await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
 
                 await deployTask.CompleteAsync(
                     new MarkdownString($"Service **{Name}** is now running with Docker Compose locally (runtime: {runtime.Name})"),

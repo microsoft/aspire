@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREINTERACTION001
 
 using System.Globalization;
@@ -161,9 +162,24 @@ internal static partial class HelmDeploymentEngine
             Description = $"Confirms and destroys the Helm deployment for {environment.Name}.",
             Action = async ctx =>
             {
-                var @namespace = await ResolveNamespaceAsync(ctx, environment).ConfigureAwait(false);
-                var releaseName = await ResolveReleaseNameAsync(ctx, environment).ConfigureAwait(false);
-                await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{releaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
+                // Check deployment state to verify this environment was actually deployed
+                var deploymentStateManager = ctx.Services.GetRequiredService<IDeploymentStateManager>();
+                var stateSection = await deploymentStateManager.AcquireSectionAsync($"Helm:{environment.Name}", ctx.CancellationToken).ConfigureAwait(false);
+                var savedReleaseName = stateSection.Data["ReleaseName"]?.ToString();
+                var savedNamespace = stateSection.Data["Namespace"]?.ToString();
+
+                if (string.IsNullOrEmpty(savedReleaseName))
+                {
+                    await ctx.ReportingStep.CompleteAsync(
+                        $"No Helm deployment state found for '{environment.Name}'. Nothing to destroy.",
+                        CompletionState.Completed,
+                        ctx.CancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                // Use saved state for the confirmation message (more accurate than recomputing)
+                var @namespace = savedNamespace ?? "default";
+                await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{savedReleaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
                 await HelmUninstallAsync(ctx, environment).ConfigureAwait(false);
             },
             DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
@@ -444,6 +460,13 @@ internal static partial class HelmDeploymentEngine
                     }
                     else
                     {
+                        // Persist deployment state so destroy can find the release
+                        var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+                        var stateSection = await deploymentStateManager.AcquireSectionAsync($"Helm:{environment.Name}", context.CancellationToken).ConfigureAwait(false);
+                        stateSection.Data["ReleaseName"] = releaseName;
+                        stateSection.Data["Namespace"] = @namespace;
+                        await deploymentStateManager.SaveSectionAsync(stateSection, context.CancellationToken).ConfigureAwait(false);
+
                         await deployTask.CompleteAsync(
                             new MarkdownString($"Helm release **{releaseName}** deployed to namespace **{@namespace}**"),
                             CompletionState.Completed,
