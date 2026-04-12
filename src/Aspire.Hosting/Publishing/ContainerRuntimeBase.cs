@@ -439,6 +439,17 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// <summary>
     /// Parses Docker Compose ps JSON output, handling both NDJSON (one object per line) and JSON array formats.
     /// </summary>
+    /// <example>
+    /// NDJSON (Docker Compose v2+):
+    /// <code>
+    /// {"Service":"web","Publishers":[{"URL":"","TargetPort":80,"PublishedPort":8080,"Protocol":"tcp"}]}
+    /// {"Service":"cache","Publishers":[{"TargetPort":6379,"PublishedPort":6379}]}
+    /// </code>
+    /// JSON array (older versions):
+    /// <code>
+    /// [{"Service":"web","Publishers":[{"TargetPort":80,"PublishedPort":8080}]}]
+    /// </code>
+    /// </example>
     internal static List<ComposeServiceInfo> ParseComposeServiceEntries(List<string> outputLines)
     {
         var results = new List<ComposeServiceInfo>();

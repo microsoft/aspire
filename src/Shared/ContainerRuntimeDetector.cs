@@ -13,6 +13,7 @@
 
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
@@ -365,8 +366,18 @@ internal static class ContainerRuntimeDetector
     }
 
     /// <summary>
-    /// Parses the JSON output from <c>docker/podman version -f json</c> using AOT-compatible JsonDocument.
+    /// Parses the JSON output from <c>docker/podman version -f json</c> using source-generated JSON serialization.
     /// </summary>
+    /// <example>
+    /// Docker:
+    /// <code>
+    /// {"Client":{"Version":"28.0.1","Context":"desktop-linux"},"Server":{"Version":"27.5.0","Os":"linux"}}
+    /// </code>
+    /// Podman:
+    /// <code>
+    /// {"Client":{"Version":"4.9.3"},"Server":null}
+    /// </code>
+    /// </example>
     internal static RuntimeVersionInfo ParseVersionOutput(string? output)
     {
         if (string.IsNullOrWhiteSpace(output))
@@ -376,42 +387,19 @@ internal static class ContainerRuntimeDetector
 
         try
         {
-            using var doc = JsonDocument.Parse(output);
-            var root = doc.RootElement;
-
-            Version? clientVersion = null;
-            Version? serverVersion = null;
-            string? context = null;
-            string? serverOs = null;
-
-            if (root.TryGetProperty("Client", out var client))
+            var json = JsonSerializer.Deserialize(output, ContainerRuntimeJsonContext.Default.ContainerRuntimeVersionJson);
+            if (json is null)
             {
-                if (client.TryGetProperty("Version", out var cv))
-                {
-                    Version.TryParse(cv.GetString(), out clientVersion);
-                }
-                if (client.TryGetProperty("Context", out var ctx))
-                {
-                    context = ctx.GetString();
-                }
+                return default;
             }
 
-            if (root.TryGetProperty("Server", out var server))
-            {
-                if (server.TryGetProperty("Version", out var sv))
-                {
-                    Version.TryParse(sv.GetString(), out serverVersion);
-                }
-                if (server.TryGetProperty("Os", out var os))
-                {
-                    serverOs = os.GetString();
-                }
-            }
-
+            Version.TryParse(json.Client?.Version, out var clientVersion);
+            Version.TryParse(json.Server?.Version, out var serverVersion);
+            var context = json.Client?.Context;
             var isDockerDesktop = context is not null &&
                 context.Contains("desktop", StringComparison.OrdinalIgnoreCase);
 
-            return new RuntimeVersionInfo(clientVersion, serverVersion, isDockerDesktop, serverOs);
+            return new RuntimeVersionInfo(clientVersion, serverVersion, isDockerDesktop, json.Server?.Os);
         }
         catch (JsonException)
         {
@@ -431,4 +419,30 @@ internal static class ContainerRuntimeDetector
         Version? ServerVersion,
         bool IsDockerDesktop,
         string? ServerOs);
+}
+
+internal sealed class ContainerRuntimeVersionJson
+{
+    [JsonPropertyName("Client")]
+    public ContainerRuntimeComponentJson? Client { get; set; }
+
+    [JsonPropertyName("Server")]
+    public ContainerRuntimeComponentJson? Server { get; set; }
+}
+
+internal sealed class ContainerRuntimeComponentJson
+{
+    [JsonPropertyName("Version")]
+    public string? Version { get; set; }
+
+    [JsonPropertyName("Context")]
+    public string? Context { get; set; }
+
+    [JsonPropertyName("Os")]
+    public string? Os { get; set; }
+}
+
+[JsonSerializable(typeof(ContainerRuntimeVersionJson))]
+internal sealed partial class ContainerRuntimeJsonContext : JsonSerializerContext
+{
 }
