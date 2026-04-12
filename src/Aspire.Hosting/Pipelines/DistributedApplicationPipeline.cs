@@ -270,7 +270,18 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             Name = WellKnownPipelineSteps.Destroy,
             Description = "Aggregation step for all destroy operations. All destroy steps should be required by this step.",
-            Action = _ => Task.CompletedTask,
+            Action = context =>
+            {
+                // Clear deployment state after successful destroy
+                var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+                if (deploymentStateManager.StateFilePath is string stateFilePath && File.Exists(stateFilePath))
+                {
+                    File.Delete(stateFilePath);
+                    context.Logger.LogInformation("Deployment state cleared: {Path}", stateFilePath);
+                }
+
+                return Task.CompletedTask;
+            },
         });
 
         _steps.Add(new PipelineStep

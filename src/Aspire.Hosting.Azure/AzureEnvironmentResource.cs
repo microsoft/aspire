@@ -238,9 +238,7 @@ public sealed class AzureEnvironmentResource : Resource
         }
         catch (global::Azure.RequestFailedException ex) when (ex.Status == 404)
         {
-            // Resource group already deleted — clean up state
-            await deploymentStateManager.DeleteSectionAsync(azureStateSection, context.CancellationToken).ConfigureAwait(false);
-
+            // Resource group already deleted
             await context.ReportingStep.CompleteAsync(
                 new MarkdownString($"Resource group **{resourceGroupName}** not found (already deleted)"),
                 CompletionState.Completed,
@@ -342,9 +340,6 @@ public sealed class AzureEnvironmentResource : Resource
             try
             {
                 await resourceGroup.DeleteAsync(global::Azure.WaitUntil.Started, context.CancellationToken).ConfigureAwait(false);
-
-                // Clean up deployment state after successful destroy initiation
-                await deploymentStateManager.DeleteSectionAsync(azureStateSection, context.CancellationToken).ConfigureAwait(false);
 
                 await deleteTask.CompleteAsync(
                     new MarkdownString($"Resource group **{resourceGroupName}** deletion initiated successfully"),
