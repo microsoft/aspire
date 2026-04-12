@@ -660,10 +660,11 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
         var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(() =>
             imageBuilder.BuildImageAsync(project.Resource, cts.Token));
 
-        Assert.Contains("broken-project", exception.Message);
+        Assert.Contains("missing.csproj", exception.Message);
+        Assert.NotEqual(0, exception.ExitCode);
     }
 
     [Fact]
