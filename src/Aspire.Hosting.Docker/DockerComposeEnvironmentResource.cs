@@ -273,7 +273,9 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
 
         if (!File.Exists(dockerComposeFilePath))
         {
-            throw new InvalidOperationException($"Docker Compose file not found at {dockerComposeFilePath}");
+            throw new InvalidOperationException(
+                $"Docker Compose file not found at '{dockerComposeFilePath}'. " +
+                $"If you deployed with a custom --output-path, pass the same path to the destroy command.");
         }
 
         var runtime = await context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken).ConfigureAwait(false);
