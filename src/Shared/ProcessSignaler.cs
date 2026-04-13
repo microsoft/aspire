@@ -40,7 +40,7 @@ internal static partial class ProcessSignaler
             {
                 process.Kill(entireProcessTree: false);
             }
-            catch(InvalidOperationException)
+            catch (InvalidOperationException)
             {
                 // Process already exited.
             }

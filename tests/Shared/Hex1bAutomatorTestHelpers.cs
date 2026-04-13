@@ -161,7 +161,7 @@ internal static class Hex1bAutomatorTestHelpers
                 return; // success
             }
 
-             remaining = effectiveTimeout - stopwatch.Elapsed;
+            remaining = effectiveTimeout - stopwatch.Elapsed;
             if (remaining <= TimeSpan.Zero)
             {
                 break;
