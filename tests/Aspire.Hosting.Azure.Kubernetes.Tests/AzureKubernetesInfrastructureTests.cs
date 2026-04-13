@@ -102,6 +102,11 @@ public class AzureKubernetesInfrastructureTests
 
         // The compute environment should be the inner K8s environment
         Assert.Same(aks.Resource.KubernetesEnvironment, target.ComputeEnvironment);
+
+        // CRITICAL: ContainerRegistry must be set on the DeploymentTargetAnnotation
+        // so that push steps can resolve the registry endpoint
+        Assert.NotNull(target.ContainerRegistry);
+        Assert.IsType<AzureContainerRegistryResource>(target.ContainerRegistry);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

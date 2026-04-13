@@ -79,13 +79,14 @@ public static class AzureKubernetesEnvironmentExtensions
         // call registry.Endpoint.GetValueAsync() which awaits the BicepOutputReference
         // for loginServer — if the ACR hasn't been provisioned yet (or outputs not
         // populated yet), this blocks indefinitely.
+        // We make the push-prereq step depend on provisioning so all push steps
+        // (which already depend on push-prereq) are guaranteed to run after provisioning.
         k8sEnvBuilder.WithAnnotation(new PipelineConfigurationAnnotation(context =>
         {
-            foreach (var computeResource in context.Model.GetComputeResources())
-            {
-                var pushSteps = context.GetSteps(computeResource, WellKnownPipelineTags.PushContainerImage);
-                pushSteps.DependsOn(AzureEnvironmentResource.ProvisionInfrastructureStepName);
-            }
+            var pushPrereq = context.Steps
+                .FirstOrDefault(s => s.Name == WellKnownPipelineSteps.PushPrereq);
+
+            pushPrereq?.DependsOn(AzureEnvironmentResource.ProvisionInfrastructureStepName);
         }));
 
         return builder.AddResource(resource);
