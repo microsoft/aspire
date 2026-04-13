@@ -111,4 +111,45 @@ public class AzureKubernetesInfrastructureTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public async Task MultiEnv_ResourcesMatchCorrectEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry");
+        var enva = builder.AddAzureKubernetesEnvironment("enva")
+            .WithContainerRegistry(registry);
+        var envb = builder.AddAzureKubernetesEnvironment("envb")
+            .WithContainerRegistry(registry);
+
+        var cache = builder.AddContainer("cache", "redis")
+            .WithComputeEnvironment(enva);
+        var api = builder.AddContainer("api", "myapi")
+            .WithComputeEnvironment(enva);
+        var other = builder.AddContainer("other", "myother")
+            .WithComputeEnvironment(envb);
+
+        // ParentComputeEnvironment should be set
+        Assert.Same(enva.Resource, enva.Resource.KubernetesEnvironment.ParentComputeEnvironment);
+        Assert.Same(envb.Resource, envb.Resource.KubernetesEnvironment.ParentComputeEnvironment);
+
+        await using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        // cache and api should get DeploymentTargetAnnotation from enva-k8s
+        Assert.True(cache.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var cacheTarget),
+            "cache should have DeploymentTargetAnnotation");
+        Assert.Same(enva.Resource.KubernetesEnvironment, cacheTarget.ComputeEnvironment);
+
+        Assert.True(api.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var apiTarget),
+            "api should have DeploymentTargetAnnotation");
+        Assert.Same(enva.Resource.KubernetesEnvironment, apiTarget.ComputeEnvironment);
+
+        // other should get DeploymentTargetAnnotation from envb-k8s
+        Assert.True(other.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var otherTarget),
+            "other should have DeploymentTargetAnnotation");
+        Assert.Same(envb.Resource.KubernetesEnvironment, otherTarget.ComputeEnvironment);
+    }
 }
