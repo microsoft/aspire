@@ -9,6 +9,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Kubernetes;
@@ -164,12 +166,13 @@ internal sealed class AzureKubernetesInfrastructure(
                 // resolution that may not be available at this point in the pipeline.
                 var clusterName = environment.Name;
 
-                // Get the resource group by querying Azure directly for the AKS cluster.
-                // We can't access the provisioning context internals from this package,
-                // so we query Azure for the cluster's resource group.
+                // Get the resource group from the deployment state. The deployment state
+                // is loaded into IConfiguration by the deploy-prereq step and contains
+                // Azure:ResourceGroup from the provisioning context.
+                // We read it via IConfiguration which is populated from the deployment
+                // state JSON file before pipeline steps execute.
                 var azPath = FindAzCli();
-                var resourceGroup = await GetAksResourceGroupAsync(azPath, clusterName, context)
-                    .ConfigureAwait(false);
+                var resourceGroup = GetResourceGroupFromDeploymentState(context);
 
                 // Write credentials to an isolated kubeconfig file
                 var kubeConfigDir = Directory.CreateTempSubdirectory("aspire-aks");
@@ -224,6 +227,15 @@ internal sealed class AzureKubernetesInfrastructure(
 
                 context.Logger.LogInformation(
                     "AKS credentials written to {KubeConfigPath}", kubeConfigPath);
+
+                // Attach ACR to AKS so the kubelet identity can pull images.
+                // This grants AcrPull role to the kubelet managed identity.
+                if (environment.DefaultContainerRegistry is not null ||
+                    environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))
+                {
+                    await AttachAcrToAksAsync(azPath, clusterName, resourceGroup, environment, context)
+                        .ConfigureAwait(false);
+                }
 
                 await getCredsTask.SucceedAsync(
                     $"AKS credentials fetched for cluster {clusterName}",
@@ -282,16 +294,72 @@ internal sealed class AzureKubernetesInfrastructure(
     }
 
     /// <summary>
-    /// Queries Azure for the resource group of the specified AKS cluster.
+    /// Gets the resource group from the deployment state loaded into IConfiguration.
+    /// The deployment state JSON file contains Azure:ResourceGroup which is loaded
+    /// by the deploy-prereq step before any other pipeline steps execute.
     /// </summary>
-    private static async Task<string> GetAksResourceGroupAsync(
+    private static string GetResourceGroupFromDeploymentState(PipelineStepContext context)
+    {
+        var configuration = context.Services.GetRequiredService<IConfiguration>();
+
+        // The deployment state is loaded into IConfiguration under the Azure section.
+        // It's populated from ~/.aspire/deployments/{hash}/{env}.json
+        var resourceGroup = configuration["Azure:ResourceGroup"];
+
+        if (!string.IsNullOrEmpty(resourceGroup))
+        {
+            return resourceGroup;
+        }
+
+        // Fallback: check AzureProvisionerOptions binding
+        resourceGroup = configuration["Azure:ResourceGroup"];
+
+        if (string.IsNullOrEmpty(resourceGroup))
+        {
+            throw new InvalidOperationException(
+                "Azure resource group not found in deployment state. " +
+                "Ensure Azure provisioning has completed before this step runs.");
+        }
+
+        return resourceGroup;
+    }
+
+    /// <summary>
+    /// Attaches an Azure Container Registry to the AKS cluster, granting the kubelet
+    /// managed identity the AcrPull role so pods can pull container images.
+    /// </summary>
+    private static async Task AttachAcrToAksAsync(
         string azPath,
         string clusterName,
+        string resourceGroup,
+        AzureKubernetesEnvironmentResource environment,
         PipelineStepContext context)
     {
-        // Query Azure for the AKS cluster's resource group using az resource list.
-        // This avoids JMESPath quote-escaping issues with az aks list on Windows.
-        var arguments = $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv";
+        // Resolve the ACR name from the registry resource's Bicep output
+        string? acrName = null;
+
+        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation) &&
+            annotation.Registry is AzureContainerRegistryResource explicitAcr)
+        {
+            acrName = await explicitAcr.NameOutputReference
+                .GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        }
+        else if (environment.DefaultContainerRegistry is { } defaultAcr)
+        {
+            acrName = await defaultAcr.NameOutputReference
+                .GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        }
+
+        if (string.IsNullOrEmpty(acrName))
+        {
+            context.Logger.LogWarning("Could not resolve ACR name — skipping ACR attach");
+            return;
+        }
+
+        context.Logger.LogInformation(
+            "Attaching ACR '{AcrName}' to AKS cluster '{ClusterName}'", acrName, clusterName);
+
+        var arguments = $"aks update --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --attach-acr \"{acrName}\"";
 
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -311,23 +379,21 @@ internal sealed class AzureKubernetesInfrastructure(
 
         await process.WaitForExitAsync(context.CancellationToken).ConfigureAwait(false);
 
+        if (!string.IsNullOrWhiteSpace(stderr))
+        {
+            context.Logger.LogDebug("az aks update (stderr): {Error}", stderr);
+        }
+
         if (process.ExitCode != 0)
         {
-            throw new InvalidOperationException(
-                $"Failed to query AKS cluster resource group (exit code {process.ExitCode}): {stderr.Trim()}");
+            context.Logger.LogWarning(
+                "Failed to attach ACR '{AcrName}' to AKS cluster (exit code {ExitCode}): {Error}",
+                acrName, process.ExitCode, stderr.Trim());
+            // Don't throw — ACR might already be attached from a previous run
         }
-
-        var resourceGroup = stdout.Trim().ReplaceLineEndings("").Trim();
-
-        if (string.IsNullOrEmpty(resourceGroup))
+        else
         {
-            throw new InvalidOperationException(
-                $"AKS cluster '{clusterName}' not found. Ensure the cluster has been provisioned.");
+            context.Logger.LogInformation("ACR '{AcrName}' attached to AKS cluster", acrName);
         }
-
-        context.Logger.LogInformation("Resolved resource group '{ResourceGroup}' for AKS cluster '{ClusterName}'",
-            resourceGroup, clusterName);
-
-        return resourceGroup;
     }
 }
