@@ -5,7 +5,10 @@ resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
   name: take('acr${uniqueString(resourceGroup().id)}', 50)
   location: location
   sku: {
-    name: 'Basic'
+    name: 'Premium'
+  }
+  properties: {
+    publicNetworkAccess: 'Disabled'
   }
   tags: {
     'aspire-resource-name': 'acr'
