@@ -75,6 +75,11 @@ public static class AzureKubernetesEnvironmentExtensions
         resource.DefaultContainerRegistry = defaultRegistry.Resource;
         k8sEnvBuilder.WithAnnotation(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
 
+        // Wire ACR name as a parameter on the AKS resource so the Bicep module
+        // can create an AcrPull role assignment for the kubelet identity.
+        // The publishing context will wire this as a parameter in main.bicep.
+        resource.Parameters["acrName"] = defaultRegistry.Resource.NameOutputReference;
+
         // Ensure push steps wait for ALL Azure provisioning to complete. Push steps
         // call registry.Endpoint.GetValueAsync() which awaits the BicepOutputReference
         // for loginServer — if the ACR hasn't been provisioned yet, this blocks.

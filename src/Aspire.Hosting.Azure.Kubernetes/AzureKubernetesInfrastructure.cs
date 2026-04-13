@@ -228,15 +228,6 @@ internal sealed class AzureKubernetesInfrastructure(
                 context.Logger.LogInformation(
                     "AKS credentials written to {KubeConfigPath}", kubeConfigPath);
 
-                // Attach ACR to AKS so the kubelet identity can pull images.
-                // This grants AcrPull role to the kubelet managed identity.
-                if (environment.DefaultContainerRegistry is not null ||
-                    environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))
-                {
-                    await AttachAcrToAksAsync(azPath, clusterName, resourceGroup, environment, context)
-                        .ConfigureAwait(false);
-                }
-
                 await getCredsTask.SucceedAsync(
                     $"AKS credentials fetched for cluster {clusterName}",
                     context.CancellationToken).ConfigureAwait(false);
@@ -306,14 +297,6 @@ internal sealed class AzureKubernetesInfrastructure(
         // It's populated from ~/.aspire/deployments/{hash}/{env}.json
         var resourceGroup = configuration["Azure:ResourceGroup"];
 
-        if (!string.IsNullOrEmpty(resourceGroup))
-        {
-            return resourceGroup;
-        }
-
-        // Fallback: check AzureProvisionerOptions binding
-        resourceGroup = configuration["Azure:ResourceGroup"];
-
         if (string.IsNullOrEmpty(resourceGroup))
         {
             throw new InvalidOperationException(
@@ -322,78 +305,5 @@ internal sealed class AzureKubernetesInfrastructure(
         }
 
         return resourceGroup;
-    }
-
-    /// <summary>
-    /// Attaches an Azure Container Registry to the AKS cluster, granting the kubelet
-    /// managed identity the AcrPull role so pods can pull container images.
-    /// </summary>
-    private static async Task AttachAcrToAksAsync(
-        string azPath,
-        string clusterName,
-        string resourceGroup,
-        AzureKubernetesEnvironmentResource environment,
-        PipelineStepContext context)
-    {
-        // Resolve the ACR name from the registry resource's Bicep output
-        string? acrName = null;
-
-        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation) &&
-            annotation.Registry is AzureContainerRegistryResource explicitAcr)
-        {
-            acrName = await explicitAcr.NameOutputReference
-                .GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-        }
-        else if (environment.DefaultContainerRegistry is { } defaultAcr)
-        {
-            acrName = await defaultAcr.NameOutputReference
-                .GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-        }
-
-        if (string.IsNullOrEmpty(acrName))
-        {
-            context.Logger.LogWarning("Could not resolve ACR name — skipping ACR attach");
-            return;
-        }
-
-        context.Logger.LogInformation(
-            "Attaching ACR '{AcrName}' to AKS cluster '{ClusterName}'", acrName, clusterName);
-
-        var arguments = $"aks update --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --attach-acr \"{acrName}\"";
-
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
-        {
-            FileName = azPath,
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        process.Start();
-
-        var stdout = await process.StandardOutput.ReadToEndAsync(context.CancellationToken).ConfigureAwait(false);
-        var stderr = await process.StandardError.ReadToEndAsync(context.CancellationToken).ConfigureAwait(false);
-
-        await process.WaitForExitAsync(context.CancellationToken).ConfigureAwait(false);
-
-        if (!string.IsNullOrWhiteSpace(stderr))
-        {
-            context.Logger.LogDebug("az aks update (stderr): {Error}", stderr);
-        }
-
-        if (process.ExitCode != 0)
-        {
-            context.Logger.LogWarning(
-                "Failed to attach ACR '{AcrName}' to AKS cluster (exit code {ExitCode}): {Error}",
-                acrName, process.ExitCode, stderr.Trim());
-            // Don't throw — ACR might already be attached from a previous run
-        }
-        else
-        {
-            context.Logger.LogInformation("ACR '{AcrName}' attached to AKS cluster", acrName);
-        }
     }
 }

@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using System.Text;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 
@@ -148,6 +149,14 @@ public class AzureKubernetesEnvironmentResource(
         sb.AppendLine("param location string = resourceGroup().location");
         sb.AppendLine();
 
+        // ACR parameter for role assignment
+        if (DefaultContainerRegistry is not null || this.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))
+        {
+            sb.AppendLine("@description('The name of the Azure Container Registry for AcrPull role assignment.')");
+            sb.AppendLine("param acrName string");
+            sb.AppendLine();
+        }
+
         // AKS cluster resource
         sb.Append("resource ").Append(id).AppendLine(" 'Microsoft.ContainerService/managedClusters@2024-06-02-preview' = {");
         sb.Append("  name: '").Append(Name).AppendLine("'");
@@ -237,6 +246,28 @@ public class AzureKubernetesEnvironmentResource(
         sb.AppendLine("  }");
         sb.AppendLine("}");
         sb.AppendLine();
+
+        // ACR pull role assignment for kubelet identity
+        if (DefaultContainerRegistry is not null || this.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))
+        {
+            sb.AppendLine("// Reference the existing ACR to grant pull access to AKS");
+            sb.AppendLine("resource acr 'Microsoft.ContainerRegistry/registries@2025-04-01' existing = {");
+            sb.AppendLine("  name: acrName");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("// AcrPull role assignment for the AKS kubelet managed identity");
+            sb.Append("resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {");
+            sb.AppendLine();
+            sb.Append("  name: guid(acr.id, ").Append(id).AppendLine(".properties.identityProfile.kubeletidentity.objectId, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d'))");
+            sb.AppendLine("  scope: acr");
+            sb.AppendLine("  properties: {");
+            sb.Append("    principalId: ").Append(id).AppendLine(".properties.identityProfile.kubeletidentity.objectId");
+            sb.AppendLine("    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')");
+            sb.AppendLine("    principalType: 'ServicePrincipal'");
+            sb.AppendLine("  }");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
 
         // Outputs
         sb.Append("output id string = ").Append(id).AppendLine(".id");
