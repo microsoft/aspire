@@ -294,7 +294,7 @@ internal sealed class AddCommand : BaseCommand
             _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
         };
 
-        var packageVersions = possiblePackages.Where(p => p.Package.Id == selectedPackage.Package.Id);
+        var packageVersions = possiblePackages.Where(p => p.Package.Id == selectedPackage.Package.Id).ToArray();
 
         // If any of the package versions are an exact match for the preferred version
         // then we can skip the version prompt and just use that version.
@@ -302,6 +302,18 @@ internal sealed class AddCommand : BaseCommand
         {
             var preferredVersionPackage = packageVersions.First(p => p.Package.Version == preferredVersion);
             return preferredVersionPackage;
+        }
+
+        // When PR hives are present, prefer the package that exactly matches the installed
+        // CLI/SDK version so template- and add-generated projects stay on the same build.
+        if (ExecutionContext.GetPrHiveCount() > 0)
+        {
+            var cliVersion = VersionHelper.GetDefaultSdkVersion();
+            var cliVersionPackage = packageVersions.FirstOrDefault(p => string.Equals(p.Package.Version, cliVersion, StringComparison.OrdinalIgnoreCase));
+            if (cliVersionPackage.Package is not null)
+            {
+                return cliVersionPackage;
+            }
         }
 
         // In non-interactive mode, prefer the implicit/default channel first to keep

@@ -8,6 +8,11 @@ namespace Aspire.Cli.Utils;
 
 internal static class VersionHelper
 {
+    public static bool IsPrChannel(string? channelName)
+    {
+        return channelName?.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) == true;
+    }
+
     public static string GetDefaultTemplateVersion()
     {
         return PackageUpdateHelpers.GetCurrentAssemblyVersion() ?? throw new InvalidOperationException(ErrorStrings.UnableToRetrieveAssemblyVersion);

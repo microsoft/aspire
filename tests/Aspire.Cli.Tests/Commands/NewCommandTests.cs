@@ -460,6 +460,82 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithPrChannelPrefersCurrentCliVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        string? selectedVersion = null;
+        bool promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForTemplatesVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt for version when a PR channel contains the current CLI version.");
+                };
+
+                return prompter;
+            };
+
+            options.PackagingServiceFactory = (sp) =>
+            {
+                var packagingService = new NewCommandTestPackagingService();
+                packagingService.GetChannelsAsyncCallback = (ct) =>
+                {
+                    var fakeCache = new NewCommandTestFakeNuGetPackageCache();
+                    fakeCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                    {
+                        var packages = new[]
+                        {
+                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = cliVersion },
+                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "99.0.0" },
+                        };
+
+                        return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
+                    };
+
+                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache);
+                    return Task.FromResult<IEnumerable<PackageChannel>>([prChannel]);
+                };
+
+                return packagingService;
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                {
+                    selectedVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-starter --channel pr-12345 --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(cliVersion, selectedVersion);
+        Assert.False(promptedForVersion);
+    }
+
+    [Fact]
     // Quarantined due to flakiness. See linked issue for details.
     public async Task NewCommandDoesNotPromptForTemplateIfSpecifiedOnCommandLine()
     {

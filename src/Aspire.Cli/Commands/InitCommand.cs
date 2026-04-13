@@ -796,6 +796,16 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             }
         }
 
+        if (hasChannelSetting && VersionHelper.IsPrChannel(channelName))
+        {
+            var cliVersion = VersionHelper.GetDefaultSdkVersion();
+            var cliVersionPackageFromChannel = orderedPackagesFromChannels.FirstOrDefault(p => string.Equals(p.Package.Version, cliVersion, StringComparison.OrdinalIgnoreCase));
+            if (cliVersionPackageFromChannel.Package is not null)
+            {
+                return cliVersionPackageFromChannel;
+            }
+        }
+
         // If channel was specified via --channel option or global setting (but no --version), 
         // automatically select the highest version from that channel without prompting
         if (hasChannelSetting)

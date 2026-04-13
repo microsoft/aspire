@@ -11,6 +11,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -525,6 +526,84 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommandWithPrChannelPrefersCurrentCliVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        string? selectedVersion = null;
+        bool promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForTemplatesVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt for version when a PR channel contains the current CLI version.");
+                };
+
+                return prompter;
+            };
+
+            options.PackagingServiceFactory = (sp) =>
+            {
+                return new Aspire.Cli.Tests.TestServices.TestPackagingService
+                {
+                    GetChannelsAsyncCallback = (ct) =>
+                    {
+                        var fakeCache = new CallbackNuGetPackageCache(
+                            (dir, prerelease, nugetConfig, ct) =>
+                            {
+                                var packages = new[]
+                                {
+                                    new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = cliVersion },
+                                    new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "99.0.0" },
+                                };
+
+                                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(packages);
+                            });
+
+                        var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache);
+                        return Task.FromResult<IEnumerable<PackageChannel>>([prChannel]);
+                    }
+                };
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                {
+                    selectedVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    var appHostFile = Path.Combine(outputPath, "apphost.cs");
+                    File.WriteAllText(appHostFile, "// Test apphost file");
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<InitCommand>();
+        var result = command.Parse("init --channel pr-12345");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(cliVersion, selectedVersion);
+        Assert.False(promptedForVersion);
+    }
+
+    [Fact]
     public async Task InitCommandWithInvalidChannelShowsError()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -676,6 +755,30 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 Version = "10.0.0"
             };
             return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(new[] { package });
+        }
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(Array.Empty<Aspire.Shared.NuGetPackageCli>());
+        }
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(Array.Empty<Aspire.Shared.NuGetPackageCli>());
+        }
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(Array.Empty<Aspire.Shared.NuGetPackageCli>());
+        }
+    }
+
+    private sealed class CallbackNuGetPackageCache(
+        Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<Aspire.Shared.NuGetPackageCli>>> getTemplatePackagesAsyncCallback) : INuGetPackageCache
+    {
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        {
+            return getTemplatePackagesAsyncCallback(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
         }
 
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
