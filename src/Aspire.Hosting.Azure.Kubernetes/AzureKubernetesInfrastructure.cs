@@ -164,8 +164,9 @@ internal sealed class AzureKubernetesInfrastructure(
                 Action = ctx => GetAksCredentialsAsync(ctx, environment)
             };
 
-            // Run after AKS cluster is provisioned
-            step.DependsOn($"provision-{environment.Name}");
+            // Run after ALL Azure infrastructure is provisioned (including the AKS cluster).
+            // This depends on the aggregation step that gates on all individual provision-* steps.
+            step.DependsOn(AzureEnvironmentResource.ProvisionInfrastructureStepName);
 
             // Must complete before Helm prepare step
             step.RequiredBy($"prepare-{k8sEnv.Name}");
