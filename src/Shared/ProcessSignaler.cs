@@ -36,7 +36,14 @@ internal static partial class ProcessSignaler
         if (process is { })
         {
             logger.LogDebug("Killing process {Pid}...", pid);
-            process.Kill(entireProcessTree: false);
+            try
+            {
+                process.Kill(entireProcessTree: false);
+            }
+            catch(InvalidOperationException)
+            {
+                // Process already exited.
+            }
         }
     }
 

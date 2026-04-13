@@ -158,7 +158,19 @@ internal static class Hex1bAutomatorTestHelpers
 
             if (firstOutputMatched)
             {
-                return;
+                return; // success
+            }
+
+             remaining = effectiveTimeout - stopwatch.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            var delayBeforeRetry = remaining < effectiveRetryInterval ? remaining : effectiveRetryInterval;
+            if (delayBeforeRetry > TimeSpan.FromMilliseconds(1))
+            {
+                await auto.WaitAsync(delayBeforeRetry);
             }
         }
 
