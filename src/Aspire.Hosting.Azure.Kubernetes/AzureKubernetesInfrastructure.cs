@@ -191,19 +191,19 @@ internal sealed class AzureKubernetesInfrastructure(
         {
             try
             {
-                // Resolve the cluster name from Bicep output
-                var clusterName = await environment.NameOutputReference
-                    .GetValueAsync(context.CancellationToken).ConfigureAwait(false)
-                    ?? throw new InvalidOperationException("AKS cluster name output was not resolved.");
+                // The cluster name is the resource name — we set it directly in the Bicep template.
+                // We don't use NameOutputReference.GetValueAsync() because it triggers parameter
+                // resolution that may not be available at this point in the pipeline.
+                var clusterName = environment.Name;
 
                 // Get the resource group from Azure provisioning configuration.
-                // This is set by the Azure provisioner during the provisioning context
-                // creation step (stored in Azure:ResourceGroup config key).
+                // The create-provisioning-context step resolves this and stores it in
+                // the Azure:ResourceGroup config key before any provision steps run.
                 var configuration = context.Services.GetRequiredService<IConfiguration>();
                 var resourceGroup = configuration["Azure:ResourceGroup"]
                     ?? throw new InvalidOperationException(
                         "Azure resource group name not found in configuration. " +
-                        "Ensure the Azure provisioning context has been created (provision step must complete first).");
+                        "Ensure the Azure provisioning context has been created.");
 
                 // Write credentials to an isolated kubeconfig file
                 var kubeConfigDir = Directory.CreateTempSubdirectory("aspire-aks");
