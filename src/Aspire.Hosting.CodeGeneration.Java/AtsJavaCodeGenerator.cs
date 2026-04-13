@@ -1751,7 +1751,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
             .ToDictionary(
                 g => g.Key,
-                g => g.OrderByDescending(t => t.IsResourceBuilder).First(),
+                g => g.Any(t => t.IsResourceBuilder),
                 StringComparer.Ordinal);
         var results = new List<JavaHandleType>();
         foreach (var typeId in handleTypeIds)
@@ -1759,7 +1759,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.IsResourceBuilder;
+                isResourceBuilder = typeInfo;
             }
 
             var className = _classNames[typeId];
