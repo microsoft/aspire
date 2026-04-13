@@ -228,6 +228,15 @@ internal sealed class AzureKubernetesInfrastructure(
                 context.Logger.LogInformation(
                     "AKS credentials written to {KubeConfigPath}", kubeConfigPath);
 
+                // Add AKS connection info to the pipeline summary
+                context.Summary.Add(
+                    "☸ AKS Cluster",
+                    new MarkdownString($"**{clusterName}** in resource group **{resourceGroup}**"));
+
+                context.Summary.Add(
+                    "🔑 Connect to cluster",
+                    new MarkdownString($"`az aks get-credentials --resource-group {resourceGroup} --name {clusterName}`"));
+
                 await getCredsTask.SucceedAsync(
                     $"AKS credentials fetched for cluster {clusterName}",
                     context.CancellationToken).ConfigureAwait(false);
