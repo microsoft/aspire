@@ -511,15 +511,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>("docker");
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>("podman");
-        _innerBuilder.Services.AddSingleton(sp =>
-        {
-            var dcpOptions = sp.GetRequiredService<IOptions<DcpOptions>>();
-            return dcpOptions.Value.ContainerRuntime switch
-            {
-                string rt => sp.GetRequiredKeyedService<IContainerRuntime>(rt),
-                null => sp.GetRequiredKeyedService<IContainerRuntime>("docker")
-            };
-        });
+        _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());

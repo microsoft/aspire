@@ -292,6 +292,81 @@ internal static class CliE2ETestHelpers
         return builder.Build();
     }
 
+    /// <summary>
+    /// Creates a Hex1b terminal that runs inside a Docker container, configured using the
+    /// given <see cref="CliInstallStrategy"/> for CLI installation.
+    /// </summary>
+    internal static Hex1bTerminal CreateDockerTestTerminal(
+        string repoRoot,
+        CliInstallStrategy strategy,
+        ITestOutputHelper output,
+        DockerfileVariant variant = DockerfileVariant.DotNet,
+        bool mountDockerSocket = false,
+        TemporaryWorkspace? workspace = null,
+        IEnumerable<string>? additionalVolumes = null,
+        int width = 160,
+        int height = 48,
+        [CallerMemberName] string testName = "")
+    {
+        var recordingPath = GetTestResultsRecordingPath(testName);
+        var dockerfileName = variant switch
+        {
+            DockerfileVariant.DotNet => "Dockerfile.e2e",
+            DockerfileVariant.Polyglot => "Dockerfile.e2e-polyglot-base",
+            DockerfileVariant.PolyglotJava => "Dockerfile.e2e-polyglot-java",
+            _ => throw new ArgumentOutOfRangeException(nameof(variant)),
+        };
+        var dockerfilePath = Path.Combine(repoRoot, "tests", "Shared", "Docker", dockerfileName);
+
+        if (variant is DockerfileVariant.PolyglotJava)
+        {
+            EnsurePolyglotBaseImage(repoRoot, output);
+        }
+
+        output.WriteLine($"Creating Docker test terminal:");
+        output.WriteLine($"  Test name:      {testName}");
+        output.WriteLine($"  Strategy:       {strategy}");
+        output.WriteLine($"  Variant:        {variant}");
+        output.WriteLine($"  Dockerfile:     {dockerfilePath}");
+        output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");
+        output.WriteLine($"  Docker socket:  {mountDockerSocket}");
+        output.WriteLine($"  Dimensions:     {width}x{height}");
+        output.WriteLine($"  Recording:      {recordingPath}");
+
+        var builder = Hex1bTerminal.CreateBuilder()
+            .WithHeadless()
+            .WithDimensions(width, height)
+            .WithAsciinemaRecording(recordingPath)
+            .WithDockerContainer(c =>
+            {
+                c.DockerfilePath = dockerfilePath;
+                c.BuildContext = repoRoot;
+
+                if (mountDockerSocket)
+                {
+                    c.MountDockerSocket = true;
+                }
+
+                if (workspace is not null)
+                {
+                    c.Volumes.Add($"{workspace.WorkspaceRoot.FullName}:/workspace/{workspace.WorkspaceRoot.Name}");
+                }
+
+                if (additionalVolumes is not null)
+                {
+                    foreach (var volume in additionalVolumes)
+                    {
+                        c.Volumes.Add(volume);
+                    }
+                }
+
+                // Delegate all mode-specific Docker config to the strategy
+                strategy.ConfigureContainer(c);
+            });
+
+        return builder.Build();
+    }
+
     private static void EnsurePolyglotBaseImage(string repoRoot, ITestOutputHelper output)
     {
         lock (s_polyglotBaseImageLock)

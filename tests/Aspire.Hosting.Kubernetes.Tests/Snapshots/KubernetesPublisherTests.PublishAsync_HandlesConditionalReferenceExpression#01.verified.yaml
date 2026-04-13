@@ -1,6 +1,9 @@
 ﻿parameters: {}
 secrets: {}
 config:
+  env_dashboard:
+    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
+    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   myapp:
     TLS_SUFFIX: ",ssl=true"
     TLS_SUFFIX_FALSE: ",ssl=false"

@@ -129,7 +129,7 @@ internal sealed class DoctorCommand : BaseCommand
     private void OutputCheckResult(EnvironmentCheckResult result)
     {
         var (icon, color) = GetStatusIconAndColor(result.Status);
-        var iconPrefix = ConsoleHelpers.FormatEmojiPrefix(icon, _ansiConsole);
+        var iconPrefix = ConsoleHelpers.FormatEmojiPrefix(icon, _ansiConsole, suppressColor: true);
 
         // Primary grid: icon + message (wrapped lines stay aligned with message text)
         var messageGrid = new Grid();

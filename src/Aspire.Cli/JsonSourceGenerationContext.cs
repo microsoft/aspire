@@ -27,7 +27,6 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(DoctorCheckResponse))]
 [JsonSerializable(typeof(EnvironmentCheckResult))]
 [JsonSerializable(typeof(DoctorCheckSummary))]
-[JsonSerializable(typeof(ContainerVersionJson))]
 [JsonSerializable(typeof(AspireJsonConfiguration))]
 [JsonSerializable(typeof(AspireConfigFile))]
 [JsonSerializable(typeof(List<DevCertInfo>))]

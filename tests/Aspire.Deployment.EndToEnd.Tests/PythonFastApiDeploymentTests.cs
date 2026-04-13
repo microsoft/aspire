@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -76,10 +77,17 @@ public sealed class PythonFastApiDeploymentTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
+            // Python apphosts need the full bundle because
+            // the prebuilt AppHost server is required for aspire new with Python templates.
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
+                var prNumber = DeploymentE2ETestHelpers.GetPrNumber();
+                if (prNumber > 0)
+                {
+                    output.WriteLine($"Step 2: Installing Aspire bundle from PR #{prNumber}...");
+                    await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
+                }
+                await auto.SourceAspireBundleEnvironmentAsync(counter);
             }
 
             // Step 3: Create Python FastAPI project using aspire new with interactive prompts
@@ -145,7 +153,7 @@ builder.Build().Run();
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             // Wait for pipeline to complete successfully
-            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 10: Extract deployment URLs and verify endpoints with retry

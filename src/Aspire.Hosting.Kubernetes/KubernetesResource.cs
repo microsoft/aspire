@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.Globalization;
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
+using Aspire.Hosting.Pipelines;
 
 namespace Aspire.Hosting.Kubernetes;
 
@@ -18,7 +21,24 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     /// <inheritdoc/>
     public KubernetesEnvironmentResource Parent => kubernetesEnvironmentResource;
 
-    internal record EndpointMapping(string Scheme, string Protocol, string Host, HelmValue Port, string Name, string? HelmExpression = null);
+    internal void AddPrintSummaryStep()
+    {
+        Annotations.Add(new PipelineStepAnnotation(_ =>
+        {
+            var printResourceSummary = new PipelineStep
+            {
+                Name = $"print-{resource.Name}-summary",
+                Description = $"Retrieves deployment status for {resource.Name}.",
+                Action = async ctx => await HelmDeploymentEngine.PrintResourceSummaryAsync(ctx, kubernetesEnvironmentResource, resource, this).ConfigureAwait(false),
+                Tags = [HelmDeploymentEngine.PrintSummaryTag],
+                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+            };
+
+            return new List<PipelineStep> { printResourceSummary };
+        }));
+    }
+
+    internal record EndpointMapping(string Scheme, string Protocol, string Host, HelmValue Port, string Name, string? HelmExpression = null, HelmValue? ServicePort = null);
     internal Dictionary<string, EndpointMapping> EndpointMappings { get; } = [];
     internal Dictionary<string, HelmValue> EnvironmentVariables { get; } = [];
     internal Dictionary<string, HelmValue> Secrets { get; } = [];
@@ -145,7 +165,10 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
         var imageEnvName = $"{resourceInstance.Name.ToHelmValuesSectionName()}_image";
         var value = $"{resourceInstance.Name}:latest";
-        var expression = new HelmValue(imageEnvName.ToHelmParameterExpression(resource.Name), value);
+        var expression = new HelmValue(imageEnvName.ToHelmParameterExpression(resource.Name), value)
+        {
+            ImageResource = resourceInstance
+        };
 
         Parameters[imageEnvName] = expression;
         return expression.ToScalar();
@@ -198,7 +221,17 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             }
 
             var portValue = resolved.TargetPort.Value.Value.ToString(CultureInfo.InvariantCulture);
-            EndpointMappings[endpoint.Name] = new(endpoint.UriScheme, GetKubernetesProtocolName(endpoint.Protocol), resource.Name.ToServiceName(), HelmValue.Literal(portValue), endpoint.Name);
+
+            // Capture the exposed (service) port when it differs from the target (container) port.
+            // This allows WithServicePort to set a different Kubernetes Service port than the container port.
+            HelmValue? servicePort = null;
+            if (resolved.ExposedPort.Value is int exposedPortValue &&
+                exposedPortValue != resolved.TargetPort.Value.Value)
+            {
+                servicePort = HelmValue.Literal(exposedPortValue.ToString(CultureInfo.InvariantCulture));
+            }
+
+            EndpointMappings[endpoint.Name] = new(endpoint.UriScheme, GetKubernetesProtocolName(endpoint.Protocol), resource.Name.ToServiceName(), HelmValue.Literal(portValue), endpoint.Name, ServicePort: servicePort);
         }
     }
 
@@ -324,6 +357,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 await c.Callback(context).ConfigureAwait(false);
             }
 
+            // Remove HTTPS service discovery variables — containers in Kubernetes don't have TLS certificates.
+            // TLS termination is handled externally by ingress controllers or service mesh.
+            // This matches the Docker Compose behavior in RemoveHttpsServiceDiscoveryVariables.
+            RemoveHttpsServiceDiscoveryVariables(context.EnvironmentVariables);
+
             foreach (var environmentVariable in context.EnvironmentVariables)
             {
                 var key = environmentVariable.Key;
@@ -375,6 +413,19 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     {
         var configExpression = key.ToHelmConfigExpression(resourceName);
         EnvironmentVariables[key] = new(configExpression, value.ToString() ?? string.Empty);
+    }
+
+    private static void RemoveHttpsServiceDiscoveryVariables(Dictionary<string, object> environmentVariables)
+    {
+        var keysToRemove = environmentVariables
+            .Where(kvp => kvp.Value is EndpointReference epRef && epRef.Scheme == "https" && kvp.Key.StartsWith("services__"))
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in keysToRemove)
+        {
+            environmentVariables.Remove(key);
+        }
     }
 
     private async Task<object> ProcessValueAsync(KubernetesEnvironmentContext context, DistributedApplicationExecutionContext executionContext, object value, bool embedded = false)
@@ -452,7 +503,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
                 if (expr is { Format: "{0}", ValueProviders.Count: 1 })
                 {
-                    return (await ProcessValueAsync(context, executionContext, expr.ValueProviders[0], true).ConfigureAwait(false)).ToString() ?? string.Empty;
+                    var inner = await ProcessValueAsync(context, executionContext, expr.ValueProviders[0], embedded).ConfigureAwait(false);
+                    // When embedded in a larger format string, convert to string for interpolation.
+                    // When at the top level, preserve the original object (e.g., HelmValue with ValuesKey)
+                    // so ProcessEnvironmentHelmExpression handles it correctly.
+                    return embedded ? inner?.ToString() ?? string.Empty : inner;
                 }
 
                 var args = new object[expr.ValueProviders.Count];
@@ -544,7 +599,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)
     {
-        var (scheme, _, host, port, _, _) = mapping;
+        var (scheme, _, host, port, _, _, _) = mapping;
 
         return property switch
         {
@@ -595,15 +650,10 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             formattedName.ToHelmSecretExpression(resource.Name) :
             formattedName.ToHelmConfigExpression(resource.Name);
 
-        // Store the parameter itself for deferred resolution instead of resolving the value immediately
-        if (parameter.Default is null || parameter.Secret)
-        {
-            return new(expression, (string?)null);
-        }
-        else
-        {
-            return new(expression, parameter);
-        }
+        // Always store the parameter reference for deferred resolution.
+        // Secrets and parameters without defaults are resolved at deploy time (not publish time).
+        // ValuesKey preserves the parameter name so values.yaml key matches the Helm expression path.
+        return new(expression, parameter) { ValuesKey = formattedName };
     }
     
     private static HelmValue ResolveUnknownValue(IManifestExpressionProvider parameter, IResource resource)
@@ -685,6 +735,20 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         /// Gets the parameter resource associated with this HelmValue, if any.
         /// </summary>
         public ParameterResource? ParameterSource { get; }
+
+        /// <summary>
+        /// Gets the resource associated with a container image reference, if any.
+        /// When set, the image name is resolved at deploy time via <see cref="ContainerImageReference"/>
+        /// to include the container registry prefix.
+        /// </summary>
+        public IResource? ImageResource { get; init; }
+
+        /// <summary>
+        /// Gets the key to use when writing this value to the Helm values.yaml file.
+        /// When set, this overrides the dictionary key to ensure the values.yaml key matches
+        /// the Helm expression path (e.g., parameter name "cache_password" vs env var name "REDIS_PASSWORD").
+        /// </summary>
+        public string? ValuesKey { get; init; }
 
         /// <summary>
         /// Indicates whether the expression contains a Helm secret expression. 

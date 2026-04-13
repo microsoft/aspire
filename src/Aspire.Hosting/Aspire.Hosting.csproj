@@ -29,6 +29,7 @@
     <Compile Include="$(SharedDir)KnownEndpointNames.cs" Link="Utils\KnownEndpointNames.cs" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="ApplicationModel\EnvironmentVariableNameEncoder.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Publishing\ContainerRuntimeDetector.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)OtlpEndpointResolver.cs" Link="Utils\OtlpEndpointResolver.cs" />
     <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />

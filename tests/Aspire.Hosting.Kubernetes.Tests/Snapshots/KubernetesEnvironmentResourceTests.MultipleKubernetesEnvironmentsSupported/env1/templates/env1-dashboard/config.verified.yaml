@@ -1,0 +1,12 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "env1-dashboard-config"
+  labels:
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "env1-dashboard"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  DASHBOARD__FRONTEND__AUTHMODE: "{{ .Values.config.env1_dashboard.DASHBOARD__FRONTEND__AUTHMODE }}"
+  DASHBOARD__OTLP__AUTHMODE: "{{ .Values.config.env1_dashboard.DASHBOARD__OTLP__AUTHMODE }}"

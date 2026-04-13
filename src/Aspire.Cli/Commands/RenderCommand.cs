@@ -31,6 +31,7 @@ internal sealed class RenderCommand : BaseCommand
     private static readonly Dictionary<string, string> s_choices = new()
     {
         ["displaymessage"] = "Display message (all emojis)",
+        ["displaystyles"] = "Display error, success, subtle, and cancellation messages",
         ["showstatus"] = "Show status spinner (first 5 emojis)",
         ["showstatus-markup"] = "Show status with markup rendered",
         ["showstatus-escaped"] = "Show status with markup escaped",
@@ -136,6 +137,8 @@ internal sealed class RenderCommand : BaseCommand
             {
                 case "displaymessage":
                     return TestDisplayMessage();
+                case "displaystyles":
+                    return TestDisplayStyles();
                 case "showstatus":
                     return await TestShowStatusAsync(cancellationToken);
                 case "showstatus-markup":
@@ -188,6 +191,15 @@ internal sealed class RenderCommand : BaseCommand
             InteractionService.DisplayMessage(emoji, $"DisplayMessage with {emoji.Name}");
         }
 
+        return ExitCodeConstants.Success;
+    }
+
+    private int TestDisplayStyles()
+    {
+        InteractionService.DisplayError("This is an error message.");
+        InteractionService.DisplaySuccess("Operation completed successfully.");
+        InteractionService.DisplaySubtleMessage("This is a subtle hint.");
+        InteractionService.DisplayCancellationMessage();
         return ExitCodeConstants.Success;
     }
 
@@ -334,8 +346,8 @@ internal sealed class RenderCommand : BaseCommand
             "Markup characters in names and failures",
             [
                 new("root", "Build [web] frontend", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(120), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromMilliseconds(120)),
-                new("child", "Deploy [api] service", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromMilliseconds(35), "Failure while parsing [resource] => {bad}", "root", 1, 2, TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(95)),
-                new("sibling", "Notify [[observers]]", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromMilliseconds(12), null, "root", 1, 3, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(112)),
+                new("child", "Deploy [api] service", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromMilliseconds(35), "Failure while parsing [[resource]] => [bold]{bad}[/]", "root", 1, 2, TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(95)),
+                new("sibling", "Notify [observers]", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromMilliseconds(12), null, "root", 1, 3, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(112)),
             ], false),
         "publish-summary-mixed-hierarchy" => new(
             "Mixed roots and orphaned parents",
@@ -344,7 +356,8 @@ internal sealed class RenderCommand : BaseCommand
                 new("orphan", "Orphaned child falls back to root ordering", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "missing-parent", 1, 2, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)),
                 new("root-b", "Publish", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromSeconds(4), null, null, 0, 3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(9)),
                 new("child-b", "Package", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(1), null, "root-b", 1, 4, TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(7)),
-                new("root-c", "Validate", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, null, 0, 5, TimeSpan.FromSeconds(9), TimeSpan.FromSeconds(11)),
+                new("info-step", "Using cached configuration", ConsoleActivityLogger.ActivityState.Info, TimeSpan.FromSeconds(0), null, "root-b", 1, 5, TimeSpan.FromSeconds(7), TimeSpan.FromSeconds(7)),
+                new("root-c", "Validate", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, null, 0, 6, TimeSpan.FromSeconds(9), TimeSpan.FromSeconds(11)),
             ]),
         "publish-summary-duration-extremes" => new(
             "Duration extremes",

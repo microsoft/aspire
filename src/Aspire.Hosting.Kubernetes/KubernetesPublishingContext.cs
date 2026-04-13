@@ -18,6 +18,7 @@ internal sealed class KubernetesPublishingContext(
     DistributedApplicationExecutionContext executionContext,
     string outputPath,
     ILogger logger,
+    KubernetesEnvironmentResource? environment = null,
     CancellationToken cancellationToken = default)
 {
     public readonly string OutputPath = outputPath;
@@ -66,7 +67,13 @@ internal sealed class KubernetesPublishingContext(
 
     private async Task WriteKubernetesOutputAsync(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
     {
-        foreach (var resource in model.Resources)
+        // Include the dashboard resource alongside model resources so its templates are generated.
+        // This mirrors the Docker Compose pattern in DockerComposePublishingContext.
+        IEnumerable<IResource> resources = environment.DashboardEnabled && environment.Dashboard?.Resource is IResource dashboardResource
+            ? [dashboardResource, .. model.Resources]
+            : model.Resources;
+
+        foreach (var resource in resources)
         {
             if (resource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget is KubernetesResource serviceResource)
             {
@@ -135,8 +142,24 @@ internal sealed class KubernetesPublishingContext(
 
         foreach (var (key, helmExpressionWithValue) in contextItems)
         {
+            // Use ValuesKey when available to ensure values.yaml key matches the Helm expression path.
+            // This matters when the dictionary key (env var name, e.g., "REDIS_PASSWORD") differs from
+            // the parameter name used in the Helm expression (e.g., "cache_password").
+            var valuesKey = helmExpressionWithValue.ValuesKey ?? key.ToHelmValuesSectionName();
+
+            // Cross-resource secret references have their Value set to a string containing
+            // Helm expressions (e.g., "cache:6379,password={{ .Values.secrets.cache.password }}").
+            // These need empty placeholders in values.yaml so the YAML section structure exists,
+            // and the actual values are resolved at deploy time from the captured cross-reference.
             if (helmExpressionWithValue.ValueContainsHelmExpression)
             {
+                paramValues[valuesKey] = string.Empty;
+                environment?.CapturedHelmCrossReferences.Add(
+                    new KubernetesEnvironmentResource.CapturedHelmCrossReference(
+                        helmKey,
+                        resource.Name.ToHelmValuesSectionName(),
+                        valuesKey,
+                        helmExpressionWithValue.ValueString!));
                 continue;
             }
 
@@ -145,14 +168,43 @@ internal sealed class KubernetesPublishingContext(
             // If there's a parameter source, resolve its value asynchronously
             if (helmExpressionWithValue.ParameterSource is ParameterResource parameter)
             {
-                value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+                if (parameter.Secret || parameter.Default is null)
+                {
+                    // Don't resolve secrets or parameters without defaults during publish.
+                    // Write an empty placeholder and capture the mapping for deploy-time resolution.
+                    value = string.Empty;
+                    environment?.CapturedHelmValues.Add(
+                        new KubernetesEnvironmentResource.CapturedHelmValue(
+                            helmKey,
+                            resource.Name.ToHelmValuesSectionName(),
+                            valuesKey,
+                            parameter));
+                }
+                else
+                {
+                    value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+                }
             }
             else
             {
                 value = helmExpressionWithValue.Value;
             }
 
-            paramValues[key.ToHelmValuesSectionName()] = value ?? string.Empty;
+            paramValues[valuesKey] = value ?? string.Empty;
+
+            // Capture container image references for deploy-time registry resolution.
+            // During publish, the default image name (e.g., "server:latest") is written to values.yaml.
+            // During deploy, the ContainerImageReference resolves the full registry-prefixed name
+            // (e.g., "myregistry.azurecr.io/server:latest") and writes it to the override file.
+            if (helmExpressionWithValue.ImageResource is not null)
+            {
+                environment?.CapturedHelmImageReferences.Add(
+                    new KubernetesEnvironmentResource.CapturedHelmImageReference(
+                        helmKey,
+                        resource.Name.ToHelmValuesSectionName(),
+                        valuesKey,
+                        helmExpressionWithValue.ImageResource));
+            }
         }
 
         if (paramValues.Count > 0)

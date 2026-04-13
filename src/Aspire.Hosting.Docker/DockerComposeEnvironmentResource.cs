@@ -3,17 +3,16 @@
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Docker.Resources;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Docker;
 
@@ -224,58 +223,27 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             throw new InvalidOperationException($"Docker Compose file not found at {dockerComposeFilePath}");
         }
 
+        var runtime = await context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken).ConfigureAwait(false);
+
         var deployTask = await context.ReportingStep.CreateTaskAsync(
-            new MarkdownString($"Running docker compose up for **{Name}**"),
+            new MarkdownString($"Running compose up for **{Name}** using **{runtime.Name}**"),
             context.CancellationToken).ConfigureAwait(false);
         await using (deployTask.ConfigureAwait(false))
         {
             try
             {
-                var arguments = GetDockerComposeArguments(context, this);
-                arguments += " up -d --remove-orphans";
+                var composeContext = CreateComposeOperationContext(context);
 
-                context.Logger.LogDebug("Running docker compose up with arguments: {Arguments}", arguments);
+                await runtime.ComposeUpAsync(composeContext, context.CancellationToken).ConfigureAwait(false);
 
-                var spec = new ProcessSpec("docker")
-                {
-                    Arguments = arguments,
-                    WorkingDirectory = outputPath,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true,
-                    OnOutputData = output =>
-                    {
-                        context.Logger.LogDebug("docker compose up (stdout): {Output}", output);
-                    },
-                    OnErrorData = error =>
-                    {
-                        context.Logger.LogDebug("docker compose up (stderr): {Error}", error);
-                    },
-                };
-
-                var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
-
-                await using (processDisposable)
-                {
-                    var processResult = await pendingProcessResult
-                        .WaitAsync(context.CancellationToken)
-                        .ConfigureAwait(false);
-
-                    if (processResult.ExitCode != 0)
-                    {
-                        await deployTask.FailAsync($"docker compose up failed with exit code {processResult.ExitCode}", cancellationToken: context.CancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await deployTask.CompleteAsync(
-                            new MarkdownString($"Service **{Name}** is now running with Docker Compose locally"),
-                            CompletionState.Completed,
-                            context.CancellationToken).ConfigureAwait(false);
-                    }
-                }
+                await deployTask.CompleteAsync(
+                    new MarkdownString($"Service **{Name}** is now running with Docker Compose locally (runtime: {runtime.Name})"),
+                    CompletionState.Completed,
+                    context.CancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                await deployTask.CompleteAsync($"Docker Compose deployment failed: {ex.Message}", CompletionState.CompletedWithError, context.CancellationToken).ConfigureAwait(false);
+                await deployTask.CompleteAsync($"Compose deployment failed ({runtime.Name}): {ex.Message}", CompletionState.CompletedWithError, context.CancellationToken).ConfigureAwait(false);
                 throw;
             }
         }
@@ -291,50 +259,27 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             throw new InvalidOperationException($"Docker Compose file not found at {dockerComposeFilePath}");
         }
 
+        var runtime = await context.Services.GetRequiredService<IContainerRuntimeResolver>().ResolveAsync(context.CancellationToken).ConfigureAwait(false);
+
         var deployTask = await context.ReportingStep.CreateTaskAsync(
-            new MarkdownString($"Running docker compose down for **{Name}**"),
+            new MarkdownString($"Running compose down for **{Name}** using **{runtime.Name}**"),
             context.CancellationToken).ConfigureAwait(false);
         await using (deployTask.ConfigureAwait(false))
         {
             try
             {
-                var arguments = GetDockerComposeArguments(context, this);
-                arguments += " down";
+                var composeContext = CreateComposeOperationContext(context);
 
-                context.Logger.LogDebug("Running docker compose down with arguments: {Arguments}", arguments);
+                await runtime.ComposeDownAsync(composeContext, context.CancellationToken).ConfigureAwait(false);
 
-                var spec = new ProcessSpec("docker")
-                {
-                    Arguments = arguments,
-                    WorkingDirectory = outputPath,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true
-                };
-
-                var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
-
-                await using (processDisposable)
-                {
-                    var processResult = await pendingProcessResult
-                        .WaitAsync(context.CancellationToken)
-                        .ConfigureAwait(false);
-
-                    if (processResult.ExitCode != 0)
-                    {
-                        await deployTask.FailAsync($"docker compose down failed with exit code {processResult.ExitCode}", cancellationToken: context.CancellationToken).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        await deployTask.CompleteAsync(
-                            new MarkdownString($"Docker Compose shutdown complete for **{Name}**"),
-                            CompletionState.Completed,
-                            context.CancellationToken).ConfigureAwait(false);
-                    }
-                }
+                await deployTask.CompleteAsync(
+                    new MarkdownString($"Compose shutdown complete for **{Name}** ({runtime.Name})"),
+                    CompletionState.Completed,
+                    context.CancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                await deployTask.CompleteAsync($"Docker Compose shutdown failed: {ex.Message}", CompletionState.CompletedWithError, context.CancellationToken).ConfigureAwait(false);
+                await deployTask.CompleteAsync($"Compose shutdown failed ({runtime.Name}): {ex.Message}", CompletionState.CompletedWithError, context.CancellationToken).ConfigureAwait(false);
                 throw;
             }
         }
@@ -396,21 +341,16 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
         return envFilePath;
     }
 
-    internal static string GetDockerComposeArguments(PipelineStepContext context, DockerComposeEnvironmentResource environment)
+    internal ComposeOperationContext CreateComposeOperationContext(PipelineStepContext context)
     {
-        var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, environment);
-        var dockerComposeFilePath = Path.Combine(outputPath, "docker-compose.yaml");
-        var envFilePath = GetEnvFilePath(context, environment);
-        var projectName = GetDockerComposeProjectName(context, environment);
-
-        var arguments = $"compose -f \"{dockerComposeFilePath}\" --project-name \"{projectName}\"";
-
-        if (File.Exists(envFilePath))
+        var outputPath = PublishingContextUtils.GetEnvironmentOutputPath(context, this);
+        return new ComposeOperationContext
         {
-            arguments += $" --env-file \"{envFilePath}\"";
-        }
-
-        return arguments;
+            ComposeFilePath = Path.Combine(outputPath, "docker-compose.yaml"),
+            ProjectName = GetDockerComposeProjectName(context, this),
+            EnvFilePath = GetEnvFilePath(context, this),
+            WorkingDirectory = outputPath
+        };
     }
 
     internal static string GetDockerComposeProjectName(PipelineStepContext context, DockerComposeEnvironmentResource environment)

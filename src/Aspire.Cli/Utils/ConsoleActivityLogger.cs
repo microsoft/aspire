@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Spectre.Console;
@@ -49,7 +50,9 @@ internal sealed class ConsoleActivityLogger
 
     private const string SuccessSymbol = "✓";
     private const string FailureSymbol = "✗";
-    private const string WarningSymbol = "⚠";
+    // The warning symbol is intentionally not ⚠ because that character can be displayed as an emoji in some terminals, causing rendering issues.
+    private const string WarningSymbol = "△";
+
     private const string InProgressSymbol = "→";
     private const string InfoSymbol = "i";
     private const int SummaryTimelineWidth = 28;
@@ -88,7 +91,7 @@ internal sealed class ConsoleActivityLogger
                 _stepStates[taskKey] = ActivityState.InProgress;
             }
         }
-        WriteLine(taskKey, InProgressSymbol, startingMessage ?? "Starting...", ActivityState.InProgress);
+        WriteLine(taskKey, InProgressSymbol, startingMessage ?? ConsoleActivityLoggerStrings.ActivityStarting, ActivityState.InProgress);
     }
 
     public void StartTask(string taskKey, string displayName, string? startingMessage = null)
@@ -101,7 +104,7 @@ internal sealed class ConsoleActivityLogger
             }
             _displayNames[taskKey] = displayName;
         }
-        WriteLine(taskKey, InProgressSymbol, startingMessage ?? ($"Starting {displayName}..."), ActivityState.InProgress);
+        WriteLine(taskKey, InProgressSymbol, startingMessage ?? string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.ActivityStartingWithName, displayName), ActivityState.InProgress);
     }
 
     public void StartSpinner()
@@ -218,17 +221,22 @@ internal sealed class ConsoleActivityLogger
             var warningSteps = _stepStates.Values.Count(v => v == ActivityState.Warning);
             var failedSteps = _stepStates.Values.Count(v => v == ActivityState.Failure);
             var summaryParts = new List<string>();
-            var succeededSegment = totalSteps > 0 ? $"{succeededSteps}/{totalSteps} steps succeeded" : $"{succeededSteps} steps succeeded";
+            var succeededSegment = totalSteps > 0
+                ? string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryStepsSucceededWithTotal, succeededSteps, totalSteps)
+                : string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryStepsSucceeded, succeededSteps);
             if (_enableColor)
             {
-                summaryParts.Add($"[green]{SuccessSymbol} {succeededSegment}[/]");
+                summaryParts.Add($"[green]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CheckMarkButton, _console, suppressColor: true)}{succeededSegment}[/]");
                 if (warningSteps > 0)
                 {
-                    summaryParts.Add($"[yellow]{WarningSymbol} {warningSteps} warning{(warningSteps == 1 ? string.Empty : "s")}[/]");
+                    var warningText = warningSteps == 1
+                        ? string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryWarningsSingular, warningSteps)
+                        : string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryWarningsPlural, warningSteps);
+                    summaryParts.Add($"[yellow]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.Warning, _console, suppressColor: true)}{warningText}[/]");
                 }
                 if (failedSteps > 0)
                 {
-                    summaryParts.Add($"[red]{FailureSymbol} {failedSteps} failed[/]");
+                    summaryParts.Add($"[red]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CrossMark, _console, suppressColor: true)}{string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryFailed, failedSteps)}[/]");
                 }
             }
             else
@@ -236,14 +244,17 @@ internal sealed class ConsoleActivityLogger
                 summaryParts.Add($"{SuccessSymbol} {succeededSegment}");
                 if (warningSteps > 0)
                 {
-                    summaryParts.Add($"{WarningSymbol} {warningSteps} warning{(warningSteps == 1 ? string.Empty : "s")}");
+                    var warningText = warningSteps == 1
+                        ? string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryWarningsSingular, warningSteps)
+                        : string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryWarningsPlural, warningSteps);
+                    summaryParts.Add($"{WarningSymbol} {warningText}");
                 }
                 if (failedSteps > 0)
                 {
-                    summaryParts.Add($"{FailureSymbol} {failedSteps} failed");
+                    summaryParts.Add($"{FailureSymbol} {string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryFailed, failedSteps)}");
                 }
             }
-            summaryParts.Add($"Total time: {DurationFormatter.FormatDuration(TimeSpan.FromSeconds(totalSeconds), CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed)}");
+            summaryParts.Add(string.Format(CultureInfo.CurrentCulture, ConsoleActivityLoggerStrings.SummaryTotalTime, DurationFormatter.FormatDuration(TimeSpan.FromSeconds(totalSeconds), CultureInfo.InvariantCulture, DecimalDurationDisplay.Fixed)));
             _console.MarkupLine(string.Join(" • ", summaryParts));
 
             if (_durationRecords is { Count: > 0 })
@@ -255,7 +266,7 @@ internal sealed class ConsoleActivityLogger
             if (!string.IsNullOrEmpty(_finalStatusHeader))
             {
                 _console.MarkupLine(_finalStatusHeader!);
-                
+
                 // Display pipeline summary if available (for successful deployments)
                 // Store in local variable to avoid potential threading issues
                 var pipelineSummary = _pipelineSummary;
@@ -268,13 +279,13 @@ internal sealed class ConsoleActivityLogger
                         _console.MarkupLine(formattedLine);
                     }
                 }
-                
+
                 // If pipeline failed and not already in debug/trace mode, show help message about using --log-level debug
                 if (!_pipelineSucceeded && !_isDebugOrTraceLoggingEnabled)
                 {
                     var helpMessage = _enableColor
-                        ? "[dim]For more details, add --log-level debug/trace to the command.[/]"
-                        : "For more details, add --log-level debug/trace to the command.";
+                        ? $"[dim]{ConsoleActivityLoggerStrings.SummaryLogLevelHelp}[/]"
+                        : ConsoleActivityLoggerStrings.SummaryLogLevelHelp;
                     _console.MarkupLine(helpMessage);
                 }
             }
@@ -322,14 +333,14 @@ internal sealed class ConsoleActivityLogger
         if (succeeded)
         {
             _finalStatusHeader = _enableColor
-                ? $"[green]{SuccessSymbol} PIPELINE SUCCEEDED[/]"
-                : $"{SuccessSymbol} PIPELINE SUCCEEDED";
+                ? $"[green]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CheckMarkButton, _console, suppressColor: true)}{ConsoleActivityLoggerStrings.PipelineSucceeded}[/]"
+                : $"{SuccessSymbol} {ConsoleActivityLoggerStrings.PipelineSucceeded}";
         }
         else
         {
             _finalStatusHeader = _enableColor
-                ? $"[red]{FailureSymbol} PIPELINE FAILED[/]"
-                : $"{FailureSymbol} PIPELINE FAILED";
+                ? $"[red]{ConsoleHelpers.FormatEmojiPrefix(KnownEmojis.CrossMark, _console, suppressColor: true)}{ConsoleActivityLoggerStrings.PipelineFailed}[/]"
+                : $"{FailureSymbol} {ConsoleActivityLoggerStrings.PipelineFailed}";
         }
     }
 
@@ -403,17 +414,19 @@ internal sealed class ConsoleActivityLogger
         foreach (var rec in orderedRecords)
         {
             var durStr = FormatSummaryDuration(rec.Duration, totalTimeline).PadLeft(durationWidth);
-            var symbol = rec.State switch
+            var stateSymbol = rec.State switch
             {
-                ActivityState.Success => _enableColor ? "[green]" + SuccessSymbol + "[/]" : SuccessSymbol,
-                ActivityState.Warning => _enableColor ? "[yellow]" + WarningSymbol + "[/]" : WarningSymbol,
-                ActivityState.Failure => _enableColor ? "[red]" + FailureSymbol + "[/]" : FailureSymbol,
-                _ => _enableColor ? "[cyan]" + InProgressSymbol + "[/]" : InProgressSymbol
+                ActivityState.Success => SuccessSymbol,
+                ActivityState.Warning => WarningSymbol,
+                ActivityState.Failure => FailureSymbol,
+                ActivityState.Info => InfoSymbol,
+                _ => InProgressSymbol
             };
-            // DisplayName and FailureReason are already Spectre-safe (pre-processed
-            // through ConvertTextWithMarkdownFlag which escapes or converts markdown).
+            var symbol = _enableColor ? $"[{GetStateColor(rec.State)}]{stateSymbol}[/]" : stateSymbol;
             var displayName = GetIndentedDisplayName(rec);
             var name = (renderTimeline ? displayName.PadRight(nameWidth) : displayName).EscapeMarkup();
+
+            // FailureReason is already Spectre-safe (pre-processed through ConvertTextWithMarkdownFlag which escapes or converts markdown).
             var reason = rec.State == ActivityState.Failure && !string.IsNullOrEmpty(rec.FailureReason)
                 ? (_enableColor ? $" [red]— {HighlightMessage(rec.FailureReason!)}[/]" : $" — {rec.FailureReason!}")
                 : string.Empty;
@@ -642,13 +655,7 @@ internal sealed class ConsoleActivityLogger
             return escapedBar;
         }
 
-        return state switch
-        {
-            ActivityState.Success => $"[green]{escapedBar}[/]",
-            ActivityState.Warning => $"[yellow]{escapedBar}[/]",
-            ActivityState.Failure => $"[red]{escapedBar}[/]",
-            _ => $"[cyan]{escapedBar}[/]"
-        };
+        return $"[{GetStateColor(state)}]{escapedBar}[/]";
     }
 
     private void WriteCompletion(string taskKey, string symbol, string message, ActivityState state, double? seconds)
@@ -725,15 +732,17 @@ internal sealed class ConsoleActivityLogger
         }
     }
 
-    private static string ColorizeSymbol(string symbol, ActivityState state) => state switch
+    private static string GetStateColor(ActivityState state) => state switch
     {
-        ActivityState.Success => $"[green]{symbol}[/]",
-        ActivityState.Warning => $"[yellow]{symbol}[/]",
-        ActivityState.Failure => $"[red]{symbol}[/]",
-        ActivityState.InProgress => $"[cyan]{symbol}[/]",
-        ActivityState.Info => $"[dim]{symbol}[/]",
-        _ => symbol
+        ActivityState.Success => "green",
+        ActivityState.Warning => "yellow",
+        ActivityState.Failure => "red",
+        ActivityState.Info => "blue",
+        _ => "cyan"
     };
+
+    private static string ColorizeSymbol(string symbol, ActivityState state) =>
+        $"[{GetStateColor(state)}]{symbol}[/]";
 
     // Messages are already converted from Markdown to Spectre markup in PipelineCommandBase.
     // When interactive output is not supported, we need to convert Spectre link markup

@@ -668,6 +668,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "push-servicea");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
 
         // No registry added - will use LocalContainerRegistry with empty endpoint
         builder.AddDockerComposeEnvironment("docker-compose");
@@ -698,6 +699,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "push-servicea");
         builder.Services.AddSingleton<IResourceContainerImageManager>(new MockImageBuilderWithRuntime(fakeRuntime));
         builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
 
         // Add a remote registry with a non-empty endpoint
         var registry = builder.AddContainerRegistry("acr", "myregistry.azurecr.io");

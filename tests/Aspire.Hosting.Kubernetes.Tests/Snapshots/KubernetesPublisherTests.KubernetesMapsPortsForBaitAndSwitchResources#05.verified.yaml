@@ -1,35 +1,35 @@
----
+﻿---
 apiVersion: "apps/v1"
 kind: "Deployment"
 metadata:
-  name: "gateway-deployment"
+  name: "api-deployment"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "gateway"
+    app.kubernetes.io/component: "api"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
   template:
     metadata:
       labels:
         app.kubernetes.io/name: "aspire-hosting-tests"
-        app.kubernetes.io/component: "gateway"
+        app.kubernetes.io/component: "api"
         app.kubernetes.io/instance: "{{ .Release.Name }}"
     spec:
       containers:
-        - image: "nginx:latest"
-          name: "gateway"
+        - image: "{{ .Values.parameters.api.api_image }}"
+          name: "api"
           envFrom:
             - configMapRef:
-                name: "gateway-config"
+                name: "api-config"
           ports:
             - name: "http"
               protocol: "TCP"
-              containerPort: 8080
+              containerPort: 8000
           imagePullPolicy: "IfNotPresent"
   selector:
     matchLabels:
       app.kubernetes.io/name: "aspire-hosting-tests"
-      app.kubernetes.io/component: "gateway"
+      app.kubernetes.io/component: "api"
       app.kubernetes.io/instance: "{{ .Release.Name }}"
   replicas: 1
   revisionHistoryLimit: 3

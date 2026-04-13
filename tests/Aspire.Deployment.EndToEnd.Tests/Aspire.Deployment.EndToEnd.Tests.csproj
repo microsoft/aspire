@@ -57,4 +57,12 @@
     <Compile Include="$(TestsSharedDir)Hex1bAutomatorTestHelpers.cs" Link="shared\Hex1bAutomatorTestHelpers.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.Designer.cs" Link="Resources\ConsoleActivityLoggerStrings.Designer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.resx" Link="Resources\ConsoleActivityLoggerStrings.resx" LogicalName="Aspire.Cli.Resources.ConsoleActivityLoggerStrings.resources" />
+  </ItemGroup>
+
 </Project>

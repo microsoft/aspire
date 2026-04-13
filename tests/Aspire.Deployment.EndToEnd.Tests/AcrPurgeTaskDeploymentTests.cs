@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -74,10 +75,17 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
+            // Python apphosts need the full bundle because
+            // the prebuilt AppHost server is required for aspire new with Python templates.
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
+                var prNumber = DeploymentE2ETestHelpers.GetPrNumber();
+                if (prNumber > 0)
+                {
+                    output.WriteLine($"Step 2: Installing Aspire bundle from PR #{prNumber}...");
+                    await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
+                }
+                await auto.SourceAspireBundleEnvironmentAsync(counter);
             }
 
             // Step 3: Create Python FastAPI project using aspire new
@@ -95,7 +103,7 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
+            if (DeploymentE2ETestHelpers.IsRunningInCI && DeploymentE2ETestHelpers.GetPrNumber() <= 0)
             {
                 await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
                 await auto.EnterAsync();
@@ -140,12 +148,12 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitUntilAsync(s =>
             {
-                if (s.ContainsText("PIPELINE SUCCEEDED"))
+                if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
                 {
                     pipelineSucceeded = true;
                     return true;
                 }
-                return s.ContainsText("PIPELINE FAILED");
+                return s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed);
             }, timeout: TimeSpan.FromMinutes(30), description: "pipeline succeeded or failed");
 
             if (!pipelineSucceeded)
@@ -183,7 +191,7 @@ builder.Build().Run();
             output.WriteLine("Modified main.py to force a new container image build");
 
             // Step 11: Second deployment to push new images
-            // Clear the terminal so WaitUntilTextAsync doesn't match "PIPELINE SUCCEEDED" from the first deploy
+            // Clear the terminal so WaitUntilTextAsync doesn't match the pipeline succeeded text from the first deploy
             output.WriteLine("Step 11: Starting second Azure deployment...");
             var pipeline2Succeeded = false;
             await auto.TypeAsync("export TERM=xterm && clear");
@@ -193,12 +201,12 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitUntilAsync(s =>
             {
-                if (s.ContainsText("PIPELINE SUCCEEDED"))
+                if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
                 {
                     pipeline2Succeeded = true;
                     return true;
                 }
-                return s.ContainsText("PIPELINE FAILED");
+                return s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed);
             }, timeout: TimeSpan.FromMinutes(30), description: "pipeline succeeded or failed");
 
             if (!pipeline2Succeeded)

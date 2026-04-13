@@ -19,10 +19,11 @@
         <div class="input-container">
             <FluentSelect
                 TOption="CultureInfo"
-                Immediate="true"
+                ChangeOnEnterOnly="true"
                 Position="SelectPosition.Below"
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
+                OptionValue="@(c => c!.Name)"
                 OptionText="@(c => c!.NativeName.Humanize())"
                 ValueChanged="@ValueChanged"
                 @bind-SelectedOption="@_selectedUiCulture"

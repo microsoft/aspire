@@ -1,0 +1,21 @@
+﻿---
+apiVersion: "v1"
+kind: "ConfigMap"
+metadata:
+  name: "api-config"
+  labels:
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "api"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+data:
+  PROJECT1_HTTP: "http://project1-service:{{ .Values.parameters.project1.port_http }}"
+  services__project1__http__0: "http://project1-service:{{ .Values.parameters.project1.port_http }}"
+  PROJECT1_HTTPS: "https://project1-service:{{ .Values.parameters.project1.port_http }}"
+  PROJECT1_CUSTOM1: "{{ .Values.config.api.PROJECT1_CUSTOM1 }}"
+  services__project1__http__1: "{{ .Values.config.api.services__project1__http__1 }}"
+  PROJECT1_CUSTOM2: "{{ .Values.config.api.PROJECT1_CUSTOM2 }}"
+  services__project1__http__2: "{{ .Values.config.api.services__project1__http__2 }}"
+  PROJECT1_CUSTOM3: "{{ .Values.config.api.PROJECT1_CUSTOM3 }}"
+  services__project1__http__3: "{{ .Values.config.api.services__project1__http__3 }}"
+  PROJECT1_CUSTOM4: "{{ .Values.config.api.PROJECT1_CUSTOM4 }}"
+  services__project1__http__4: "{{ .Values.config.api.services__project1__http__4 }}"

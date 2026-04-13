@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -86,28 +87,60 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
             // Step 3: Create TypeScript AppHost using aspire init
             output.WriteLine("Step 3: Creating TypeScript AppHost with aspire init...");
 
-            var waitingForNuGetConfigPrompt = new CellPatternSearcher()
+            var waitingForTemplateVersionPrompt = new CellPatternSearcher()
                 .Find("NuGet.config");
-            var waitingForInitComplete = new CellPatternSearcher()
-                .Find("Aspire initialization complete");
+            var waitingForAgentInitPrompt = new CellPatternSearcher()
+                .Find("configure AI agent environments");
+            var waitingForSuccessPrompt = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
 
             await auto.TypeAsync("aspire init --language typescript");
             await auto.EnterAsync();
 
-            // NuGet.config prompt may or may not appear depending on environment.
-            await auto.WaitUntilAsync(
-                s => waitingForNuGetConfigPrompt.Search(s).Count > 0
-                    || waitingForInitComplete.Search(s).Count > 0,
-                timeout: TimeSpan.FromMinutes(2),
-                description: "NuGet.config prompt or init completion");
-            await auto.EnterAsync(); // Dismiss NuGet.config prompt if present
+            var sawTemplateVersionPrompt = false;
+            var sawAgentInitPrompt = false;
+            await auto.WaitUntilAsync(s =>
+            {
+                if (waitingForTemplateVersionPrompt.Search(s).Count > 0)
+                {
+                    sawTemplateVersionPrompt = true;
+                    return true;
+                }
 
-            await auto.WaitUntilAsync(
-                s => waitingForInitComplete.Search(s).Count > 0,
-                timeout: TimeSpan.FromMinutes(2),
-                description: "aspire initialization complete");
+                if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                {
+                    sawAgentInitPrompt = true;
+                    return true;
+                }
 
-            await auto.DeclineAgentInitPromptAsync(counter);
+                return waitingForSuccessPrompt.Search(s).Count > 0;
+            }, timeout: TimeSpan.FromMinutes(2), description: "template version prompt, agent init prompt, or init success prompt");
+
+            if (sawTemplateVersionPrompt)
+            {
+                await auto.EnterAsync();
+
+                await auto.WaitUntilAsync(s =>
+                {
+                    if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                    {
+                        sawAgentInitPrompt = true;
+                        return true;
+                    }
+
+                    return waitingForSuccessPrompt.Search(s).Count > 0;
+                }, timeout: TimeSpan.FromMinutes(2), description: "agent init prompt or init success prompt");
+            }
+
+            if (sawAgentInitPrompt)
+            {
+                await auto.DeclineAgentInitPromptAsync(counter);
+            }
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter);
+            }
 
             // Step 4a: Add Aspire.Hosting.Azure.AppContainers
             output.WriteLine("Step 4a: Adding Azure Container Apps hosting package...");
@@ -193,7 +226,7 @@ await builder.build().run();
             output.WriteLine("Step 7: Starting Azure deployment...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(25));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(25));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify VNet infrastructure

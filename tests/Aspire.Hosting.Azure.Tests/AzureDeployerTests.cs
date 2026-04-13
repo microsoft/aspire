@@ -1293,7 +1293,8 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         builder.Services.AddSingleton<IProcessRunner>(processRunner ?? new MockProcessRunner());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(containerRuntime ?? new FakeContainerRuntime());
-        builder.Services.AddSingleton<IAcrLoginService>(sp => new FakeAcrLoginService(sp.GetRequiredService<IContainerRuntime>()));
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IAcrLoginService>(sp => new FakeAcrLoginService(sp.GetRequiredService<IContainerRuntimeResolver>()));
     }
 
     private sealed class NoOpDeploymentStateManager : IDeploymentStateManager
@@ -1730,6 +1731,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         builder.Services.AddSingleton<IProcessRunner>(new MockProcessRunner());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(new FakeContainerRuntime());
-        builder.Services.AddSingleton<IAcrLoginService>(sp => new FakeAcrLoginService(sp.GetRequiredService<IContainerRuntime>()));
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IAcrLoginService>(sp => new FakeAcrLoginService(sp.GetRequiredService<IContainerRuntimeResolver>()));
     }
 }

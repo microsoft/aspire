@@ -101,6 +101,69 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Installs the Aspire CLI inside a Docker container using the given install strategy.
+    /// Handles all modes: LocalHive, PullRequest, and InstallScript.
+    /// </summary>
+    internal static async Task InstallAspireCliAsync(
+        this Hex1bTerminalAutomator auto,
+        CliInstallStrategy strategy,
+        SequenceCounter counter)
+    {
+        switch (strategy.Mode)
+        {
+            case CliInstallMode.LocalHive:
+                // Extract the localhive archive into ~/.aspire
+                await auto.TypeAsync("mkdir -p ~/.aspire && tar -xzf /tmp/aspire-localhive.tar.gz -C ~/.aspire");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+                await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
+                // Set the channel to 'local' so the CLI finds the hive packages
+                await auto.TypeAsync("aspire config set channel local -g");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
+                break;
+
+            case CliInstallMode.PullRequest:
+                var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
+                await auto.TypeAsync($"/opt/aspire-scripts/get-aspire-cli-pr.sh {prNumber}");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
+                await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
+                break;
+
+            case CliInstallMode.InstallScript:
+                var scriptArgs = "";
+                if (strategy.Quality is not null)
+                {
+                    scriptArgs = $" --quality {strategy.Quality.Value.ToString().ToLowerInvariant()}";
+                }
+                else if (strategy.Version is not null)
+                {
+                    scriptArgs = $" --version {strategy.Version}";
+                }
+                await auto.TypeAsync($"/opt/aspire-scripts/get-aspire-cli.sh{scriptArgs}");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(120));
+                await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(strategy), strategy.Mode, "Unknown install mode");
+        }
+
+        // Log the installed version for debugging — visible in asciinema recordings
+        await auto.TypeAsync("aspire --version");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
     /// Mounts the workspace-local Aspire package hive into the standard local hive path inside Docker.
     /// Used for SourceBuild E2E runs where the CLI binary is local but package resolution still needs
     /// locally packed Aspire packages.

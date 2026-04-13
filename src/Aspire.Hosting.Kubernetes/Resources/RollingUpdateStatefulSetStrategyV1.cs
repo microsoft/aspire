@@ -20,7 +20,7 @@ public sealed class RollingUpdateStatefulSetStrategyV1
     /// while the StatefulSet is being updated to achieve its desired state.
     /// </summary>
     [YamlMember(Alias = "maxUnavailable")]
-    public int MaxUnavailable { get; set; }
+    public int? MaxUnavailable { get; set; }
 
     /// <summary>
     /// Gets or sets the ordinal at which the StatefulSet should be partitioned.
