@@ -62,6 +62,11 @@ public static class AzureKubernetesEnvironmentExtensions
         var resource = new AzureKubernetesEnvironmentResource(name, ConfigureAksInfrastructure);
         resource.KubernetesEnvironment = k8sEnvBuilder.Resource;
 
+        // Set the parent so KubernetesInfrastructure matches resources that use
+        // WithComputeEnvironment(aksEnv) — the inner K8s env checks both itself
+        // and its parent when filtering compute resources.
+        k8sEnvBuilder.Resource.ParentComputeEnvironment = resource;
+
         if (builder.ExecutionContext.IsRunMode)
         {
             return builder.CreateResourceBuilder(resource);
@@ -276,6 +281,10 @@ public static class AzureKubernetesEnvironmentExtensions
         builder.WithAnnotation(new ContainerRegistryReferenceAnnotation(registry.Resource));
         builder.Resource.KubernetesEnvironment.Annotations.Add(
             new ContainerRegistryReferenceAnnotation(registry.Resource));
+
+        // Update the acrName parameter to reference the explicit registry's output
+        // (replaces the default ACR reference set during AddAzureKubernetesEnvironment)
+        builder.Resource.Parameters["acrName"] = registry.Resource.NameOutputReference;
 
         return builder;
     }

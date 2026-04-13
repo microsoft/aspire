@@ -103,6 +103,18 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// </remarks>
     public string? KubeConfigPath { get; set; }
 
+    /// <summary>
+    /// Gets or sets the parent compute environment resource that owns this Kubernetes environment.
+    /// When set, resources with <c>WithComputeEnvironment</c> targeting the parent will also
+    /// be processed by this Kubernetes environment.
+    /// </summary>
+    /// <remarks>
+    /// This is used by Azure Kubernetes Service (AKS) integration where the user calls
+    /// <c>WithComputeEnvironment(aksEnv)</c> but the inner <c>KubernetesEnvironmentResource</c>
+    /// needs to process the resource.
+    /// </remarks>
+    public IComputeEnvironmentResource? ParentComputeEnvironment { get; set; }
+
     internal IPortAllocator PortAllocator { get; } = new PortAllocator();
 
     /// <summary>

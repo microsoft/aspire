@@ -52,9 +52,13 @@ internal sealed class KubernetesInfrastructure(
 
             foreach (var r in @event.Model.GetComputeResources())
             {
-                // Skip resources that are explicitly targeted to a different compute environment
+                // Skip resources that are explicitly targeted to a different compute environment.
+                // Also match if the resource targets a parent compute environment (e.g., AKS)
+                // that owns this Kubernetes environment.
                 var resourceComputeEnvironment = r.GetComputeEnvironment();
-                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != environment)
+                if (resourceComputeEnvironment is not null &&
+                    resourceComputeEnvironment != environment &&
+                    resourceComputeEnvironment != environment.ParentComputeEnvironment)
                 {
                     continue;
                 }
