@@ -289,8 +289,9 @@ internal sealed class AzureKubernetesInfrastructure(
         string clusterName,
         PipelineStepContext context)
     {
-        // Use az aks list to find the cluster and its resource group
-        var arguments = $"aks list --query \"[?name=='{clusterName}'].resourceGroup\" -o tsv";
+        // Query Azure for the AKS cluster's resource group using az resource list.
+        // This avoids JMESPath quote-escaping issues with az aks list on Windows.
+        var arguments = $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv";
 
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
@@ -324,7 +325,7 @@ internal sealed class AzureKubernetesInfrastructure(
                 $"AKS cluster '{clusterName}' not found. Ensure the cluster has been provisioned.");
         }
 
-        context.Logger.LogDebug("Resolved resource group '{ResourceGroup}' for AKS cluster '{ClusterName}'",
+        context.Logger.LogInformation("Resolved resource group '{ResourceGroup}' for AKS cluster '{ClusterName}'",
             resourceGroup, clusterName);
 
         return resourceGroup;
