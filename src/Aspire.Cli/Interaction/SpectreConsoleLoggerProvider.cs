@@ -8,6 +8,11 @@ namespace Aspire.Cli.Interaction;
 
 internal class SpectreConsoleLoggerProvider : ILoggerProvider
 {
+    // Shared buffering state for console logs emitted while interactive prompts are active.
+    private static readonly object s_logBufferLock = new();
+    private static readonly Queue<(TextWriter Writer, string Message)> s_bufferedMessages = new();
+    private static int s_interactivePromptDepth;
+
     private readonly TextWriter _output;
 
     /// <summary>
@@ -17,6 +22,76 @@ internal class SpectreConsoleLoggerProvider : ILoggerProvider
     public SpectreConsoleLoggerProvider(TextWriter output)
     {
         _output = output;
+    }
+
+    // Depth-based scope to support nested prompts. Logs flush when the outermost scope ends.
+    internal static IDisposable BeginInteractivePromptScope()
+    {
+        lock (s_logBufferLock)
+        {
+            s_interactivePromptDepth++;
+        }
+
+        return new InteractivePromptScope();
+    }
+
+    internal static void WriteOrBuffer(TextWriter output, string message)
+    {
+        lock (s_logBufferLock)
+        {
+            // During an active prompt, queue log lines instead of writing immediately.
+            if (s_interactivePromptDepth > 0)
+            {
+                s_bufferedMessages.Enqueue((output, message));
+                return;
+            }
+        }
+
+        output.WriteLine(message);
+    }
+
+    private static void EndInteractivePromptScope()
+    {
+        List<(TextWriter Writer, string Message)> messagesToFlush = [];
+
+        lock (s_logBufferLock)
+        {
+            if (s_interactivePromptDepth > 0)
+            {
+                s_interactivePromptDepth--;
+            }
+
+            if (s_interactivePromptDepth > 0)
+            {
+                return;
+            }
+
+            // Drain under lock to preserve ordering across concurrent writers.
+            while (s_bufferedMessages.Count > 0)
+            {
+                messagesToFlush.Add(s_bufferedMessages.Dequeue());
+            }
+        }
+
+        // Write outside the lock to avoid holding the global lock during I/O.
+        foreach (var (writer, message) in messagesToFlush)
+        {
+            writer.WriteLine(message);
+        }
+    }
+
+    private sealed class InteractivePromptScope : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            // Ensure scope close is applied only once for idempotent disposal.
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            {
+                EndInteractivePromptScope();
+            }
+        }
     }
 
     public ILogger CreateLogger(string categoryName)
@@ -61,7 +136,7 @@ internal class SpectreConsoleLogger(TextWriter output, string categoryName) : IL
         var logMessage = $"[{timestamp}] [{GetLogLevelString(logLevel)}] {shortCategoryName}: {formattedMessage}";
 
         // Write to the configured output (stderr by default)
-        output.WriteLine(logMessage);
+        SpectreConsoleLoggerProvider.WriteOrBuffer(output, logMessage);
     }
 
     private static string GetLogLevelString(LogLevel logLevel) => logLevel switch

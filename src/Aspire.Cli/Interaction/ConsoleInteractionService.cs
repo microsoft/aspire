@@ -150,6 +150,10 @@ internal class ConsoleInteractionService : IInteractionService
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
 
+        // Buffer console logs while interactive prompts are active so
+        // background debug output doesn't drown the prompt UI.
+        using var promptScope = SpectreConsoleLoggerProvider.BeginInteractivePromptScope();
+
         MessageLogger.LogInformation("Prompt: {PromptText} (default: {DefaultValue}, secret: {IsSecret})", promptText, isSecret ? "****" : defaultValue ?? "(none)", isSecret);
 
         var prompt = new TextPrompt<string>(promptText)
@@ -197,6 +201,10 @@ internal class ConsoleInteractionService : IInteractionService
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NoItemsAvailableForSelection, promptText));
         }
 
+        // Buffer console logs while interactive prompts are active so
+        // background debug output doesn't drown the prompt UI.
+        using var promptScope = SpectreConsoleLoggerProvider.BeginInteractivePromptScope();
+
         // Wrap the caller's formatter to produce safe plain text for Spectre.Console.
         // Spectre's SelectionPrompt treats converter output as markup and its search
         // highlighting manipulates the markup string directly, which breaks escaped
@@ -237,6 +245,10 @@ internal class ConsoleInteractionService : IInteractionService
         {
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NoItemsAvailableForSelection, promptText));
         }
+
+        // Buffer console logs while interactive prompts are active so
+        // background debug output doesn't drown the prompt UI.
+        using var promptScope = SpectreConsoleLoggerProvider.BeginInteractivePromptScope();
 
         var preSelectedSet = preSelected is not null ? new HashSet<T>(preSelected) : null;
 
