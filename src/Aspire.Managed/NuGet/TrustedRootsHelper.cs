@@ -6,7 +6,6 @@
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 using NuGet.Packaging.Signing;
-using INuGetLogger = NuGet.Common.ILogger;
 
 namespace Aspire.Managed.NuGet;
 
@@ -16,6 +15,8 @@ namespace Aspire.Managed.NuGet;
 /// </summary>
 internal static class TrustedRootsHelper
 {
+    private static bool s_initialized;
+
     /// <summary>
     /// Initializes the NuGet trust store with embedded trusted root certificates.
     /// On Linux, when DOTNET_NUGET_SIGNATURE_VERIFICATION is set to "true", NuGet requires
@@ -29,8 +30,13 @@ internal static class TrustedRootsHelper
     /// TODO: Remove this once NuGet supports a public API for configuring the trust store,
     /// or when it supports single-file apps. See https://github.com/dotnet/aspire/issues/15282.
     /// </remarks>
-    public static void InitializeTrustStore(INuGetLogger logger)
+    public static void InitializeTrustStore()
     {
+        if (s_initialized)
+        {
+            return;
+        }
+
         if (!OperatingSystem.IsLinux())
         {
             // On Windows, NuGet uses the system certificate store directly.
@@ -39,7 +45,7 @@ internal static class TrustedRootsHelper
         }
 
         var envValue = Environment.GetEnvironmentVariable("DOTNET_NUGET_SIGNATURE_VERIFICATION");
-        if (!string.Equals(bool.TrueString, envValue, StringComparison.OrdinalIgnoreCase))
+        if (!(bool.TryParse(envValue, out var enabled) && enabled))
         {
             // If DOTNET_NUGET_SIGNATURE_VERIFICATION is not set to "true", NuGet won't
             // perform signature verification on Linux, so there's no need to initialize
@@ -49,18 +55,19 @@ internal static class TrustedRootsHelper
 
         try
         {
-            InitializeTrustStoreFromEmbeddedResources(logger);
+            InitializeTrustStoreFromEmbeddedResources();
+            s_initialized = true;
         }
         catch (Exception ex)
         {
             // Log but don't fail the restore. If trust store initialization fails,
             // NuGet may still work if signature verification is not required or if
             // the system has its own certificate bundles.
-            logger.LogWarning($"Failed to initialize NuGet trust store from embedded certificates: {ex.Message}");
+            Console.Error.WriteLine($"WARNING: Failed to initialize NuGet trust store from embedded certificates: {ex}");
         }
     }
 
-    private static void InitializeTrustStoreFromEmbeddedResources(INuGetLogger logger)
+    private static void InitializeTrustStoreFromEmbeddedResources()
     {
         var nugetPackagingAssembly = typeof(X509TrustStore).Assembly;
 
@@ -70,7 +77,7 @@ internal static class TrustedRootsHelper
 
         if (chainFactoryInterfaceType is null || chainInterfaceType is null)
         {
-            logger.LogWarning("Could not find IX509ChainFactory or IX509Chain types in NuGet.Packaging.");
+            Console.Error.WriteLine("WARNING: Could not find IX509ChainFactory or IX509Chain types in NuGet.Packaging.");
             return;
         }
 
@@ -79,29 +86,26 @@ internal static class TrustedRootsHelper
             "SetCodeSigningX509ChainFactory",
             "codesignctl.pem",
             chainFactoryInterfaceType,
-            chainInterfaceType,
-            logger);
+            chainInterfaceType);
 
         // Set up timestamping trust store
         SetTrustStoreFactory(
             "SetTimestampingX509ChainFactory",
             "timestampctl.pem",
             chainFactoryInterfaceType,
-            chainInterfaceType,
-            logger);
+            chainInterfaceType);
     }
 
     private static void SetTrustStoreFactory(
         string setterMethodName,
         string resourceName,
         Type chainFactoryInterfaceType,
-        Type chainInterfaceType,
-        INuGetLogger logger)
+        Type chainInterfaceType)
     {
         var certificates = LoadCertificatesFromResource(resourceName);
         if (certificates is null || certificates.Count == 0)
         {
-            logger.LogWarning($"No certificates loaded from embedded resource: {resourceName}");
+            Console.Error.WriteLine($"WARNING: No certificates loaded from embedded resource: {resourceName}");
             return;
         }
 
@@ -116,12 +120,11 @@ internal static class TrustedRootsHelper
 
         if (setter is null)
         {
-            logger.LogWarning($"Could not find {setterMethodName} on X509TrustStore.");
+            Console.Error.WriteLine($"WARNING: Could not find {setterMethodName} on X509TrustStore.");
             return;
         }
 
         setter.Invoke(null, [factory]);
-        logger.LogInformation($"Initialized NuGet trust store from embedded resource: {resourceName} ({certificates.Count} certificates)");
     }
 
     private static X509Certificate2Collection? LoadCertificatesFromResource(string resourceName)
@@ -170,7 +173,7 @@ internal class ChainFactoryDispatchProxy : DispatchProxy
             return CreateChain();
         }
 
-        throw new NotSupportedException($"Method {targetMethod?.Name} is not supported.");
+        throw new NotSupportedException($"Method '{targetMethod?.Name}' is not supported on IX509ChainFactory proxy. This may indicate a NuGet.Packaging version mismatch — the library may have added new interface members.");
     }
 
     private object CreateChain()
@@ -210,7 +213,7 @@ internal class ChainDispatchProxy : DispatchProxy
             "get_ChainStatus" => _chain.ChainStatus,
             "get_PrivateReference" => _chain,
             "get_AdditionalContext" => (global::NuGet.Common.ILogMessage?)null,
-            _ => throw new NotSupportedException($"Method {targetMethod?.Name} is not supported.")
+            _ => throw new NotSupportedException($"Method '{targetMethod?.Name}' is not supported on IX509Chain proxy. This may indicate a NuGet.Packaging version mismatch — the library may have added new interface members.")
         };
     }
 

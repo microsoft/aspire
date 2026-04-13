@@ -40,6 +40,7 @@ internal sealed class BundleNuGetService : INuGetService
     private readonly ILayoutDiscovery _layoutDiscovery;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly IFeatures _features;
+    private readonly CliExecutionContext _executionContext;
     private readonly ILogger<BundleNuGetService> _logger;
     private readonly string _cacheDirectory;
 
@@ -47,11 +48,13 @@ internal sealed class BundleNuGetService : INuGetService
         ILayoutDiscovery layoutDiscovery,
         LayoutProcessRunner layoutProcessRunner,
         IFeatures features,
+        CliExecutionContext executionContext,
         ILogger<BundleNuGetService> logger)
     {
         _layoutDiscovery = layoutDiscovery;
         _layoutProcessRunner = layoutProcessRunner;
         _features = features;
+        _executionContext = executionContext;
         _logger = logger;
         _cacheDirectory = GetCacheDirectory();
     }
@@ -147,7 +150,7 @@ internal sealed class BundleNuGetService : INuGetService
         _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", restoreArgs));
 
         var environmentVariables = new Dictionary<string, string>();
-        NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features);
+        NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _executionContext);
 
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,

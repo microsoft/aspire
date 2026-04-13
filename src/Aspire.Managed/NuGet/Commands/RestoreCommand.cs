@@ -196,7 +196,7 @@ public static class RestoreCommand
 
             // Initialize NuGet's trust store with embedded trusted root certificates
             // so that package signature verification works on Linux.
-            TrustedRootsHelper.InitializeTrustStore(logger);
+            TrustedRootsHelper.InitializeTrustStore();
 
             var results = await RestoreRunner.RunAsync(restoreArgs).ConfigureAwait(false);
             var summary = results.Count > 0 ? results[0] : null;
