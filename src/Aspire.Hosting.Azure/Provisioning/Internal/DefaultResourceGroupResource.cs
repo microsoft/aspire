@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Azure;
 using Azure.Core;
+using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
@@ -18,4 +20,7 @@ internal sealed class DefaultResourceGroupResource(ResourceGroupResource resourc
     {
         return new DefaultArmDeploymentCollection(resourceGroupResource.GetArmDeployments());
     }
+
+    public Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default) =>
+        resourceGroupResource.DeleteAsync(waitUntil, cancellationToken: cancellationToken);
 }

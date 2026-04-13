@@ -1,8 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure;
 
@@ -34,10 +38,33 @@ public static class AzureEnvironmentResourceExtensions
         var resource = new AzureEnvironmentResource(resourceName, locationParam, resourceGroupName, principalId);
         if (builder.ExecutionContext.IsRunMode)
         {
-            // Return a builder that isn't added to the top-level application builder
-            // so it doesn't surface as a resource.
-            return builder.CreateResourceBuilder(resource);
+            var resourceBuilder = builder.AddResource(resource)
+                .WithInitialState(new CustomResourceSnapshot
+                {
+                    ResourceType = nameof(AzureEnvironmentResource),
+                    CreationTimeStamp = DateTime.UtcNow,
+                    State = KnownResourceStates.NotStarted,
+                    Properties = ImmutableArray<ResourcePropertySnapshot>.Empty
+                });
 
+            foreach (var command in AzureProvisioningController.EnvironmentCommandDefinitions)
+            {
+                resourceBuilder.WithCommand(
+                    command.Name,
+                    command.DisplayName,
+                    executeCommand: context => context.ServiceProvider.GetRequiredService<AzureProvisioningController>().ExecuteEnvironmentCommandAsync(command.Command, context),
+                    commandOptions: new CommandOptions
+                    {
+                        Description = command.Description,
+                        ConfirmationMessage = command.ConfirmationMessage,
+                        IconName = command.IconName,
+                        IconVariant = command.IconVariant,
+                        IsHighlighted = command.IsHighlighted,
+                        UpdateState = context => context.ServiceProvider.GetRequiredService<AzureProvisioningController>().GetEnvironmentCommandState()
+                    });
+            }
+
+            return resourceBuilder.ExcludeFromManifest();
         }
 
         // In publish mode, add the resource to the application model
