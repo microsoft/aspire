@@ -172,7 +172,8 @@ internal sealed class AzureKubernetesInfrastructure(
                 // We read it via IConfiguration which is populated from the deployment
                 // state JSON file before pipeline steps execute.
                 var azPath = FindAzCli();
-                var resourceGroup = GetResourceGroupFromDeploymentState(context);
+                var resourceGroup = await GetResourceGroupAsync(azPath, clusterName, context)
+                    .ConfigureAwait(false);
 
                 // Write credentials to an isolated kubeconfig file
                 var kubeConfigDir = Directory.CreateTempSubdirectory("aspire-aks");
@@ -294,23 +295,56 @@ internal sealed class AzureKubernetesInfrastructure(
     }
 
     /// <summary>
-    /// Gets the resource group from the deployment state loaded into IConfiguration.
-    /// The deployment state JSON file contains Azure:ResourceGroup which is loaded
-    /// by the deploy-prereq step before any other pipeline steps execute.
+    /// Gets the resource group, trying deployment state first, falling back to az CLI query.
+    /// On first deploy, the deployment state may not be loaded into IConfiguration yet
+    /// because it's written during the pipeline run (after create-provisioning-context).
     /// </summary>
-    private static string GetResourceGroupFromDeploymentState(PipelineStepContext context)
+    private static async Task<string> GetResourceGroupAsync(
+        string azPath,
+        string clusterName,
+        PipelineStepContext context)
     {
+        // Try deployment state first (works on re-deploys)
         var configuration = context.Services.GetRequiredService<IConfiguration>();
-
-        // The deployment state is loaded into IConfiguration under the Azure section.
-        // It's populated from ~/.aspire/deployments/{hash}/{env}.json
         var resourceGroup = configuration["Azure:ResourceGroup"];
+
+        if (!string.IsNullOrEmpty(resourceGroup))
+        {
+            return resourceGroup;
+        }
+
+        // Fallback for first deploy: query Azure directly
+        context.Logger.LogDebug(
+            "Resource group not in deployment state, querying Azure for cluster '{ClusterName}'",
+            clusterName);
+
+        var arguments = $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv";
+
+        using var process = new Process();
+        process.StartInfo = new ProcessStartInfo
+        {
+            FileName = azPath,
+            Arguments = arguments,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        process.Start();
+
+        var stdout = await process.StandardOutput.ReadToEndAsync(context.CancellationToken).ConfigureAwait(false);
+        await process.StandardError.ReadToEndAsync(context.CancellationToken).ConfigureAwait(false);
+
+        await process.WaitForExitAsync(context.CancellationToken).ConfigureAwait(false);
+
+        resourceGroup = stdout.Trim().ReplaceLineEndings("").Trim();
 
         if (string.IsNullOrEmpty(resourceGroup))
         {
             throw new InvalidOperationException(
-                "Azure resource group not found in deployment state. " +
-                "Ensure Azure provisioning has completed before this step runs.");
+                $"Could not resolve resource group for AKS cluster '{clusterName}'. " +
+                "Ensure Azure provisioning has completed.");
         }
 
         return resourceGroup;
