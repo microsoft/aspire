@@ -127,10 +127,10 @@
     <value>The destroy operation was canceled.</value>
   </data>
   <data name="OperationCompletedPrefix" xml:space="preserve">
-    <value>DESTROY COMPLETED</value>
+    <value>Destroy completed</value>
   </data>
   <data name="OperationFailedPrefix" xml:space="preserve">
-    <value>DESTROY FAILED</value>
+    <value>Destroy failed</value>
   </data>
   <data name="YesOptionDescription" xml:space="preserve">
     <value>Do not prompt for confirmation before destroying resources</value>

@@ -13,13 +13,13 @@
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
-        <source>DESTROY COMPLETED</source>
-        <target state="new">DESTROY COMPLETED</target>
+        <source>Destroy completed</source>
+        <target state="new">Destroy completed</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailedPrefix">
-        <source>DESTROY FAILED</source>
-        <target state="new">DESTROY FAILED</target>
+        <source>Destroy failed</source>
+        <target state="new">Destroy failed</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">

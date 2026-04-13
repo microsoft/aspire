@@ -88,7 +88,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to DESTROY COMPLETED.
+        ///   Looks up a localized string similar to Destroy completed.
         /// </summary>
         public static string OperationCompletedPrefix {
             get {
@@ -97,7 +97,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to DESTROY FAILED.
+        ///   Looks up a localized string similar to Destroy failed.
         /// </summary>
         public static string OperationFailedPrefix {
             get {
