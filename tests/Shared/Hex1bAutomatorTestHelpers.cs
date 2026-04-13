@@ -116,6 +116,7 @@ internal static class Hex1bAutomatorTestHelpers
                         }
 
                         firstOutputMatched = firstOutputLine.Contains(desiredOutput, StringComparison.Ordinal);
+                        sawPrompt = IsPromptVisible(snapshot, expectedPromptSequence);
                         return true;
                     }
 
