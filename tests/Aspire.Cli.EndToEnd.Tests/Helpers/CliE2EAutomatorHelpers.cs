@@ -119,6 +119,10 @@ internal static class CliE2EAutomatorHelpers
                 await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
+                // Set the channel to 'local' so the CLI finds the hive packages
+                await auto.TypeAsync("aspire config set channel local -g");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
                 break;
 
             case CliInstallMode.SourceBuild:
