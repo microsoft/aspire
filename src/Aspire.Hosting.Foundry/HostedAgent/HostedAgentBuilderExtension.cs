@@ -77,7 +77,7 @@ public static class HostedAgentResourceBuilderExtensions
     [AspireExportIgnore(Reason = "Subset of the full PublishAsHostedAgent overload which is exported.")]
     public static IResourceBuilder<T> PublishAsHostedAgent<T>(
         this IResourceBuilder<T> builder, Action<HostedAgentConfiguration> configure)
-        where T : ExecutableResource
+        where T : IResourceWithEndpoints, IResourceWithEnvironment
     {
         return PublishAsHostedAgent(builder, project: null, configure: configure);
     }
@@ -92,7 +92,7 @@ public static class HostedAgentResourceBuilderExtensions
     [AspireExport("publishAsHostedAgentExecutable", MethodName = "publishAsHostedAgent", Description = "Publishes an executable resource as a hosted agent in Microsoft Foundry.")]
     public static IResourceBuilder<T> PublishAsHostedAgent<T>(
         this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
-        where T : ExecutableResource
+        where T : IResourceWithEndpoints, IResourceWithEnvironment
     {
         /*
          * Much of the logic here is similar to ExecutableResourceBuilderExtensions.PublishAsDockerFile().
@@ -295,7 +295,19 @@ public static class HostedAgentResourceBuilderExtensions
         else
         {
             // Ensure we have a container resource to deploy
-            builder.PublishAsDockerFile();
+            if (resource is ProjectResource)
+            {
+                builder.ApplicationBuilder.CreateResourceBuilder((ProjectResource)(object)resource).PublishAsDockerFile();
+            }
+            else if (resource is ExecutableResource)
+            {
+                builder.ApplicationBuilder.CreateResourceBuilder((ExecutableResource)(object)resource).PublishAsDockerFile();
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
+            }
+
             if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out crb))
             {
                 target = crb.Resource;
