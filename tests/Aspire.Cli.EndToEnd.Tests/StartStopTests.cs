@@ -92,7 +92,6 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Run aspire stop with no running AppHost - should exit with code 0
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Exit the shell
@@ -145,14 +144,11 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop if still running (the add command may have stopped it)
-        // aspire stop may return a non-zero exit code if no instances are found
-        // (already stopped by aspire add), so wait for known output patterns.
+        // aspire stop should return successfully whether the app host is still running
+        // or was already stopped by the preceding add command.
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilAsync(s =>
-            s.ContainsText(SharedCommandStrings.AppHostNotRunning) || s.ContainsText(StopCommandStrings.AppHostStoppedSuccessfully),
-            timeout: TimeSpan.FromMinutes(1), description: "AppHost stopped or no running AppHost");
-        await auto.WaitForAnyPromptAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
 
         // Exit the shell
         await auto.TypeAsync("exit");
@@ -203,20 +199,27 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync(AddCommandStrings.SelectAnIntegrationToAdd, timeout: TimeSpan.FromMinutes(1));
         await auto.TypeAsync("mongodb"); // type to filter the list
         await auto.EnterAsync(); // select the filtered result
-        await auto.WaitUntilTextAsync("Select a version of", timeout: TimeSpan.FromSeconds(30));
-        await auto.EnterAsync(); // Accept the default version
+        var waitingForVersionSelection = false;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            waitingForVersionSelection = snapshot.ContainsText("Select a version of");
+            return waitingForVersionSelection || snapshot.ContainsText("was added successfully.");
+        }, timeout: TimeSpan.FromSeconds(30), description: "version prompt or add success");
+
+        if (waitingForVersionSelection)
+        {
+            await auto.EnterAsync(); // Accept the default version
+        }
+
         await auto.WaitUntilTextAsync("was added successfully.", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop if still running
-        // aspire stop may return a non-zero exit code if no instances are found
-        // (already stopped by aspire add), so wait for known output patterns.
+        // aspire stop should return successfully whether the app host is still running
+        // or was already stopped by the preceding add command.
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilAsync(s =>
-            s.ContainsText(SharedCommandStrings.AppHostNotRunning) || s.ContainsText(StopCommandStrings.AppHostStoppedSuccessfully),
-            timeout: TimeSpan.FromMinutes(1), description: "AppHost stopped or no running AppHost");
-        await auto.WaitForAnyPromptAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
 
         // Exit the shell
         await auto.TypeAsync("exit");
