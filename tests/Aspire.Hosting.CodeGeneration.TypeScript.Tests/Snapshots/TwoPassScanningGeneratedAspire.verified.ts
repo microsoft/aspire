@@ -4852,7 +4852,7 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
     addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise {
         const dependsOn = options?.dependsOn;
         const requiredBy = options?.requiredBy;
-        return new DistributedApplicationPipelinePromiseImpl(this._addStepInternal(stepName, callback, dependsOn, requiredBy));
+        return new DistributedApplicationPipelinePromiseImpl(this._addStepInternal(stepName, callback, dependsOn, requiredBy), this._client);
     }
 
     /** Configures the application pipeline via a callback */
@@ -4872,7 +4872,7 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
     }
 
     configure(callback: (arg: PipelineConfigurationContext) => Promise<void>): DistributedApplicationPipelinePromise {
-        return new DistributedApplicationPipelinePromiseImpl(this._configureInternal(callback));
+        return new DistributedApplicationPipelinePromiseImpl(this._configureInternal(callback), this._client);
     }
 
 }
@@ -4881,7 +4881,9 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
  * Thenable wrapper for DistributedApplicationPipeline that enables fluent chaining.
  */
 class DistributedApplicationPipelinePromiseImpl implements DistributedApplicationPipelinePromise {
-    constructor(private _promise: Promise<DistributedApplicationPipeline>) {}
+    constructor(private _promise: Promise<DistributedApplicationPipeline>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
 
     then<TResult1 = DistributedApplicationPipeline, TResult2 = never>(
         onfulfilled?: ((value: DistributedApplicationPipeline) => TResult1 | PromiseLike<TResult1>) | null,
@@ -4892,12 +4894,12 @@ class DistributedApplicationPipelinePromiseImpl implements DistributedApplicatio
 
     /** Adds a pipeline step to the application */
     addStep(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: AddStepOptions): DistributedApplicationPipelinePromise {
-        return new DistributedApplicationPipelinePromiseImpl(this._promise.then(obj => obj.addStep(stepName, callback, options)));
+        return new DistributedApplicationPipelinePromiseImpl(this._promise.then(obj => obj.addStep(stepName, callback, options)), this._client);
     }
 
     /** Configures the application pipeline via a callback */
     configure(callback: (arg: PipelineConfigurationContext) => Promise<void>): DistributedApplicationPipelinePromise {
-        return new DistributedApplicationPipelinePromiseImpl(this._promise.then(obj => obj.configure(callback)));
+        return new DistributedApplicationPipelinePromiseImpl(this._promise.then(obj => obj.configure(callback)), this._client);
     }
 
 }

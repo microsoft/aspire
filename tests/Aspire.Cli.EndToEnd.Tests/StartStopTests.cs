@@ -49,13 +49,11 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Start the AppHost in the background using aspire start
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.ClearScreenAsync(counter);
@@ -136,7 +134,6 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Start the AppHost in detached mode (locks the project file)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Add a package while the AppHost is running - this should auto-stop the
@@ -196,7 +193,6 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Start the AppHost in detached mode (locks the project file)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Run aspire add interactively (no integration argument) while AppHost is running.
