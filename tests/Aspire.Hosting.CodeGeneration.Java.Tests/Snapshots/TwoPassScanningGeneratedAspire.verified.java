@@ -1,4 +1,4 @@
-// ===== AddContainerOptions.java =====
+﻿// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -4144,27 +4144,14 @@ public class ConnectionStringResource extends ResourceBuilderBase {
 
 }
 
-<<<<<<< HEAD
-// ===== ContainerImageReference.java =====
-// ContainerImageReference.java - GENERATED CODE - DO NOT EDIT
-=======
 // ===== ContainerImagePushOptions.java =====
 // ContainerImagePushOptions.java - GENERATED CODE - DO NOT EDIT
->>>>>>> 4ffc78f12 (Add polyglot withImagePushOptions support)
 
 package aspire;
 
 import java.util.*;
 import java.util.function.*;
 
-<<<<<<< HEAD
-/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference. */
-public class ContainerImageReference extends HandleWrapperBase {
-    ContainerImageReference(Handle handle, AspireClient client) {
-        super(handle, client);
-    }
-
-=======
 /** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions. */
 public class ContainerImagePushOptions extends HandleWrapperBase {
     ContainerImagePushOptions(Handle handle, AspireClient client) {
@@ -4268,7 +4255,22 @@ public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase 
         return (ContainerImagePushOptionsCallbackContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions", reqArgs);
     }
 
->>>>>>> 4ffc78f12 (Add polyglot withImagePushOptions support)
+}
+
+// ===== ContainerImageReference.java =====
+// ContainerImageReference.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference. */
+public class ContainerImageReference extends HandleWrapperBase {
+    ContainerImageReference(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
 }
 
 // ===== ContainerLifetime.java =====
@@ -22975,12 +22977,9 @@ public final class WithVolumeOptions {
 .modules/CompleteTaskOptions.java
 .modules/ConnectionStringAvailableEvent.java
 .modules/ConnectionStringResource.java
-<<<<<<< HEAD
-.modules/ContainerImageReference.java
-=======
 .modules/ContainerImagePushOptions.java
 .modules/ContainerImagePushOptionsCallbackContext.java
->>>>>>> 4ffc78f12 (Add polyglot withImagePushOptions support)
+.modules/ContainerImageReference.java
 .modules/ContainerLifetime.java
 .modules/ContainerMountAnnotation.java
 .modules/ContainerPortReference.java
