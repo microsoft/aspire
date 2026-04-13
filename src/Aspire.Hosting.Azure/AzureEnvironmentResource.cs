@@ -342,6 +342,7 @@ public sealed class AzureEnvironmentResource : Resource
             var portalUrl = AzurePortalUrls.GetResourceGroupUrl(subscriptionId, resourceGroupName, subscription.TenantId);
             context.Summary.Add("🗑️ Resource Group", new MarkdownString($"[{resourceGroupName}]({portalUrl})"));
             context.Summary.Add("🔑 Subscription", subscriptionId);
+            context.Summary.Add("⏳ Status", new MarkdownString($"Deletion in progress. Monitor in the [Azure portal]({portalUrl})."));
 
             await deleteTask.CompleteAsync(
                 new MarkdownString($"Resource group **{resourceGroupName}** deletion in progress. Monitor in the [Azure portal]({portalUrl})."),
