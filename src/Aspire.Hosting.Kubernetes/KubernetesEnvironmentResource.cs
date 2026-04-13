@@ -92,6 +92,17 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// </remarks>
     public string DefaultServiceType { get; set; } = "ClusterIP";
 
+    /// <summary>
+    /// Gets or sets the path to an explicit kubeconfig file for Helm and kubectl commands.
+    /// When set, all Helm and kubectl commands will use <c>--kubeconfig</c> to target
+    /// this file instead of the default <c>~/.kube/config</c>.
+    /// </summary>
+    /// <remarks>
+    /// This is used by Azure Kubernetes Service (AKS) integration to isolate credentials
+    /// fetched via <c>az aks get-credentials</c> from the user's default kubectl context.
+    /// </remarks>
+    public string? KubeConfigPath { get; set; }
+
     internal IPortAllocator PortAllocator { get; } = new PortAllocator();
 
     /// <summary>

@@ -424,6 +424,11 @@ internal static partial class HelmDeploymentEngine
                 arguments.Append(" --create-namespace");
                 arguments.Append(" --wait");
 
+                if (environment.KubeConfigPath is not null)
+                {
+                    arguments.Append(CultureInfo.InvariantCulture, $" --kubeconfig \"{environment.KubeConfigPath}\"");
+                }
+
                 if (File.Exists(valuesFilePath))
                 {
                     arguments.Append(CultureInfo.InvariantCulture, $" -f \"{valuesFilePath}\"");
@@ -501,7 +506,7 @@ internal static partial class HelmDeploymentEngine
 
         try
         {
-            var endpoints = await GetServiceEndpointsAsync(computeResource.Name.ToServiceName(), @namespace, context.Logger, context.CancellationToken).ConfigureAwait(false);
+            var endpoints = await GetServiceEndpointsAsync(computeResource.Name.ToServiceName(), @namespace, environment.KubeConfigPath, context.Logger, context.CancellationToken).ConfigureAwait(false);
 
             if (endpoints.Count > 0)
             {
@@ -570,6 +575,11 @@ internal static partial class HelmDeploymentEngine
             {
                 var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
                 var arguments = $"uninstall {releaseName} --namespace {@namespace}";
+
+                if (environment.KubeConfigPath is not null)
+                {
+                    arguments += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
 
                 context.Logger.LogDebug("Running helm {Arguments}", arguments);
 
@@ -640,12 +650,18 @@ internal static partial class HelmDeploymentEngine
     private static async Task<List<string>> GetServiceEndpointsAsync(
         string serviceName,
         string @namespace,
+        string? kubeConfigPath,
         ILogger logger,
         CancellationToken cancellationToken)
     {
         var endpoints = new List<string>();
 
         var arguments = $"get service {serviceName} --namespace {@namespace} -o json";
+
+        if (kubeConfigPath is not null)
+        {
+            arguments += $" --kubeconfig \"{kubeConfigPath}\"";
+        }
         var stdoutBuilder = new StringBuilder();
 
         var spec = new ProcessSpec("kubectl")
