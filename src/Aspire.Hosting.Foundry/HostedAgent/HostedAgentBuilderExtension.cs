@@ -105,8 +105,19 @@ public static class HostedAgentResourceBuilderExtensions
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
+            // Remove any existing HTTP/HTTPS endpoints to avoid conflicts
+            var existingEndpoints = resource.Annotations.OfType<EndpointAnnotation>()
+                .Where(e => string.Equals(e.UriScheme, "http", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(e.UriScheme, "https", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var endpoint in existingEndpoints)
+            {
+                resource.Annotations.Remove(endpoint);
+            }
+
             builder
-                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", port: 8088, targetPort: 8088, isProxied: false)
+                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", targetPort: 8088)
                 .WithUrls((ctx) =>
                 {
                     var http = ctx.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == "http" || u.Endpoint?.EndpointName == "https");
