@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Xml.Linq;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 
@@ -98,6 +99,69 @@ internal static class CliE2EAutomatorHelpers
             default:
                 throw new ArgumentOutOfRangeException(nameof(installMode));
         }
+    }
+
+    /// <summary>
+    /// Installs the Aspire CLI inside a Docker container using the given install strategy.
+    /// Handles all modes: LocalHive, PullRequest, and InstallScript.
+    /// </summary>
+    internal static async Task InstallAspireCliAsync(
+        this Hex1bTerminalAutomator auto,
+        CliInstallStrategy strategy,
+        SequenceCounter counter)
+    {
+        switch (strategy.Mode)
+        {
+            case CliInstallMode.LocalHive:
+                // Extract the localhive archive into ~/.aspire
+                await auto.TypeAsync("mkdir -p ~/.aspire && tar -xzf /tmp/aspire-localhive.tar.gz -C ~/.aspire");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+                await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
+                // Set the channel to 'local' so the CLI finds the hive packages
+                await auto.TypeAsync("aspire config set channel local -g");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
+                break;
+
+            case CliInstallMode.PullRequest:
+                var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
+                await auto.TypeAsync($"/opt/aspire-scripts/get-aspire-cli-pr.sh {prNumber}");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(300));
+                await auto.TypeAsync("export PATH=~/.aspire/bin:~/.aspire:$PATH");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
+                break;
+
+            case CliInstallMode.InstallScript:
+                var scriptArgs = "";
+                if (strategy.Quality is not null)
+                {
+                    scriptArgs = $" --quality {strategy.Quality.Value.ToString().ToLowerInvariant()}";
+                }
+                else if (strategy.Version is not null)
+                {
+                    scriptArgs = $" --version {strategy.Version}";
+                }
+                await auto.TypeAsync($"/opt/aspire-scripts/get-aspire-cli.sh{scriptArgs}");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(120));
+                await auto.TypeAsync("export PATH=~/.aspire/bin:$PATH");
+                await auto.EnterAsync();
+                await auto.WaitForSuccessPromptAsync(counter);
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(strategy), strategy.Mode, "Unknown install mode");
+        }
+
+        // Log the installed version for debugging — visible in asciinema recordings
+        await auto.TypeAsync("aspire --version");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -464,5 +528,20 @@ internal static class CliE2EAutomatorHelpers
                              "echo done");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Destroys the current deployment using <c>aspire destroy --yes</c> and waits for pipeline success.
+    /// </summary>
+    internal static async Task AspireDestroyAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        timeout ??= TimeSpan.FromMinutes(2);
+        await auto.TypeAsync("aspire destroy --yes");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: timeout.Value);
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
     }
 }

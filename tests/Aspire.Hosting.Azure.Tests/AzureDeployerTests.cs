@@ -1260,6 +1260,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         MockProcessRunner? processRunner = null,
         IPipelineActivityReporter? activityReporter = null,
         IContainerRuntime? containerRuntime = null,
+        IDeploymentStateManager? deploymentStateManager = null,
         bool setDefaultProvisioningOptions = true)
     {
         var options = setDefaultProvisioningOptions ? ProvisioningTestHelpers.CreateOptions() : ProvisioningTestHelpers.CreateOptions(null, null, null);
@@ -1284,7 +1285,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             builder.Services.AddSingleton(activityReporter);
         }
         builder.Services.AddSingleton<IProvisioningContextProvider, PublishModeProvisioningContextProvider>();
-        builder.Services.AddSingleton<IDeploymentStateManager, NoOpDeploymentStateManager>();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager ?? new NoOpDeploymentStateManager());
         if (bicepProvisioner is not null)
         {
             builder.Services.AddSingleton(bicepProvisioner);
@@ -1293,7 +1294,8 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         builder.Services.AddSingleton<IProcessRunner>(processRunner ?? new MockProcessRunner());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(containerRuntime ?? new FakeContainerRuntime());
-        builder.Services.AddSingleton<IAcrLoginService>(sp => new FakeAcrLoginService(sp.GetRequiredService<IContainerRuntime>()));
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IAcrLoginService>(sp => new FakeAcrLoginService(sp.GetRequiredService<IContainerRuntimeResolver>()));
     }
 
     private sealed class NoOpDeploymentStateManager : IDeploymentStateManager
@@ -1306,6 +1308,8 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task SaveSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class NoOpBicepProvisioner : IBicepProvisioner
@@ -1730,6 +1734,87 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         builder.Services.AddSingleton<IProcessRunner>(new MockProcessRunner());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(new FakeContainerRuntime());
-        builder.Services.AddSingleton<IAcrLoginService>(sp => new FakeAcrLoginService(sp.GetRequiredService<IContainerRuntime>()));
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IAcrLoginService>(sp => new FakeAcrLoginService(sp.GetRequiredService<IContainerRuntimeResolver>()));
+    }
+
+    [Fact]
+    public async Task DestroyAsync_WithAzureState_DeletesResourceGroup()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Destroy);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure", new JsonObject
+        {
+            ["ResourceGroup"] = "rg-test-destroy",
+            ["SubscriptionId"] = "12345678-1234-1234-1234-123456789012",
+            ["Location"] = "westus2"
+        });
+
+        var testResourceGroup = new TestResourceGroupResource("rg-test-destroy");
+        var armClientProvider = new TestArmClientProvider(testResourceGroup);
+
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        var testInteractionService = new TestInteractionService();
+        ConfigureTestServices(builder, interactionService: testInteractionService, bicepProvisioner: new NoOpBicepProvisioner(), armClientProvider: armClientProvider, activityReporter: mockActivityReporter, deploymentStateManager: stateManager, setDefaultProvisioningOptions: false);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddAzureContainerAppEnvironment("aca");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        // Verify the resource group was actually deleted via ARM
+        Assert.True(testResourceGroup.WasDeleteCalled, "DeleteAsync should have been called on the resource group");
+        Assert.True(testResourceGroup.WasGetResourcesCalled, "GetResourcesAsync should have been called to enumerate resources before deletion");
+    }
+
+    [Fact]
+    public async Task DestroyAsync_WithNoAzureState_ReportsNothingToDestroy()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Destroy);
+        var stateManager = new InMemoryDeploymentStateManager();
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+
+        ConfigureTestServices(builder, bicepProvisioner: new NoOpBicepProvisioner(), activityReporter: mockActivityReporter, deploymentStateManager: stateManager, setDefaultProvisioningOptions: false);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddAzureContainerAppEnvironment("aca");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        // Verify it reported nothing to destroy
+        var completedSteps = mockActivityReporter.CompletedSteps;
+        Assert.Contains(completedSteps, s => s.CompletionText.Contains("Nothing to destroy", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DestroyAsync_NonInteractiveWithoutYes_FailsFast()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Destroy);
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Azure", new JsonObject
+        {
+            ["ResourceGroup"] = "rg-test-destroy",
+            ["SubscriptionId"] = "12345678-1234-1234-1234-123456789012"
+        });
+
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        // Non-interactive: interaction service with IsAvailable = false
+        var nonInteractiveService = new TestInteractionService { IsAvailable = false };
+        ConfigureTestServices(builder, interactionService: nonInteractiveService, bicepProvisioner: new NoOpBicepProvisioner(), activityReporter: mockActivityReporter, deploymentStateManager: stateManager, setDefaultProvisioningOptions: false);
+        // Yes is NOT set — should fail fast
+
+        builder.AddAzureContainerAppEnvironment("aca");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        // The pipeline should have failed with a message about --yes
+        var completedSteps = mockActivityReporter.CompletedSteps;
+        Assert.Contains(completedSteps, s => s.CompletionText.Contains("--yes", StringComparison.OrdinalIgnoreCase));
     }
 }

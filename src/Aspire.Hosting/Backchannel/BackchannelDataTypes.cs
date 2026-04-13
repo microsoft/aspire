@@ -1020,6 +1020,12 @@ internal sealed class AppHostInformation
     /// Gets or sets when the AppHost process started.
     /// </summary>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets when the CLI process that launched the AppHost started.
+    /// This value is only set when the AppHost is launched via the Aspire CLI.
+    /// </summary>
+    public DateTimeOffset? CliStartedAt { get; init; }
 }
 
 /// <summary>

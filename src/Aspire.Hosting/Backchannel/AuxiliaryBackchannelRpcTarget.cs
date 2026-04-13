@@ -366,13 +366,20 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             cliProcessId = parsedCliPid;
         }
+        DateTimeOffset? cliStartedAt = null;
+        var cliStartedAtString = configuration[KnownConfigNames.CliProcessStarted];
+        if (!string.IsNullOrEmpty(cliStartedAtString) && long.TryParse(cliStartedAtString, out var parsedCliStartedAt))
+        {
+            cliStartedAt = DateTimeOffset.FromUnixTimeSeconds(parsedCliStartedAt);
+        }
 
         return Task.FromResult(new AppHostInformation
         {
             AppHostPath = appHostPath,
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
-            StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime)
+            StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
+            CliStartedAt = cliStartedAt
         });
     }
 

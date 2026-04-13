@@ -50,6 +50,7 @@
     <Compile Include="$(TestsSharedDir)\TestInteractionService.cs" />
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
     <Compile Include="$(TestsSharedDir)\TestPipelineActivityReporter.cs" />
+    <Compile Include="$(TestsSharedDir)\InMemoryDeploymentStateManager.cs" />
     
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="KnownProperties.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="StringComparers.cs" />

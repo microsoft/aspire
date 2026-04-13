@@ -82,6 +82,10 @@ await container.withImageRegistry("docker.io");
 // ===================================================================
 
 await dockerContainer.withHttpEndpoint({ name: "http", targetPort: 80 });
+await dockerContainer.withHttpEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8080);
+    await updateContext.isProxied.set(false);
+}, { name: "http", createIfNotExists: false });
 const endpoint = await dockerContainer.getEndpoint("http");
 const expr = refExpr`Host=${endpoint}`;
 
@@ -100,6 +104,25 @@ await builtConnectionString.withConnectionProperty("Host", expr);
 await builtConnectionString.withConnectionProperty("Mode", "Development");
 
 const envConnectionString = await builder.addConnectionString("envcs");
+
+// ===================================================================
+// Application pipeline on builder
+// ===================================================================
+
+const pipeline = await builder.pipeline.get();
+
+await pipeline.addStep("custom-builder-step", async (stepContext) => {
+    const summary = await stepContext.summary.get();
+    await summary.add("BuilderPipelineStep", "Validated");
+}, {
+    dependsOn: ["build"],
+    requiredBy: ["publish"],
+});
+
+await pipeline.configure(async (configContext) => {
+    const _allSteps = await configContext.steps.get();
+    const _builderTaggedSteps = await configContext.getStepsByTag("custom-build");
+});
 
 // ===================================================================
 // ResourceBuilderExtensions.cs — NEW exports on ContainerResource
@@ -163,6 +186,13 @@ await container.withRemoteImageName("myregistry.azurecr.io/myapp");
 
 // withRemoteImageTag
 await container.withRemoteImageTag("latest");
+
+// withImagePushOptions
+await container.withImagePushOptions(async (context) => {
+    const options = await context.options.get();
+    await options.remoteImageName.set("myregistry.azurecr.io/myapp");
+    await options.remoteImageTag.set("latest");
+});
 
 // withMcpServer
 await container.withMcpServer({ path: "/mcp" });
@@ -410,12 +440,40 @@ await container.withEnvironment("MY_VAR", "value");
 
 // withEndpoint
 await container.withEndpoint();
+await container.withEndpoint({ name: "callback-endpoint" });
+await container.withEndpointCallback("callback-endpoint", async (updateContext) => {
+    await updateContext.port.set(5001);
+    await updateContext.targetPort.set(5002);
+    await updateContext.isExternal.set(false);
+}, { createIfNotExists: false });
 
 // withHttpEndpoint
 await container.withHttpEndpoint();
+await container.withHttpEndpoint({ name: "callback-http" });
+await container.withHttpEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8081);
+    await updateContext.targetPort.set(8082);
+    await updateContext.isProxied.set(false);
+}, { name: "callback-http", createIfNotExists: false });
+await container.withHttpEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8083);
+    await updateContext.targetPort.set(8084);
+    await updateContext.isProxied.set(false);
+}, { name: "created-http" });
 
 // withHttpsEndpoint
 await container.withHttpsEndpoint();
+await container.withHttpsEndpoint({ name: "callback-https" });
+await container.withHttpsEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8444);
+    await updateContext.targetPort.set(8443);
+    await updateContext.isProxied.set(false);
+}, { name: "callback-https", createIfNotExists: false });
+await container.withHttpsEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8445);
+    await updateContext.targetPort.set(8446);
+    await updateContext.isProxied.set(false);
+}, { name: "created-https" });
 
 // withExternalHttpEndpoints
 await container.withExternalHttpEndpoints();
@@ -449,6 +507,10 @@ await container.withHttpHealthCheck();
 await container.withCommand("restart", "Restart", async (_ctx) => {
     return { success: true };
 });
+
+// withHttpCommand
+await container.withHttpCommand("/health", "Health Check");
+await container.withHttpCommand("/api/reset", "Reset", { methodName: "POST", confirmationMessage: "Are you sure?" });
 
 const app = await builder.build();
 await app.run();

@@ -35,6 +35,20 @@ internal sealed class KubernetesInfrastructure(
         foreach (var environment in kubernetesEnvironments)
         {
             var environmentContext = new KubernetesEnvironmentContext(environment, logger);
+            var containerRegistry = GetContainerRegistry(environment, @event.Model);
+
+            // Create a Kubernetes resource for the dashboard if enabled
+            if (environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource dashboard)
+            {
+                var dashboardService = await environmentContext.CreateKubernetesResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
+                dashboardService.AddPrintSummaryStep();
+
+                dashboard.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
+                {
+                    ComputeEnvironment = environment,
+                    ContainerRegistry = containerRegistry
+                });
+            }
 
             foreach (var r in @event.Model.GetComputeResources())
             {
@@ -45,16 +59,44 @@ internal sealed class KubernetesInfrastructure(
                     continue;
                 }
 
+                // Configure OTLP for resources if dashboard is enabled
+                if (environment.DashboardEnabled && environment.Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+                {
+                    ConfigureOtlp(r, otlpGrpcEndpoint);
+                }
+
                 // Create a Kubernetes compute resource for the resource
                 var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
+                serviceResource.AddPrintSummaryStep();
 
                 // Add deployment target annotation to the resource
                 r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
                 {
-                    ComputeEnvironment = environment
+                    ComputeEnvironment = environment,
+                    ContainerRegistry = containerRegistry
                 });
             }
         }
+    }
+
+    private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
+    {
+        // Check for explicit container registry reference annotation on the environment
+        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
+        {
+            return annotation.Registry;
+        }
+
+        // Check if there's a single container registry in the app model
+        var registries = appModel.Resources.OfType<IContainerRegistry>().ToArray();
+        if (registries.Length == 1)
+        {
+            return registries[0];
+        }
+
+        // Kubernetes has no local registry fallback — return null if no registry is configured.
+        // The PushPrereq step will validate and error if a registry is required but not available.
+        return null;
     }
 
     private static void EnsureNoPublishAsKubernetesServiceAnnotations(DistributedApplicationModel appModel)
@@ -65,6 +107,20 @@ internal sealed class KubernetesInfrastructure(
             {
                 throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as a Kubernetes service, but there are no '{nameof(KubernetesEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(KubernetesEnvironmentExtensions.AddKubernetesEnvironment)}'.");
             }
+        }
+    }
+
+    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    {
+        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        {
+            resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+            {
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                return Task.CompletedTask;
+            }));
         }
     }
 

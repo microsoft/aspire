@@ -26,6 +26,12 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
   </ItemGroup>
 
+  <!-- When targeting net8.0 or net9.0, we use older Npgsql versions (8.x/9.x) whose metrics
+       don't align with the OpenTelemetry spec. LEGACY_NPGSQL enables custom histogram views. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net8.0' or '$(TargetFramework)' == 'net9.0'">
+    <DefineConstants>$(DefineConstants);LEGACY_NPGSQL</DefineConstants>
+  </PropertyGroup>
+
   <!-- Npgsql EF needs to match the same major version as the underlying Npgsql assemblies. -->
   <!-- This is to override CentralPackageTransitivePinningEnabled -->
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">

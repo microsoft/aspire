@@ -1425,7 +1425,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         await pipeline.ExecuteAsync(context).DefaultTimeout();
 
         Assert.True(callbackExecuted);
-        Assert.Equal(12, capturedSteps.Count); // Updated to account for all default steps including process-parameters, push, push-prereq
+        Assert.Equal(14, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, push, push-prereq, publish, publish-prereq, diagnostics, destroy, destroy-prereq + step1, step2
         Assert.Contains(capturedSteps, s => s.Name == "deploy");
         Assert.Contains(capturedSteps, s => s.Name == "process-parameters");
         Assert.Contains(capturedSteps, s => s.Name == "deploy-prereq");
@@ -1436,6 +1436,8 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.Contains(capturedSteps, s => s.Name == "publish");
         Assert.Contains(capturedSteps, s => s.Name == "publish-prereq");
         Assert.Contains(capturedSteps, s => s.Name == "diagnostics");
+        Assert.Contains(capturedSteps, s => s.Name == "destroy");
+        Assert.Contains(capturedSteps, s => s.Name == "destroy-prereq");
         Assert.Contains(capturedSteps, s => s.Name == "step1");
         Assert.Contains(capturedSteps, s => s.Name == "step2");
     }

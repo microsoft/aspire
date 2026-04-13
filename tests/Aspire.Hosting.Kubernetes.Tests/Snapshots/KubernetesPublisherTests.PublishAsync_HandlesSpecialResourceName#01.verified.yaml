@@ -1,10 +1,17 @@
-parameters:
+﻿parameters:
   SpeciaL_ApP:
     SpeciaL_ApP_image: "SpeciaL-ApP:latest"
 secrets:
   SpeciaL_ApP:
     param3: ""
+    ConnectionStrings__api_cs: ""
 config:
+  env_dashboard:
+    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
+    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   SpeciaL_ApP:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ConnectionStrings__api_cs2: "host.local:80"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env-dashboard-service:18889"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+    OTEL_SERVICE_NAME: "SpeciaL-ApP"

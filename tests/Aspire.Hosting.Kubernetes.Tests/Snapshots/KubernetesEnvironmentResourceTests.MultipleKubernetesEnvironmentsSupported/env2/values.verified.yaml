@@ -1,9 +1,16 @@
-parameters:
+﻿parameters:
   ServiceB:
     port_http: 8080
     ServiceB_image: "ServiceB:latest"
 secrets: {}
 config:
+  env2_dashboard:
+    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
+    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   ServiceB:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    HTTP_PORTS: ""
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env2-dashboard-service:18889"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+    OTEL_SERVICE_NAME: "ServiceB"

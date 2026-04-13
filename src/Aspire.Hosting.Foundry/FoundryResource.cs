@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Foundry;
 /// <param name="configureInfrastructure">Configures the underlying Azure resource using Azure.Provisioning.</param>
 [AspireExport]
 public class FoundryResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure) :
-    AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzureNspAssociationTarget
+    AzureProvisioningResource(name, configureInfrastructure), IResourceWithEndpoints, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     internal Uri? EmulatorServiceUri { get; set; }
 
@@ -132,6 +132,10 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
             yield return new("Key", ReferenceExpression.Create($"{ApiKey}"));
         }
     }
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["account"];
+
+    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.cognitiveservices.azure.com";
 }
 
 /// <summary>

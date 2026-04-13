@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -98,12 +99,107 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
 
             // Step 5: Create single-file AppHost with GA CLI
             output.WriteLine("Step 5: Creating single-file AppHost with GA CLI...");
+            var waitingForLanguageSelectionPrompt = new CellPatternSearcher()
+                .Find("Which language would you like to use?");
+            var waitingForTemplateVersionPrompt = new CellPatternSearcher()
+                .Find("NuGet.config");
+            var waitingForAgentInitPrompt = new CellPatternSearcher()
+                .Find("configure AI agent environments");
+            var waitingForSuccessPrompt = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+
             await auto.TypeAsync("aspire init");
             await auto.EnterAsync();
-            await auto.WaitAsync(TimeSpan.FromSeconds(5));
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Aspire initialization complete", timeout: TimeSpan.FromMinutes(2));
-            await auto.DeclineAgentInitPromptAsync(counter);
+
+            var initState = "success";
+            await auto.WaitUntilAsync(s =>
+            {
+                if (waitingForLanguageSelectionPrompt.Search(s).Count > 0)
+                {
+                    initState = "language";
+                    return true;
+                }
+
+                if (waitingForTemplateVersionPrompt.Search(s).Count > 0)
+                {
+                    initState = "template-version";
+                    return true;
+                }
+
+                if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                {
+                    initState = "agent-init";
+                    return true;
+                }
+
+                if (waitingForSuccessPrompt.Search(s).Count > 0)
+                {
+                    initState = "success";
+                    return true;
+                }
+
+                return false;
+            }, timeout: TimeSpan.FromMinutes(2), description: "language prompt, template version prompt, agent init prompt, or init success prompt");
+
+            if (initState == "language")
+            {
+                await auto.EnterAsync();
+
+                await auto.WaitUntilAsync(s =>
+                {
+                    if (waitingForTemplateVersionPrompt.Search(s).Count > 0)
+                    {
+                        initState = "template-version";
+                        return true;
+                    }
+
+                    if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                    {
+                        initState = "agent-init";
+                        return true;
+                    }
+
+                    if (waitingForSuccessPrompt.Search(s).Count > 0)
+                    {
+                        initState = "success";
+                        return true;
+                    }
+
+                    return false;
+                }, timeout: TimeSpan.FromMinutes(2), description: "template version prompt, agent init prompt, or init success prompt");
+            }
+
+            if (initState == "template-version")
+            {
+                await auto.EnterAsync();
+
+                await auto.WaitUntilAsync(s =>
+                {
+                    if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                    {
+                        initState = "agent-init";
+                        return true;
+                    }
+
+                    if (waitingForSuccessPrompt.Search(s).Count > 0)
+                    {
+                        initState = "success";
+                        return true;
+                    }
+
+                    return false;
+                }, timeout: TimeSpan.FromMinutes(2), description: "agent init prompt or init success prompt");
+            }
+
+            if (initState == "agent-init")
+            {
+                await auto.DeclineAgentInitPromptAsync(counter);
+            }
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter);
+            }
 
             // Step 6: Add ACA package using GA CLI (uses GA NuGet packages)
             output.WriteLine("Step 6: Adding Azure Container Apps package (GA)...");
@@ -143,7 +239,7 @@ builder.Build().Run();
             output.WriteLine("Step 9: First deployment with GA CLI...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 10: Record the storage account count after first deploy
@@ -248,7 +344,7 @@ builder.Build().Run();
             output.WriteLine("Step 13: Redeploying with dev packages (no compact naming)...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 14: Verify no duplicate storage accounts
@@ -265,7 +361,11 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 15: Exit
+            // Step 15: Clean up Azure resources using aspire destroy
+            output.WriteLine("Step 15: Destroying Azure deployment...");
+            await auto.AspireDestroyAsync(counter);
+
+            // Step 16: Exit
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 

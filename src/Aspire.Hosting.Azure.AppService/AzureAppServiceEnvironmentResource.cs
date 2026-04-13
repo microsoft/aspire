@@ -275,6 +275,11 @@ public class AzureAppServiceEnvironmentResource :
     internal BicepOutputReference WebSiteSuffix => new("webSiteSuffix", this);
 
     /// <summary>
+    /// When true, HTTP endpoints are not upgraded to HTTPS. Default is false (HTTP→HTTPS upgrade is enabled).
+    /// </summary>
+    internal bool PreserveHttpEndpoints { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
     /// Default is true.
     /// </summary>

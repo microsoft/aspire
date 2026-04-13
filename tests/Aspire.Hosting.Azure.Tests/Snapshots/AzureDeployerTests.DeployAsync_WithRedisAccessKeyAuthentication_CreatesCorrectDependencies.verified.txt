@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 35
+Total steps defined: 38
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -42,13 +42,16 @@ Steps with no dependencies run first, followed by steps that depend on them.
  26. print-dashboard-url-env
  27. deploy
  28. deploy-api
- 29. diagnostics
- 30. publish-prereq
- 31. publish-azure634f9
- 32. validate-appservice-config-env
- 33. publish
- 34. publish-manifest
- 35. push
+ 29. destroy-prereq
+ 30. destroy-azure-azure634f9
+ 31. destroy
+ 32. diagnostics
+ 33. publish-prereq
+ 34. publish-azure634f9
+ 35. validate-appservice-config-env
+ 36. publish
+ 37. publish-manifest
+ 38. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -87,6 +90,19 @@ Step: deploy-api
 Step: deploy-prereq
     Description: Prerequisite step that runs before any deploy operations. Initializes deployment environment and manages deployment state.
     Dependencies: ✓ process-parameters
+
+Step: destroy
+    Description: Aggregation step for all destroy operations. All destroy steps should be required by this step.
+    Dependencies: ✓ destroy-azure-azure634f9
+
+Step: destroy-azure-azure634f9
+    Description: Destroys the Azure resource group and all resources for azure634f9.
+    Dependencies: ✓ destroy-prereq
+    Resource: azure634f9 (AzureEnvironmentResource)
+
+Step: destroy-prereq
+    Description: Prerequisite step that runs before any destroy operations.
+    Dependencies: none
 
 Step: diagnostics
     Description: Dumps dependency graph information for troubleshooting pipeline execution.
@@ -320,6 +336,27 @@ If targeting 'deploy-prereq':
   Execution order:
     [0] process-parameters
     [1] deploy-prereq
+
+If targeting 'destroy':
+  Direct dependencies: destroy-azure-azure634f9
+  Total steps: 3
+  Execution order:
+    [0] destroy-prereq
+    [1] destroy-azure-azure634f9
+    [2] destroy
+
+If targeting 'destroy-azure-azure634f9':
+  Direct dependencies: destroy-prereq
+  Total steps: 2
+  Execution order:
+    [0] destroy-prereq
+    [1] destroy-azure-azure634f9
+
+If targeting 'destroy-prereq':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] destroy-prereq
 
 If targeting 'diagnostics':
   Direct dependencies: none

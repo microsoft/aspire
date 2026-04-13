@@ -68,6 +68,113 @@ public sealed class SmokeTests(ITestOutputHelper output)
 }
 ```
 
+## Running Tests Locally
+
+CLI E2E tests run inside Docker containers on Linux. The workflow is: build a portable archive with `localhive`, then point the tests at it. This is the primary way to iterate on E2E tests during development.
+
+### Prerequisites
+
+- Docker Desktop running (with Linux containers)
+- .NET 10 SDK (installed via `./restore.sh` or `.\restore.cmd`)
+
+### Quick Start (macOS / Linux)
+
+```bash
+# 1. Build a portable archive with CLI + packages + bundle
+#    Use linux-arm64 on Apple Silicon, linux-x64 on Intel/Linux
+./localhive.sh -o /tmp/aspire-e2e -r linux-arm64 --archive
+
+# 2. Run a specific test
+ASPIRE_E2E_ARCHIVE=/tmp/aspire-e2e.tar.gz \
+  dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  -- --filter-method "*.CreateAndRunAspireStarterProject"
+
+# 3. Run all tests in a class
+ASPIRE_E2E_ARCHIVE=/tmp/aspire-e2e.tar.gz \
+  dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  -- --filter-class "*.SmokeTests"
+```
+
+### Quick Start (Windows / PowerShell)
+
+```powershell
+# 1. Build a portable archive (Docker Desktop uses linux-x64 via WSL2)
+.\localhive.ps1 -o C:\tmp\aspire-e2e -r linux-x64 -Archive
+
+# 2. Run a specific test
+$env:ASPIRE_E2E_ARCHIVE = "C:\tmp\aspire-e2e.tar.gz"
+dotnet test tests\Aspire.Cli.EndToEnd.Tests\Aspire.Cli.EndToEnd.Tests.csproj `
+  -- --filter-method "*.CreateAndRunAspireStarterProject"
+
+# 3. Run all tests in a class
+dotnet test tests\Aspire.Cli.EndToEnd.Tests\Aspire.Cli.EndToEnd.Tests.csproj `
+  -- --filter-class "*.SmokeTests"
+```
+
+### Choosing the Right RID
+
+The archive must match the Docker container's architecture:
+
+| Host | Docker Desktop | RID |
+|------|---------------|-----|
+| Apple Silicon Mac | Linux arm64 containers | `linux-arm64` |
+| Intel Mac | Linux x64 containers | `linux-x64` |
+| Windows (any) | WSL2 Linux x64 | `linux-x64` |
+| Linux x64 | Native | `linux-x64` |
+| Linux arm64 | Native | `linux-arm64` |
+
+### Development Workflow
+
+The typical loop when writing or debugging E2E tests:
+
+```bash
+# 1. Make your code changes (CLI, hosting, templates, etc.)
+
+# 2. Rebuild the archive (picks up all changes — ~3 min)
+./localhive.sh -o /tmp/aspire-e2e -r linux-arm64 --archive
+
+# 3. Run the specific test you're working on
+ASPIRE_E2E_ARCHIVE=/tmp/aspire-e2e.tar.gz \
+  dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  -- --filter-method "*.YourTestName"
+
+# 4. If it fails, check the asciinema recording
+#    Recordings are saved to $TMPDIR/aspire-cli-e2e/recordings/
+#    Play with: asciinema play /path/to/YourTestName.cast
+
+# 5. Fix and repeat from step 1 or 2
+```
+
+### Install Modes
+
+The `CliInstallStrategy` class auto-detects how to install the CLI in the test container. You can override via environment variables:
+
+| Env Var | Mode | Example |
+|---------|------|---------|
+| `ASPIRE_E2E_ARCHIVE` | LocalHive — extract archive into container | `/tmp/aspire-e2e.tar.gz` |
+| `ASPIRE_E2E_QUALITY` | Install script with quality | `dev`, `staging`, `release` |
+| `ASPIRE_E2E_VERSION` | Install script with version | `13.2.1` |
+| *(none, in CI)* | PullRequest — install from PR artifacts | Auto-detected |
+| *(none, locally)* | InstallScript (latest GA) | Auto-detected |
+
+**LocalHive** (via `ASPIRE_E2E_ARCHIVE`) is the recommended mode for local development — it uses your locally-built CLI, packages, and bundle so you test exactly what you've changed.
+
+### Testing Against Released Versions
+
+Useful for verifying tests pass against shipped versions or catching regressions:
+
+```bash
+# Test against latest GA release
+ASPIRE_E2E_QUALITY=release dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+  -- --filter-method "*.CreateAndRunAspireStarterProject"
+
+# Test against daily builds
+ASPIRE_E2E_QUALITY=dev dotnet test ...
+
+# Test against a specific version
+ASPIRE_E2E_VERSION=13.2.1 dotnet test ...
+```
+
 ## SequenceCounter and Prompt Detection
 
 The `SequenceCounter` class tracks the number of shell commands executed. This enables deterministic waiting for command completion via a custom shell prompt.

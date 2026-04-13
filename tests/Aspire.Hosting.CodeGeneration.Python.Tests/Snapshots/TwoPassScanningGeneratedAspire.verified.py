@@ -1504,6 +1504,8 @@ DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
 EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled"]
 
+HttpCommandResultMode = typing.Literal["None", "Auto", "Json", "Text"]
+
 IconVariant = typing.Literal["Regular", "Filled"]
 
 ImagePullPolicy = typing.Literal["Default", "Always", "Missing", "Never"]
@@ -1605,6 +1607,24 @@ class ReferenceParameters(typing.TypedDict, total=False):
     name: str
 
 
+class EndpointCallbackParameters(typing.TypedDict, total=False):
+    endpoint_name: typing.Required[str]
+    callback: typing.Required[typing.Callable[[EndpointUpdateContext], None]]
+    create_if_not_exists: bool
+
+
+class HttpEndpointCallbackParameters(typing.TypedDict, total=False):
+    callback: typing.Required[typing.Callable[[EndpointUpdateContext], None]]
+    name: str
+    create_if_not_exists: bool
+
+
+class HttpsEndpointCallbackParameters(typing.TypedDict, total=False):
+    callback: typing.Required[typing.Callable[[EndpointUpdateContext], None]]
+    name: str
+    create_if_not_exists: bool
+
+
 class EndpointParameters(typing.TypedDict, total=False):
     port: int
     target_port: int
@@ -1636,6 +1656,12 @@ class HttpHealthCheckParameters(typing.TypedDict, total=False):
     path: str
     status_code: int
     endpoint_name: str
+
+
+class HttpCommandParameters(typing.TypedDict, total=False):
+    path: typing.Required[str]
+    display_name: typing.Required[str]
+    options: HttpCommandExportOptions
 
 
 class HttpProbeParameters(typing.TypedDict, total=False):
@@ -1713,6 +1739,17 @@ class GenerateParameterDefault(typing.TypedDict, total=False):
     MinUpper: int
     MinNumeric: int
     MinSpecial: int
+
+class HttpCommandExportOptions(typing.TypedDict, total=False):
+    Description: str
+    ConfirmationMessage: str
+    IconName: str
+    IconVariant: IconVariant
+    IsHighlighted: bool
+    CommandName: str
+    EndpointName: str
+    MethodName: str
+    ResultMode: HttpCommandResultMode
 
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
     ConnectionString: bool
@@ -1891,6 +1928,15 @@ class DistributedApplicationBuilder:
             {'context': self._handle}
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
+
+    @_cached_property
+    def pipeline(self) -> AbstractDistributedApplicationPipeline:
+        """Gets the Pipeline property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/IDistributedApplicationBuilder.pipeline',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractDistributedApplicationPipeline, result)
 
     @_cached_property
     def user_secrets_manager(self) -> AbstractUserSecretsManager:
@@ -2264,6 +2310,45 @@ class AbstractDistributedApplicationEventing:
         rpc_args['subscription'] = subscription
         self._client.invoke_capability(
             'Aspire.Hosting.Eventing/IDistributedApplicationEventing.unsubscribe',
+            rpc_args
+        )
+
+
+class AbstractDistributedApplicationPipeline:
+    """Type class for AbstractDistributedApplicationPipeline."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractDistributedApplicationPipeline(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def add_step(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None) -> None:
+        """Adds a pipeline step to the application"""
+        rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
+        rpc_args['stepName'] = step_name
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if depends_on is not None:
+            rpc_args['dependsOn'] = depends_on
+        if required_by is not None:
+            rpc_args['requiredBy'] = required_by
+        self._client.invoke_capability(
+            'Aspire.Hosting/addStep',
+            rpc_args
+        )
+
+    def configure(self, callback: typing.Callable[[PipelineConfigurationContext], None]) -> None:
+        """Configures the application pipeline via a callback"""
+        rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        self._client.invoke_capability(
+            'Aspire.Hosting/configure',
             rpc_args
         )
 
@@ -2924,6 +3009,114 @@ class ConnectionStringAvailableEvent:
         return typing.cast(AbstractServiceProvider, result)
 
 
+class ContainerImagePushOptions:
+    """Type class for ContainerImagePushOptions."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerImagePushOptions(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_uncached_property
+    def remote_image_name(self) -> str:
+        """Gets the RemoteImageName property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @remote_image_name.setter
+    def remote_image_name(self, value: str) -> None:
+        """Sets the RemoteImageName property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def remote_image_tag(self) -> str:
+        """Gets the RemoteImageTag property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @remote_image_tag.setter
+    def remote_image_tag(self, value: str) -> None:
+        """Sets the RemoteImageTag property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag',
+            {'context': self._handle, 'value': value}
+        )
+
+
+class ContainerImagePushOptionsCallbackContext:
+    """Type class for ContainerImagePushOptionsCallbackContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerImagePushOptionsCallbackContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_uncached_property
+    def resource(self) -> AbstractResource:
+        """Gets the Resource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @resource.setter
+    def resource(self, value: AbstractResource) -> None:
+        """Sets the Resource property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setResource',
+            {'context': self._handle, 'value': value}
+        )
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    @_uncached_property
+    def options(self) -> ContainerImagePushOptions:
+        """Gets the Options property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.options',
+            {'context': self._handle}
+        )
+        return typing.cast(ContainerImagePushOptions, result)
+
+    @options.setter
+    def options(self, value: ContainerImagePushOptions) -> None:
+        """Sets the Options property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions',
+            {'context': self._handle, 'value': value}
+        )
+
+
 class DistributedApplication:
     """Type class for DistributedApplication."""
 
@@ -3283,6 +3476,201 @@ class EndpointReferenceExpression:
             {'context': self._handle}
         )
         return typing.cast(str, result)
+
+
+class EndpointUpdateContext:
+    """Type class for EndpointUpdateContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"EndpointUpdateContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def name(self) -> str:
+        """Gets the Name property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.name',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_uncached_property
+    def protocol(self) -> ProtocolType:
+        """Gets the Protocol property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.protocol',
+            {'context': self._handle}
+        )
+        return typing.cast(ProtocolType, result)
+
+    @protocol.setter
+    def protocol(self, value: ProtocolType) -> None:
+        """Sets the Protocol property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setProtocol',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def port(self) -> int:
+        """Gets the Port property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port',
+            {'context': self._handle}
+        )
+        return typing.cast(int, result)
+
+    @port.setter
+    def port(self, value: int) -> None:
+        """Sets the Port property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def target_port(self) -> int:
+        """Gets the TargetPort property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort',
+            {'context': self._handle}
+        )
+        return typing.cast(int, result)
+
+    @target_port.setter
+    def target_port(self, value: int) -> None:
+        """Sets the TargetPort property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def uri_scheme(self) -> str:
+        """Gets the UriScheme property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.uriScheme',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @uri_scheme.setter
+    def uri_scheme(self, value: str) -> None:
+        """Sets the UriScheme property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setUriScheme',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def target_host(self) -> str:
+        """Gets the TargetHost property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetHost',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @target_host.setter
+    def target_host(self, value: str) -> None:
+        """Sets the TargetHost property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetHost',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def transport(self) -> str:
+        """Gets the Transport property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.transport',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @transport.setter
+    def transport(self, value: str) -> None:
+        """Sets the Transport property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTransport',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def is_external(self) -> bool:
+        """Gets the IsExternal property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isExternal',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @is_external.setter
+    def is_external(self, value: bool) -> None:
+        """Sets the IsExternal property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsExternal',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def is_proxied(self) -> bool:
+        """Gets the IsProxied property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isProxied',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @is_proxied.setter
+    def is_proxied(self, value: bool) -> None:
+        """Sets the IsProxied property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsProxied',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def exclude_reference_endpoint(self) -> bool:
+        """Gets the ExcludeReferenceEndpoint property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.excludeReferenceEndpoint',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @exclude_reference_endpoint.setter
+    def exclude_reference_endpoint(self, value: bool) -> None:
+        """Sets the ExcludeReferenceEndpoint property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setExcludeReferenceEndpoint',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def tls_enabled(self) -> bool:
+        """Gets the TlsEnabled property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.tlsEnabled',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @tls_enabled.setter
+    def tls_enabled(self, value: bool) -> None:
+        """Sets the TlsEnabled property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTlsEnabled',
+            {'context': self._handle, 'value': value}
+        )
 
 
 class EnvironmentCallbackContext:
@@ -4821,6 +5209,10 @@ class AbstractComputeResource(AbstractResource):
     """Abstract base class for AbstractComputeResource interface."""
 
     @abc.abstractmethod
+    def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
+        """Sets image push options via callback"""
+
+    @abc.abstractmethod
     def with_remote_image_name(self, remote_image_name: str) -> typing.Self:
         """Sets the remote image name for publishing"""
 
@@ -4897,6 +5289,18 @@ class AbstractResourceWithEndpoints(AbstractResource):
         """Configures an MCP server endpoint on the resource"""
 
     @abc.abstractmethod
+    def with_endpoint_callback(self, endpoint_name: str, callback: typing.Callable[[EndpointUpdateContext], None], *, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates a named endpoint via callback"""
+
+    @abc.abstractmethod
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTP endpoint via callback"""
+
+    @abc.abstractmethod
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTPS endpoint via callback"""
+
+    @abc.abstractmethod
     def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
         """Adds a network endpoint"""
 
@@ -4927,6 +5331,10 @@ class AbstractResourceWithEndpoints(AbstractResource):
     @abc.abstractmethod
     def with_http_health_check(self, *, path: str | None = None, status_code: int | None = None, endpoint_name: str | None = None) -> typing.Self:
         """Adds an HTTP health check"""
+
+    @abc.abstractmethod
+    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None = None) -> typing.Self:
+        """Adds an HTTP resource command"""
 
     @abc.abstractmethod
     def with_http_probe(self, probe_type: ProbeType, *, path: str | None = None, initial_delay_seconds: int | None = None, period_seconds: int | None = None, timeout_seconds: int | None = None, failure_threshold: int | None = None, success_threshold: int | None = None, endpoint_name: str | None = None) -> typing.Self:
@@ -6217,6 +6625,9 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     reference_uri: tuple[str, str]
     reference_external_service: ExternalServiceResource
     reference_endpoint: EndpointReference
+    endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
+    http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
+    https_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpsEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -6227,11 +6638,13 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
+    http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
+    image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
     volume: str | VolumeParameters
@@ -6639,6 +7052,50 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_endpoint_callback(self, endpoint_name: str, callback: typing.Callable[[EndpointUpdateContext], None], *, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates a named endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['endpointName'] = endpoint_name
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTP endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTPS endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
         """Adds a network endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -6804,6 +7261,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None = None) -> typing.Self:
+        """Adds an HTTP resource command"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['path'] = path
+        rpc_args['displayName'] = display_name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpCommand',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_developer_certificate_trust(self, trust: bool) -> typing.Self:
         """Configures developer certificate trust"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -6868,6 +7339,17 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             rpc_args['endpointName'] = endpoint_name
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpProbe',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
+        """Sets image push options via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withImagePushOptions',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -7218,6 +7700,46 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_endpoint'. Expected: EndpointReference")
+        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+            if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
+        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+            if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
+        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+            if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7331,6 +7853,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpHealthCheck', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_health_check'. Expected: HttpHealthCheckParameters or Literal[True]")
+        if _http_command := kwargs.pop("http_command", None):
+            if _validate_tuple_types(_http_command, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["path"] = typing.cast(tuple[str, str], _http_command)[0]
+                rpc_args["displayName"] = typing.cast(tuple[str, str], _http_command)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
+            elif _validate_dict_types(_http_command, HttpCommandParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["path"] = typing.cast(HttpCommandParameters, _http_command)["path"]
+                rpc_args["displayName"] = typing.cast(HttpCommandParameters, _http_command)["display_name"]
+                rpc_args["options"] = typing.cast(HttpCommandParameters, _http_command).get("options")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_command'. Expected: (str, str) or HttpCommandParameters")
         if _developer_certificate_trust := kwargs.pop("developer_certificate_trust", None):
             if _validate_type(_developer_certificate_trust, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7379,6 +7915,13 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
+        if _image_push_options := kwargs.pop("image_push_options", None):
+            if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
         if _remote_image_name := kwargs.pop("remote_image_name", None):
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7451,6 +7994,9 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     reference_uri: tuple[str, str]
     reference_external_service: ExternalServiceResource
     reference_endpoint: EndpointReference
+    endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
+    http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
+    https_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpsEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -7462,11 +8008,13 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
+    http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
+    image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
@@ -7694,6 +8242,50 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_endpoint_callback(self, endpoint_name: str, callback: typing.Callable[[EndpointUpdateContext], None], *, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates a named endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['endpointName'] = endpoint_name
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTP endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTPS endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
         """Adds a network endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -7871,6 +8463,20 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None = None) -> typing.Self:
+        """Adds an HTTP resource command"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['path'] = path
+        rpc_args['displayName'] = display_name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpCommand',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_developer_certificate_trust(self, trust: bool) -> typing.Self:
         """Configures developer certificate trust"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -7935,6 +8541,17 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             rpc_args['endpointName'] = endpoint_name
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpProbe',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
+        """Sets image push options via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withImagePushOptions',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8144,6 +8761,46 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_endpoint'. Expected: EndpointReference")
+        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+            if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
+        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+            if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
+        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+            if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8265,6 +8922,20 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpHealthCheck', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_health_check'. Expected: HttpHealthCheckParameters or Literal[True]")
+        if _http_command := kwargs.pop("http_command", None):
+            if _validate_tuple_types(_http_command, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["path"] = typing.cast(tuple[str, str], _http_command)[0]
+                rpc_args["displayName"] = typing.cast(tuple[str, str], _http_command)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
+            elif _validate_dict_types(_http_command, HttpCommandParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["path"] = typing.cast(HttpCommandParameters, _http_command)["path"]
+                rpc_args["displayName"] = typing.cast(HttpCommandParameters, _http_command)["display_name"]
+                rpc_args["options"] = typing.cast(HttpCommandParameters, _http_command).get("options")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_command'. Expected: (str, str) or HttpCommandParameters")
         if _developer_certificate_trust := kwargs.pop("developer_certificate_trust", None):
             if _validate_type(_developer_certificate_trust, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8313,6 +8984,13 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
+        if _image_push_options := kwargs.pop("image_push_options", None):
+            if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
         if _remote_image_name := kwargs.pop("remote_image_name", None):
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8386,6 +9064,9 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     reference_uri: tuple[str, str]
     reference_external_service: ExternalServiceResource
     reference_endpoint: EndpointReference
+    endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
+    http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
+    https_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpsEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -8396,11 +9077,13 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
+    http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
+    image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
@@ -8630,6 +9313,50 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_endpoint_callback(self, endpoint_name: str, callback: typing.Callable[[EndpointUpdateContext], None], *, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates a named endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['endpointName'] = endpoint_name
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTP endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTPS endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
         """Adds a network endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -8795,6 +9522,20 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None = None) -> typing.Self:
+        """Adds an HTTP resource command"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['path'] = path
+        rpc_args['displayName'] = display_name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpCommand',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_developer_certificate_trust(self, trust: bool) -> typing.Self:
         """Configures developer certificate trust"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -8859,6 +9600,17 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             rpc_args['endpointName'] = endpoint_name
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpProbe',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
+        """Sets image push options via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withImagePushOptions',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9069,6 +9821,46 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_endpoint'. Expected: EndpointReference")
+        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+            if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
+        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+            if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
+        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+            if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9182,6 +9974,20 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpHealthCheck', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_health_check'. Expected: HttpHealthCheckParameters or Literal[True]")
+        if _http_command := kwargs.pop("http_command", None):
+            if _validate_tuple_types(_http_command, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["path"] = typing.cast(tuple[str, str], _http_command)[0]
+                rpc_args["displayName"] = typing.cast(tuple[str, str], _http_command)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
+            elif _validate_dict_types(_http_command, HttpCommandParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["path"] = typing.cast(HttpCommandParameters, _http_command)["path"]
+                rpc_args["displayName"] = typing.cast(HttpCommandParameters, _http_command)["display_name"]
+                rpc_args["options"] = typing.cast(HttpCommandParameters, _http_command).get("options")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_command'. Expected: (str, str) or HttpCommandParameters")
         if _developer_certificate_trust := kwargs.pop("developer_certificate_trust", None):
             if _validate_type(_developer_certificate_trust, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9230,6 +10036,13 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
+        if _image_push_options := kwargs.pop("image_push_options", None):
+            if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
         if _remote_image_name := kwargs.pop("remote_image_name", None):
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9895,6 +10708,7 @@ _register_handle_wrapper("Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.Appl
 _register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
 _register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", AbstractConfiguration)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", AbstractDistributedApplicationEventing)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline", AbstractDistributedApplicationPipeline)
 _register_handle_wrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", AbstractHostEnvironment)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger", AbstractLogger)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory", AbstractLoggerFactory)
@@ -9907,12 +10721,15 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeR
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", BeforeStartEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", CommandLineArgsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", ConnectionStringAvailableEvent)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", ContainerImagePushOptions)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext", ContainerImagePushOptionsCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplication", DistributedApplication)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription", DistributedApplicationEventSubscription)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext", DistributedApplicationExecutionContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", DistributedApplicationModel)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", EndpointReference)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", EndpointReferenceExpression)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", EndpointUpdateContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", EnvironmentCallbackContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)

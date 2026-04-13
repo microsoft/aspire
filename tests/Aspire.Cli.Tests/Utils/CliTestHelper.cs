@@ -184,6 +184,7 @@ internal static class CliTestHelper
         services.AddTransient<ExecCommand>();
         services.AddTransient<AddCommand>();
         services.AddTransient<DeployCommand>();
+        services.AddTransient<DestroyCommand>();
         services.AddTransient<DoCommand>();
         services.AddTransient<PublishCommand>();
         services.AddTransient<ConfigCommand>();
@@ -293,13 +294,16 @@ internal sealed class CliServiceCollectionTestOptions
             Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
             Interactive = InteractionSupport.Yes,
             ColorSystem = ansi ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
-            Out = new AnsiConsoleOutput(textWriter)
+            Out = new AnsiConsoleOutput(textWriter),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         };
         var console = AnsiConsole.Create(settings);
         if (!ansi)
         {
             // Use a large width to prevent Spectre.Console from word-wrapping output lines.
             console.Profile.Width = int.MaxValue;
+            // Disable link capabilities to prevent OSC 8 hyperlink sequences in output.
+            console.Profile.Capabilities.Links = false;
         }
         return console;
     }

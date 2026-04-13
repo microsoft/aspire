@@ -4,10 +4,20 @@
     project1_image: "project1:latest"
 secrets: {}
 config:
+  env_dashboard:
+    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
+    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   project1:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    HTTP_PORTS: ""
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env-dashboard-service:18889"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+    OTEL_SERVICE_NAME: "project1"
   api:
+    PROJECT1_HTTP: ""
+    services__project1__http__0: ""
+    PROJECT1_HTTPS: ""
     PROJECT1_CUSTOM1: "http://project1-service:8000"
     services__project1__http__1: "http://project1-service:8000"
     PROJECT1_CUSTOM2: "http://project1-service:8001"

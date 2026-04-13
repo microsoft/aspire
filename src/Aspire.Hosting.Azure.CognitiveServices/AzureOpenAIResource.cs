@@ -17,7 +17,7 @@ namespace Aspire.Hosting.ApplicationModel;
 [AspireExport]
 public class AzureOpenAIResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure),
-    IResourceWithConnectionString, IAzureNspAssociationTarget
+    IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzureNspAssociationTarget
 {
     [Obsolete("Use AzureOpenAIDeploymentResource instead.")]
     private readonly List<AzureOpenAIDeployment> _deployments = [];
@@ -110,6 +110,10 @@ public class AzureOpenAIResource(string name, Action<AzureResourceInfrastructure
         infra.Add(account);
         return account;
     }
+
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["account"];
+
+    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.openai.azure.com";
 
     IEnumerable<KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties()
     {

@@ -328,7 +328,11 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            // Step 28: Exit terminal
+            // Step 28: Clean up Azure resources using aspire destroy
+            output.WriteLine("Step 28: Destroying Azure deployment...");
+            await auto.AspireDestroyAsync(counter);
+
+            // Step 29: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 

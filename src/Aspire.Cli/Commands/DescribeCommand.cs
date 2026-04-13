@@ -11,6 +11,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Dashboard.Utils;
 using Aspire.Shared;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.Logging;
@@ -186,7 +187,7 @@ internal sealed class DescribeCommand : BaseCommand
         }
         else
         {
-            DisplayResourcesTable(snapshots);
+            DisplayResourcesTable(snapshots, dashboardBaseUrl);
         }
 
         return ExitCodeConstants.Success;
@@ -259,7 +260,7 @@ internal sealed class DescribeCommand : BaseCommand
         return ExitCodeConstants.Success;
     }
 
-    private void DisplayResourcesTable(IReadOnlyList<ResourceSnapshot> snapshots)
+    private void DisplayResourcesTable(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl)
     {
         if (snapshots.Count == 0)
         {
@@ -290,7 +291,14 @@ internal sealed class DescribeCommand : BaseCommand
             var stateText = ColorState(snapshot.State);
             var healthText = ColorHealth(snapshot.HealthStatus?.EscapeMarkup() ?? "-");
 
-            table.AddRow(ColorResourceName(displayName, displayName.EscapeMarkup()), type, stateText, healthText, endpoints);
+            var nameMarkup = ColorResourceName(displayName, displayName.EscapeMarkup());
+            if (!string.IsNullOrEmpty(dashboardBaseUrl))
+            {
+                var resourceUrl = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: snapshot.Name));
+                nameMarkup = $"[link={resourceUrl}]{nameMarkup}[/]";
+            }
+
+            table.AddRow(nameMarkup, type, stateText, healthText, endpoints);
         }
 
         _interactionService.DisplayRenderable(table);

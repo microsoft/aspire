@@ -108,7 +108,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
                             // User confirmed - delete the deployment state file
                             context.Logger.LogInformation("Deleting deployment state file at {Path} due to --clear-cache flag", stateFilePath);
-                            File.Delete(stateFilePath);
+                            await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
                         }
                     }
                 }
@@ -263,6 +263,27 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 // Generate the diagnostic output using the resolved data
                 DumpDependencyGraphDiagnostics(stepsToAnalyze, context);
             }
+        });
+
+        // Add a "destroy" aggregation step for teardown operations
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.Destroy,
+            Description = "Aggregation step for all destroy operations. All destroy steps should be required by this step.",
+            Action = async context =>
+            {
+                // Full destroy clears all deployment state — parameters, Azure config, everything.
+                // The next deploy starts completely fresh.
+                var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+                await deploymentStateManager.ClearAllStateAsync(context.CancellationToken).ConfigureAwait(false);
+            },
+        });
+
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.DestroyPrereq,
+            Description = "Prerequisite step that runs before any destroy operations.",
+            Action = _ => Task.CompletedTask,
         });
     }
 

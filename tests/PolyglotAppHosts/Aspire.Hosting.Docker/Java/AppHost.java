@@ -11,6 +11,13 @@ void main() throws Exception {
             var _dashboardEnabled = environment.dashboardEnabled();
             var _environmentName = environment.name();
         });
+        compose.configureEnvFile((envVars) -> {
+            var bindMount = envVars.get("API_BINDMOUNT_0");
+            bindMount.setDescription("Customized bind mount source");
+            var _bindMountDescription = bindMount.description();
+            bindMount.setDefaultValue("./data");
+            var _bindMountDefaultValue = bindMount.defaultValue();
+        });
         compose.withDashboard(false);
         compose.withDashboard();
         compose.configureDashboard((dashboard) -> {

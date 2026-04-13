@@ -77,16 +77,17 @@ internal static partial class DetachedProcessLauncher
 
                     var si = new STARTUPINFOEX();
                     si.cb = Marshal.SizeOf<STARTUPINFOEX>();
-                    si.dwFlags = StartfUseStdHandles;
+                    si.dwFlags = StartfUseStdHandles | StartfUseShowWindow;
                     si.hStdInput = nint.Zero;
                     si.hStdOutput = nulRawHandle;
                     si.hStdError = nulRawHandle;
                     si.lpAttributeList = attrList;
+                    si.wShowWindow = ShowWindowHide;
 
                     // Build the command line string: "fileName" arg1 arg2 ...
                     var commandLine = BuildCommandLine(fileName, arguments);
 
-                    var flags = CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNoWindow;
+                    var flags = CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewProcessGroup;
 
                     // Build a filtered environment block if variables need to be removed.
                     // CreateProcessW with lpEnvironment=nint.Zero inherits the parent's
@@ -293,9 +294,11 @@ internal static partial class DetachedProcessLauncher
     private const uint OpenExisting = 3;
     private const uint HandleFlagInherit = 0x00000001;
     private const uint StartfUseStdHandles = 0x00000100;
+    private const uint StartfUseShowWindow = 0x00000001;
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint ExtendedStartupInfoPresent = 0x00080000;
-    private const uint CreateNoWindow = 0x08000000;
+    private const uint CreateNewProcessGroup = 0x00000200;
+    private const ushort ShowWindowHide = 0x0000;
     private static readonly nint s_procThreadAttributeHandleList = (nint)0x00020002;
 
     // --- Structs ---

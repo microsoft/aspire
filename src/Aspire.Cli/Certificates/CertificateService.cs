@@ -34,10 +34,10 @@ internal sealed class CertificateService(
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    Func<bool>? isWindows = null) : ICertificateService
+    Func<bool>? isNonInteractiveTrustSupported = null) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private readonly Func<bool> _isWindows = isWindows ?? OperatingSystem.IsWindows;
+    private readonly Func<bool> _isNonInteractiveTrustSupported = isNonInteractiveTrustSupported ?? OperatingSystem.IsLinux;
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
@@ -78,8 +78,11 @@ internal sealed class CertificateService(
         // If not trusted at all, run the trust operation
         if (trustResult.IsNotTrusted)
         {
-            if (_isWindows() && !hostEnvironment.SupportsInteractiveInput)
+            if (!hostEnvironment.SupportsInteractiveInput && !_isNonInteractiveTrustSupported())
             {
+                // In non-interactive mode (e.g. CI), skip the trust operation on platforms
+                // where it requires user interaction (macOS Keychain password prompt, Windows
+                // certificate trust dialog). Linux trust is non-interactive, so it can proceed.
                 if (!trustResult.HasCertificates)
                 {
                     var ensureResultCode = await interactionService.ShowStatusAsync(

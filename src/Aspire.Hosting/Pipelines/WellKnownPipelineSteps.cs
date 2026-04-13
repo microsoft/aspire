@@ -63,4 +63,15 @@ public static class WellKnownPipelineSteps
     /// The diagnostic step that dumps dependency graph information for troubleshooting.
     /// </summary>
     public const string Diagnostics = "diagnostics";
+
+    /// <summary>
+    /// Aggregation step for all destroy operations.
+    /// All destroy steps should be required by this step.
+    /// </summary>
+    public const string Destroy = "destroy";
+
+    /// <summary>
+    /// The prerequisite step that runs before any destroy operations.
+    /// </summary>
+    public const string DestroyPrereq = "destroy-prereq";
 }
