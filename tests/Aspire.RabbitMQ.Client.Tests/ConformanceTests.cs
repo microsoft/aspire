@@ -1,16 +1,19 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Aspire.TestUtilities;
 using Aspire.Components.ConformanceTests;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using OpenTelemetry.Trace;
 using RabbitMQ.Client;
 using Xunit;
+
+#if !RABBITMQ_V6
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
+using OpenTelemetry.Trace;
+#endif
 
 namespace Aspire.RabbitMQ.Client.Tests;
 
