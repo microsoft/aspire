@@ -49,10 +49,6 @@ internal sealed class AzureKubernetesInfrastructure(
         {
             logger.LogInformation("Processing AKS environment '{Name}'", environment.Name);
 
-            // Flow the container registry to the inner K8s environment so
-            // KubernetesInfrastructure can find it for image push/pull.
-            FlowContainerRegistry(environment, @event.Model);
-
             // Add a pipeline step to fetch AKS credentials into an isolated kubeconfig
             // file. This runs after AKS is provisioned and before the Helm deploy.
             AddGetCredentialsStep(environment);
@@ -117,33 +113,6 @@ internal sealed class AzureKubernetesInfrastructure(
         return new AksNodePoolResource(poolName,
             environment.NodePools.First(p => p.Name == poolName),
             environment);
-    }
-
-    /// <summary>
-    /// Flows the container registry from the AKS environment to the inner
-    /// KubernetesEnvironmentResource via ContainerRegistryReferenceAnnotation.
-    /// This allows KubernetesInfrastructure to discover the registry for image push/pull.
-    /// </summary>
-    private static void FlowContainerRegistry(AzureKubernetesEnvironmentResource environment, DistributedApplicationModel _)
-    {
-        IContainerRegistry? registry = null;
-
-        // Check for explicit registry set via WithContainerRegistry
-        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
-        {
-            registry = annotation.Registry;
-        }
-        else if (environment.DefaultContainerRegistry is not null)
-        {
-            registry = environment.DefaultContainerRegistry;
-        }
-
-        if (registry is not null)
-        {
-            // Propagate to the inner K8s environment so KubernetesInfrastructure finds it
-            environment.KubernetesEnvironment.Annotations.Add(
-                new ContainerRegistryReferenceAnnotation(registry));
-        }
     }
 
     /// <summary>

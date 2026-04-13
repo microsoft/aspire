@@ -63,9 +63,13 @@ public static class AzureKubernetesEnvironmentExtensions
             return builder.CreateResourceBuilder(resource);
         }
 
-        // Auto-create a default Azure Container Registry for image push/pull
+        // Auto-create a default Azure Container Registry for image push/pull.
+        // Wire it to the inner K8s environment immediately so KubernetesInfrastructure
+        // can discover it during BeforeStartEvent (both subscribers run during the same
+        // event, so we can't rely on annotation ordering during the event).
         var defaultRegistry = builder.AddAzureContainerRegistry($"{name}-acr");
         resource.DefaultContainerRegistry = defaultRegistry.Resource;
+        k8sEnvBuilder.WithAnnotation(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
 
         return builder.AddResource(resource);
     }
@@ -226,8 +230,11 @@ public static class AzureKubernetesEnvironmentExtensions
             builder.Resource.DefaultContainerRegistry = null;
         }
 
-        // Set the explicit registry via annotation (same pattern as Container Apps)
+        // Set the explicit registry via annotation on both the AKS environment
+        // and the inner K8s environment (so KubernetesInfrastructure finds it)
         builder.WithAnnotation(new ContainerRegistryReferenceAnnotation(registry.Resource));
+        builder.Resource.KubernetesEnvironment.Annotations.Add(
+            new ContainerRegistryReferenceAnnotation(registry.Resource));
 
         return builder;
     }
