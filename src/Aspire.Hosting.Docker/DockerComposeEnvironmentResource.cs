@@ -182,6 +182,10 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                     else
                     {
                         ctx.Logger.LogInformation("Compose file '{Path}' no longer exists, skipping compose down. State preserved for manual cleanup.", savedComposeFilePath);
+                        await ctx.ReportingStep.CompleteAsync(
+                            $"Compose file no longer exists at '{savedComposeFilePath}'. Deployment state preserved for manual cleanup.",
+                            CompletionState.Completed,
+                            ctx.CancellationToken).ConfigureAwait(false);
                     }
                 },
                 DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
@@ -385,7 +389,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
                     Intent = MessageIntent.Confirmation,
                     ShowSecondaryButton = true,
                     ShowDismiss = false,
-                    PrimaryButtonText = "Yes, destroy",
+                    PrimaryButtonText = "Destroy",
                     SecondaryButtonText = "Cancel"
                 },
                 context.CancellationToken).ConfigureAwait(false);

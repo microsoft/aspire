@@ -106,7 +106,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Skip the confirmation prompt and proceed with the destroy operation.
+        ///   Looks up a localized string similar to Do not prompt for confirmation before destroying resources.
         /// </summary>
         public static string YesOptionDescription {
             get {

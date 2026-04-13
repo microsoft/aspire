@@ -133,6 +133,6 @@
     <value>DESTROY FAILED</value>
   </data>
   <data name="YesOptionDescription" xml:space="preserve">
-    <value>Skip the confirmation prompt and proceed with the destroy operation</value>
+    <value>Do not prompt for confirmation before destroying resources</value>
   </data>
 </root>

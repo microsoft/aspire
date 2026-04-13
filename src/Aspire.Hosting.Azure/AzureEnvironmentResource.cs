@@ -317,7 +317,7 @@ public sealed class AzureEnvironmentResource : Resource
                     Intent = MessageIntent.Confirmation,
                     ShowSecondaryButton = true,
                     ShowDismiss = false,
-                    PrimaryButtonText = "Yes, destroy",
+                    PrimaryButtonText = "Destroy",
                     SecondaryButtonText = "Cancel"
                 },
                 context.CancellationToken).ConfigureAwait(false);

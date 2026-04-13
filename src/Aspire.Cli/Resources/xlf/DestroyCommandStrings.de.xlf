@@ -28,8 +28,8 @@
         <note />
       </trans-unit>
       <trans-unit id="YesOptionDescription">
-        <source>Skip the confirmation prompt and proceed with the destroy operation</source>
-        <target state="new">Skip the confirmation prompt and proceed with the destroy operation</target>
+        <source>Do not prompt for confirmation before destroying resources</source>
+        <target state="new">Do not prompt for confirmation before destroying resources</target>
         <note />
       </trans-unit>
     </body>
