@@ -1194,7 +1194,7 @@ export interface ContainerImagePushOptionsCallbackContext {
     toJSON(): MarshalledHandle;
     resource: {
         get: () => Promise<Resource>;
-        set: (value: CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource) => Promise<void>;
+        set: (value: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>) => Promise<void>;
     };
     cancellationToken: {
         get: () => Promise<CancellationToken>;
@@ -1202,7 +1202,7 @@ export interface ContainerImagePushOptionsCallbackContext {
     };
     options: {
         get: () => Promise<ContainerImagePushOptions>;
-        set: (value: ContainerImagePushOptions) => Promise<void>;
+        set: (value: Awaitable<ContainerImagePushOptions>) => Promise<void>;
     };
 }
 
@@ -1228,7 +1228,8 @@ class ContainerImagePushOptionsCallbackContextImpl implements ContainerImagePush
             );
             return new ResourceImpl(handle, this._client);
         },
-        set: async (value: CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource): Promise<void> => {
+        set: async (value: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setResource',
                 { context: this._handle, value }
@@ -1262,7 +1263,8 @@ class ContainerImagePushOptionsCallbackContextImpl implements ContainerImagePush
             );
             return new ContainerImagePushOptionsImpl(handle, this._client);
         },
-        set: async (value: ContainerImagePushOptions): Promise<void> => {
+        set: async (value: Awaitable<ContainerImagePushOptions>): Promise<void> => {
+            value = isPromiseLike(value) ? await value : value;
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions',
                 { context: this._handle, value }
@@ -10281,7 +10283,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new ContainerResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -11279,7 +11281,7 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
@@ -12722,7 +12724,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new CSharpAppResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -13631,7 +13633,7 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
@@ -15168,7 +15170,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new DotnetToolResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -16107,7 +16109,7 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
@@ -17542,7 +17544,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new ExecutableResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -18451,7 +18453,7 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
@@ -22191,7 +22193,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new ProjectResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -23100,7 +23102,7 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
@@ -24786,7 +24788,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new TestDatabaseResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -25784,7 +25786,7 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
@@ -27546,7 +27548,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new TestRedisResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -28748,7 +28750,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
@@ -30506,7 +30508,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new TestVaultResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -31519,7 +31521,7 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
@@ -31747,7 +31749,7 @@ class ComputeResourceImpl extends ResourceBuilderBase<IComputeResourceHandle> im
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise {
-        return new ComputeResourcePromiseImpl(this._withImagePushOptionsInternal(callback));
+        return new ComputeResourcePromiseImpl(this._withImagePushOptionsInternal(callback), this._client);
     }
 
     /** @internal */
@@ -31801,7 +31803,7 @@ class ComputeResourcePromiseImpl implements ComputeResourcePromise {
 
     /** Sets image push options via callback */
     withImagePushOptions(callback: (arg: ContainerImagePushOptionsCallbackContext) => Promise<void>): ComputeResourcePromise {
-        return new ComputeResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)));
+        return new ComputeResourcePromiseImpl(this._promise.then(obj => obj.withImagePushOptions(callback)), this._client);
     }
 
     /** Sets the remote image name for publishing */
