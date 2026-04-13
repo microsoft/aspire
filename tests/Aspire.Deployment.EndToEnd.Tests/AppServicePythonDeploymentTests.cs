@@ -116,29 +116,28 @@ public sealed class AppServicePythonDeploymentTests(ITestOutputHelper output)
                 await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            // Step 6: Modify apphost.cs to add Azure App Service Environment
-            // Note: Python template uses single-file AppHost (apphost.cs in project root)
+            // Step 6: Modify apphost.ts to add Azure App Service Environment
+            // Note: Python template uses TypeScript AppHost (apphost.ts in project root)
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-            // Single-file AppHost is in the project root, not a subdirectory
-            var appHostFilePath = Path.Combine(projectDir, "apphost.cs");
+            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
 
-            output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
-            // Insert the Azure App Service Environment before builder.Build().Run();
-            var buildRunPattern = "builder.Build().Run();";
-            var replacement = """
+            // Add Azure App Service Environment before build().run()
+            content = content.Replace(
+                "await builder.build().run();",
+                """
 // Add Azure App Service Environment for deployment
-builder.AddAzureAppServiceEnvironment("infra");
+await builder.addAzureAppServiceEnvironment("infra");
 
-builder.Build().Run();
-""";
+await builder.build().run();
+""");
 
-            content = content.Replace(buildRunPattern, replacement);
             File.WriteAllText(appHostFilePath, content);
 
-            output.WriteLine($"Modified apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Modified apphost.ts at: {appHostFilePath}");
 
             // Step 7: Set environment for deployment
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts
