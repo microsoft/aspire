@@ -1390,6 +1390,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     {
         public bool WasUninstallCalled { get; private set; }
         public string? LastArguments { get; private set; }
+        public int ExitCode { get; set; }
 
         public Task<int> RunAsync(
             string arguments,
@@ -1403,7 +1404,46 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             {
                 WasUninstallCalled = true;
             }
-            return Task.FromResult(0);
+            return Task.FromResult(ExitCode);
         }
+    }
+
+    [Fact]
+    public async Task DestroyHelm_WhenUninstallFails_PreservesState()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var fakeHelm = new FakeHelmRunner { ExitCode = 1 };
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("Helm:env", new JsonObject
+        {
+            ["ReleaseName"] = "my-release",
+            ["Namespace"] = "my-namespace"
+        });
+
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Destroy);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IHelmRunner>(fakeHelm);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddKubernetesEnvironment("env");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        // Verify helm uninstall was attempted
+        Assert.True(fakeHelm.WasUninstallCalled);
+
+        // Verify state was NOT deleted (preserved for retry)
+        var stateSection = await stateManager.AcquireSectionAsync("Helm:env");
+        Assert.Equal("my-release", stateSection.Data["ReleaseName"]?.ToString());
     }
 }
