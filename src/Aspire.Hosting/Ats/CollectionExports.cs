@@ -174,6 +174,8 @@ internal static class CollectionExports
         }
         catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException or ArgumentException)
         {
+            // Fall back to the original key when best-effort conversion fails so callers see
+            // the same "missing key" behavior as an unconvertible lookup against the underlying dictionary.
         }
 
         return key;
