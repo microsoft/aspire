@@ -310,7 +310,7 @@ public sealed class AzureEnvironmentResource : Resource
                 : $"Delete resource group '{resourceGroupName}'? This action cannot be undone.";
 
             var result = await interactionService.PromptNotificationAsync(
-                "Destroy Azure Resources",
+                "Destroy Azure resources",
                 confirmMessage,
                 new NotificationInteractionOptions
                 {

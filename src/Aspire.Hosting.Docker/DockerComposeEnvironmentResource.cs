@@ -382,7 +382,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
             }
 
             var result = await interactionService.PromptNotificationAsync(
-                "Destroy Environment",
+                "Destroy environment",
                 message,
                 new NotificationInteractionOptions
                 {

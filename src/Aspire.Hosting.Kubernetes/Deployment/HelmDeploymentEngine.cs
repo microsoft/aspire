@@ -620,7 +620,7 @@ internal static partial class HelmDeploymentEngine
             }
 
             var result = await interactionService.PromptNotificationAsync(
-                "Destroy Environment",
+                "Destroy environment",
                 message,
                 new NotificationInteractionOptions
                 {
