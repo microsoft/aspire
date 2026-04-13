@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Pipeline types are experimental
+#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is experimental
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -74,18 +75,16 @@ public static class AzureKubernetesEnvironmentExtensions
         resource.DefaultContainerRegistry = defaultRegistry.Resource;
         k8sEnvBuilder.WithAnnotation(new ContainerRegistryReferenceAnnotation(defaultRegistry.Resource));
 
-        // Ensure push steps wait for ACR provisioning to complete. The push step
-        // calls registry.Endpoint.GetValueAsync() which awaits the Bicep output —
-        // if the ACR isn't provisioned yet, this blocks indefinitely.
-        var acrResource = defaultRegistry.Resource;
+        // Ensure push steps wait for ALL Azure provisioning to complete. Push steps
+        // call registry.Endpoint.GetValueAsync() which awaits the BicepOutputReference
+        // for loginServer — if the ACR hasn't been provisioned yet (or outputs not
+        // populated yet), this blocks indefinitely.
         k8sEnvBuilder.WithAnnotation(new PipelineConfigurationAnnotation(context =>
         {
-            var acrProvisionSteps = context.GetSteps(acrResource, WellKnownPipelineTags.ProvisionInfrastructure);
-
             foreach (var computeResource in context.Model.GetComputeResources())
             {
                 var pushSteps = context.GetSteps(computeResource, WellKnownPipelineTags.PushContainerImage);
-                pushSteps.DependsOn(acrProvisionSteps);
+                pushSteps.DependsOn(AzureEnvironmentResource.ProvisionInfrastructureStepName);
             }
         }));
 
