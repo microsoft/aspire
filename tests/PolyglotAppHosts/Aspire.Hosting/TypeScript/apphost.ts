@@ -438,11 +438,16 @@ await container.withHttpEndpointCallback(async (updateContext) => {
 // withHttpsEndpoint
 await container.withHttpsEndpoint();
 await container.withHttpsEndpoint({ name: "callback-https" });
-await container.withEndpointCallback("callback-https", async (updateContext) => {
+await container.withHttpsEndpointCallback(async (updateContext) => {
     await updateContext.port.set(8444);
     await updateContext.targetPort.set(8443);
     await updateContext.isProxied.set(false);
-}, { createIfNotExists: false });
+}, { name: "callback-https", createIfNotExists: false });
+await container.withHttpsEndpointCallback(async (updateContext) => {
+    await updateContext.port.set(8445);
+    await updateContext.targetPort.set(8446);
+    await updateContext.isProxied.set(false);
+}, { name: "created-https" });
 
 // withExternalHttpEndpoints
 await container.withExternalHttpEndpoints();

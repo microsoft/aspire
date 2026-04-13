@@ -5,7 +5,6 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using System.Linq.Expressions;
 using System.Net.Sockets;
 
 namespace Aspire.Hosting.Tests;
@@ -160,21 +159,29 @@ public class WithEndpointTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var container = builder.AddContainer("app", "image");
-        var endpointUpdateContextType = typeof(ContainerResource).Assembly.GetType("Aspire.Hosting.ApplicationModel.EndpointUpdateContext", throwOnError: true)!;
-        var callback = Expression.Lambda(typeof(Action<>).MakeGenericType(endpointUpdateContextType), Expression.Empty(), Expression.Parameter(endpointUpdateContextType, "context")).Compile();
-        var withHttpEndpointCallbackMethod = typeof(ResourceBuilderExtensions)
-            .GetMethods(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)
-            .Single(method => method is { Name: nameof(ResourceBuilderExtensions.WithHttpEndpointCallback), IsGenericMethodDefinition: true });
-
-        _ = withHttpEndpointCallbackMethod
-            .MakeGenericMethod(typeof(ContainerResource))
-            .Invoke(null, new object?[] { container, callback, "callback-http", true });
+        var container = builder.AddContainer("app", "image")
+            .WithHttpEndpointCallback(_ => { }, name: "callback-http");
 
         var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>()
             .Single(endpoint => string.Equals(endpoint.Name, "callback-http", EndpointAnnotationName));
 
         Assert.Equal("http", endpoint.UriScheme);
+        Assert.Equal("http", endpoint.Transport);
+        Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
+    }
+
+    [Fact]
+    public void WithHttpsEndpointCallbackCreatesHttpsEndpointWhenMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("app", "image")
+            .WithHttpsEndpointCallback(_ => { }, name: "callback-https");
+
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Single(endpoint => string.Equals(endpoint.Name, "callback-https", EndpointAnnotationName));
+
+        Assert.Equal("https", endpoint.UriScheme);
         Assert.Equal("http", endpoint.Transport);
         Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
     }

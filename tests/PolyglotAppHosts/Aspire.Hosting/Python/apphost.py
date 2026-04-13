@@ -29,6 +29,11 @@ with create_builder() as builder:
         endpoint.target_port = 8443
         endpoint.is_proxied = False
 
+    def update_created_https_endpoint(endpoint):
+        endpoint.port = 8445
+        endpoint.target_port = 8446
+        endpoint.is_proxied = False
+
     # addContainer (pre-existing)
     container = builder.add_container("resource", "image")
     # addDockerfile
@@ -155,7 +160,8 @@ with create_builder() as builder:
     # withHttpsEndpoint
     container.with_https_endpoint()
     container.with_https_endpoint(name="callback-https")
-    container.with_endpoint_callback("callback-https", update_https_endpoint, create_if_not_exists=False)
+    container.with_https_endpoint_callback(update_https_endpoint, name="callback-https", create_if_not_exists=False)
+    container.with_https_endpoint_callback(update_created_https_endpoint, name="created-https")
     # withExternalHttpEndpoints
     container.with_external_http_endpoints()
     # asHttp2Service

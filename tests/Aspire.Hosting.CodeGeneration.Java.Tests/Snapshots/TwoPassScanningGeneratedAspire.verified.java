@@ -1,4 +1,4 @@
-﻿// ===== AddContainerOptions.java =====
+// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1705,6 +1705,39 @@ public class CSharpAppResource extends ResourceBuilderBase {
             reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
         }
         getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private CSharpAppResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -5320,6 +5353,39 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
+    public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private ContainerResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
+        return this;
+    }
+
     /** Adds a network endpoint */
     public ContainerResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
@@ -7117,6 +7183,39 @@ public class DotnetToolResource extends ResourceBuilderBase {
             reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
         }
         getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private DotnetToolResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -9029,6 +9128,39 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
         }
         getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private ExecutableResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -14065,6 +14197,39 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
+    public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private ProjectResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
+        return this;
+    }
+
     /** Adds a network endpoint */
     public ProjectResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
@@ -16601,6 +16766,39 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
+    public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private TestDatabaseResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
+        return this;
+    }
+
     /** Adds a network endpoint */
     public TestDatabaseResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
@@ -18448,6 +18646,39 @@ public class TestRedisResource extends ResourceBuilderBase {
             reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
         }
         getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private TestRedisResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -20382,6 +20613,39 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
+    public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private TestVaultResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
+        return this;
+    }
+
     /** Adds a network endpoint */
     public TestVaultResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
@@ -21952,6 +22216,33 @@ public final class WithHttpProbeOptions {
 
 }
 
+// ===== WithHttpsEndpointCallbackOptions.java =====
+// WithHttpsEndpointCallbackOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithHttpsEndpointCallback. */
+public final class WithHttpsEndpointCallbackOptions {
+    private String name;
+    private Boolean createIfNotExists;
+
+    public String getName() { return name; }
+    public WithHttpsEndpointCallbackOptions name(String value) {
+        this.name = value;
+        return this;
+    }
+
+    public Boolean getCreateIfNotExists() { return createIfNotExists; }
+    public WithHttpsEndpointCallbackOptions createIfNotExists(Boolean value) {
+        this.createIfNotExists = value;
+        return this;
+    }
+
+}
+
 // ===== WithHttpsEndpointOptions.java =====
 // WithHttpsEndpointOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -22354,6 +22645,7 @@ public final class WithVolumeOptions {
 .modules/WithHttpEndpointOptions.java
 .modules/WithHttpHealthCheckOptions.java
 .modules/WithHttpProbeOptions.java
+.modules/WithHttpsEndpointCallbackOptions.java
 .modules/WithHttpsEndpointOptions.java
 .modules/WithMcpServerOptions.java
 .modules/WithMergeLoggingOptions.java

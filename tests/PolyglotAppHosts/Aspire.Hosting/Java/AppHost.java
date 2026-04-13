@@ -85,7 +85,8 @@ void main() throws Exception {
         container.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8083.0); updateContext.setTargetPort(8084.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("created-http"));
         container.withHttpsEndpoint();
         container.withHttpsEndpoint(new WithHttpsEndpointOptions().name("callback-https"));
-        container.withEndpointCallback("callback-https", (updateContext) -> { updateContext.setPort(8444.0); updateContext.setTargetPort(8443.0); updateContext.setIsProxied(false); }, false);
+        container.withHttpsEndpointCallback((updateContext) -> { updateContext.setPort(8444.0); updateContext.setTargetPort(8443.0); updateContext.setIsProxied(false); }, new WithHttpsEndpointCallbackOptions().name("callback-https").createIfNotExists(false));
+        container.withHttpsEndpointCallback((updateContext) -> { updateContext.setPort(8445.0); updateContext.setTargetPort(8446.0); updateContext.setIsProxied(false); }, new WithHttpsEndpointCallbackOptions().name("created-https"));
         container.withExternalHttpEndpoints();
         container.asHttp2Service();
         container.withArgs(new String[] { "--verbose" });

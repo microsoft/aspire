@@ -1231,6 +1231,23 @@ impl CSharpAppResource {
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3883,6 +3900,23 @@ impl ContainerResource {
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5324,6 +5358,23 @@ impl DotnetToolResource {
             args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -6971,6 +7022,23 @@ impl ExecutableResource {
             args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -11393,6 +11461,23 @@ impl ProjectResource {
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13317,6 +13402,23 @@ impl TestDatabaseResource {
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -14735,6 +14837,23 @@ impl TestRedisResource {
             args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -16268,6 +16387,23 @@ impl TestVaultResource {
             args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }

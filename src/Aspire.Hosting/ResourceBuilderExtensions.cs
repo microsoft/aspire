@@ -1333,12 +1333,24 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(callback);
 
-        var endpointName = name ?? "http";
+        return builder.WithWellKnownEndpointCallback(callback, name ?? "http", createIfNotExists, static (resourceBuilder, endpointName) => resourceBuilder.WithHttpEndpoint(name: endpointName));
+    }
 
+    [AspireExport(Description = "Updates an HTTPS endpoint via callback")]
+    internal static IResourceBuilder<T> WithHttpsEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.WithWellKnownEndpointCallback(callback, name ?? "https", createIfNotExists, static (resourceBuilder, endpointName) => resourceBuilder.WithHttpsEndpoint(name: endpointName));
+    }
+
+    private static IResourceBuilder<T> WithWellKnownEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, string endpointName, bool createIfNotExists, Action<IResourceBuilder<T>, string> createEndpoint) where T : IResourceWithEndpoints
+    {
         if (createIfNotExists &&
             !builder.Resource.Annotations.OfType<EndpointAnnotation>().Any(endpoint => string.Equals(endpoint.Name, endpointName, StringComparisons.EndpointAnnotationName)))
         {
-            builder.WithHttpEndpoint(name: endpointName);
+            createEndpoint(builder, endpointName);
         }
 
         return builder.WithEndpoint(endpointName, endpoint => callback(new EndpointUpdateContext(endpoint)), createIfNotExists: false);
@@ -1554,6 +1566,7 @@ public static class ResourceBuilderExtensions
 
         return builder;
     }
+
     /// <summary>
     /// Gets an <see cref="EndpointReference"/> by name from the resource. These endpoints are declared either using <see cref="WithEndpoint{T}(IResourceBuilder{T}, int?, int?, string?, string?, string?, bool, bool?, ProtocolType?)"/> or by launch settings (for project resources).
     /// The <see cref="EndpointReference"/> can be used to resolve the address of the endpoint in <see cref="WithEnvironment{T}(IResourceBuilder{T}, Action{EnvironmentCallbackContext})"/>.

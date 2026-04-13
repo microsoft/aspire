@@ -1619,6 +1619,12 @@ class HttpEndpointCallbackParameters(typing.TypedDict, total=False):
     create_if_not_exists: bool
 
 
+class HttpsEndpointCallbackParameters(typing.TypedDict, total=False):
+    callback: typing.Required[typing.Callable[[EndpointUpdateContext], None]]
+    name: str
+    create_if_not_exists: bool
+
+
 class EndpointParameters(typing.TypedDict, total=False):
     port: int
     target_port: int
@@ -5131,6 +5137,10 @@ class AbstractResourceWithEndpoints(AbstractResource):
         """Updates an HTTP endpoint via callback"""
 
     @abc.abstractmethod
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTPS endpoint via callback"""
+
+    @abc.abstractmethod
     def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
         """Adds a network endpoint"""
 
@@ -6457,6 +6467,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     reference_endpoint: EndpointReference
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
     http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
+    https_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpsEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -6904,6 +6915,21 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             rpc_args['createIfNotExists'] = create_if_not_exists
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTPS endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsEndpointCallback',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -7529,6 +7555,19 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
+        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+            if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7778,6 +7817,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     reference_endpoint: EndpointReference
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
     http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
+    https_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpsEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -8046,6 +8086,21 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             rpc_args['createIfNotExists'] = create_if_not_exists
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTPS endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsEndpointCallback',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8542,6 +8597,19 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
+        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+            if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8800,6 +8868,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     reference_endpoint: EndpointReference
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
     http_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpEndpointCallbackParameters
+    https_endpoint_callback: typing.Callable[[EndpointUpdateContext], None] | HttpsEndpointCallbackParameters
     endpoint: EndpointParameters | typing.Literal[True]
     http_endpoint: HttpEndpointParameters | typing.Literal[True]
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
@@ -9069,6 +9138,21 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             rpc_args['createIfNotExists'] = create_if_not_exists
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpEndpointCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+        """Updates an HTTPS endpoint via callback"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        if name is not None:
+            rpc_args['name'] = name
+        if create_if_not_exists is not None:
+            rpc_args['createIfNotExists'] = create_if_not_exists
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsEndpointCallback',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9554,6 +9638,19 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
+        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+            if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
+                rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
         if _endpoint := kwargs.pop("endpoint", None):
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
