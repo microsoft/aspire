@@ -136,18 +136,13 @@ internal static class Hex1bAutomatorTestHelpers
 
             if (!sawPrompt)
             {
-                remaining = effectiveTimeout - stopwatch.Elapsed;
-                if (remaining <= TimeSpan.Zero)
-                {
-                    break;
-                }
-
+                var promptGrace = TimeSpan.FromSeconds(1);
                 try
                 {
-                    await auto.WaitForAnyPromptAsync(counter, remaining);
+                    await auto.WaitForAnyPromptAsync(counter, promptGrace);
                     sawPrompt = true;
                 }
-                catch (TimeoutException) when (stopwatch.Elapsed < effectiveTimeout)
+                catch (TimeoutException) when (stopwatch.Elapsed < effectiveTimeout + promptGrace)
                 {
                     continue;
                 }
