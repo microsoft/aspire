@@ -142,6 +142,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private string GetPublicPromiseInterfaceName(string typeId) => GetPromiseInterfaceName(GetConcreteClassName(typeId));
 
+    private static bool IsHandleType(AtsTypeRef? typeRef) =>
+        typeRef is { Category: AtsTypeCategory.Handle };
+
     /// <summary>
     /// Maps an AtsTypeRef to a TypeScript type using category-based dispatch.
     /// This is the preferred method - uses type metadata rather than string parsing.
