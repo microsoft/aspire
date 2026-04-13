@@ -9,6 +9,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Kubernetes;
@@ -194,13 +196,14 @@ internal sealed class AzureKubernetesInfrastructure(
                     .GetValueAsync(context.CancellationToken).ConfigureAwait(false)
                     ?? throw new InvalidOperationException("AKS cluster name output was not resolved.");
 
-                // Get the resource group from the Azure environment resource
-                var azureEnv = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault()
-                    ?? throw new InvalidOperationException("No AzureEnvironmentResource found in the model.");
-
-                var resourceGroup = await azureEnv.ResourceGroupName
-                    .GetValueAsync(context.CancellationToken).ConfigureAwait(false)
-                    ?? throw new InvalidOperationException("Resource group name was not resolved.");
+                // Get the resource group from Azure provisioning configuration.
+                // This is set by the Azure provisioner during the provisioning context
+                // creation step (stored in Azure:ResourceGroup config key).
+                var configuration = context.Services.GetRequiredService<IConfiguration>();
+                var resourceGroup = configuration["Azure:ResourceGroup"]
+                    ?? throw new InvalidOperationException(
+                        "Azure resource group name not found in configuration. " +
+                        "Ensure the Azure provisioning context has been created (provision step must complete first).");
 
                 // Write credentials to an isolated kubeconfig file
                 var kubeConfigDir = Directory.CreateTempSubdirectory("aspire-aks");
