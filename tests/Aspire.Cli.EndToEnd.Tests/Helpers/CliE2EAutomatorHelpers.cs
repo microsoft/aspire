@@ -102,7 +102,7 @@ internal static class CliE2EAutomatorHelpers
 
     /// <summary>
     /// Installs the Aspire CLI inside a Docker container using the given install strategy.
-    /// Handles all modes: LocalHive, SourceBuild, PullRequest, and InstallScript.
+    /// Handles all modes: LocalHive, PullRequest, and InstallScript.
     /// </summary>
     internal static async Task InstallAspireCliAsync(
         this Hex1bTerminalAutomator auto,
@@ -139,7 +139,7 @@ internal static class CliE2EAutomatorHelpers
                 var scriptArgs = "";
                 if (strategy.Quality is not null)
                 {
-                    scriptArgs = $" --quality {strategy.Quality}";
+                    scriptArgs = $" --quality {strategy.Quality.Value.ToString().ToLowerInvariant()}";
                 }
                 else if (strategy.Version is not null)
                 {

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
+
 namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 
 /// <summary>
@@ -28,6 +30,19 @@ internal enum CliInstallMode
 }
 
 /// <summary>
+/// Quality levels for the Aspire CLI install script.
+/// </summary>
+internal enum CliInstallQuality
+{
+    /// <summary>Daily development builds.</summary>
+    Dev,
+    /// <summary>Staging/preview builds.</summary>
+    Staging,
+    /// <summary>Official release builds.</summary>
+    Release,
+}
+
+/// <summary>
 /// Encapsulates how the Aspire CLI is detected, configured, and installed
 /// inside an E2E test Docker container. Replaces the scattered DockerInstallMode
 /// branching across CliE2ETestHelpers and CliE2EAutomatorHelpers.
@@ -45,16 +60,18 @@ internal sealed class CliInstallStrategy
     public string? ArchivePath { get; }
 
     /// <summary>
-    /// For InstallScript: the quality level (e.g., "dev", "staging", "release").
+    /// For InstallScript: the quality level.
     /// </summary>
-    public string? Quality { get; }
+    public CliInstallQuality? Quality { get; }
 
     /// <summary>
     /// For InstallScript: a specific version (e.g., "13.2.1").
     /// </summary>
     public string? Version { get; }
 
-    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, string? quality = null, string? version = null)
+    private static readonly Regex s_versionPattern = new(@"^[0-9A-Za-z.\-]+$", RegexOptions.Compiled);
+
+    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null)
     {
         Mode = mode;
         ArchivePath = archivePath;
@@ -76,9 +93,9 @@ internal sealed class CliInstallStrategy
     }
 
     /// <summary>
-    /// Creates an InstallScript strategy targeting a quality level (e.g., "dev" for daily builds).
+    /// Creates an InstallScript strategy targeting a quality level.
     /// </summary>
-    public static CliInstallStrategy FromQuality(string quality)
+    public static CliInstallStrategy FromQuality(CliInstallQuality quality)
     {
         return new CliInstallStrategy(CliInstallMode.InstallScript, quality: quality);
     }
@@ -88,6 +105,11 @@ internal sealed class CliInstallStrategy
     /// </summary>
     public static CliInstallStrategy FromVersion(string version)
     {
+        if (!s_versionPattern.IsMatch(version))
+        {
+            throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
+        }
+
         return new CliInstallStrategy(CliInstallMode.InstallScript, version: version);
     }
 
@@ -105,7 +127,7 @@ internal sealed class CliInstallStrategy
     ///   1. ASPIRE_E2E_ARCHIVE → LocalHive
     ///   2. ASPIRE_E2E_QUALITY → InstallScript with quality
     ///   3. ASPIRE_E2E_VERSION → InstallScript with version
-    ///   4. CI with PR (GITHUB_PR_NUMBER) → PullRequest
+    ///   4. CI with PR (GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA) → PullRequest
     ///   5. CI without PR (main branch, scheduled) → InstallScript (dev/daily)
     ///   6. Local fallback → InstallScript (latest GA)
     /// </summary>
@@ -119,9 +141,13 @@ internal sealed class CliInstallStrategy
         }
 
         // 2. Explicit quality override (daily, staging, etc.)
-        var quality = Environment.GetEnvironmentVariable("ASPIRE_E2E_QUALITY");
-        if (!string.IsNullOrEmpty(quality))
+        var qualityStr = Environment.GetEnvironmentVariable("ASPIRE_E2E_QUALITY");
+        if (!string.IsNullOrEmpty(qualityStr))
         {
+            if (!Enum.TryParse<CliInstallQuality>(qualityStr, ignoreCase: true, out var quality))
+            {
+                throw new ArgumentException($"Invalid ASPIRE_E2E_QUALITY value: '{qualityStr}'. Must be one of: {string.Join(", ", Enum.GetNames<CliInstallQuality>())}");
+            }
             return FromQuality(quality);
         }
 
@@ -142,7 +168,7 @@ internal sealed class CliInstallStrategy
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) ||
             !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS")))
         {
-            return FromQuality("dev");
+            return FromQuality(CliInstallQuality.Dev);
         }
 
         // 6. Local fallback — latest GA
@@ -179,6 +205,9 @@ internal sealed class CliInstallStrategy
             case CliInstallMode.InstallScript:
                 // No special Docker config needed — install script runs inside container
                 break;
+
+            default:
+                throw new InvalidOperationException($"Unknown install mode: {Mode}");
         }
     }
 
@@ -191,7 +220,7 @@ internal sealed class CliInstallStrategy
         {
             CliInstallMode.LocalHive => $"LocalHive ({ArchivePath})",
             CliInstallMode.PullRequest => $"PullRequest (PR #{Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")})",
-            CliInstallMode.InstallScript when Quality is not null => $"InstallScript (--quality {Quality})",
+            CliInstallMode.InstallScript when Quality is not null => $"InstallScript (--quality {Quality.Value.ToString().ToLowerInvariant()})",
             CliInstallMode.InstallScript when Version is not null => $"InstallScript (--version {Version})",
             CliInstallMode.InstallScript => "InstallScript (latest GA)",
             _ => Mode.ToString(),

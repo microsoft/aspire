@@ -155,7 +155,7 @@ The `CliInstallStrategy` class auto-detects how to install the CLI in the test c
 | `ASPIRE_E2E_QUALITY` | Install script with quality | `dev`, `staging`, `release` |
 | `ASPIRE_E2E_VERSION` | Install script with version | `13.2.1` |
 | *(none, in CI)* | PullRequest — install from PR artifacts | Auto-detected |
-| *(none, locally)* | SourceBuild or GA fallback | Auto-detected |
+| *(none, locally)* | InstallScript (latest GA) | Auto-detected |
 
 **LocalHive** (via `ASPIRE_E2E_ARCHIVE`) is the recommended mode for local development — it uses your locally-built CLI, packages, and bundle so you test exactly what you've changed.
 
