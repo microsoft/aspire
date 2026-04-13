@@ -196,7 +196,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var computeResource in resources)
             {
-                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget;
+                var targetEnv = (IComputeEnvironmentResource?)environment.ParentComputeEnvironment ?? environment;
+                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget;
                 if (deploymentTarget is not null &&
                     deploymentTarget.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var annotations))
                 {
@@ -232,7 +233,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var computeResource in resources)
             {
-                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget;
+                var targetEnv = (IComputeEnvironmentResource?)ParentComputeEnvironment ?? this;
+                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget;
                 if (deploymentTarget is null)
                 {
                     continue;

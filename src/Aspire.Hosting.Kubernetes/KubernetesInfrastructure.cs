@@ -73,10 +73,14 @@ internal sealed class KubernetesInfrastructure(
                 var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
                 serviceResource.AddPrintSummaryStep();
 
-                // Add deployment target annotation to the resource
+                // Add deployment target annotation to the resource.
+                // Use the resource's actual compute environment (which may be a parent
+                // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
+                // can match it correctly during publish.
+                var computeEnvForAnnotation = resourceComputeEnvironment ?? (IComputeEnvironmentResource)environment;
                 r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
                 {
-                    ComputeEnvironment = environment,
+                    ComputeEnvironment = computeEnvForAnnotation,
                     ContainerRegistry = containerRegistry
                 });
             }

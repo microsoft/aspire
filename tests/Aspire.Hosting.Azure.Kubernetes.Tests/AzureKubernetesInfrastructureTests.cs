@@ -138,18 +138,18 @@ public class AzureKubernetesInfrastructureTests
         await using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        // cache and api should get DeploymentTargetAnnotation from enva-k8s
+        // cache and api should get DeploymentTargetAnnotation targeting enva
         Assert.True(cache.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var cacheTarget),
             "cache should have DeploymentTargetAnnotation");
-        Assert.Same(enva.Resource.KubernetesEnvironment, cacheTarget.ComputeEnvironment);
+        Assert.Same(enva.Resource, cacheTarget.ComputeEnvironment);
 
         Assert.True(api.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var apiTarget),
             "api should have DeploymentTargetAnnotation");
-        Assert.Same(enva.Resource.KubernetesEnvironment, apiTarget.ComputeEnvironment);
+        Assert.Same(enva.Resource, apiTarget.ComputeEnvironment);
 
-        // other should get DeploymentTargetAnnotation from envb-k8s
+        // other should get DeploymentTargetAnnotation targeting envb
         Assert.True(other.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var otherTarget),
             "other should have DeploymentTargetAnnotation");
-        Assert.Same(envb.Resource.KubernetesEnvironment, otherTarget.ComputeEnvironment);
+        Assert.Same(envb.Resource, otherTarget.ComputeEnvironment);
     }
 }
