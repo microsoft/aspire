@@ -105,8 +105,13 @@ public static class HostedAgentResourceBuilderExtensions
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
+            // Preserve any target port already configured on an existing "http" endpoint;
+            // fall back to the default MAF agent port (8088) when none is set.
+            var existingHttpEndpoint = resource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(e => e.Name == "http");
+            var targetPort = existingHttpEndpoint?.TargetPort ?? 8088;
+
             builder
-                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", targetPort: 8088)
+                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", targetPort: targetPort)
                 .WithUrls((ctx) =>
                 {
                     var http = ctx.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == "http" || u.Endpoint?.EndpointName == "https");

@@ -29,14 +29,14 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_OverwritesExistingHttpEndpoints()
+    public void PublishAsHostedAgent_InRunMode_PreservesExistingHttpEndpointTargetPort()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithHttpEndpoint(name: "http", targetPort: 5000)
+            .WithHttpEndpoint(targetPort: 5000)
             .PublishAsHostedAgent(project);
 
         builder.Build();
@@ -44,7 +44,7 @@ public class HostedAgentExtensionTests
         Assert.True(app.Resource.TryGetEndpoints(out var endpoints));
         var httpEndpoints = endpoints.Where(e => e.Name == "http").ToList();
         Assert.Single(httpEndpoints);
-        Assert.Equal(8088, httpEndpoints[0].TargetPort);
+        Assert.Equal(5000, httpEndpoints[0].TargetPort);
         Assert.True(httpEndpoints[0].IsProxied);
     }
 
