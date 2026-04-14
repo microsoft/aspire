@@ -27,7 +27,7 @@ internal static class CommandsConfigurationExtensions
                 var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, context.ResourceName) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, GetResolvedResourceName(resource, context)) };
             },
             updateState: context =>
             {
@@ -60,7 +60,7 @@ internal static class CommandsConfigurationExtensions
                 var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, context.ResourceName) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, GetResolvedResourceName(resource, context)) };
             },
             updateState: context =>
             {
@@ -100,7 +100,7 @@ internal static class CommandsConfigurationExtensions
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRestarted, context.ResourceName) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRestarted, GetResolvedResourceName(resource, context)) };
             },
             updateState: context =>
             {
@@ -139,6 +139,11 @@ internal static class CommandsConfigurationExtensions
         static bool IsBuilding(string? state) => state == KnownResourceStates.Building;
         static bool IsRuntimeUnhealthy(string? state) => state == KnownResourceStates.RuntimeUnhealthy;
         static bool HasNoState(string? state) => string.IsNullOrEmpty(state);
+    }
+
+    private static string GetResolvedResourceName(IResource resource, ExecuteCommandContext context)
+    {
+        return resource.GetReplicaCount() > 1 ? context.ResourceName : resource.Name;
     }
 
     private static void AddRebuildCommand(ProjectResource projectResource)

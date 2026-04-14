@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -90,6 +90,15 @@ type CSharpAppResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Application
 
 /** Handle to DistributedApplicationModel */
 type DistributedApplicationModelHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel'>;
+
+/** Handle to DockerfileBuilder */
+type DockerfileBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder'>;
+
+/** Handle to DockerfileStage */
+type DockerfileStageHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage'>;
+
+/** Handle to DockerfileBuilderCallbackContext */
+type DockerfileBuilderCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext'>;
 
 /** Handle to DotnetToolResource */
 type DotnetToolResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource'>;
@@ -518,12 +527,24 @@ export interface AddConnectionStringOptions {
     environmentVariableName?: string;
 }
 
+export interface AddContainerFilesOptions {
+    logger?: Awaitable<Logger>;
+}
+
+export interface AddContainerFilesStagesOptions {
+    logger?: Awaitable<Logger>;
+}
+
 export interface AddContainerRegistryFromStringOptions {
     repository?: string;
 }
 
 export interface AddContainerRegistryOptions {
     repository?: Awaitable<ParameterResource>;
+}
+
+export interface AddDockerfileBuilderOptions {
+    stage?: string;
 }
 
 export interface AddDockerfileOptions {
@@ -570,6 +591,10 @@ export interface AppendValueProviderOptions {
     format?: string;
 }
 
+export interface ArgOptions {
+    defaultValue?: string;
+}
+
 export interface CompleteStepMarkdownOptions {
     completionState?: string;
     cancellationToken?: AbortSignal | CancellationToken;
@@ -591,12 +616,24 @@ export interface CompleteTaskOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
+export interface CopyFromOptions {
+    chown?: string;
+}
+
+export interface CopyOptions {
+    chown?: string;
+}
+
 export interface CreateMarkdownTaskOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
 export interface CreateTaskOptions {
     cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface FromOptions {
+    stageName?: string;
 }
 
 export interface GetStatusAsyncOptions {
@@ -670,6 +707,10 @@ export interface WithDescriptionOptions {
 export interface WithDockerfileBaseImageOptions {
     buildImage?: string;
     runtimeImage?: string;
+}
+
+export interface WithDockerfileBuilderOptions {
+    stage?: string;
 }
 
 export interface WithDockerfileOptions {
@@ -1514,6 +1555,563 @@ class DistributedApplicationModelPromiseImpl implements DistributedApplicationMo
     /** Finds a resource by name */
     findResourceByName(name: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.findResourceByName(name)), this._client);
+    }
+
+}
+
+// ============================================================================
+// DockerfileBuilder
+// ============================================================================
+
+export interface DockerfileBuilder {
+    toJSON(): MarshalledHandle;
+    arg(name: string, options?: ArgOptions): DockerfileBuilderPromise;
+    from(image: string, options?: FromOptions): DockerfileStagePromise;
+    addContainerFilesStages(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, options?: AddContainerFilesStagesOptions): DockerfileBuilderPromise;
+}
+
+export interface DockerfileBuilderPromise extends PromiseLike<DockerfileBuilder> {
+    arg(name: string, options?: ArgOptions): DockerfileBuilderPromise;
+    from(image: string, options?: FromOptions): DockerfileStagePromise;
+    addContainerFilesStages(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, options?: AddContainerFilesStagesOptions): DockerfileBuilderPromise;
+}
+
+// ============================================================================
+// DockerfileBuilderImpl
+// ============================================================================
+
+/**
+ * Type class for DockerfileBuilder.
+ */
+class DockerfileBuilderImpl implements DockerfileBuilder {
+    constructor(private _handle: DockerfileBuilderHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Adds a global ARG statement to the Dockerfile */
+    /** @internal */
+    async _argInternal(name: string, defaultValue?: string): Promise<DockerfileBuilder> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+        if (defaultValue !== undefined) rpcArgs.defaultValue = defaultValue;
+        const result = await this._client.invokeCapability<DockerfileBuilderHandle>(
+            'Aspire.Hosting/dockerfileBuilderArg',
+            rpcArgs
+        );
+        return new DockerfileBuilderImpl(result, this._client);
+    }
+
+    arg(name: string, options?: ArgOptions): DockerfileBuilderPromise {
+        const defaultValue = options?.defaultValue;
+        return new DockerfileBuilderPromiseImpl(this._argInternal(name, defaultValue), this._client);
+    }
+
+    /** Adds a FROM statement to start a Dockerfile stage */
+    /** @internal */
+    async _fromInternal(image: string, stageName?: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
+        if (stageName !== undefined) rpcArgs.stageName = stageName;
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/dockerfileBuilderFrom',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    from(image: string, options?: FromOptions): DockerfileStagePromise {
+        const stageName = options?.stageName;
+        return new DockerfileStagePromiseImpl(this._fromInternal(image, stageName), this._client);
+    }
+
+    /** Adds Dockerfile stages for published container files */
+    /** @internal */
+    async _addContainerFilesStagesInternal(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, logger?: Awaitable<Logger>): Promise<DockerfileBuilder> {
+        resource = isPromiseLike(resource) ? await resource : resource;
+        logger = isPromiseLike(logger) ? await logger : logger;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, resource };
+        if (logger !== undefined) rpcArgs.logger = logger;
+        const result = await this._client.invokeCapability<DockerfileBuilderHandle>(
+            'Aspire.Hosting/dockerfileBuilderAddContainerFilesStages',
+            rpcArgs
+        );
+        return new DockerfileBuilderImpl(result, this._client);
+    }
+
+    addContainerFilesStages(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, options?: AddContainerFilesStagesOptions): DockerfileBuilderPromise {
+        let logger = options?.logger;
+        return new DockerfileBuilderPromiseImpl(this._addContainerFilesStagesInternal(resource, logger), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for DockerfileBuilder that enables fluent chaining.
+ */
+class DockerfileBuilderPromiseImpl implements DockerfileBuilderPromise {
+    constructor(private _promise: Promise<DockerfileBuilder>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = DockerfileBuilder, TResult2 = never>(
+        onfulfilled?: ((value: DockerfileBuilder) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Adds a global ARG statement to the Dockerfile */
+    arg(name: string, options?: ArgOptions): DockerfileBuilderPromise {
+        return new DockerfileBuilderPromiseImpl(this._promise.then(obj => obj.arg(name, options)), this._client);
+    }
+
+    /** Adds a FROM statement to start a Dockerfile stage */
+    from(image: string, options?: FromOptions): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.from(image, options)), this._client);
+    }
+
+    /** Adds Dockerfile stages for published container files */
+    addContainerFilesStages(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, options?: AddContainerFilesStagesOptions): DockerfileBuilderPromise {
+        return new DockerfileBuilderPromiseImpl(this._promise.then(obj => obj.addContainerFilesStages(resource, options)), this._client);
+    }
+
+}
+
+// ============================================================================
+// DockerfileBuilderCallbackContext
+// ============================================================================
+
+export interface DockerfileBuilderCallbackContext {
+    toJSON(): MarshalledHandle;
+    resource: {
+        get: () => Promise<Resource>;
+    };
+    builder: {
+        get: () => Promise<DockerfileBuilder>;
+    };
+    services: {
+        get: () => Promise<ServiceProvider>;
+    };
+    cancellationToken: {
+        get: () => Promise<CancellationToken>;
+    };
+}
+
+// ============================================================================
+// DockerfileBuilderCallbackContextImpl
+// ============================================================================
+
+/**
+ * Type class for DockerfileBuilderCallbackContext.
+ */
+class DockerfileBuilderCallbackContextImpl implements DockerfileBuilderCallbackContext {
+    constructor(private _handle: DockerfileBuilderCallbackContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Gets the Resource property */
+    resource = {
+        get: async (): Promise<Resource> => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        },
+    };
+
+    /** Gets the Builder property */
+    builder = {
+        get: async (): Promise<DockerfileBuilder> => {
+            const handle = await this._client.invokeCapability<DockerfileBuilderHandle>(
+                'Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder',
+                { context: this._handle }
+            );
+            return new DockerfileBuilderImpl(handle, this._client);
+        },
+    };
+
+    /** Gets the Services property */
+    services = {
+        get: async (): Promise<ServiceProvider> => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        },
+    };
+
+    /** Gets the CancellationToken property */
+    cancellationToken = {
+        get: async (): Promise<CancellationToken> => {
+            const result = await this._client.invokeCapability<string | null>(
+                'Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationToken',
+                { context: this._handle }
+            );
+            return CancellationToken.fromValue(result);
+        },
+    };
+
+}
+
+// ============================================================================
+// DockerfileStage
+// ============================================================================
+
+export interface DockerfileStage {
+    toJSON(): MarshalledHandle;
+    arg(name: string, options?: ArgOptions): DockerfileStagePromise;
+    workDir(path: string): DockerfileStagePromise;
+    run(command: string): DockerfileStagePromise;
+    copy(source: string, destination: string, options?: CopyOptions): DockerfileStagePromise;
+    copyFrom(from: string, source: string, destination: string, options?: CopyFromOptions): DockerfileStagePromise;
+    env(name: string, value: string): DockerfileStagePromise;
+    expose(port: number): DockerfileStagePromise;
+    cmd(command: string[]): DockerfileStagePromise;
+    entrypoint(command: string[]): DockerfileStagePromise;
+    runWithMounts(command: string, mounts: string[]): DockerfileStagePromise;
+    user(user: string): DockerfileStagePromise;
+    emptyLine(): DockerfileStagePromise;
+    comment(comment: string): DockerfileStagePromise;
+    addContainerFiles(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, rootDestinationPath: string, options?: AddContainerFilesOptions): DockerfileStagePromise;
+}
+
+export interface DockerfileStagePromise extends PromiseLike<DockerfileStage> {
+    arg(name: string, options?: ArgOptions): DockerfileStagePromise;
+    workDir(path: string): DockerfileStagePromise;
+    run(command: string): DockerfileStagePromise;
+    copy(source: string, destination: string, options?: CopyOptions): DockerfileStagePromise;
+    copyFrom(from: string, source: string, destination: string, options?: CopyFromOptions): DockerfileStagePromise;
+    env(name: string, value: string): DockerfileStagePromise;
+    expose(port: number): DockerfileStagePromise;
+    cmd(command: string[]): DockerfileStagePromise;
+    entrypoint(command: string[]): DockerfileStagePromise;
+    runWithMounts(command: string, mounts: string[]): DockerfileStagePromise;
+    user(user: string): DockerfileStagePromise;
+    emptyLine(): DockerfileStagePromise;
+    comment(comment: string): DockerfileStagePromise;
+    addContainerFiles(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, rootDestinationPath: string, options?: AddContainerFilesOptions): DockerfileStagePromise;
+}
+
+// ============================================================================
+// DockerfileStageImpl
+// ============================================================================
+
+/**
+ * Type class for DockerfileStage.
+ */
+class DockerfileStageImpl implements DockerfileStage {
+    constructor(private _handle: DockerfileStageHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Adds an ARG statement to a Dockerfile stage */
+    /** @internal */
+    async _argInternal(name: string, defaultValue?: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, name };
+        if (defaultValue !== undefined) rpcArgs.defaultValue = defaultValue;
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/dockerfileStageArg',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    arg(name: string, options?: ArgOptions): DockerfileStagePromise {
+        const defaultValue = options?.defaultValue;
+        return new DockerfileStagePromiseImpl(this._argInternal(name, defaultValue), this._client);
+    }
+
+    /** Adds a WORKDIR statement to a Dockerfile stage */
+    /** @internal */
+    async _workDirInternal(path: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, path };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/workDir',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    workDir(path: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._workDirInternal(path), this._client);
+    }
+
+    /** Adds a RUN statement to a Dockerfile stage */
+    /** @internal */
+    async _runInternal(command: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, command };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/dockerfileStageRun',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    run(command: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._runInternal(command), this._client);
+    }
+
+    /** Adds a COPY statement to a Dockerfile stage */
+    /** @internal */
+    async _copyInternal(source: string, destination: string, chown?: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, source, destination };
+        if (chown !== undefined) rpcArgs.chown = chown;
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/dockerfileStageCopy',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    copy(source: string, destination: string, options?: CopyOptions): DockerfileStagePromise {
+        const chown = options?.chown;
+        return new DockerfileStagePromiseImpl(this._copyInternal(source, destination, chown), this._client);
+    }
+
+    /** Adds a COPY --from statement to a Dockerfile stage */
+    /** @internal */
+    async _copyFromInternal(from: string, source: string, destination: string, chown?: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, from, source, destination };
+        if (chown !== undefined) rpcArgs.chown = chown;
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/dockerfileStageCopyFrom',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    copyFrom(from: string, source: string, destination: string, options?: CopyFromOptions): DockerfileStagePromise {
+        const chown = options?.chown;
+        return new DockerfileStagePromiseImpl(this._copyFromInternal(from, source, destination, chown), this._client);
+    }
+
+    /** Adds an ENV statement to a Dockerfile stage */
+    /** @internal */
+    async _envInternal(name: string, value: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, name, value };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/env',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    env(name: string, value: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._envInternal(name, value), this._client);
+    }
+
+    /** Adds an EXPOSE statement to a Dockerfile stage */
+    /** @internal */
+    async _exposeInternal(port: number): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, port };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/expose',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    expose(port: number): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._exposeInternal(port), this._client);
+    }
+
+    /** Adds a CMD statement to a Dockerfile stage */
+    /** @internal */
+    async _cmdInternal(command: string[]): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, command };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/cmd',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    cmd(command: string[]): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._cmdInternal(command), this._client);
+    }
+
+    /** Adds an ENTRYPOINT statement to a Dockerfile stage */
+    /** @internal */
+    async _entrypointInternal(command: string[]): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, command };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/entrypoint',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    entrypoint(command: string[]): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._entrypointInternal(command), this._client);
+    }
+
+    /** Adds a RUN statement with mounts to a Dockerfile stage */
+    /** @internal */
+    async _runWithMountsInternal(command: string, mounts: string[]): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, command, mounts };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/runWithMounts',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    runWithMounts(command: string, mounts: string[]): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._runWithMountsInternal(command, mounts), this._client);
+    }
+
+    /** Adds a USER statement to a Dockerfile stage */
+    /** @internal */
+    async _userInternal(user: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, user };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/user',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    user(user: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._userInternal(user), this._client);
+    }
+
+    /** Adds an empty line to a Dockerfile stage */
+    /** @internal */
+    async _emptyLineInternal(): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/emptyLine',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    emptyLine(): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._emptyLineInternal(), this._client);
+    }
+
+    /** Adds a comment to a Dockerfile stage */
+    /** @internal */
+    async _commentInternal(comment: string): Promise<DockerfileStage> {
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, comment };
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/comment',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    comment(comment: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._commentInternal(comment), this._client);
+    }
+
+    /** Adds COPY --from statements for published container files */
+    /** @internal */
+    async _addContainerFilesInternal(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, rootDestinationPath: string, logger?: Awaitable<Logger>): Promise<DockerfileStage> {
+        resource = isPromiseLike(resource) ? await resource : resource;
+        logger = isPromiseLike(logger) ? await logger : logger;
+        const rpcArgs: Record<string, unknown> = { stage: this._handle, resource, rootDestinationPath };
+        if (logger !== undefined) rpcArgs.logger = logger;
+        const result = await this._client.invokeCapability<DockerfileStageHandle>(
+            'Aspire.Hosting/dockerfileStageAddContainerFiles',
+            rpcArgs
+        );
+        return new DockerfileStageImpl(result, this._client);
+    }
+
+    addContainerFiles(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, rootDestinationPath: string, options?: AddContainerFilesOptions): DockerfileStagePromise {
+        let logger = options?.logger;
+        return new DockerfileStagePromiseImpl(this._addContainerFilesInternal(resource, rootDestinationPath, logger), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for DockerfileStage that enables fluent chaining.
+ */
+class DockerfileStagePromiseImpl implements DockerfileStagePromise {
+    constructor(private _promise: Promise<DockerfileStage>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = DockerfileStage, TResult2 = never>(
+        onfulfilled?: ((value: DockerfileStage) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Adds an ARG statement to a Dockerfile stage */
+    arg(name: string, options?: ArgOptions): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.arg(name, options)), this._client);
+    }
+
+    /** Adds a WORKDIR statement to a Dockerfile stage */
+    workDir(path: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.workDir(path)), this._client);
+    }
+
+    /** Adds a RUN statement to a Dockerfile stage */
+    run(command: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.run(command)), this._client);
+    }
+
+    /** Adds a COPY statement to a Dockerfile stage */
+    copy(source: string, destination: string, options?: CopyOptions): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.copy(source, destination, options)), this._client);
+    }
+
+    /** Adds a COPY --from statement to a Dockerfile stage */
+    copyFrom(from: string, source: string, destination: string, options?: CopyFromOptions): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.copyFrom(from, source, destination, options)), this._client);
+    }
+
+    /** Adds an ENV statement to a Dockerfile stage */
+    env(name: string, value: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.env(name, value)), this._client);
+    }
+
+    /** Adds an EXPOSE statement to a Dockerfile stage */
+    expose(port: number): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.expose(port)), this._client);
+    }
+
+    /** Adds a CMD statement to a Dockerfile stage */
+    cmd(command: string[]): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.cmd(command)), this._client);
+    }
+
+    /** Adds an ENTRYPOINT statement to a Dockerfile stage */
+    entrypoint(command: string[]): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.entrypoint(command)), this._client);
+    }
+
+    /** Adds a RUN statement with mounts to a Dockerfile stage */
+    runWithMounts(command: string, mounts: string[]): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.runWithMounts(command, mounts)), this._client);
+    }
+
+    /** Adds a USER statement to a Dockerfile stage */
+    user(user: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.user(user)), this._client);
+    }
+
+    /** Adds an empty line to a Dockerfile stage */
+    emptyLine(): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.emptyLine()), this._client);
+    }
+
+    /** Adds a comment to a Dockerfile stage */
+    comment(comment: string): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.comment(comment)), this._client);
+    }
+
+    /** Adds COPY --from statements for published container files */
+    addContainerFiles(resource: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, rootDestinationPath: string, options?: AddContainerFilesOptions): DockerfileStagePromise {
+        return new DockerfileStagePromiseImpl(this._promise.then(obj => obj.addContainerFiles(resource, rootDestinationPath, options)), this._client);
     }
 
 }
@@ -4412,6 +5010,7 @@ export interface DistributedApplicationBuilder {
     addContainerRegistryFromString(name: string, endpoint: string, options?: AddContainerRegistryFromStringOptions): ContainerRegistryResourcePromise;
     addContainer(name: string, image: string | AddContainerOptions): ContainerResourcePromise;
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise;
+    addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise;
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;
     addExecutable(name: string, command: string, workingDirectory: string, args: string[]): ExecutableResourcePromise;
     addExternalService(name: string, url: string): ExternalServiceResourcePromise;
@@ -4442,6 +5041,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     addContainerRegistryFromString(name: string, endpoint: string, options?: AddContainerRegistryFromStringOptions): ContainerRegistryResourcePromise;
     addContainer(name: string, image: string | AddContainerOptions): ContainerResourcePromise;
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise;
+    addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise;
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;
     addExecutable(name: string, command: string, workingDirectory: string, args: string[]): ExecutableResourcePromise;
     addExternalService(name: string, url: string): ExternalServiceResourcePromise;
@@ -4661,6 +5261,28 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new ContainerResourcePromiseImpl(this._addDockerfileInternal(name, contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** Adds a container resource built from a programmatically generated Dockerfile */
+    /** @internal */
+    async _addDockerfileBuilderInternal(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<ContainerResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
+            const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, contextPath, callback: callbackId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/addDockerfileBuilder',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise {
+        const stage = options?.stage;
+        return new ContainerResourcePromiseImpl(this._addDockerfileBuilderInternal(name, contextPath, callback, stage), this._client);
     }
 
     /** Adds a .NET tool resource */
@@ -5038,6 +5660,11 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
     /** Adds a container resource built from a Dockerfile */
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.addDockerfile(name, contextPath, options)), this._client);
+    }
+
+    /** Adds a container resource built from a programmatically generated Dockerfile */
+    addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.addDockerfileBuilder(name, contextPath, callback, options)), this._client);
     }
 
     /** Adds a .NET tool resource */
@@ -8795,6 +9422,7 @@ export interface ContainerResource {
     withBuildSecret(name: string, value: Awaitable<ParameterResource>): ContainerResourcePromise;
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise;
     withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise;
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise;
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
@@ -8906,6 +9534,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withBuildSecret(name: string, value: Awaitable<ParameterResource>): ContainerResourcePromise;
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): ContainerResourcePromise;
     withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise;
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerResourcePromise;
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
@@ -9278,6 +9907,28 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /** Configures endpoint proxy support */
     withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<ContainerResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
+            const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, callback: callbackId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withDockerfileBuilder',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise {
+        const stage = options?.stage;
+        return new ContainerResourcePromiseImpl(this._withDockerfileBuilderInternal(contextPath, callback, stage), this._client);
     }
 
     /** @internal */
@@ -10990,6 +11641,11 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
     /** Configures endpoint proxy support */
     withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
     }
 
     /** Sets the base image for a Dockerfile build */
@@ -23300,6 +23956,7 @@ export interface TestDatabaseResource {
     withBuildSecret(name: string, value: Awaitable<ParameterResource>): TestDatabaseResourcePromise;
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestDatabaseResourcePromise;
     withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise;
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise;
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
@@ -23411,6 +24068,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withBuildSecret(name: string, value: Awaitable<ParameterResource>): TestDatabaseResourcePromise;
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestDatabaseResourcePromise;
     withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise;
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise;
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
@@ -23783,6 +24441,28 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /** Configures endpoint proxy support */
     withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestDatabaseResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
+            const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, callback: callbackId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withDockerfileBuilder',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise {
+        const stage = options?.stage;
+        return new TestDatabaseResourcePromiseImpl(this._withDockerfileBuilderInternal(contextPath, callback, stage), this._client);
     }
 
     /** @internal */
@@ -25497,6 +26177,11 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
+    }
+
     /** Sets the base image for a Dockerfile build */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
@@ -25989,6 +26674,7 @@ export interface TestRedisResource {
     withBuildSecret(name: string, value: Awaitable<ParameterResource>): TestRedisResourcePromise;
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestRedisResourcePromise;
     withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise;
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise;
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
@@ -26116,6 +26802,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withBuildSecret(name: string, value: Awaitable<ParameterResource>): TestRedisResourcePromise;
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestRedisResourcePromise;
     withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise;
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise;
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
@@ -26504,6 +27191,28 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /** Configures endpoint proxy support */
     withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestRedisResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
+            const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, callback: callbackId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withDockerfileBuilder',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise {
+        const stage = options?.stage;
+        return new TestRedisResourcePromiseImpl(this._withDockerfileBuilderInternal(contextPath, callback, stage), this._client);
     }
 
     /** @internal */
@@ -28446,6 +29155,11 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
+    }
+
     /** Sets the base image for a Dockerfile build */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
@@ -29018,6 +29732,7 @@ export interface TestVaultResource {
     withBuildSecret(name: string, value: Awaitable<ParameterResource>): TestVaultResourcePromise;
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestVaultResourcePromise;
     withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise;
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise;
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
@@ -29130,6 +29845,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withBuildSecret(name: string, value: Awaitable<ParameterResource>): TestVaultResourcePromise;
     withContainerCertificatePaths(options?: WithContainerCertificatePathsOptions): TestVaultResourcePromise;
     withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise;
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): TestVaultResourcePromise;
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
@@ -29503,6 +30219,28 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /** Configures endpoint proxy support */
     withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestVaultResource> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
+            const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, callback: callbackId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withDockerfileBuilder',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise {
+        const stage = options?.stage;
+        return new TestVaultResourcePromiseImpl(this._withDockerfileBuilderInternal(contextPath, callback, stage), this._client);
     }
 
     /** @internal */
@@ -31230,6 +31968,11 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
     /** Configures endpoint proxy support */
     withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    withDockerfileBuilder(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: WithDockerfileBuilderOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBuilder(contextPath, callback, options)), this._client);
     }
 
     /** Sets the base image for a Dockerfile build */
@@ -34622,6 +35365,9 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerI
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.DistributedApplication', (handle, client) => new DistributedApplicationImpl(handle as DistributedApplicationHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext', (handle, client) => new DistributedApplicationExecutionContextImpl(handle as DistributedApplicationExecutionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel', (handle, client) => new DistributedApplicationModelImpl(handle as DistributedApplicationModelHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder', (handle, client) => new DockerfileBuilderImpl(handle as DockerfileBuilderHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext', (handle, client) => new DockerfileBuilderCallbackContextImpl(handle as DockerfileBuilderCallbackContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage', (handle, client) => new DockerfileStageImpl(handle as DockerfileStageHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference', (handle, client) => new EndpointReferenceImpl(handle as EndpointReferenceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression', (handle, client) => new EndpointReferenceExpressionImpl(handle as EndpointReferenceExpressionHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext', (handle, client) => new EndpointUpdateContextImpl(handle as EndpointUpdateContextHandle, client));
