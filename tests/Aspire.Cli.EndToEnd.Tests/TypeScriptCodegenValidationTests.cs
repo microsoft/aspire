@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
 using Hex1b;
@@ -69,6 +71,11 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         if (!initialAspireTs.Contains("createBuilder"))
         {
             throw new InvalidOperationException("aspire.ts did not contain the expected base exports before adding a new integration.");
+        }
+
+        if (Regex.IsMatch(initialAspireTs, @"(?m)^\s*(?![*/])\S.*\baddRedis\s*\("))
+        {
+            throw new InvalidOperationException("Baseline SDK already exposes an addRedis API; test cannot verify refresh behavior after adding Redis.");
         }
 
         var codegenHashPath = Path.Combine(modulesDir, ".codegen-hash");
@@ -237,7 +244,8 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         CliE2ETestHelpers.DockerfileVariant variant,
         bool mountDockerSocket,
         out CliInstallStrategy? strategy,
-        out CliE2ETestHelpers.DockerInstallMode? installMode)
+        out CliE2ETestHelpers.DockerInstallMode? installMode,
+        [CallerMemberName] string testName = "")
     {
         if (ShouldUseCliInstallStrategy())
         {
@@ -250,7 +258,8 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
                 output,
                 variant: variant,
                 mountDockerSocket: mountDockerSocket,
-                workspace: workspace);
+                workspace: workspace,
+                testName: testName);
         }
 
         strategy = null;
@@ -262,7 +271,8 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             output,
             variant: variant,
             mountDockerSocket: mountDockerSocket,
-            workspace: workspace);
+            workspace: workspace,
+            testName: testName);
     }
 
     private static async Task InstallAspireCliAsync(
