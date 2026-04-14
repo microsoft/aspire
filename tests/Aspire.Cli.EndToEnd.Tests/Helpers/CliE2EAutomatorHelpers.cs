@@ -425,10 +425,9 @@ internal static class CliE2EAutomatorHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // If DASHBOARD_URL is empty, the apphost likely crashed — dump logs for diagnostics and fail
+        // If DASHBOARD_URL is empty, the apphost likely crashed — dump logs for diagnostics.
         await auto.TypeAsync(
             "if [ -z \"$DASHBOARD_URL\" ]; then " +
-            "echo 'dashboard-url-empty'; " +
             "echo '=== ASPIRE START JSON ==='; cat " + jsonFile + "; echo '=== END JSON ==='; " +
             "echo '=== ALL LOGS ==='; ls -lt ~/.aspire/logs/ 2>/dev/null; echo '=== END LIST ==='; " +
             "DETACH_LOG=$(ls -t ~/.aspire/logs/cli_*detach*.log 2>/dev/null | head -1); " +
@@ -437,14 +436,19 @@ internal static class CliE2EAutomatorHelpers
             "echo \"=== CLI LOG: $CLI_LOG ===\"; [ -n \"$CLI_LOG\" ] && tail -100 \"$CLI_LOG\"; echo '=== END CLI ==='; " +
             "fi");
         await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
-        // Wait for the prompt then check whether $DASHBOARD_URL was set. If it's empty,
-        // fail immediately with a clear message instead of letting curl produce the cryptic
-        // "curl: (3) URL rejected: Malformed input to a URL function" error.
+        // Check whether $DASHBOARD_URL was set using variable expansion so the marker
+        // text in the output differs from the typed command text. The typed command
+        // shows the literal "${DASHBOARD_URL}" on screen, while the shell output
+        // shows the expanded value — "URLCHECK::URLEND" when empty.
+        await auto.TypeAsync("echo \"URLCHECK:${DASHBOARD_URL}:URLEND\"");
+        await auto.EnterAsync();
+
         var dashboardUrlEmpty = false;
         await auto.WaitUntilAsync(snapshot =>
         {
-            var emptySearcher = new CellPatternSearcher().FindPattern("dashboard-url-empty");
+            var emptySearcher = new CellPatternSearcher().FindPattern("URLCHECK::URLEND");
             if (emptySearcher.Search(snapshot).Count > 0)
             {
                 dashboardUrlEmpty = true;
