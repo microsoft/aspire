@@ -9,20 +9,23 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end test that validates the <c>aspire restore</c> command by creating a
-/// TypeScript AppHost with two integrations and verifying the generated SDK files
-/// are produced in the <c>.modules/</c> directory.
+/// End-to-end tests that validate TypeScript SDK generation for guest AppHosts,
+/// including refreshing the generated SDK after adding integrations.
 /// </summary>
 public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 {
     [Fact]
-    public async Task RestoreGeneratesSdkFiles()
+    [CaptureWorkspaceOnFailure]
+    public async Task RestoreRefreshesGeneratedSdkAfterAddingIntegration()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
+        // Use the DotNet container variant even for the TypeScript AppHost so local LocalHive
+        // repros still have dotnet available for package/add flows while remaining outside the repo,
+        // which keeps the AppHost on the PrebuiltAppHostServer path instead of in-repo dev mode.
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -31,38 +34,48 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Step 1: Create a TypeScript AppHost
+        // Step 1: Create a TypeScript AppHost and verify the baseline generated SDK.
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 2: Add two integrations
-        await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire add Aspire.Hosting.SqlServer");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Step 3: Run aspire restore and verify success
-        await auto.TypeAsync("aspire restore");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Step 4: Verify generated SDK files exist
         var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
         if (!Directory.Exists(modulesDir))
         {
             throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
         }
 
+        var aspireModulePath = Path.Combine(modulesDir, "aspire.ts");
+        if (!File.Exists(aspireModulePath))
+        {
+            throw new InvalidOperationException($"Expected generated file not found: {aspireModulePath}");
+        }
+
+        var initialAspireTs = File.ReadAllText(aspireModulePath);
+        if (!initialAspireTs.Contains("createBuilder"))
+        {
+            throw new InvalidOperationException("aspire.ts did not contain the expected base exports before adding a new integration.");
+        }
+
+        var codegenHashPath = Path.Combine(modulesDir, ".codegen-hash");
+        var initialCodegenHash = File.Exists(codegenHashPath) ? File.ReadAllText(codegenHashPath) : null;
+
+        // Step 2: Add a new integration that is not present in the initial generated SDK.
+        await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Step 3: Run aspire restore and verify the generated SDK picks up the new exports.
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Step 4: Verify generated SDK files exist and were refreshed.
         var expectedFiles = new[] { "aspire.ts", "base.ts", "transport.ts" };
         foreach (var file in expectedFiles)
         {
@@ -79,16 +92,37 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             }
         }
 
-        // Verify aspire.ts contains symbols from both integrations
-        var aspireTs = File.ReadAllText(Path.Combine(modulesDir, "aspire.ts"));
-        if (!aspireTs.Contains("addRedis"))
+        var restoredAspireTs = File.ReadAllText(aspireModulePath);
+        if (!restoredAspireTs.Contains("createBuilder"))
         {
-            throw new InvalidOperationException("aspire.ts does not contain addRedis from Aspire.Hosting.Redis");
+            throw new InvalidOperationException("aspire.ts no longer contains the original base exports after restore.");
         }
-        if (!aspireTs.Contains("addSqlServer"))
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        var configJson = File.ReadAllText(configPath);
+        if (!configJson.Contains("\"Aspire.Hosting.Redis\""))
         {
-            throw new InvalidOperationException("aspire.ts does not contain addSqlServer from Aspire.Hosting.SqlServer");
+            throw new InvalidOperationException("aspire.config.json did not record Aspire.Hosting.Redis after aspire add.");
         }
+
+        var restoredCodegenHash = File.Exists(codegenHashPath) ? File.ReadAllText(codegenHashPath) : null;
+        if (initialCodegenHash == restoredCodegenHash)
+        {
+            throw new InvalidOperationException(".modules/.codegen-hash did not change after adding Aspire.Hosting.Redis and running aspire restore.");
+        }
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, """
+            import { createBuilder } from './.modules/aspire.js';
+
+            const builder = await createBuilder();
+            await builder.addRedis("cache");
+            await builder.build().run();
+            """);
+
+        await auto.TypeAsync("npx tsc --noEmit --project tsconfig.apphost.json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
@@ -101,17 +135,17 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
     public async Task UnAwaitedChainsCompileWithAutoResolvePromises()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
