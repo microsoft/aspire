@@ -12,6 +12,11 @@
         <target state="needs-review-translation">로그가 기록되는 대로 실시간으로 스트리밍합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">JSON 형식(NDJSON)으로 로그를 출력합니다.</target>

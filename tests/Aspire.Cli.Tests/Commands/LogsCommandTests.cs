@@ -568,6 +568,140 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("[apiservice-def456] Hello from replica 2", logLines[2]);
     }
 
+    [Fact]
+    public async Task LogsCommand_HiddenResources_AreExcludedByDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // Only visible resource logs should be present
+        Assert.All(logsOutput.Logs, l => Assert.Equal("redis", l.ResourceName));
+        Assert.DoesNotContain(logsOutput.Logs, l => l.ResourceName == "aspire-dashboard");
+    }
+
+    [Fact]
+    public async Task LogsCommand_IncludeHidden_ShowsHiddenResourceLogs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json --include-hidden");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // Both visible and hidden resource logs should be present
+        Assert.Contains(logsOutput.Logs, l => l.ResourceName == "redis");
+        Assert.Contains(logsOutput.Logs, l => l.ResourceName == "aspire-dashboard");
+    }
+
+    [Fact]
+    public async Task LogsCommand_SpecificHiddenResource_WorksWithoutFlag()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs aspire-dashboard --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        Assert.All(logsOutput.Logs, l => Assert.Equal("aspire-dashboard", l.ResourceName));
+    }
+
+    private ServiceProvider CreateLogsTestServicesWithHidden(
+        TemporaryWorkspace workspace,
+        TestOutputTextWriter outputWriter,
+        bool disableAnsi = false)
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "aspire-dashboard",
+                    DisplayName = "aspire-dashboard",
+                    ResourceType = "Executable",
+                    State = "Hidden"
+                }
+            ],
+            LogLines =
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z Ready to accept connections",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "aspire-dashboard",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:01Z Dashboard started",
+                    IsError = false
+                }
+            ]
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = disableAnsi;
+        });
+
+        return services.BuildServiceProvider();
+    }
+
     private ServiceProvider CreateLogsTestServices(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,

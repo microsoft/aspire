@@ -858,6 +858,11 @@ internal sealed class ResourceSnapshot
     public Dictionary<string, string?> Properties { get; init; } = [];
 
     /// <summary>
+    /// Gets a value indicating whether this resource is hidden.
+    /// </summary>
+    public bool IsHidden { get; init; }
+
+    /// <summary>
     /// Gets the MCP server information if the resource exposes an MCP endpoint.
     /// </summary>
     public ResourceSnapshotMcpServer? McpServer { get; init; }

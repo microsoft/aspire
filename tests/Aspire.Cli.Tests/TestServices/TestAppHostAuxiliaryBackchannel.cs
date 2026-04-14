@@ -56,23 +56,36 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         return Task.FromResult(DashboardUrlsState);
     }
 
-    public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
+    public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default, bool includeHidden = false)
     {
         if (GetResourceSnapshotsHandler is not null)
         {
             return GetResourceSnapshotsHandler(cancellationToken);
         }
 
-        return Task.FromResult(ResourceSnapshots);
+        var snapshots = includeHidden
+            ? ResourceSnapshots
+            : ResourceSnapshots.Where(s => !IsHiddenResource(s)).ToList();
+        return Task.FromResult(snapshots);
     }
 
-    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default, bool includeHidden = false)
     {
         foreach (var snapshot in ResourceSnapshots)
         {
+            if (!includeHidden && IsHiddenResource(snapshot))
+            {
+                continue;
+            }
+
             yield return snapshot;
         }
         await Task.CompletedTask;
+    }
+
+    private static bool IsHiddenResource(ResourceSnapshot snapshot)
+    {
+        return snapshot.IsHidden || string.Equals(snapshot.State, "Hidden", StringComparison.OrdinalIgnoreCase);
     }
 
     public async IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(

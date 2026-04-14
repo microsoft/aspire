@@ -256,7 +256,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
-    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
+    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default, bool includeHidden = false)
     {
         var rpc = EnsureConnected();
 
@@ -268,6 +268,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
                 "GetResourceSnapshotsAsync",
                 [],
                 cancellationToken).ConfigureAwait(false) ?? [];
+
+            if (!includeHidden)
+            {
+                snapshots.RemoveAll(IsHiddenResource);
+            }
 
             // Sort resources by name for consistent ordering.
             snapshots.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
@@ -282,7 +287,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default, bool includeHidden = false)
     {
         var rpc = EnsureConnected();
 
@@ -309,8 +314,18 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         await foreach (var snapshot in snapshots.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
+            if (!includeHidden && IsHiddenResource(snapshot))
+            {
+                continue;
+            }
+
             yield return snapshot;
         }
+    }
+
+    private static bool IsHiddenResource(ResourceSnapshot snapshot)
+    {
+        return snapshot.IsHidden || string.Equals(snapshot.State, "Hidden", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc />
