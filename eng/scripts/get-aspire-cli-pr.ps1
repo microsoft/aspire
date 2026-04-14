@@ -873,9 +873,23 @@ function Get-PRHeadSHA {
 
     Write-Message "Calling GitHub API: $($ghCommand -join ' ')" -Level Verbose
 
-    $headSha = & $ghCommand[0] $ghCommand[1..($ghCommand.Length-1)] 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $graphQlError = $headSha
+    $graphQlError = $null
+    try {
+        $headSha = & $ghCommand[0] $ghCommand[1..($ghCommand.Length-1)] 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            $graphQlError = "gh exited with code $LASTEXITCODE"
+        } elseif ([string]::IsNullOrWhiteSpace($headSha) -or $headSha -eq "null") {
+            $graphQlError = "GraphQL returned empty or null result"
+        } else {
+            # Normalize to a single trimmed string in case of unexpected multi-line output
+            $headSha = ($headSha | Select-Object -First 1).Trim()
+        }
+    }
+    catch {
+        $graphQlError = $_.Exception.Message
+    }
+
+    if ($graphQlError) {
         Write-Message "GraphQL PR head lookup failed, falling back to REST API: $graphQlError" -Level Verbose
         try {
             $headSha = Invoke-GitHubAPICall -Endpoint "$Script:GHReposBase/pulls/$PRNumber" -JqFilter ".head.sha" -ErrorMessage "Failed to get HEAD SHA for PR #$PRNumber using REST fallback"

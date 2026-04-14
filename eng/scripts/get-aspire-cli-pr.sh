@@ -626,12 +626,13 @@ get_pr_head_sha() {
     say_verbose "Calling GitHub API: ${gh_cmd[*]}"
 
     local head_sha
-    if ! head_sha=$("${gh_cmd[@]}" 2>&1); then
-        local graphql_error="$head_sha"
-        say_verbose "GraphQL PR head lookup failed, falling back to REST API: $graphql_error"
+    if head_sha=$("${gh_cmd[@]}" 2>/dev/null) && [[ -n "$head_sha" && "$head_sha" != "null" ]]; then
+        # GraphQL succeeded with a valid SHA
+        :
+    else
+        say_verbose "GraphQL PR head lookup failed or returned empty, falling back to REST API"
 
         if ! head_sha=$(gh_api_call "${GH_REPOS_BASE}/pulls/$pr_number" ".head.sha" "Failed to get HEAD SHA for PR #$pr_number using REST fallback"); then
-            say_error "Failed to get HEAD SHA for PR #$pr_number with GraphQL query: $graphql_error"
             say_info "This could mean:"
             say_info "  - The PR number does not exist"
             say_info "  - You don't have access to the repository"
