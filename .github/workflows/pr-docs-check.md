@@ -19,9 +19,6 @@ on:
         description: "PR number to analyze"
         required: true
         type: string
-  # The compiled lock file intentionally carries required safe-output checkout
-  # path overrides for microsoft/aspire.dev (under _repos/aspire.dev) that
-  # gh-aw does not currently preserve from source.
   stale-check: false
 
 if: >-
@@ -29,12 +26,10 @@ if: >-
   && github.repository_owner == 'microsoft'
 
 checkout:
-  # gh-aw checks out the workflow repository first, then overlays the current
-  # workspace with aspire.dev because that is where documentation changes are
-  # authored. Read aspire PR details via GitHub tools instead of relying on
-  # local files from the initial workflow-repository checkout.
-  # Recompile this workflow with gh-aw v0.67.2+; v0.67.1 emits a broken
-  # cross-job checkout token handoff that GitHub Actions strips as a secret.
+  # Use aspire.dev as the current workspace because that is where documentation
+  # changes are authored, and keep a mirrored checkout under _repos so the
+  # safeoutputs create_pull_request tool can reliably rediscover the target repo
+  # in multi-repo mode.
   - repository: microsoft/aspire.dev
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
@@ -42,6 +37,13 @@ checkout:
       owner: "microsoft"
       repositories: ["aspire.dev"]
     current: true
+  - repository: microsoft/aspire.dev
+    path: _repos/aspire.dev
+    github-app:
+      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+      private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+      owner: "microsoft"
+      repositories: ["aspire.dev"]
 
 permissions:
   contents: read
@@ -56,6 +58,11 @@ network:
 tools:
   github:
     toolsets: [repos, issues, pull_requests]
+    # Keep the guard policy explicit so gh-aw does not inject a separate
+    # auto-lockdown github-script step with an independently resolved action pin.
+    min-integrity: approved
+    allowed-repos:
+      - microsoft/*
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
       private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
@@ -68,6 +75,31 @@ safe-outputs:
     private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
     owner: "microsoft"
     repositories: ["aspire.dev", "aspire"]
+  steps:
+    - name: Mirror target repo checkout
+      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
+      uses: actions/checkout@v6.0.2
+      with:
+        repository: microsoft/aspire.dev
+        ref: ${{ github.base_ref || github.event.pull_request.base.ref || github.ref_name || github.event.repository.default_branch }}
+        token: ${{ steps.safe-outputs-app-token.outputs.token }}
+        persist-credentials: false
+        path: _repos/aspire.dev
+        fetch-depth: 1
+    - name: Configure mirrored target repo Git credentials
+      if: contains(needs.agent.outputs.output_types, 'create_pull_request')
+      working-directory: _repos/aspire.dev
+      env:
+        REPO_NAME: "microsoft/aspire.dev"
+        SERVER_URL: ${{ github.server_url }}
+        GIT_TOKEN: ${{ steps.safe-outputs-app-token.outputs.token }}
+      run: |
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions[bot]"
+        git config --global am.keepcr true
+        SERVER_URL_STRIPPED="${SERVER_URL#https://}"
+        git remote set-url origin "https://x-access-token:${GIT_TOKEN}@${SERVER_URL_STRIPPED}/${REPO_NAME}.git"
+        echo "Mirrored checkout configured with standard GitHub Actions identity"
   create-pull-request:
     title-prefix: "[docs] "
     labels: [docs-from-code]
@@ -102,9 +134,10 @@ needed, create a draft PR with the actual documentation changes.
 - **PR Title**: `${{ github.event.pull_request.title }}`
 
 > [!NOTE]
-> The agent runs with `microsoft/aspire.dev` as the current workspace, so use
-> GitHub tools for the source `microsoft/aspire` PR details and diff instead of
-> expecting a local checkout of the merged PR contents to remain available.
+> The agent runs with `microsoft/aspire.dev` as the current workspace and also
+> has a mirrored checkout at `_repos/aspire.dev`, so use GitHub tools for the
+> source `microsoft/aspire` PR details and diff instead of expecting a local
+> checkout of the merged PR contents to remain available.
 >
 > For security, this workflow only auto-activates for merged PRs whose head
 > repository is `microsoft/aspire`. Unlike the old `pull_request_target` hook,
