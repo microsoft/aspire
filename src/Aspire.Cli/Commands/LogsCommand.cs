@@ -167,11 +167,22 @@ internal sealed class LogsCommand : BaseCommand
 
         var connection = result.Connection!;
 
-        // Fetch snapshots for resource name resolution.
+        // Always fetch all snapshots so we know which resources are hidden.
         // When a specific resource is requested, always include hidden resources
         // so the user can get logs from any resource by name.
         var effectiveIncludeHidden = includeHidden || resourceName is not null;
-        var snapshots = await connection.GetResourceSnapshotsAsync(effectiveIncludeHidden, cancellationToken).ConfigureAwait(false);
+        var allSnapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
+
+        // Build the set of hidden resource names for log filtering.
+        // When the user requests hidden resources, use an empty set so nothing is filtered.
+        var hiddenResourceNames = effectiveIncludeHidden
+            ? new HashSet<string>(StringComparers.ResourceName)
+            : new HashSet<string>(allSnapshots.Where(IsHiddenResource).Select(s => s.Name), StringComparers.ResourceName);
+
+        // Derive the display list (visible-only unless hidden requested).
+        var snapshots = effectiveIncludeHidden
+            ? allSnapshots
+            : allSnapshots.Where(s => !IsHiddenResource(s)).ToList();
 
         // Pre-resolve colors for all resource names so that assignment is
         // deterministic regardless of which resources are displayed.
@@ -197,11 +208,11 @@ internal sealed class LogsCommand : BaseCommand
 
         if (follow)
         {
-            return await ExecuteWatchAsync(connection, resourceName, format, tail, timestamps, snapshots, cancellationToken);
+            return await ExecuteWatchAsync(connection, resourceName, format, tail, timestamps, snapshots, hiddenResourceNames, cancellationToken);
         }
         else
         {
-            return await ExecuteGetAsync(connection, resourceName, format, tail, timestamps, snapshots, cancellationToken);
+            return await ExecuteGetAsync(connection, resourceName, format, tail, timestamps, snapshots, hiddenResourceNames, cancellationToken);
         }
     }
 
@@ -212,12 +223,13 @@ internal sealed class LogsCommand : BaseCommand
         int? tail,
         bool timestamps,
         IReadOnlyList<ResourceSnapshot> snapshots,
+        HashSet<string> hiddenResourceNames,
         CancellationToken cancellationToken)
     {
         // Collect all logs, parsing into LogEntry with resolved resource names sorted by timestamp
         var entries = await _interactionService.ShowStatusAsync(
             LogsCommandStrings.GettingLogs,
-            async () => await CollectLogsAsync(connection, resourceName, snapshots, cancellationToken).ConfigureAwait(false));
+            async () => await CollectLogsAsync(connection, resourceName, snapshots, hiddenResourceNames, cancellationToken).ConfigureAwait(false));
 
         // Apply tail filter (tail.Value is guaranteed >= 1 by earlier validation)
         if (tail.HasValue && entries.Count > tail.Value)
@@ -261,6 +273,7 @@ internal sealed class LogsCommand : BaseCommand
         int? tail,
         bool timestamps,
         IReadOnlyList<ResourceSnapshot> snapshots,
+        HashSet<string> hiddenResourceNames,
         CancellationToken cancellationToken)
     {
         var logParser = new LogParser(ConsoleColor.Black);
@@ -270,7 +283,7 @@ internal sealed class LogsCommand : BaseCommand
         {
             var entries = await _interactionService.ShowStatusAsync(
                 LogsCommandStrings.GettingLogs,
-                async () => await CollectLogsAsync(connection, resourceName, snapshots, cancellationToken).ConfigureAwait(false));
+                async () => await CollectLogsAsync(connection, resourceName, snapshots, hiddenResourceNames, cancellationToken).ConfigureAwait(false));
 
             // Output last N lines
             var tailedEntries = entries.Count > tail.Value
@@ -284,11 +297,12 @@ internal sealed class LogsCommand : BaseCommand
         }
 
         // Now stream new logs
-        var visibleResourceNames = new HashSet<string>(snapshots.Select(s => s.Name), StringComparers.ResourceName);
         await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: true, cancellationToken).ConfigureAwait(false))
         {
-            // When streaming all resources, only include logs from visible resources
-            if (resourceName is null && !visibleResourceNames.Contains(logLine.ResourceName))
+            // When streaming all resources, skip logs from hidden resources.
+            // We filter by exclusion so that new resources appearing after the
+            // initial snapshot are included by default.
+            if (resourceName is null && hiddenResourceNames.Contains(logLine.ResourceName))
             {
                 continue;
             }
@@ -309,15 +323,15 @@ internal sealed class LogsCommand : BaseCommand
         IAppHostAuxiliaryBackchannel connection,
         string? resourceName,
         IReadOnlyList<ResourceSnapshot> snapshots,
+        HashSet<string> hiddenResourceNames,
         CancellationToken cancellationToken)
     {
-        var visibleResourceNames = new HashSet<string>(snapshots.Select(s => s.Name), StringComparers.ResourceName);
         var logParser = new LogParser(ConsoleColor.Black);
         var logEntries = new LogEntries(int.MaxValue) { BaseLineNumber = 1 };
         await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
         {
-            // When streaming all resources, only include logs from visible resources
-            if (resourceName is null && !visibleResourceNames.Contains(logLine.ResourceName))
+            // When streaming all resources, skip logs from hidden resources
+            if (resourceName is null && hiddenResourceNames.Contains(logLine.ResourceName))
             {
                 continue;
             }
@@ -379,5 +393,10 @@ internal sealed class LogsCommand : BaseCommand
             return ResourceSnapshotMapper.GetResourceName(snapshot, snapshots);
         }
         return resourceName;
+    }
+
+    private static bool IsHiddenResource(ResourceSnapshot snapshot)
+    {
+        return snapshot.IsHidden || string.Equals(snapshot.State, "Hidden", StringComparison.OrdinalIgnoreCase);
     }
 }

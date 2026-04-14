@@ -271,13 +271,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
             if (!includeHidden)
             {
-                snapshots.RemoveAll(IsHiddenResource);
+                snapshots = snapshots.Where(s => !IsHiddenResource(s)).ToList();
             }
 
             // Sort resources by name for consistent ordering.
-            snapshots.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-
-            return snapshots;
+            return snapshots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
         catch (RemoteMethodNotFoundException ex)
         {

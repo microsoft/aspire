@@ -641,6 +641,96 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         Assert.All(logsOutput.Logs, l => Assert.Equal("aspire-dashboard", l.ResourceName));
     }
 
+    [Fact]
+    public async Task LogsCommand_NewResourceAfterInitialSnapshot_LogsAreIncluded()
+    {
+        // Verifies that logs from a resource not present in the initial snapshot
+        // (e.g. a resource that came online after streaming started) are still shown.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "aspire-dashboard",
+                    DisplayName = "aspire-dashboard",
+                    ResourceType = "Executable",
+                    State = "Hidden"
+                }
+            ],
+            LogLines =
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z Ready to accept connections",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "aspire-dashboard",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:01Z Dashboard started",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "webapi",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:02Z Webapi started",
+                    IsError = false
+                }
+            ]
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = false;
+        });
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // redis logs should be present (visible resource in initial snapshot)
+        Assert.Contains(logsOutput.Logs, l => l.ResourceName == "redis");
+        // webapi logs should be present even though it was not in the initial snapshot
+        Assert.Contains(logsOutput.Logs, l => l.ResourceName == "webapi");
+        // aspire-dashboard logs should still be excluded (hidden)
+        Assert.DoesNotContain(logsOutput.Logs, l => l.ResourceName == "aspire-dashboard");
+    }
+
     private ServiceProvider CreateLogsTestServicesWithHidden(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
