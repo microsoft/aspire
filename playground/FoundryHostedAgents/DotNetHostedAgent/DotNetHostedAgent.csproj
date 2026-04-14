@@ -30,8 +30,4 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="../../../src/Components/Aspire.Azure.AI.Inference/Aspire.Azure.AI.Inference.csproj" />
-  </ItemGroup>
-
 </Project>
