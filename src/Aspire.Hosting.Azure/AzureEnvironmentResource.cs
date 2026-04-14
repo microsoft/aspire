@@ -192,17 +192,20 @@ public sealed class AzureEnvironmentResource : Resource
                 CompletionState.Completed,
                 context.CancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (!context.CancellationToken.IsCancellationRequested)
         {
             // The timeout CTS fired, not the pipeline cancellation — credential process took too long
+            var message =
+                $"Azure credential validation timed out after {timeoutSeconds} seconds. " +
+                "This can happen when the Azure CLI is slow to respond (e.g., antivirus scanning, network latency). " +
+                "To increase the timeout, set `Azure:CredentialProcessTimeoutSeconds` (or the environment variable `Azure__CredentialProcessTimeoutSeconds`) to a higher value (e.g., 120).";
+
             await context.ReportingStep.CompleteAsync(
-                new MarkdownString(
-                    $"Azure credential validation timed out after {timeoutSeconds} seconds. " +
-                    "This can happen when the Azure CLI is slow to respond (e.g., antivirus scanning, network latency). " +
-                    "To increase the timeout, set `Azure__CredentialProcessTimeoutSeconds` to a higher value (e.g., 120)."),
+                new MarkdownString(message),
                 CompletionState.CompletedWithError,
                 context.CancellationToken).ConfigureAwait(false);
-            throw;
+
+            throw new TimeoutException(message, ex);
         }
         catch (Exception)
         {
