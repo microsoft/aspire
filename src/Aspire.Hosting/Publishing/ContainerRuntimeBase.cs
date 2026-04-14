@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
-using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
@@ -180,7 +179,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="logArguments">Arguments to pass to the log templates.</param>
     /// <param name="environmentVariables">Optional environment variables to set for the process.</param>
-    /// <param name="outputBuffer">Optional buffer to collect stdout/stderr lines.</param>
+    /// <param name="outputBuffer">Optional buffer to retain stdout/stderr lines.</param>
     /// <returns>The exit code of the process.</returns>
     protected async Task<int> ExecuteContainerCommandWithExitCodeAsync(
         string arguments,
@@ -189,7 +188,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         CancellationToken cancellationToken,
         object[] logArguments,
         Dictionary<string, string>? environmentVariables = null,
-        ConcurrentQueue<string>? outputBuffer = null)
+        BuildOutputCapture? outputBuffer = null)
     {
         var spec = CreateProcessSpec(arguments, outputBuffer);
 
@@ -287,7 +286,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         return CreateProcessSpec(arguments, outputBuffer: null);
     }
 
-    private ProcessSpec CreateProcessSpec(string arguments, ConcurrentQueue<string>? outputBuffer)
+    private ProcessSpec CreateProcessSpec(string arguments, BuildOutputCapture? outputBuffer)
     {
         return new ProcessSpec(RuntimeExecutable)
         {
@@ -295,12 +294,12 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             OnOutputData = output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
-                outputBuffer?.Enqueue(output);
+                outputBuffer?.Add(output);
             },
             OnErrorData = error =>
             {
                 _logger.LogDebug("{RuntimeName} (stderr): {Error}", RuntimeExecutable, error);
-                outputBuffer?.Enqueue(error);
+                outputBuffer?.Add(error);
             },
             ThrowOnNonZeroReturnCode = false,
             InheritEnv = true

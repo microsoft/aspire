@@ -6,19 +6,21 @@ namespace Aspire.Hosting.Publishing;
 /// <summary>
 /// Exception thrown when a container image build or dotnet publish operation fails.
 /// </summary>
-internal sealed class ProcessFailedException : Exception
+internal sealed class ProcessFailedException : DistributedApplicationException
 {
     /// <summary>
     /// Initializes a new instance of <see cref="ProcessFailedException"/>.
     /// </summary>
     /// <param name="message">A summary of the failure (e.g., "Docker build failed with exit code 1.").</param>
     /// <param name="exitCode">The process exit code.</param>
-    /// <param name="buildOutput">The captured stdout/stderr lines from the build process.</param>
-    public ProcessFailedException(string message, int exitCode, IReadOnlyList<string> buildOutput)
+    /// <param name="buildOutput">The retained stdout/stderr lines from the build process.</param>
+    /// <param name="totalBuildOutputLineCount">The total number of stdout/stderr lines observed.</param>
+    public ProcessFailedException(string message, int exitCode, IReadOnlyList<string> buildOutput, int? totalBuildOutputLineCount = null)
         : base(message)
     {
         ExitCode = exitCode;
         BuildOutput = buildOutput;
+        TotalBuildOutputLineCount = totalBuildOutputLineCount ?? buildOutput.Count;
     }
 
     /// <summary>
@@ -27,9 +29,14 @@ internal sealed class ProcessFailedException : Exception
     public int ExitCode { get; }
 
     /// <summary>
-    /// The captured stdout/stderr lines from the build process.
+    /// The retained stdout/stderr lines from the build process.
     /// </summary>
     public IReadOnlyList<string> BuildOutput { get; }
+
+    /// <summary>
+    /// The total number of stdout/stderr lines observed for the failed process.
+    /// </summary>
+    public int TotalBuildOutputLineCount { get; }
 
     /// <inheritdoc/>
     public override string Message => BuildOutput.Count > 0
@@ -41,15 +48,22 @@ internal sealed class ProcessFailedException : Exception
     /// </summary>
     public string GetFormattedOutput(int maxLines = 50)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxLines);
+
         if (BuildOutput.Count == 0)
         {
             return string.Empty;
         }
 
-        IEnumerable<string> lines = BuildOutput.Count > maxLines
-            ? BuildOutput.Skip(BuildOutput.Count - maxLines)
-            : BuildOutput;
+        var linesShown = Math.Min(maxLines, BuildOutput.Count);
+        IEnumerable<string> lines = BuildOutput.Skip(BuildOutput.Count - linesShown);
+        var formattedOutput = string.Join(Environment.NewLine, lines);
 
-        return string.Join(Environment.NewLine, lines);
+        if (TotalBuildOutputLineCount > linesShown)
+        {
+            return $"Build output truncated: showing last {linesShown} of {TotalBuildOutputLineCount} lines.{Environment.NewLine}{formattedOutput}";
+        }
+
+        return formattedOutput;
     }
 }

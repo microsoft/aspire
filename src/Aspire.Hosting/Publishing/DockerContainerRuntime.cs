@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
-using System.Collections.Concurrent;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
@@ -97,7 +96,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
                 }
             }
 
-            var buildOutput = new ConcurrentQueue<string>();
+            var buildOutput = new BuildOutputCapture();
 
             var exitCode = await ExecuteContainerCommandWithExitCodeAsync(
                 arguments,
@@ -110,7 +109,11 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
             if (exitCode != 0)
             {
-                throw new ProcessFailedException($"Docker build failed with exit code {exitCode}.", exitCode, buildOutput.ToArray());
+                throw new ProcessFailedException(
+                    $"Docker build failed with exit code {exitCode}.",
+                    exitCode,
+                    buildOutput.ToArray(),
+                    buildOutput.TotalLineCount);
             }
         }
         finally
@@ -191,7 +194,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
     private async Task CreateBuildkitInstanceAsync(string builderName, CancellationToken cancellationToken)
     {
         var arguments = $"buildx create --name \"{builderName}\" --driver docker-container";
-        var buildOutput = new ConcurrentQueue<string>();
+        var buildOutput = new BuildOutputCapture();
 
         var exitCode = await ExecuteContainerCommandWithExitCodeAsync(
             arguments,
@@ -206,7 +209,8 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             throw new ProcessFailedException(
                 $"Failed to create buildkit instance '{builderName}' with exit code {exitCode}.",
                 exitCode,
-                buildOutput.ToArray());
+                buildOutput.ToArray(),
+                buildOutput.TotalLineCount);
         }
     }
 

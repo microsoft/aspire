@@ -5,7 +5,6 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
@@ -379,7 +378,7 @@ internal sealed class ResourceContainerImageManager(
         }
 #pragma warning restore ASPIREDOCKERFILEBUILDER001
 
-        var buildOutput = new ConcurrentQueue<string>();
+        var buildOutput = new BuildOutputCapture();
 
         var spec = new ProcessSpec("dotnet")
         {
@@ -388,12 +387,12 @@ internal sealed class ResourceContainerImageManager(
             OnOutputData = output =>
             {
                 logger.LogDebug("dotnet publish {ProjectPath} (stdout): {Output}", projectMetadata.ProjectPath, output);
-                buildOutput.Enqueue(output);
+                buildOutput.Add(output);
             },
             OnErrorData = error =>
             {
                 logger.LogDebug("dotnet publish {ProjectPath} (stderr): {Error}", projectMetadata.ProjectPath, error);
-                buildOutput.Enqueue(error);
+                buildOutput.Add(error);
             }
         };
 
@@ -412,7 +411,11 @@ internal sealed class ResourceContainerImageManager(
 
             if (processResult.ExitCode != 0)
             {
-                throw new ProcessFailedException($"dotnet publish for project '{projectMetadata.ProjectPath}' failed with exit code {processResult.ExitCode}.", processResult.ExitCode, buildOutput.ToArray());
+                throw new ProcessFailedException(
+                    $"dotnet publish for project '{projectMetadata.ProjectPath}' failed with exit code {processResult.ExitCode}.",
+                    processResult.ExitCode,
+                    buildOutput.ToArray(),
+                    buildOutput.TotalLineCount);
             }
             else
             {

@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
-using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.Dcp.Process;
@@ -196,7 +195,7 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             }
         }
 
-        var buildOutput = new ConcurrentQueue<string>();
+        var buildOutput = new BuildOutputCapture();
 
         var exitCode = await ExecuteContainerCommandWithExitCodeAsync(
             arguments,
@@ -209,7 +208,11 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
 
         if (exitCode != 0)
         {
-            throw new ProcessFailedException($"Podman build failed with exit code {exitCode}.", exitCode, buildOutput.ToArray());
+            throw new ProcessFailedException(
+                $"Podman build failed with exit code {exitCode}.",
+                exitCode,
+                buildOutput.ToArray(),
+                buildOutput.TotalLineCount);
         }
     }
 

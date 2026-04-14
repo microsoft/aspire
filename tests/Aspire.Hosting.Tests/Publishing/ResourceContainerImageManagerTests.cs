@@ -1453,7 +1453,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var tempDir = new TestTempDirectory();
         var dockerfilePath = Path.Combine(tempDir.Path, "Dockerfile");
         await File.WriteAllTextAsync(dockerfilePath, """
-            FROM mcr.microsoft.com/cbl-mariner/base/core:2.0
+            FROM scratch
             COPY nonexistent-file-12345.txt /app/
             """);
 
