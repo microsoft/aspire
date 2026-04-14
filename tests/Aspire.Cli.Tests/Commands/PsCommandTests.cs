@@ -249,7 +249,9 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
         var output = string.Join(Environment.NewLine, textWriter.Logs);
-        Assert.Contains("http://localhost:18888/login?t=abc123", output, StringComparison.Ordinal);
+        var normalizedOutput = output.Replace(Environment.NewLine, string.Empty, StringComparison.Ordinal);
+        var expectedDashboardUrl = new Uri("http://localhost:18888/login?t=abc123").AbsoluteUri;
+        Assert.Contains(expectedDashboardUrl, normalizedOutput, StringComparison.Ordinal);
     }
 
     [Fact]
