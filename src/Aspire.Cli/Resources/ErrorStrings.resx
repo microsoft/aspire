@@ -221,6 +221,10 @@
     <value>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</value>
     <comment>Do not translate 'npm install', 'Node.js', or 'PATH'.</comment>
   </data>
+  <data name="PackageDoesNotExposeGuestAppHostApis" xml:space="preserve">
+    <value>The package '{0}' does not expose any APIs for {1} AppHosts. Aspire can still run your app, but this package did not add anything to the generated SDK.</value>
+    <comment>{0} is the package ID, {1} is the guest AppHost language display name. Do not translate 'AppHost' or 'SDK'.</comment>
+  </data>
   <data name="AppHostsMayNotBeBuildable" xml:space="preserve">
     <value>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</value>
   </data>
