@@ -784,6 +784,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             throw new InvalidOperationException("No template versions found");
         }
 
+        var hasPrHives = _executionContext.GetPrHiveCount() > 0;
         var orderedPackagesFromChannels = packagesFromChannels.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
 
         // Check for explicit version specified via command line
@@ -800,7 +801,8 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             orderedPackagesFromChannels,
             p => p.Package.Version,
             out var cliVersionPackageFromChannel,
-            channelName: channelName))
+            channelName: channelName,
+            hasPrHives: hasPrHives))
         {
             return cliVersionPackageFromChannel;
         }

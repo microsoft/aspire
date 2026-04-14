@@ -21,8 +21,8 @@ internal static class VersionHelper
         IEnumerable<T> candidates,
         Func<T, string?> versionSelector,
         [MaybeNullWhen(false)] out T match,
-        string? channelName = null,
-        bool hasPrHives = false)
+        string? channelName,
+        bool hasPrHives)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(versionSelector);

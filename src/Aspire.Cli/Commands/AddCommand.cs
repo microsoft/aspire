@@ -323,6 +323,7 @@ internal sealed class AddCommand : BaseCommand
             prChannelPackageVersions,
             p => p.Package.Version,
             out var cliVersionPackage,
+            channelName: null,
             hasPrHives: ExecutionContext.GetPrHiveCount() > 0))
         {
             return cliVersionPackage;
