@@ -855,7 +855,36 @@ function Get-PRHeadSHA {
 
     Write-Message "Getting HEAD SHA for PR #$PRNumber" -Level Verbose
 
-    $headSha = Invoke-GitHubAPICall -Endpoint "$Script:GHReposBase/pulls/$PRNumber" -JqFilter ".head.sha" -ErrorMessage "Failed to get HEAD SHA for PR #$PRNumber"
+    if ($Script:Repository -notmatch '^([^/]+)/([^/]+)$') {
+        throw "Invalid repository format '$Script:Repository'. Expected 'owner/name'."
+    }
+    $owner = $Matches[1]
+    $name = $Matches[2]
+
+    $graphqlQuery = 'query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { headRefOid } } }'
+    $ghCommand = @(
+        "gh", "api", "graphql",
+        "-f", "query=$graphqlQuery",
+        "-F", "owner=$owner",
+        "-F", "name=$name",
+        "-F", "number=$PRNumber",
+        "--jq", ".data.repository.pullRequest.headRefOid"
+    )
+
+    Write-Message "Calling GitHub API: $($ghCommand -join ' ')" -Level Verbose
+
+    $headSha = & $ghCommand[0] $ghCommand[1..($ghCommand.Length-1)] 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $graphQlError = $headSha
+        Write-Message "GraphQL PR head lookup failed, falling back to REST API: $graphQlError" -Level Verbose
+        try {
+            $headSha = Invoke-GitHubAPICall -Endpoint "$Script:GHReposBase/pulls/$PRNumber" -JqFilter ".head.sha" -ErrorMessage "Failed to get HEAD SHA for PR #$PRNumber using REST fallback"
+        }
+        catch {
+            throw "Failed to get HEAD SHA for PR #$PRNumber with GraphQL query: $graphQlError`nREST fallback error: $($_.Exception.Message)"
+        }
+    }
+
     if ([string]::IsNullOrWhiteSpace($headSha) -or $headSha -eq "null") {
         Write-Message "This could mean:" -Level Info
         Write-Message "  - The PR number does not exist" -Level Info
