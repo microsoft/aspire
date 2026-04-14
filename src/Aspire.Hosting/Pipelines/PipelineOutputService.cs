@@ -5,6 +5,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Pipelines;
@@ -19,24 +20,36 @@ internal sealed class PipelineOutputService : IPipelineOutputService
     /// Stores the resolved output directory path, or <c>null</c> if not specified.
     /// </summary>
     private readonly string? _outputPath;
-    
+
+    /// <summary>
+    /// Stores the default output directory path.
+    /// </summary>
+    private readonly string _defaultOutputPath;
+
     /// <summary>
     /// Stores the path to the temporary directory for pipeline output.
     /// </summary>
     private readonly string _tempDirectory;
 
-    public PipelineOutputService(IOptions<PipelineOptions> options, IFileSystemService directoryService)
+    public PipelineOutputService(IOptions<PipelineOptions> options, IConfiguration configuration, IFileSystemService directoryService)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(directoryService);
 
         _outputPath = options.Value.OutputPath is not null ? Path.GetFullPath(options.Value.OutputPath) : null;
+        // DistributedApplicationBuilder publishes the resolved AppHost project directory here.
+        var appHostDirectory = configuration["AppHost:Directory"];
+        _defaultOutputPath = !string.IsNullOrWhiteSpace(appHostDirectory)
+            ? Path.Combine(Path.GetFullPath(appHostDirectory), "aspire-output")
+            : Path.Combine(Environment.CurrentDirectory, "aspire-output");
         _tempDirectory = directoryService.TempDirectory.CreateTempSubdirectory("aspire-pipelines").Path;
     }
 
     /// <inheritdoc/>
     public string GetOutputDirectory()
     {
-        return _outputPath ?? Path.Combine(Environment.CurrentDirectory, "aspire-output");
+        return _outputPath ?? _defaultOutputPath;
     }
 
     /// <inheritdoc/>

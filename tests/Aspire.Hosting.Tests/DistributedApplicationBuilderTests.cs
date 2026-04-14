@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREUSERSECRETS001
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Reflection;
 using System.Reflection.Emit;
@@ -104,6 +105,20 @@ public class DistributedApplicationBuilderTests
 
         var config = app.Services.GetRequiredService<IConfiguration>();
         Assert.Equal(appHostDirectory, config["AppHost:Directory"]);
+    }
+
+    [Fact]
+    public void PipelineOutputServiceUsesAppHostDirectoryByDefault()
+    {
+        var projectDirectory = OperatingSystem.IsWindows() ? @"C:\projects\Tailspin" : "/projects/Tailspin";
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory
+        });
+        using var app = appBuilder.Build();
+
+        var outputService = app.Services.GetRequiredService<IPipelineOutputService>();
+        Assert.Equal(Path.Combine(projectDirectory, "aspire-output"), outputService.GetOutputDirectory());
     }
 
     [Fact]
