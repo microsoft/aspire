@@ -7,8 +7,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var tenantId = builder.AddParameterFromConfiguration("tenant", "Azure:TenantId");
 
-var foundry = builder.AddFoundry("aif-myfoundry");
-var project = foundry.AddProject("proj-myfoundry");
+var foundry = builder.AddFoundry("aif-globalazure");
+var project = foundry.AddProject("proj-globalazure");
 var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
 
 builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
@@ -17,5 +17,9 @@ builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
     .WithReference(chat).WaitFor(chat)
     .WithEnvironment("AZURE_TENANT_ID", tenantId)
     .PublishAsHostedAgent(project);
+
+// builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
+//     .WithReference(chat).WaitFor(chat)
+//     .PublishAsHostedAgent();
 
 builder.Build().Run();
