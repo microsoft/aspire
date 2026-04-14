@@ -435,19 +435,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _logsMenuItems.Clear();
         _resourceMenuItems.Clear();
 
-        _logsMenuItems.Add(new()
-        {
-            IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
-            OnClick = DownloadLogsAsync,
-            Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
-            Icon = new Icons.Regular.Size16.ArrowDownload()
-        });
-
-        _logsMenuItems.Add(new()
-        {
-            IsDivider = true
-        });
-
         var selectedResource = GetSelectedResource();
 
         // Only show the "Hide hidden resources" menu item when viewing all resources

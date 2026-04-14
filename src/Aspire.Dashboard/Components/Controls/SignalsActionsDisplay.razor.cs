@@ -26,4 +26,7 @@ public partial class SignalsActionsDisplay
 
     [Parameter, EditorRequired]
     public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }
+
+    [Parameter]
+    public Func<Task>? HandleDownloadLogs { get; set; }
 }

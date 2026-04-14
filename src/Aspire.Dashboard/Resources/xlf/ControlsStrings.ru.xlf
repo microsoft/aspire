@@ -93,23 +93,23 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearAllResources">
-        <source>Remove all</source>
-        <target state="translated">Удалить все</target>
+        <source>Clear all</source>
+        <target state="needs-review-translation">Удалить все</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
-        <source>Remove for resource</source>
-        <target state="translated">Удалить для ресурса</target>
+        <source>Clear for resource</source>
+        <target state="needs-review-translation">Удалить для ресурса</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
-        <source>Remove for {0}</source>
-        <target state="translated">Удалить для {0}</target>
+        <source>Clear for {0}</source>
+        <target state="needs-review-translation">Удалить для {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
-        <source>Remove data</source>
-        <target state="translated">Удалить данные</target>
+        <source>Manage logs</source>
+        <target state="needs-review-translation">Удалить данные</target>
         <note />
       </trans-unit>
       <trans-unit id="CollapseAllSpansText">

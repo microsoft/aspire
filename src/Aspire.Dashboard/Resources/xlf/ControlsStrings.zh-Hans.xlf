@@ -93,23 +93,23 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearAllResources">
-        <source>Remove all</source>
-        <target state="translated">全部移除</target>
+        <source>Clear all</source>
+        <target state="needs-review-translation">全部移除</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
-        <source>Remove for resource</source>
-        <target state="translated">删除资源</target>
+        <source>Clear for resource</source>
+        <target state="needs-review-translation">删除资源</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
-        <source>Remove for {0}</source>
-        <target state="translated">删除 {0}</target>
+        <source>Clear for {0}</source>
+        <target state="needs-review-translation">删除 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
-        <source>Remove data</source>
-        <target state="translated">移除数据</target>
+        <source>Manage logs</source>
+        <target state="needs-review-translation">移除数据</target>
         <note />
       </trans-unit>
       <trans-unit id="CollapseAllSpansText">

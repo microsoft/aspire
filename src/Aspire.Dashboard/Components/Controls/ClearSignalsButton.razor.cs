@@ -14,11 +14,15 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class ClearSignalsButton : ComponentBase
 {
-    private static readonly Icon s_clearSelectedResourceIcon = new Icons.Regular.Size16.SelectAllOn();
-    private static readonly Icon s_clearAllResourcesIcon = new Icons.Regular.Size16.Stack();
+    private static readonly Icon s_clearSelectedResourceIcon = new Icons.Regular.Size16.Delete();
+    private static readonly Icon s_clearAllResourcesIcon = new Icons.Regular.Size20.DeleteLines();
+    private static readonly Icon s_downloadLogsIcon = new Icons.Regular.Size16.ArrowDownload();
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Dashboard.Resources.ConsoleLogs> ConsoleLogsLoc { get; init; }
 
     [Parameter]
     public required SelectViewModel<ResourceTypeDetails> SelectedResource { get; set; }
@@ -26,11 +30,32 @@ public partial class ClearSignalsButton : ComponentBase
     [Parameter]
     public required Func<ResourceKey?, Task> HandleClearSignal { get; set; }
 
+    [Parameter]
+    public Func<Task>? HandleDownloadLogs { get; set; }
+
     private readonly List<MenuButtonItem> _clearMenuItems = new();
 
     protected override void OnParametersSet()
     {
         _clearMenuItems.Clear();
+
+        // Add Download logs option first if the callback is provided
+        if (HandleDownloadLogs is not null)
+        {
+            _clearMenuItems.Add(new()
+            {
+                Id = "download-logs",
+                Icon = s_downloadLogsIcon,
+                OnClick = HandleDownloadLogs,
+                Text = ConsoleLogsLoc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
+            });
+
+            // Add separator after Download logs
+            _clearMenuItems.Add(new()
+            {
+                IsDivider = true
+            });
+        }
 
         _clearMenuItems.Add(new()
         {
