@@ -671,8 +671,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var resourceIndex = 0;
         for (var i = 0; i < args.Length; i++)
         {
-            if (string.Equals(args[i], "--resource", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            if (string.Equals(args[i], "--resource", StringComparison.OrdinalIgnoreCase))
             {
+                if (i + 1 >= args.Length || args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException("The --resource flag requires a resource name value (e.g., --resource api).");
+                }
+
                 _innerBuilder.Configuration[$"Pipeline:Resources:{resourceIndex}"] = args[i + 1];
                 resourceIndex++;
                 i++; // skip the value

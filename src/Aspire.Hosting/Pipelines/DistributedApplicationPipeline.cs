@@ -615,7 +615,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             var unknownResources = resources.Where(r => !modelResourceNames.Contains(r)).ToList();
             if (unknownResources.Count > 0)
             {
-                var availableResources = string.Join(", ", modelResourceNames.Select(n => $"'{n}'"));
+                var availableResources = string.Join(", ", modelResourceNames.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).Select(n => $"'{n}'"));
                 throw new InvalidOperationException(
                     $"Resource(s) not found: {string.Join(", ", unknownResources.Select(n => $"'{n}'"))}. " +
                     $"Available resources: {availableResources}");
@@ -624,19 +624,26 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             var resourceFilter = new HashSet<string>(resources, StringComparer.OrdinalIgnoreCase);
 
             // Keep steps that are either shared (no resource) or match the requested resources.
-            // Then recompute transitive dependency closure to maintain DAG integrity.
             var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
             var seedSteps = stepsToExecute
                 .Where(s => s.Resource is null || resourceFilter.Contains(s.Resource.Name))
                 .ToList();
 
-            // Compute the full set of steps needed: each seed step plus its transitive dependencies
+            // Recompute transitive dependency closure to maintain DAG integrity.
+            // Reuse ComputeTransitiveDependencies for each seed step, merging results.
             var visited = new HashSet<string>(StringComparer.Ordinal);
             var closedSteps = new List<PipelineStep>();
 
             foreach (var seed in seedSteps)
             {
-                CollectTransitiveDependencies(seed.Name, filteredStepsByName, visited, closedSteps);
+                var deps = ComputeTransitiveDependencies(seed, filteredStepsByName);
+                foreach (var dep in deps)
+                {
+                    if (visited.Add(dep.Name))
+                    {
+                        closedSteps.Add(dep);
+                    }
+                }
             }
 
             stepsToExecute = closedSteps;
@@ -644,30 +651,6 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var resultStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
         return (stepsToExecute, resultStepsByName);
-    }
-
-    private static void CollectTransitiveDependencies(
-        string stepName,
-        Dictionary<string, PipelineStep> stepsByName,
-        HashSet<string> visited,
-        List<PipelineStep> result)
-    {
-        if (!visited.Add(stepName))
-        {
-            return;
-        }
-
-        if (!stepsByName.TryGetValue(stepName, out var step))
-        {
-            return;
-        }
-
-        foreach (var dependency in step.DependsOnSteps)
-        {
-            CollectTransitiveDependencies(dependency, stepsByName, visited, result);
-        }
-
-        result.Add(step);
     }
 
     internal static List<PipelineStep> ComputeTransitiveDependencies(
