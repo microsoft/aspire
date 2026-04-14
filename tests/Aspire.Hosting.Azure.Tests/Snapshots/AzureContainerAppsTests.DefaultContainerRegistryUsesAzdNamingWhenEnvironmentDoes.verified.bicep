@@ -14,7 +14,7 @@ resource env_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
   }
 }
 
-output name string = replace('acr-${resourceToken}', '-', '')
+output name string = env_acr.name
 
 output loginServer string = env_acr.properties.loginServer
 
