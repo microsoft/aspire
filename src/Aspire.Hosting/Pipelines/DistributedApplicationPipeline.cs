@@ -585,27 +585,89 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     {
         var pipelineOptions = context.Services.GetService<Microsoft.Extensions.Options.IOptions<PipelineOptions>>();
         var stepName = pipelineOptions?.Value.Step;
+        var resources = pipelineOptions?.Value.Resources;
         var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
 
-        if (string.IsNullOrWhiteSpace(stepName))
+        var stepsToExecute = allSteps;
+
+        // Filter by target step name (existing behavior)
+        if (!string.IsNullOrWhiteSpace(stepName))
         {
-            return (allSteps, allStepsByName);
+            if (!allStepsByName.TryGetValue(stepName, out var targetStep))
+            {
+                var availableSteps = string.Join(", ", allSteps.Select(s => $"'{s.Name}'"));
+                throw new InvalidOperationException(
+                    $"Step '{stepName}' not found in pipeline. Available steps: {availableSteps}");
+            }
+
+            // Compute transitive dependencies of the target step (includes the target step itself)
+            stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
         }
 
-        if (!allStepsByName.TryGetValue(stepName, out var targetStep))
+        // Filter by resource names
+        if (resources is { Count: > 0 })
         {
-            var availableSteps = string.Join(", ", allSteps.Select(s => $"'{s.Name}'"));
-            throw new InvalidOperationException(
-                $"Step '{stepName}' not found in pipeline. Available steps: {availableSteps}");
+            // Validate that all requested resource names exist in the model
+            var modelResourceNames = new HashSet<string>(
+                context.Model.Resources.Select(r => r.Name),
+                StringComparer.OrdinalIgnoreCase);
+
+            var unknownResources = resources.Where(r => !modelResourceNames.Contains(r)).ToList();
+            if (unknownResources.Count > 0)
+            {
+                var availableResources = string.Join(", ", modelResourceNames.Select(n => $"'{n}'"));
+                throw new InvalidOperationException(
+                    $"Resource(s) not found: {string.Join(", ", unknownResources.Select(n => $"'{n}'"))}. " +
+                    $"Available resources: {availableResources}");
+            }
+
+            var resourceFilter = new HashSet<string>(resources, StringComparer.OrdinalIgnoreCase);
+
+            // Keep steps that are either shared (no resource) or match the requested resources.
+            // Then recompute transitive dependency closure to maintain DAG integrity.
+            var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
+            var seedSteps = stepsToExecute
+                .Where(s => s.Resource is null || resourceFilter.Contains(s.Resource.Name))
+                .ToList();
+
+            // Compute the full set of steps needed: each seed step plus its transitive dependencies
+            var visited = new HashSet<string>(StringComparer.Ordinal);
+            var closedSteps = new List<PipelineStep>();
+
+            foreach (var seed in seedSteps)
+            {
+                CollectTransitiveDependencies(seed.Name, filteredStepsByName, visited, closedSteps);
+            }
+
+            stepsToExecute = closedSteps;
         }
 
-        // Compute transitive dependencies of the target step (includes the target step itself)
-        // Since RequiredBy relationships have been normalized to DependsOn,
-        // this automatically includes all steps that the target depends on
-        var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+        var resultStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
+        return (stepsToExecute, resultStepsByName);
+    }
 
-        var filteredStepsByName = stepsToExecute.ToDictionary(s => s.Name, StringComparer.Ordinal);
-        return (stepsToExecute, filteredStepsByName);
+    private static void CollectTransitiveDependencies(
+        string stepName,
+        Dictionary<string, PipelineStep> stepsByName,
+        HashSet<string> visited,
+        List<PipelineStep> result)
+    {
+        if (!visited.Add(stepName))
+        {
+            return;
+        }
+
+        if (!stepsByName.TryGetValue(stepName, out var step))
+        {
+            return;
+        }
+
+        foreach (var dependency in step.DependsOnSteps)
+        {
+            CollectTransitiveDependencies(dependency, stepsByName, visited, result);
+        }
+
+        result.Add(step);
     }
 
     internal static List<PipelineStep> ComputeTransitiveDependencies(

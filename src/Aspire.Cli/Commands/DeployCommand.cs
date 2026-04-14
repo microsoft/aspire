@@ -20,6 +20,7 @@ internal sealed class DeployCommand : PipelineCommandBase
     internal override HelpGroup HelpGroup => HelpGroup.Deployment;
 
     private readonly Option<bool> _clearCacheOption;
+    private readonly Option<string[]> _resourceOption;
 
     public DeployCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DeployCommand> logger, IAnsiConsole ansiConsole)
         : base("deploy", DeployCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
@@ -29,6 +30,13 @@ internal sealed class DeployCommand : PipelineCommandBase
             Description = DeployCommandStrings.ClearCacheOptionDescription
         };
         Options.Add(_clearCacheOption);
+
+        _resourceOption = new Option<string[]>("--resource")
+        {
+            Description = "Deploy only the specified resource(s). Can be specified multiple times.",
+            AllowMultipleArgumentsPerToken = true
+        };
+        Options.Add(_resourceOption);
     }
 
     protected override string OperationCompletedPrefix => DeployCommandStrings.OperationCompletedPrefix;
@@ -48,6 +56,16 @@ internal sealed class DeployCommand : PipelineCommandBase
         if (clearCache)
         {
             baseArgs.AddRange(["--clear-cache", "true"]);
+        }
+
+        // Forward --resource flags to AppHost
+        var resources = parseResult.GetValue(_resourceOption);
+        if (resources is { Length: > 0 })
+        {
+            foreach (var resource in resources)
+            {
+                baseArgs.AddRange(["--resource", resource]);
+            }
         }
 
         // Add --log-level and --envionment flags if specified
@@ -81,6 +99,12 @@ internal sealed class DeployCommand : PipelineCommandBase
 
     protected override string GetProgressMessage(ParseResult parseResult)
     {
+        var resources = parseResult.GetValue(_resourceOption);
+        if (resources is { Length: > 0 })
+        {
+            return $"Executing step deploy for resource(s): {string.Join(", ", resources)}";
+        }
+
         return "Executing step deploy";
     }
 }

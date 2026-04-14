@@ -37,4 +37,11 @@ public class PipelineOptions
     /// Gets or sets a value indicating whether to skip confirmation prompts for destructive operations.
     /// </summary>
     public bool SkipConfirmation { get; set; }
+
+    /// <summary>
+    /// Gets or sets the list of resource names to target for selective deployment.
+    /// When specified, only pipeline steps associated with the named resources (and shared
+    /// infrastructure steps) will be executed.
+    /// </summary>
+    public List<string>? Resources { get; set; }
 }

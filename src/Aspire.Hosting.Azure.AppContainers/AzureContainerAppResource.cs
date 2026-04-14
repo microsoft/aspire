@@ -43,6 +43,7 @@ public class AzureContainerAppResource : AzureProvisioningResource
             {
                 Name = $"print-{targetResource.Name}-summary",
                 Description = $"Prints the deployment summary and URL for {targetResource.Name}.",
+                Resource = targetResource,
                 Action = async ctx =>
                 {
                     var containerAppEnv = (AzureContainerAppEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
@@ -74,6 +75,7 @@ public class AzureContainerAppResource : AzureProvisioningResource
             {
                 Name = $"deploy-{targetResource.Name}",
                 Description = $"Aggregation step for deploying {targetResource.Name} to Azure Container Apps.",
+                Resource = targetResource,
                 Action = _ => Task.CompletedTask,
                 Tags = [WellKnownPipelineTags.DeployCompute]
             };
