@@ -36,7 +36,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
         Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Development", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
         Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
     }
 
@@ -52,7 +52,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
         Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Production", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
         Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
     }
 
@@ -69,7 +69,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             args: ["--environment", "Staging"]);
 
         Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
         Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
     }
 
@@ -101,7 +101,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
         Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Production", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
         Assert.Equal("https://localhost:19000;http://localhost:15000", env["ASPNETCORE_URLS"]);
         Assert.Equal("https://localhost:21000", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:22000", env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
@@ -122,7 +122,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             });
 
         Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
     }
 
     [Fact]
@@ -140,7 +140,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(noRestore);
             Assert.False(options.NoLaunchProfile);
             Assert.Equal("Development", env!["DOTNET_ENVIRONMENT"]);
-            Assert.Equal("Development", env["ASPNETCORE_ENVIRONMENT"]);
+            Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
             Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
             return Task.FromResult(0);
         };
@@ -173,7 +173,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(options.NoLaunchProfile);
             Assert.Equal(["--environment", "Staging"], args);
             Assert.Equal("Staging", env!["DOTNET_ENVIRONMENT"]);
-            Assert.Equal("Staging", env["ASPNETCORE_ENVIRONMENT"]);
+            Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
             return Task.FromResult(0);
         };
 
@@ -223,7 +223,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(options.NoLaunchProfile);
             Assert.Equal(["--operation", "publish"], args);
             Assert.Equal("Production", env!["DOTNET_ENVIRONMENT"]);
-            Assert.Equal("Production", env["ASPNETCORE_ENVIRONMENT"]);
+            Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
             Assert.Equal("https://localhost:19000;http://localhost:15000", env["ASPNETCORE_URLS"]);
             Assert.Equal("https://localhost:21000", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
             Assert.Equal("https://localhost:22000", env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
@@ -258,7 +258,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(options.NoLaunchProfile);
             Assert.Equal(["--operation", "publish", "--environment", "Staging"], args);
             Assert.Equal("Staging", env!["DOTNET_ENVIRONMENT"]);
-            Assert.Equal("Staging", env["ASPNETCORE_ENVIRONMENT"]);
+            Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
             return Task.FromResult(0);
         };
 

@@ -342,7 +342,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
         Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Production", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
     }
 
     [Fact]
@@ -362,7 +362,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
         Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Production", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
         Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
         Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
@@ -385,7 +385,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             args: ["--environment", "Staging"]);
 
         Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
         Assert.Equal("Development", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -426,7 +426,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
         Assert.Equal("Staging", envVars["ASPIRE_ENVIRONMENT"]);
         Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
         Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
         Assert.Equal("/tmp/certs", envVars["SSL_CERT_DIR"]);
@@ -451,7 +451,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
         Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Production", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
         Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
         Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
@@ -474,7 +474,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             args: ["--environment", "Staging"]);
 
         Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
         Assert.Equal("Development", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -491,7 +491,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             });
 
         Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
     }
 
     [Fact]
@@ -507,7 +507,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
         Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Production", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
         Assert.Equal("Staging", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -524,7 +524,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
         Assert.Equal("Testing", envVars["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Testing", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Staging", envVars["ASPNETCORE_ENVIRONMENT"]);
         Assert.Equal("Testing", envVars["ASPIRE_ENVIRONMENT"]);
     }
 

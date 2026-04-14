@@ -15,7 +15,7 @@ public class AppHostEnvironmentDefaultsTests
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.ProductionEnvironmentName);
 
         Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Production", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey(AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName));
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public class AppHostEnvironmentDefaultsTests
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.DevelopmentEnvironmentName);
 
         Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Production", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey(AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName));
         Assert.Equal("Staging", env["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -49,7 +49,7 @@ public class AppHostEnvironmentDefaultsTests
             args: ["--environment", "Staging"]);
 
         Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey(AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName));
         Assert.Equal("Development", env["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -65,7 +65,7 @@ public class AppHostEnvironmentDefaultsTests
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.DevelopmentEnvironmentName);
 
         Assert.Equal("Testing", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Testing", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Staging", env["ASPNETCORE_ENVIRONMENT"]);
         Assert.Equal("Testing", env["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -84,6 +84,6 @@ public class AppHostEnvironmentDefaultsTests
             inherited);
 
         Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Staging", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.False(env.ContainsKey(AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName));
     }
 }

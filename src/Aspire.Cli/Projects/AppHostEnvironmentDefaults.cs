@@ -3,6 +3,9 @@
 
 namespace Aspire.Cli.Projects;
 
+/// <summary>
+/// Resolves the effective AppHost environment for CLI-launched processes.
+/// </summary>
 internal static class AppHostEnvironmentDefaults
 {
     private const string EnvironmentArgumentName = "--environment";
@@ -14,9 +17,20 @@ internal static class AppHostEnvironmentDefaults
     internal const string DevelopmentEnvironmentName = "Development";
     internal const string ProductionEnvironmentName = "Production";
 
+    /// <summary>
+    /// Determines whether the variable name should be treated as an environment-selection variable
+    /// when filtering launch profile values.
+    /// </summary>
     internal static bool IsEnvironmentVariableName(string variableName) =>
         variableName is DotNetEnvironmentVariableName or AspNetCoreEnvironmentVariableName or AspireEnvironmentVariableName;
 
+    /// <summary>
+    /// Applies the effective environment to the launch environment variables.
+    /// </summary>
+    /// <param name="environmentVariables">The environment variables passed to the launched process.</param>
+    /// <param name="defaultEnvironment">The fallback environment used when no explicit environment is provided.</param>
+    /// <param name="inheritedEnvironmentVariables">Optional inherited environment variables used by tests.</param>
+    /// <param name="args">Optional command-line arguments that may contain <c>--environment</c>.</param>
     internal static void ApplyEffectiveEnvironment(
         IDictionary<string, string> environmentVariables,
         string? defaultEnvironment = null,
@@ -26,12 +40,10 @@ internal static class AppHostEnvironmentDefaults
         if (TryResolveEnvironment(environmentVariables, inheritedEnvironmentVariables, args, out var environment))
         {
             environmentVariables[DotNetEnvironmentVariableName] = environment;
-            environmentVariables[AspNetCoreEnvironmentVariableName] = environment;
         }
         else if (defaultEnvironment is not null)
         {
             environmentVariables[DotNetEnvironmentVariableName] = defaultEnvironment;
-            environmentVariables[AspNetCoreEnvironmentVariableName] = defaultEnvironment;
         }
     }
 
@@ -41,6 +53,8 @@ internal static class AppHostEnvironmentDefaults
         string[]? args,
         out string environment)
     {
+        // Match DistributedApplicationBuilder precedence:
+        // explicit --environment, then DOTNET_ENVIRONMENT, then ASPIRE_ENVIRONMENT.
         if (TryGetRequestedEnvironment(args, out environment) ||
             TryGetEnvironmentValue(environmentVariables, DotNetEnvironmentVariableName, out environment) ||
             TryGetInheritedEnvironmentValue(inheritedEnvironmentVariables, DotNetEnvironmentVariableName, out environment) ||
@@ -58,6 +72,7 @@ internal static class AppHostEnvironmentDefaults
     {
         if (args is not null)
         {
+            // Walk from the end so the last --environment flag wins.
             for (var i = args.Length - 1; i >= 0; i--)
             {
                 if (TryGetRequestedEnvironment(args, i, out environment))
