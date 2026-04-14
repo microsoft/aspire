@@ -3,10 +3,12 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.AppContainers;
@@ -61,6 +63,13 @@ public class AzureContainerAppResource : AzureProvisioningResource
                         ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. No public endpoints were configured."));
                         ctx.Summary.Add(targetResource.Name, "No public endpoints");
                     }
+
+                    // Add Azure Portal link for the deployed resource
+                    var portalUrl = await GetPortalUrlAsync(ctx, targetResource.Name, cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
+                    if (portalUrl is not null)
+                    {
+                        ctx.Summary.Add($"🔗 {targetResource.Name}", new MarkdownString($"[Azure Portal]({portalUrl})"));
+                    }
                 },
                 Tags = ["print-summary"],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy]
@@ -100,4 +109,24 @@ public class AzureContainerAppResource : AzureProvisioningResource
     /// Gets the target resource that this Azure Container App is being created for.
     /// </summary>
     public IResource TargetResource { get; }
+
+    private static async Task<string?> GetPortalUrlAsync(PipelineStepContext context, string resourceName, CancellationToken cancellationToken)
+    {
+        var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+        var azureStateSection = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
+
+        var subscriptionId = azureStateSection.Data["SubscriptionId"]?.ToString();
+        var resourceGroupName = azureStateSection.Data["ResourceGroup"]?.ToString();
+        var tenantId = azureStateSection.Data["TenantId"]?.ToString();
+
+        if (subscriptionId is null || resourceGroupName is null)
+        {
+            return null;
+        }
+
+        var resourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.App/containerApps/{resourceName.ToLowerInvariant()}";
+        Guid? tenantGuid = Guid.TryParse(tenantId, out var parsed) ? parsed : null;
+
+        return AzurePortalUrls.GetResourceUrl(resourceId, tenantGuid);
+    }
 }

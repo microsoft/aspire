@@ -8,6 +8,7 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 internal static class AzurePortalUrls
 {
+    private const string PortalBaseUrl = "https://portal.azure.com/";
     private const string PortalDeploymentOverviewUrl = "https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id";
 
     /// <summary>
@@ -16,7 +17,21 @@ internal static class AzurePortalUrls
     internal static string GetResourceGroupUrl(string subscriptionId, string resourceGroupName, Guid? tenantId = null)
     {
         var tenantSegment = tenantId.HasValue ? $"#@{tenantId.Value}" : "#";
-        return $"https://portal.azure.com/{tenantSegment}/resource/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/overview";
+        return $"{PortalBaseUrl}{tenantSegment}/resource/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/overview";
+    }
+
+    /// <summary>
+    /// Gets the Azure portal URL for a specific Azure resource using its fully qualified resource ID.
+    /// </summary>
+    /// <remarks>
+    /// The resource ID should be in the standard ARM format, e.g.:
+    /// <c>/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.App/containerApps/{name}</c>
+    /// This also handles child resources like App Service deployment slots.
+    /// </remarks>
+    internal static string GetResourceUrl(string resourceId, Guid? tenantId = null)
+    {
+        var tenantSegment = tenantId.HasValue ? $"#@{tenantId.Value}" : "#";
+        return $"{PortalBaseUrl}{tenantSegment}/resource{resourceId}";
     }
 
     /// <summary>

@@ -3,10 +3,12 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure;
@@ -59,6 +61,13 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
                     var endpoint = $"https://{hostName}.azurewebsites.net";
                     ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})"));
                     ctx.Summary.Add(targetResource.Name, new MarkdownString($"[{endpoint}]({endpoint})"));
+
+                    // Add Azure Portal link for the deployed resource
+                    var portalUrl = await GetPortalUrlAsync(ctx, hostName, deploymentSlot, ctx.CancellationToken).ConfigureAwait(false);
+                    if (portalUrl is not null)
+                    {
+                        ctx.Summary.Add($"🔗 {targetResource.Name}", new MarkdownString($"[Azure Portal]({portalUrl})"));
+                    }
                 },
                 Tags = ["print-summary"],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy]
@@ -135,4 +144,27 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
     // Source of truth: https://msazure.visualstudio.com/One/_git/AAPT-Antares-Websites?path=%2Fsrc%2FHosting%2FAdministrationService%2FMicrosoft.Web.Hosting.Administration.Api%2FCommonConstants.cs&_a=contents&version=GBdev
     internal const int MaxHostPrefixLengthWithSlot = 59;
     internal const int MaxWebSiteNamePrefixLengthWithSlot = 40;
+
+    private static async Task<string?> GetPortalUrlAsync(PipelineStepContext context, string websiteName, string? deploymentSlot, CancellationToken cancellationToken)
+    {
+        var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+        var azureStateSection = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
+
+        var subscriptionId = azureStateSection.Data["SubscriptionId"]?.ToString();
+        var resourceGroupName = azureStateSection.Data["ResourceGroup"]?.ToString();
+        var tenantId = azureStateSection.Data["TenantId"]?.ToString();
+
+        if (subscriptionId is null || resourceGroupName is null)
+        {
+            return null;
+        }
+
+        var resourceId = string.IsNullOrWhiteSpace(deploymentSlot)
+            ? $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Web/sites/{websiteName}"
+            : $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.Web/sites/{websiteName}/slots/{deploymentSlot}";
+
+        Guid? tenantGuid = Guid.TryParse(tenantId, out var parsed) ? parsed : null;
+
+        return AzurePortalUrls.GetResourceUrl(resourceId, tenantGuid);
+    }
 }
