@@ -367,6 +367,14 @@ public class PlaywrightCliInstallerTests
         // Accept tags with 'v' prefix (pre-0.1.7)
         Assert.True(WorkflowRefInfo.TryParse($"refs/tags/v{version}", out var refWith));
         Assert.True(provenanceChecker.CapturedValidateWorkflowRef(refWith!));
+
+        // Reject wrong version
+        Assert.True(WorkflowRefInfo.TryParse("refs/tags/0.2.0", out var wrongVersion));
+        Assert.False(provenanceChecker.CapturedValidateWorkflowRef(wrongVersion!));
+
+        // Reject branch ref (not a tag)
+        Assert.True(WorkflowRefInfo.TryParse("refs/heads/main", out var branchRef));
+        Assert.False(provenanceChecker.CapturedValidateWorkflowRef(branchRef!));
     }
 
     [Fact]
