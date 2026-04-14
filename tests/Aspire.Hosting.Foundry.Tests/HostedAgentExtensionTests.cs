@@ -45,7 +45,7 @@ public class HostedAgentExtensionTests
         var httpEndpoints = endpoints.Where(e => e.Name == "http").ToList();
         Assert.Single(httpEndpoints);
         Assert.Equal(8088, httpEndpoints[0].TargetPort);
-        Assert.False(httpEndpoints[0].IsProxied);
+        Assert.True(httpEndpoints[0].IsProxied);
     }
 
     [Fact]
