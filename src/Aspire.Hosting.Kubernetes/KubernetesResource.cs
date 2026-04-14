@@ -457,12 +457,22 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is ConnectionStringReference cs)
             {
+                // Check if the connection string contains deferred values
+                if (IsUnresolvedAtPublishTime(cs) && cs.Resource.ConnectionStringExpression is IValueProvider csvp)
+                {
+                    return CreateDeferredHelmValue(cs.Resource.ConnectionStringExpression, csvp);
+                }
                 value = cs.Resource.ConnectionStringExpression;
                 continue;
             }
 
             if (value is IResourceWithConnectionString csrs)
             {
+                // Check if the connection string contains deferred values
+                if (IsUnresolvedAtPublishTime(csrs) && csrs.ConnectionStringExpression is IValueProvider csrsvp)
+                {
+                    return CreateDeferredHelmValue(csrs.ConnectionStringExpression, csrsvp);
+                }
                 value = csrs.ConnectionStringExpression;
                 continue;
             }
@@ -706,9 +716,9 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     }
 
     /// <summary>
-    /// Checks if a value provider would fall through to ResolveUnknownValue —
-    /// i.e., it's not a known type that can be resolved at publish time
-    /// (endpoint, parameter, connection string, etc.).
+    /// Checks if a value contains sub-expressions that cannot be resolved
+    /// at publish time and need deploy-time resolution via IValueProvider.
+    /// Recursively checks ReferenceExpression value providers.
     /// </summary>
     private static bool IsUnresolvedAtPublishTime(object value)
     {
@@ -718,11 +728,31 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             EndpointReference => false,
             EndpointReferenceExpression => false,
             ParameterResource => false,
-            ConnectionStringReference => false,
-            IResourceWithConnectionString => false,
-            ReferenceExpression => false,
-            IManifestExpressionProvider provider when provider is IValueProvider => true,
+            ConnectionStringReference cs => IsUnresolvedAtPublishTime(cs.Resource.ConnectionStringExpression),
+            IResourceWithConnectionString csrs => IsUnresolvedAtPublishTime(csrs.ConnectionStringExpression),
+            ReferenceExpression expr => expr.ValueProviders.Any(IsUnresolvedAtPublishTime),
+            // Any other IManifestExpressionProvider that also implements IValueProvider
+            // is a deferred source (e.g., BicepOutputReference)
+            IManifestExpressionProvider when value is IValueProvider => true,
             _ => false
+        };
+    }
+
+    /// <summary>
+    /// Creates a HelmValue that defers resolution to deploy time via IValueProvider.
+    /// </summary>
+    private HelmValue CreateDeferredHelmValue(IManifestExpressionProvider expressionProvider, IValueProvider valueProvider)
+    {
+        var formattedName = expressionProvider.ValueExpression
+            .Replace("{", string.Empty)
+            .Replace("}", string.Empty)
+            .Replace(".", "_")
+            .ToHelmValuesSectionName();
+
+        var helmExpression = formattedName.ToHelmConfigExpression(TargetResource.Name);
+        return new HelmValue(helmExpression, expressionProvider.ValueExpression)
+        {
+            ValueProviderSource = valueProvider
         };
     }
 
