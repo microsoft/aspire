@@ -12,7 +12,6 @@ var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
 builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
     .WithUv()
     .WithReference(chat).WaitFor(chat)
-    .WithEnvironment("AZURE_TENANT_ID", tenantId)
     .PublishAsHostedAgent(project);
 
 builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
