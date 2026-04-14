@@ -7,11 +7,12 @@
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Aspire.Hosting.Kubernetes;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Azure.Kubernetes;
@@ -74,6 +75,46 @@ internal sealed class AzureKubernetesInfrastructure(
                 if (!r.TryGetLastAnnotation<KubernetesNodePoolAnnotation>(out _) && defaultUserPool is not null)
                 {
                     r.Annotations.Add(new KubernetesNodePoolAnnotation(defaultUserPool));
+                }
+
+                // Wire workload identity: if the resource has an AppIdentityAnnotation
+                // (auto-created by AzureResourcePreparer or explicit via WithAzureUserAssignedIdentity),
+                // generate a ServiceAccount and wire the pod spec.
+                if (r.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity))
+                {
+                    // Ensure OIDC + workload identity are enabled on the cluster
+                    environment.OidcIssuerEnabled = true;
+                    environment.WorkloadIdentityEnabled = true;
+
+                    var saName = $"{r.Name}-sa";
+                    var identityClientId = appIdentity.IdentityResource.ClientId;
+
+                    // Use KubernetesServiceCustomizationAnnotation to inject SA + pod spec changes
+                    // during Helm chart generation.
+                    r.Annotations.Add(new KubernetesServiceCustomizationAnnotation(kubeResource =>
+                    {
+                        // Create ServiceAccount with workload identity annotations
+                        var serviceAccount = new ServiceAccountV1();
+                        serviceAccount.Metadata.Name = saName;
+                        serviceAccount.Metadata.Annotations["azure.workload.identity/client-id"] =
+                            $"{{{{ .Values.parameters.{r.Name}.identityClientId }}}}";
+                        serviceAccount.Metadata.Labels["azure.workload.identity/use"] = "true";
+                        kubeResource.AdditionalResources.Add(serviceAccount);
+
+                        // Set serviceAccountName on pod spec
+                        if (kubeResource.Workload?.PodTemplate?.Spec is { } podSpec)
+                        {
+                            podSpec.ServiceAccountName = saName;
+                        }
+                    }));
+
+                    // Add the identity clientId as a deferred Helm value parameter
+                    // so it gets resolved from the Bicep output at deploy time.
+                    if (r is IResourceWithEnvironment resourceWithEnv)
+                    {
+                        // Store the identity reference for federated credential generation
+                        environment.WorkloadIdentities[r.Name] = appIdentity.IdentityResource;
+                    }
                 }
             }
         }

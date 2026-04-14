@@ -208,7 +208,7 @@ public class AzureKubernetesEnvironmentExtensionsTests
     }
 
     [Fact]
-    public void WithAzureWorkloadIdentity_AddsAnnotations()
+    public void WithAzureUserAssignedIdentity_WorksWithAks()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -216,28 +216,10 @@ public class AzureKubernetesEnvironmentExtensionsTests
         var identity = builder.AddAzureUserAssignedIdentity("myIdentity");
 
         var project = builder.AddContainer("myapi", "myimage")
-            .WithAzureWorkloadIdentity(identity);
+            .WithAzureUserAssignedIdentity(identity);
 
         Assert.True(project.Resource.TryGetLastAnnotation<AppIdentityAnnotation>(out var appIdentity));
         Assert.Same(identity.Resource, appIdentity.IdentityResource);
-
-        Assert.True(project.Resource.TryGetLastAnnotation<AksWorkloadIdentityAnnotation>(out var aksIdentity));
-        Assert.Same(identity.Resource, aksIdentity.IdentityResource);
-    }
-
-    [Fact]
-    public void WithAzureWorkloadIdentity_AutoCreatesIdentity()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var aks = builder.AddAzureKubernetesEnvironment("aks");
-
-        var project = builder.AddContainer("myapi", "myimage")
-            .WithAzureWorkloadIdentity();
-
-        Assert.True(project.Resource.TryGetLastAnnotation<AppIdentityAnnotation>(out _));
-        Assert.True(project.Resource.TryGetLastAnnotation<AksWorkloadIdentityAnnotation>(out var aksIdentity));
-        Assert.NotNull(aksIdentity.IdentityResource);
     }
 
     [Fact]

@@ -380,8 +380,8 @@ public static class AzureKubernetesEnvironmentExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
     /// <remarks>
     /// This ensures the AKS cluster is configured with OIDC issuer and workload identity enabled.
-    /// Use <see cref="WithAzureWorkloadIdentity{T}"/> on individual compute resources to assign
-    /// specific managed identities.
+    /// Workload identity is automatically wired when compute resources have an <see cref="AppIdentityAnnotation"/>,
+    /// which is added by <c>WithAzureUserAssignedIdentity</c> or auto-created by <c>AzureResourcePreparer</c>.
     /// </remarks>
     [AspireExportIgnore(Reason = "AKS hosting is not yet supported in ATS")]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithWorkloadIdentity(
@@ -391,46 +391,6 @@ public static class AzureKubernetesEnvironmentExtensions
 
         builder.Resource.OidcIssuerEnabled = true;
         builder.Resource.WorkloadIdentityEnabled = true;
-        return builder;
-    }
-
-    /// <summary>
-    /// Configures a compute resource to use AKS workload identity with the specified managed identity.
-    /// This generates a Kubernetes ServiceAccount and a federated identity credential in Azure.
-    /// </summary>
-    /// <typeparam name="T">The type of the compute resource.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="identity">The managed identity to federate with. If null, an identity will be auto-created.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <example>
-    /// <code>
-    /// var identity = builder.AddAzureUserAssignedIdentity("myIdentity");
-    /// builder.AddProject&lt;MyApi&gt;()
-    ///     .WithAzureWorkloadIdentity(identity);
-    /// </code>
-    /// </example>
-    [AspireExportIgnore(Reason = "AKS hosting is not yet supported in ATS")]
-    public static IResourceBuilder<T> WithAzureWorkloadIdentity<T>(
-        this IResourceBuilder<T> builder,
-        IResourceBuilder<AzureUserAssignedIdentityResource>? identity = null)
-        where T : IResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        if (identity is null)
-        {
-            // Auto-create an identity named after the resource
-            var appBuilder = builder.ApplicationBuilder;
-            var identityName = $"{builder.Resource.Name}-identity";
-            var identityBuilder = appBuilder.AddAzureUserAssignedIdentity(identityName);
-            identity = identityBuilder;
-        }
-
-        // Add both the standard AppIdentityAnnotation (for Azure service role assignments)
-        // and the AKS-specific annotation (for ServiceAccount + federated credential generation)
-        builder.WithAnnotation(new AppIdentityAnnotation(identity.Resource));
-        builder.WithAnnotation(new AksWorkloadIdentityAnnotation(identity.Resource));
-
         return builder;
     }
 

@@ -104,6 +104,12 @@ public class AzureKubernetesEnvironmentResource(
     internal Dictionary<string, BicepOutputReference> NodePoolSubnets { get; } = [];
 
     /// <summary>
+    /// Gets the workload identity mappings. Key is the resource name, value is the identity resource.
+    /// Used to generate federated identity credentials in Bicep.
+    /// </summary>
+    internal Dictionary<string, IAppIdentityResource> WorkloadIdentities { get; } = [];
+
+    /// <summary>
     /// Gets or sets the network profile for the AKS cluster.
     /// </summary>
     internal AksNetworkProfile? NetworkProfile { get; set; }
@@ -328,6 +334,58 @@ public class AzureKubernetesEnvironmentResource(
         sb.Append("output oidcIssuerUrl string = ").Append(id).AppendLine(".properties.oidcIssuerProfile.issuerURL");
         sb.Append("output kubeletIdentityObjectId string = ").Append(id).AppendLine(".properties.identityProfile.kubeletidentity.objectId");
         sb.Append("output nodeResourceGroup string = ").Append(id).AppendLine(".properties.nodeResourceGroup");
+
+        // Federated identity credentials for workload identity
+        foreach (var (resourceName, identityResource) in WorkloadIdentities)
+        {
+            var saName = $"{resourceName}-sa";
+            var sanitizedName = SanitizeBicepIdentifier(resourceName);
+            var fedCredId = $"fedcred_{sanitizedName}";
+            var identityParamName = $"identityName_{sanitizedName}";
+
+            // Add identity name as parameter — will be resolved from the identity resource
+            Parameters[identityParamName] = identityResource.PrincipalName;
+
+            sb.AppendLine();
+            sb.Append("@description('The name of the managed identity for ").Append(resourceName).AppendLine(".')");
+            sb.Append("param ").Append(identityParamName).AppendLine(" string");
+            sb.AppendLine();
+
+            // Reference existing identity
+            sb.Append("resource identity_").Append(sanitizedName);
+            sb.AppendLine(" 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {");
+            sb.Append("  name: ").AppendLine(identityParamName);
+            sb.AppendLine("}");
+            sb.AppendLine();
+
+            // Federated credential
+            sb.Append("resource ").Append(fedCredId);
+            sb.AppendLine(" 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {");
+            sb.Append("  parent: identity_").AppendLine(sanitizedName);
+            sb.Append("  name: '").Append(resourceName).AppendLine("-fedcred'");
+            sb.AppendLine("  properties: {");
+            sb.Append("    issuer: ").Append(id).AppendLine(".properties.oidcIssuerProfile.issuerURL");
+            sb.Append("    subject: 'system:serviceaccount:default:").Append(saName).AppendLine("'");
+            sb.AppendLine("    audiences: [");
+            sb.AppendLine("      'api://AzureADTokenExchange'");
+            sb.AppendLine("    ]");
+            sb.AppendLine("  }");
+            sb.AppendLine("}");
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Sanitizes a name for use as a Bicep identifier (alphanumeric + underscore only).
+    /// </summary>
+    private static string SanitizeBicepIdentifier(string name)
+    {
+        var sb = new StringBuilder(name.Length);
+        foreach (var c in name)
+        {
+            sb.Append(char.IsLetterOrDigit(c) ? c : '_');
+        }
 
         return sb.ToString();
     }
