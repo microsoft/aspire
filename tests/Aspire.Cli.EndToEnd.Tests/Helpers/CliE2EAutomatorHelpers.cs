@@ -384,7 +384,6 @@ internal static class CliE2EAutomatorHelpers
             if (emptySearcher.Search(snapshot).Count > 0)
             {
                 dashboardUrlEmpty = true;
-                return true;
             }
 
             var promptSearcher = new CellPatternSearcher()
