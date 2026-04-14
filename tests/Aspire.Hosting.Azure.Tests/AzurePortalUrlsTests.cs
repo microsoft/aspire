@@ -47,7 +47,7 @@ public class AzurePortalUrlsTests
         var resourceId = "/subscriptions/sub-123/resourceGroups/rg-myapp/providers/Microsoft.Web/sites/mywebapp";
         var url = AzurePortalUrls.GetResourceUrl(resourceId);
 
-        Assert.Contains("Microsoft.Web/sites/mywebapp", url);
+        Assert.Equal("https://portal.azure.com/#/resource/subscriptions/sub-123/resourceGroups/rg-myapp/providers/Microsoft.Web/sites/mywebapp", url);
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class AzurePortalUrlsTests
         var resourceId = "/subscriptions/sub-123/resourceGroups/rg-myapp/providers/Microsoft.Web/sites/mywebapp/slots/staging";
         var url = AzurePortalUrls.GetResourceUrl(resourceId);
 
-        Assert.Contains("Microsoft.Web/sites/mywebapp/slots/staging", url);
+        Assert.Equal("https://portal.azure.com/#/resource/subscriptions/sub-123/resourceGroups/rg-myapp/providers/Microsoft.Web/sites/mywebapp/slots/staging", url);
     }
 
     [Fact]

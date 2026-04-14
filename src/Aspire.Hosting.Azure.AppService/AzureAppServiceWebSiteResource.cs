@@ -62,8 +62,11 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
                     ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})"));
                     ctx.Summary.Add(targetResource.Name, new MarkdownString($"[{endpoint}]({endpoint})"));
 
+                    // Use the base App Service site resource name for Azure Portal links / ARM resource IDs.
+                    var websiteName = await GetAppServiceWebsiteNameAsync(ctx, null).ConfigureAwait(false);
+
                     // Add Azure Portal link for the deployed resource
-                    var portalUrl = await GetPortalUrlAsync(ctx, hostName, deploymentSlot, ctx.CancellationToken).ConfigureAwait(false);
+                    var portalUrl = await GetPortalUrlAsync(ctx, websiteName, deploymentSlot, ctx.CancellationToken).ConfigureAwait(false);
                     if (portalUrl is not null)
                     {
                         ctx.Summary.Add($"🔗 {targetResource.Name}", new MarkdownString($"[Azure Portal]({portalUrl})"));
@@ -147,7 +150,12 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
 
     private static async Task<string?> GetPortalUrlAsync(PipelineStepContext context, string websiteName, string? deploymentSlot, CancellationToken cancellationToken)
     {
-        var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+        var deploymentStateManager = context.Services.GetService<IDeploymentStateManager>();
+        if (deploymentStateManager is null)
+        {
+            return null;
+        }
+
         var azureStateSection = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
 
         var subscriptionId = azureStateSection.Data["SubscriptionId"]?.ToString();

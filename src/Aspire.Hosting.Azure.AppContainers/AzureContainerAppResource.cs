@@ -112,7 +112,12 @@ public class AzureContainerAppResource : AzureProvisioningResource
 
     private static async Task<string?> GetPortalUrlAsync(PipelineStepContext context, string resourceName, CancellationToken cancellationToken)
     {
-        var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+        var deploymentStateManager = context.Services.GetService<IDeploymentStateManager>();
+        if (deploymentStateManager is null)
+        {
+            return null;
+        }
+
         var azureStateSection = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
 
         var subscriptionId = azureStateSection.Data["SubscriptionId"]?.ToString();
@@ -124,7 +129,7 @@ public class AzureContainerAppResource : AzureProvisioningResource
             return null;
         }
 
-        var resourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.App/containerApps/{resourceName.ToLowerInvariant()}";
+        var resourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/providers/Microsoft.App/containerApps/{resourceName}";
         Guid? tenantGuid = Guid.TryParse(tenantId, out var parsed) ? parsed : null;
 
         return AzurePortalUrls.GetResourceUrl(resourceId, tenantGuid);

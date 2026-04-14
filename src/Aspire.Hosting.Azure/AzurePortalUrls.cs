@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Azure;
 internal static class AzurePortalUrls
 {
     private const string PortalBaseUrl = "https://portal.azure.com/";
-    private const string PortalDeploymentOverviewUrl = "https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id";
+    private const string PortalDeploymentOverviewUrl = PortalBaseUrl + "#view/HubsExtension/DeploymentDetailsBlade/~/overview/id";
 
     /// <summary>
     /// Gets the Azure portal URL for a resource group overview page.
