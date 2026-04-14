@@ -27,7 +27,7 @@ internal static class CommandsConfigurationExtensions
                 var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, GetResolvedResourceName(resource, context)) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, GetResolvedDcpResouceName(resource, context)) };
             },
             updateState: context =>
             {
@@ -60,7 +60,7 @@ internal static class CommandsConfigurationExtensions
                 var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, GetResolvedResourceName(resource, context)) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, GetResolvedDcpResouceName(resource, context)) };
             },
             updateState: context =>
             {
@@ -100,7 +100,7 @@ internal static class CommandsConfigurationExtensions
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRestarted, GetResolvedResourceName(resource, context)) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRestarted, GetResolvedDcpResouceName(resource, context)) };
             },
             updateState: context =>
             {
@@ -141,7 +141,7 @@ internal static class CommandsConfigurationExtensions
         static bool HasNoState(string? state) => string.IsNullOrEmpty(state);
     }
 
-    private static string GetResolvedResourceName(IResource resource, ExecuteCommandContext context)
+    private static string GetResolvedDcpResouceName(IResource resource, ExecuteCommandContext context)
     {
         return resource.GetReplicaCount() > 1 ? context.ResourceName : resource.Name;
     }
