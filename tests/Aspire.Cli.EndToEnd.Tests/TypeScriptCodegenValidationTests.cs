@@ -3,6 +3,7 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
+using Hex1b;
 using Hex1b.Automation;
 using Xunit;
 
@@ -19,13 +20,18 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
     public async Task RestoreRefreshesGeneratedSdkAfterAddingIntegration()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
         // Use the DotNet container variant even for the TypeScript AppHost so local LocalHive
         // repros still have dotnet available for package/add flows while remaining outside the repo,
         // which keeps the AppHost on the PrebuiltAppHostServer path instead of in-repo dev mode.
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, workspace: workspace);
+        using var terminal = CreateDockerTestTerminal(
+            repoRoot,
+            workspace,
+            variant: CliE2ETestHelpers.DockerfileVariant.DotNet,
+            mountDockerSocket: false,
+            out var strategy,
+            out var installMode);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -34,7 +40,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliAsync(strategy, counter);
+        await InstallAspireCliAsync(auto, counter, strategy, installMode);
 
         // Step 1: Create a TypeScript AppHost and verify the baseline generated SDK.
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
@@ -135,17 +141,22 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
     public async Task UnAwaitedChainsCompileWithAutoResolvePromises()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CreateDockerTestTerminal(
+            repoRoot,
+            workspace,
+            variant: CliE2ETestHelpers.DockerfileVariant.DotNet,
+            mountDockerSocket: true,
+            out var strategy,
+            out var installMode);
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliAsync(strategy, counter);
+        await InstallAspireCliAsync(auto, counter, strategy, installMode);
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
@@ -213,5 +224,68 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.EnterAsync();
 
         await pendingRun;
+    }
+
+    private Hex1bTerminal CreateDockerTestTerminal(
+        string repoRoot,
+        TemporaryWorkspace workspace,
+        CliE2ETestHelpers.DockerfileVariant variant,
+        bool mountDockerSocket,
+        out CliInstallStrategy? strategy,
+        out CliE2ETestHelpers.DockerInstallMode? installMode)
+    {
+        if (ShouldUseCliInstallStrategy())
+        {
+            strategy = CliInstallStrategy.Detect();
+            installMode = null;
+
+            return CliE2ETestHelpers.CreateDockerTestTerminal(
+                repoRoot,
+                strategy,
+                output,
+                variant: variant,
+                mountDockerSocket: mountDockerSocket,
+                workspace: workspace);
+        }
+
+        strategy = null;
+        installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+
+        return CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot,
+            installMode.Value,
+            output,
+            variant: variant,
+            mountDockerSocket: mountDockerSocket,
+            workspace: workspace);
+    }
+
+    private static async Task InstallAspireCliAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        CliInstallStrategy? strategy,
+        CliE2ETestHelpers.DockerInstallMode? installMode)
+    {
+        if (strategy is not null)
+        {
+            await auto.InstallAspireCliAsync(strategy, counter);
+            return;
+        }
+
+        if (installMode is not null)
+        {
+            await auto.InstallAspireCliInDockerAsync(installMode.Value, counter);
+            return;
+        }
+
+        throw new InvalidOperationException("Either a CLI install strategy or Docker install mode must be provided.");
+    }
+
+    private static bool ShouldUseCliInstallStrategy()
+    {
+        return CliE2ETestHelpers.IsRunningInCI ||
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPIRE_E2E_ARCHIVE")) ||
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPIRE_E2E_QUALITY")) ||
+            !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION"));
     }
 }
