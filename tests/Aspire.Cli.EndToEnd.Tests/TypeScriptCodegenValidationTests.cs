@@ -42,10 +42,15 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await InstallAspireCliAsync(auto, counter, strategy, installMode);
 
-        // Step 1: Create a TypeScript AppHost and verify the baseline generated SDK.
+        // Step 1: Create a TypeScript AppHost, restore it, and verify the baseline generated SDK.
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
         var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
