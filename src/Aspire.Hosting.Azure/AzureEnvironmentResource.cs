@@ -175,17 +175,34 @@ public sealed class AzureEnvironmentResource : Resource
     private static async Task ValidateAzureLoginAsync(PipelineStepContext context)
     {
         var tokenCredentialProvider = context.Services.GetRequiredService<ITokenCredentialProvider>();
+        var options = context.Services.GetRequiredService<IOptions<AzureProvisionerOptions>>();
+        var timeoutSeconds = options.Value.CredentialProcessTimeoutSeconds;
 
         try
         {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+
             var tokenRequest = new TokenRequestContext(["https://management.azure.com/.default"]);
-            await tokenCredentialProvider.TokenCredential.GetTokenAsync(tokenRequest, context.CancellationToken)
+            await tokenCredentialProvider.TokenCredential.GetTokenAsync(tokenRequest, timeoutCts.Token)
                 .ConfigureAwait(false);
 
             await context.ReportingStep.CompleteAsync(
                 "Azure CLI authentication validated successfully",
                 CompletionState.Completed,
                 context.CancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
+        {
+            // The timeout CTS fired, not the pipeline cancellation — credential process took too long
+            await context.ReportingStep.CompleteAsync(
+                new MarkdownString(
+                    $"Azure credential validation timed out after {timeoutSeconds} seconds. " +
+                    "This can happen when the Azure CLI is slow to respond (e.g., antivirus scanning, network latency). " +
+                    "To increase the timeout, set `Azure__CredentialProcessTimeoutSeconds` to a higher value (e.g., 120)."),
+                CompletionState.CompletedWithError,
+                context.CancellationToken).ConfigureAwait(false);
+            throw;
         }
         catch (Exception)
         {

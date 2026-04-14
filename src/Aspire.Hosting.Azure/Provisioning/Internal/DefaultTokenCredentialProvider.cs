@@ -50,27 +50,32 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
     private TokenCredential CreateCredential(string? tenantId)
     {
         var credentialSetting = _options.Value.CredentialSource;
+        var processTimeout = TimeSpan.FromSeconds(_options.Value.CredentialProcessTimeoutSeconds);
 
         TokenCredential credential = credentialSetting switch
         {
             "AzureCli" => new AzureCliCredential(new()
             {
                 TenantId = tenantId,
+                ProcessTimeout = processTimeout,
                 AdditionallyAllowedTenants = { "*" }
             }),
             "AzurePowerShell" => new AzurePowerShellCredential(new()
             {
                 TenantId = tenantId,
+                ProcessTimeout = processTimeout,
                 AdditionallyAllowedTenants = { "*" }
             }),
             "VisualStudio" => new VisualStudioCredential(new()
             {
                 TenantId = tenantId,
+                ProcessTimeout = processTimeout,
                 AdditionallyAllowedTenants = { "*" }
             }),
             "AzureDeveloperCli" => new AzureDeveloperCliCredential(new()
             {
                 TenantId = tenantId,
+                ProcessTimeout = processTimeout,
                 AdditionallyAllowedTenants = { "*" }
             }),
             "InteractiveBrowser" => new InteractiveBrowserCredential(new InteractiveBrowserCredentialOptions()
@@ -81,6 +86,7 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
             null or "Default" when _distributedApplicationExecutionContext.IsPublishMode => new AzureCliCredential(new()
             {
                 TenantId = tenantId,
+                ProcessTimeout = processTimeout,
                 AdditionallyAllowedTenants = { "*" }
             }),
             _ => new DefaultAzureCredential(new DefaultAzureCredentialOptions()
