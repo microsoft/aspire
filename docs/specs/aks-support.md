@@ -290,73 +290,64 @@ internal sealed class AzureKubernetesInfrastructure(
 
 ### 2. Workload Identity Support
 
-Workload identity enables pods to authenticate to Azure services using federated credentials without storing secrets. This requires three things:
-1. A user-assigned managed identity in Azure
-2. A Kubernetes service account annotated with the identity's client ID
-3. A federated credential linking the identity to the K8s service account via OIDC
+Workload identity enables pods to authenticate to Azure services using federated credentials without storing secrets. This is implemented by honoring the shared `AppIdentityAnnotation` from `Aspire.Hosting.Azure` — the same mechanism used by ACA and AppService.
 
-**New types**:
+**How it works**:
+1. `AzureResourcePreparer` auto-creates a per-resource managed identity when a compute resource references Azure services (e.g., `WithReference(blobStorage)`)
+2. It adds `AppIdentityAnnotation` with the identity to the resource
+3. Users can override with `WithAzureUserAssignedIdentity(myIdentity)` to supply their own identity
+4. `AzureKubernetesInfrastructure` detects `AppIdentityAnnotation` and generates:
+   - A K8s `ServiceAccount` with `azure.workload.identity/client-id` annotation
+   - `serviceAccountName` on the pod spec
+   - `azure.workload.identity/use: "true"` pod label
+   - Federated identity credential in AKS Bicep module
+
+**User API** (same as ACA):
 ```csharp
-// Annotation to mark a compute resource for workload identity
-public class AksWorkloadIdentityAnnotation(
-    IAppIdentityResource identityResource,
-    string? serviceAccountName = null) : IResourceAnnotation
-{
-    public IAppIdentityResource IdentityResource { get; } = identityResource;
-    public string? ServiceAccountName { get; set; } = serviceAccountName;
+// Automatic — identity auto-created when referencing Azure resources
+builder.AddProject<MyApi>()
+    .WithComputeEnvironment(aks)
+    .WithReference(blobStorage);  // gets identity + workload identity + role assignments
+
+// Explicit — bring your own identity
+var identity = builder.AddAzureUserAssignedIdentity("api-identity");
+builder.AddProject<MyApi>()
+    .WithComputeEnvironment(aks)
+    .WithAzureUserAssignedIdentity(identity);
+```
+
+**Generated Bicep** (federated credential):
+```bicep
+resource federatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {
+  parent: identity
+  name: '${resourceName}-fedcred'
+  properties: {
+    issuer: aksCluster.properties.oidcIssuerProfile.issuerURL
+    subject: 'system:serviceaccount:${namespace}:${resourceName}-sa'
+    audiences: ['api://AzureADTokenExchange']
+  }
 }
 ```
 
-**Extension method** (on compute resources):
-```csharp
-public static IResourceBuilder<T> WithAzureWorkloadIdentity<T>(
-    this IResourceBuilder<T> builder,
-    IResourceBuilder<AzureUserAssignedIdentityResource>? identity = null)
-    where T : IResource
-{
-    // If no identity provided, auto-create one named "{resource}-identity"
-    // Add AksWorkloadIdentityAnnotation
-    // This will be picked up by the AKS infrastructure to:
-    //   1. Create a federated credential (Bicep)
-    //   2. Generate a ServiceAccount YAML with azure.workload.identity/client-id annotation
-    //   3. Add the azure.workload.identity/use: "true" label to the pod spec
-}
+**Generated Helm chart** (ServiceAccount + pod template):
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: apiservice-sa
+  annotations:
+    azure.workload.identity/client-id: {{ .Values.parameters.apiservice.identityClientId }}
+  labels:
+    azure.workload.identity/use: "true"
+---
+# In the Deployment pod template:
+spec:
+  serviceAccountName: apiservice-sa
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
 ```
-
-**Integration with KubernetesInfrastructure**:
-When the AKS environment processes a resource with `AksWorkloadIdentityAnnotation`, it:
-1. **Bicep side**: Creates a `FederatedIdentityCredential` resource:
-   ```bicep
-   resource federatedCredential 'Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials@2023-01-31' = {
-     parent: identity
-     name: '${resourceName}-fedcred'
-     properties: {
-       issuer: aksCluster.properties.oidcIssuerProfile.issuerURL
-       subject: 'system:serviceaccount:${namespace}:${serviceAccountName}'
-       audiences: ['api://AzureADTokenExchange']
-     }
-   }
-   ```
-2. **Helm chart side**: Generates a ServiceAccount and patches the pod template:
-   ```yaml
-   apiVersion: v1
-   kind: ServiceAccount
-   metadata:
-     name: {{ .Values.parameters.myapi.serviceAccountName }}
-     annotations:
-       azure.workload.identity/client-id: {{ .Values.parameters.myapi.azureClientId }}
-   ---
-   # In the Deployment pod spec:
-   spec:
-     serviceAccountName: {{ .Values.parameters.myapi.serviceAccountName }}
-     labels:
-       azure.workload.identity/use: "true"
-   ```
-
-**Key design decision**: The federated credential Bicep resource needs the OIDC issuer URL from the AKS cluster output. This creates a dependency ordering:
-- AKS cluster must be provisioned first
-- Then federated credentials can reference its OIDC issuer URL
-- This is handled naturally by Bicep's dependency graph
 
 ### 3. Monitoring Integration
 
@@ -391,34 +382,26 @@ var aks = builder.AddAzureKubernetesEnvironment("aks")
 
 ### 4. VNet Integration
 
-AKS needs a subnet for its nodes (and optionally pods with Azure CNI Overlay). This uses the existing `WithDelegatedSubnet<T>` pattern already established for Container Apps and other Azure compute resources.
+AKS needs a subnet for its nodes. Unlike Container Apps, AKS does **not** use subnet delegation — it uses plain (non-delegated) subnets. The API is `WithSubnet()` (not `WithDelegatedSubnet()`).
 
-**Design** (uses the existing generic extension from `Aspire.Hosting.Azure.Network`):
-
-Since `AzureKubernetesEnvironmentResource` implements `IAzureDelegatedSubnetResource` with `DelegatedSubnetServiceName = "Microsoft.ContainerService/managedClusters"`, the existing `WithDelegatedSubnet<T>()` extension method works directly:
-
+**Design**:
 ```csharp
-// User code — uses the EXISTING WithDelegatedSubnet<T> from Aspire.Hosting.Azure.Network
+var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+var defaultSubnet = vnet.AddSubnet("default", "10.0.0.0/22");
+var gpuSubnet = vnet.AddSubnet("gpu-subnet", "10.0.4.0/24");
+
+// Environment-level subnet (applies to all pools by default)
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithDelegatedSubnet(aksSubnet);
+    .WithSubnet(defaultSubnet);
+
+// Per-pool subnet override
+var gpuPool = aks.AddNodePool("gpu", AksNodeVmSizes.GpuAccelerated.StandardNC6sV3, 0, 5)
+    .WithSubnet(gpuSubnet);
 ```
 
-The `ConfigureAksInfrastructure` callback reads the delegated subnet annotation and wires it into the `ManagedCluster` Bicep:
-```bicep
-resource aksCluster 'Microsoft.ContainerService/managedClusters@2024-02-01' = {
-  properties: {
-    networkProfile: {
-      networkPlugin: 'azure'
-      networkPolicy: 'calico'
-      serviceCidr: '10.0.4.0/22'
-      dnsServiceIP: '10.0.4.10'
-    }
-    agentPoolProfiles: [{
-      vnetSubnetID: subnet.id
-    }]
-  }
-}
-```
+**Bicep**: Environment-level subnet → `subnetId` parameter. Per-pool subnets → `subnetId_{poolName}` parameters. Each agent pool profile uses its own subnet if set, else the environment default.
+
+**Network profile**: Azure CNI is auto-configured when any subnet is set.
 
 **Private cluster support**:
 ```csharp
@@ -532,74 +515,107 @@ var aks = builder.AddAzureKubernetesService("aks")
 
 8. **Helm config delegation**: How cleanly can `WithHelm()` / `WithDashboard()` be forwarded from `AzureKubernetesEnvironmentResource` to the inner `KubernetesEnvironmentResource`? Should the inner resource be exposed or kept fully internal?
 
-## Implementation Phases
+## Implementation Status
 
-### Phase 1: Unified AKS Environment (Foundation)
-- Create `Aspire.Hosting.Azure.Kubernetes` package with dependency on `Azure.Provisioning.Kubernetes`
-- `AzureKubernetesEnvironmentResource` combining Azure provisioning + K8s compute environment
-- `AddAzureKubernetesEnvironment()` entry point (calls `AddKubernetesInfrastructureCore` internally)
-- `AzureKubernetesInfrastructure` eventing subscriber
-- Basic cluster Bicep generation (version, SKU, default node pool)
-- ACR auto-creation and AcrPull role assignment for kubelet identity
-- Kubeconfig retrieval pipeline step
-- `AsExisting()` support for bring-your-own AKS
-- Helm config delegation (`WithHelm()`, `WithDashboard()`)
+### ✅ Implemented
 
-### Phase 2: Workload Identity
-- `AksWorkloadIdentityAnnotation`
-- `WithAzureWorkloadIdentity()` extension on compute resources
-- Federated credential Bicep generation (using AKS OIDC issuer URL output)
-- ServiceAccount YAML generation in Helm chart
-- Pod label injection (`azure.workload.identity/use`)
-- Integration with existing `AppIdentityAnnotation` / `IAppIdentityResource` pattern
+#### Phase 1: Unified AKS Environment (Foundation)
+- ✅ `Aspire.Hosting.Azure.Kubernetes` package created
+- ✅ `AzureKubernetesEnvironmentResource` — extends `AzureProvisioningResource`, implements `IAzureComputeEnvironmentResource`, `IAzureNspAssociationTarget`
+- ✅ `AddAzureKubernetesEnvironment()` entry point — calls `AddKubernetesEnvironment()` internally
+- ✅ `AzureKubernetesInfrastructure` eventing subscriber
+- ✅ Hand-crafted Bicep generation (not Azure.Provisioning SDK — `Azure.Provisioning.ContainerService` not in internal feeds)
+- ✅ ACR auto-creation + AcrPull role assignment in Bicep
+- ✅ Kubeconfig retrieval via `az aks get-credentials` to isolated temp file
+- ✅ Multi-environment support (scoped Helm chart names, per-env kubeconfig)
+- ✅ `WithVersion()`, `WithSkuTier()`, `WithContainerRegistry()`
+- ✅ `AsPrivateCluster()` — sets `apiServerAccessProfile.enablePrivateCluster`
+- ✅ Push step dependency wiring for container image builds
 
-### Phase 3: Networking
-- `WithDelegatedSubnet()` — uses existing generic extension from `Aspire.Hosting.Azure.Network` (since resource implements `IAzureDelegatedSubnetResource`)
-- Azure CNI network profile configuration
-- `AsPrivateCluster()` for private API server
-- Private DNS Zone link verification for backing service private endpoints
+#### Phase 2: Workload Identity
+- ✅ Honors `AppIdentityAnnotation` from `Aspire.Hosting.Azure` (same mechanism as ACA/AppService)
+- ✅ Auto-identity via `AzureResourcePreparer` when resources reference Azure services
+- ✅ Override with `WithAzureUserAssignedIdentity(identity)` (standard API)
+- ✅ ServiceAccount YAML generation with `azure.workload.identity/client-id` annotation
+- ✅ Pod label `azure.workload.identity/use: "true"` on pod template
+- ✅ `serviceAccountName` set on pod spec
+- ✅ Federated identity credential Bicep generation per workload
+- ✅ Identity `clientId` wired as deferred Helm value (resolved at deploy time)
+- ✅ `ServiceAccountV1` resource added to `Aspire.Hosting.Kubernetes`
+- ❌ ~~`AksWorkloadIdentityAnnotation`~~ — **Removed** (redundant with `AppIdentityAnnotation`)
+- ❌ ~~`WithAzureWorkloadIdentity()`~~ — **Removed** (standard `WithAzureUserAssignedIdentity` works)
 
-### Phase 4: Monitoring
-- `WithAzureLogAnalyticsWorkspace()` — matches Container Apps naming convention
-- `WithContainerInsights()` — AKS-specific addon with optional Log Analytics auto-create
-- Container Insights addon profile
-- Azure Monitor metrics profile
-- Optional Application Insights OTLP integration
-- Data collection rule configuration
+#### Phase 3: Networking
+- ✅ `WithSubnet()` (NOT `WithDelegatedSubnet` — AKS doesn't support subnet delegation)
+- ✅ Per-node-pool subnet support via `WithSubnet()` on `AksNodePoolResource`
+- ✅ Azure CNI network profile auto-configured when subnet is set
+- ✅ `AsPrivateCluster()` for private API server
+- ❌ AKS does NOT implement `IAzureDelegatedSubnetResource` (intentionally — AKS uses plain subnets)
 
-### Phase 5: Network Perimeter
-- NSP association support (`IAzureNspAssociationTarget` on AKS)
-- Private DNS Zone auto-linking when backing services have private endpoints in same VNet
-- Network policy integration
+#### Node Pools (not in original spec)
+- ✅ Base `KubernetesNodePoolResource` in `Aspire.Hosting.Kubernetes` (cloud-agnostic)
+- ✅ `AksNodePoolResource` extends base with VM size, scaling, mode config
+- ✅ `AddNodePool()` on both K8s and AKS environments
+- ✅ `WithNodePool()` schedules workloads via `nodeSelector` on pod spec
+- ✅ `AksNodeVmSizes` constants class (GeneralPurpose, ComputeOptimized, MemoryOptimized, GpuAccelerated, StorageOptimized, Burstable, Arm)
+- ✅ `GenVmSizes.cs` tool + `update-azure-vm-sizes.yml` monthly workflow
+- ✅ Default "workload" user pool auto-created if none configured
+
+#### IValueProvider Resolution (not in original spec)
+- ✅ Azure resource connection strings and endpoints resolved at deploy time
+- ✅ Composite expressions (e.g., `Endpoint={storage.outputs.blobEndpoint};ContainerName=photos`) handled
+- ✅ Phase 4 in HelmDeploymentEngine for generic `IValueProvider` resolution
+
+### 🔲 Not Yet Implemented
+
+#### Monitoring (Phase 4) — Bicep not emitted
+- 🔲 `WithContainerInsights()` and `WithAzureLogAnalyticsWorkspace()` **exist as APIs** but the Bicep generation does NOT emit:
+  - Container Insights addon profile (`addonProfiles.omsagent`)
+  - Azure Monitor metrics profile (managed Prometheus)
+  - Data collection rules
+  - Application Insights OTLP integration
+
+#### Helm/Dashboard delegation
+- 🔲 `WithHelm()` and `WithDashboard()` are not exposed on `AzureKubernetesEnvironmentResource`
+  - They work on the inner `KubernetesEnvironmentResource` but users can't access them from the AKS builder
+
+#### AsExisting() support
+- 🔲 `AsExisting()` for referencing pre-provisioned AKS clusters
+
+#### Private DNS Zone auto-linking
+- 🔲 When backing services have private endpoints in same VNet as AKS, Private DNS Zones should be auto-linked
+
+#### IAzureContainerRegistry interface
+- 🔲 AKS resource does not implement `IAzureContainerRegistry` (ACR outputs not exposed via standard interface)
+
+#### Ingress controller
+- 🔲 Application Gateway Ingress Controller (AGIC) or other ingress support
+
+#### Managed Prometheus/Grafana
+- 🔲 Azure Monitor workspace for managed Prometheus
+- 🔲 Azure Managed Grafana provisioning
+
+## Key Design Changes from Original Spec
+
+1. **Bicep generation**: Uses hand-crafted `StringBuilder` via `GetBicepTemplateString()` override, NOT `Azure.Provisioning.ContainerService` SDK (package not available in internal NuGet feeds)
+2. **Workload identity**: Uses shared `AppIdentityAnnotation` from `Aspire.Hosting.Azure`, not AKS-specific annotation. Same mechanism as ACA/AppService.
+3. **Subnet integration**: `WithSubnet()` not `WithDelegatedSubnet()` — AKS uses plain subnets, not delegated ones
+4. **Node pools**: First-class resources with `AddNodePool()` returning `IResourceBuilder<AksNodePoolResource>`, `WithNodePool()` for scheduling, per-pool subnets, `AksNodeVmSizes` constants
+5. **Multi-environment**: Full support for multiple AKS environments with scoped chart names and isolated kubeconfigs
 
 ## Dependencies / Prerequisites
 
-- `Azure.Provisioning.Kubernetes` NuGet package (v1.0.0-beta.3 — need to add to `Directory.Packages.props`)
-- `Azure.Provisioning.ContainerRegistry` (already used, v1.1.0)
-- `Azure.Provisioning.Network` (already used, v1.1.0-beta.2)
-- `Azure.Provisioning.OperationalInsights` (already used, v1.1.0)
-- `Azure.Provisioning.Roles` (already used, for identity/RBAC)
-- `Aspire.Hosting.Kubernetes` (the generic K8s package, already in repo)
+- ~~`Azure.Provisioning.Kubernetes`~~ — Not used (hand-crafted Bicep instead)
+- `Azure.Provisioning.ContainerRegistry` (for ACR resource type reference)
+- `Azure.Provisioning.OperationalInsights` (for Log Analytics workspace type)
+- `Aspire.Hosting.Kubernetes` (the generic K8s package)
+- `Aspire.Hosting.Azure` (for `AppIdentityAnnotation`, `AzureProvisioningResource`, etc.)
+- `Aspire.Hosting.Azure.Network` (for subnet, VNet, NSP types)
+- `Aspire.Hosting.Azure.ContainerRegistry` (for ACR auto-creation)
 
-## Testing Strategy
+## Testing
 
-- **Unit tests**: Bicep template generation verification (snapshot tests like existing K8s tests)
-- **Integration tests**: Verify Helm chart output includes ServiceAccount, labels, etc.
-- **E2E tests**: Provision AKS + deploy workloads (expensive, CI-gated)
-- **Existing test patterns**: Follow `Aspire.Hosting.Kubernetes.Tests` structure
+- 31 AKS unit tests passing (extensions + infrastructure)
+- 88 K8s base tests passing
+- Manual E2E validation against live Azure clusters
 
-## Todos
-
-1. **aks-package-setup**: Create `Aspire.Hosting.Azure.Kubernetes` project, csproj, dependencies (including `Azure.Provisioning.Kubernetes`), add to `Directory.Packages.props`
-2. **aks-environment-resource**: Implement `AzureKubernetesEnvironmentResource` with Bicep provisioning via `Azure.Provisioning.Kubernetes.ManagedCluster`, ACR auto-creation, and inner `KubernetesEnvironmentResource`
-3. **aks-extensions**: Implement `AddAzureKubernetesEnvironment()` entry point and configuration extensions (`WithVersion`, `WithSkuTier`, `WithNodePool`, `WithHelm`, `WithDashboard`, `WithContainerRegistry`)
-4. **aks-infrastructure**: Implement `AzureKubernetesInfrastructure` eventing subscriber — process compute resources, add `DeploymentTargetAnnotation`, handle kubeconfig retrieval pipeline step
-5. **workload-identity-annotation**: `AksWorkloadIdentityAnnotation` and `WithAzureWorkloadIdentity<T>()` extension method on compute resources. Auto-create identity if not provided.
-6. **workload-identity-bicep**: Generate `FederatedIdentityCredential` Bicep resource linking managed identity to K8s service account via OIDC issuer URL output
-7. **workload-identity-helm**: Generate ServiceAccount YAML with `azure.workload.identity/client-id` annotation. Add `azure.workload.identity/use` label to pod spec.
-8. **vnet-integration**: `WithDelegatedSubnet()` — leverages existing `IAzureDelegatedSubnetResource` pattern. Azure CNI network profile. Subnet delegation for `Microsoft.ContainerService/managedClusters`.
-9. **private-cluster**: `AsPrivateCluster()` extension. Sets `apiServerAccessProfile.enablePrivateCluster`. Requires delegated subnet.
-10. **monitoring**: `WithAzureLogAnalyticsWorkspace()` (matches Container Apps naming) + `WithContainerInsights()` (AKS addon). Log Analytics auto-create, Azure Monitor metrics, data collection rules.
-11. **nsp-support**: Implement `IAzureNspAssociationTarget` on AKS resource. Auto-link Private DNS Zones when backing services have private endpoints in same VNet.
-12. **existing-cluster**: `AsExisting()` support for referencing pre-provisioned AKS clusters via `ExistingAzureResourceAnnotation` pattern.
-13. **tests**: Unit tests (Bicep snapshot verification), integration tests (Helm chart output), E2E tests (provision + deploy).
