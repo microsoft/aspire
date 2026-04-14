@@ -432,7 +432,7 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["sqlServer"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.database.windows.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.database.windows.net"];
 
     void IAzurePrivateEndpointTargetNotification.OnPrivateEndpointCreated(IResourceBuilder<AzurePrivateEndpointResource> privateEndpoint)
     {
@@ -515,7 +515,7 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
 
         public IResource Parent => storage;
 
-        public string GetPrivateDnsZoneName() => "privatelink.file.core.windows.net";
+        public IEnumerable<string> GetPrivateDnsZoneNames() => ["privatelink.file.core.windows.net"];
 
         public IEnumerable<string> GetPrivateLinkGroupIds()
         {

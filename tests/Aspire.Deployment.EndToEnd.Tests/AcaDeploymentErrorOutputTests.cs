@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -131,7 +132,7 @@ builder.Build().Run();
             output.WriteLine("Step 7: Starting deployment with invalid location (expecting failure)...");
             await auto.TypeAsync($"aspire deploy --clear-cache 2>&1 | tee {deployOutputFile}");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PIPELINE FAILED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineFailed, timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Exit terminal
@@ -160,7 +161,7 @@ builder.Build().Run();
             Assert.DoesNotContain("Status: 404", deployOutput);
 
             // Verify the pipeline DID fail (sanity check)
-            Assert.Contains("PIPELINE FAILED", deployOutput);
+            Assert.Contains(ConsoleActivityLoggerStrings.PipelineFailed, deployOutput);
 
             var duration = DateTime.UtcNow - startTime;
             output.WriteLine($"✅ Test completed in {duration} - error output is clean");

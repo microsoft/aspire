@@ -19,6 +19,9 @@ on:
         description: "PR number to analyze"
         required: true
         type: string
+  # The compiled lock file intentionally carries required safe-output checkout
+  # path overrides that gh-aw does not currently preserve from source.
+  stale-check: false
 
 if: >-
   (github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch')
@@ -76,10 +79,10 @@ safe-outputs:
     fallback-as-issue: true
   add-comment:
     target-repo: "microsoft/aspire"
-    # Note: The compiler adds 'discussions: write' permission which is not a valid
-    # GitHub Apps API scope and breaks token minting. After any recompile, manually
-    # remove 'discussions: write' and 'permission-discussions: write' from the lock
-    # file. Tracked: https://github.com/github/gh-aw/issues/25467
+    # This workflow only comments on pull requests, so opt out of discussion
+    # support to avoid requesting the invalid GitHub App discussions scope.
+    # Tracked: https://github.com/github/gh-aw/issues/25467
+    discussions: false
     hide-older-comments: true
 
 timeout-minutes: 20

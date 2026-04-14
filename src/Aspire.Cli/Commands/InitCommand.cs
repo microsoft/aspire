@@ -18,6 +18,7 @@ using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -291,7 +292,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
                 foreach (var project in initContext.ExecutableProjectsToAddToAppHost)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.CheckBoxWithCheck, project.ProjectFile.Name);
+                    InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, project.ProjectFile.Name);
                 }
 
                 var addServiceDefaultsMessage = """
@@ -924,7 +925,7 @@ internal sealed class InitContext
 
                     if (SemVersion.TryParse(versionString, SemVersionStyles.Strict, out var version))
                     {
-                        if (highestVersion is null || version.IsNewerThan(highestVersion))
+                        if (highestVersion is null || SemVersion.ComparePrecedence(version, highestVersion) > 0)
                         {
                             highestVersion = version;
                             highestTfm = tfm;

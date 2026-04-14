@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -148,6 +148,33 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void WrapMarkdownForConsole_PreservesMarkdownStructure()
+    {
+        var markdown = """
+            # Certificate configuration
+
+            > Learn how to configure HTTPS endpoints with the [Aspire CLI](https://aspire.dev/get-started/install-cli/) and `aspire run`.
+
+            ### Using the Aspire CLI (recommended)
+
+            * First item with [a link](https://example.com/docs)
+            * Second item
+
+            ```bash
+            aspire docs get certificate-configuration
+            ```
+            """;
+
+        var wrapped = Aspire.Cli.Commands.DocsGetCommand.WrapMarkdownForConsole(markdown, width: 60);
+
+        Assert.Contains("# Certificate configuration", wrapped);
+        Assert.Contains("\n\n### Using the Aspire CLI (recommended)\n\n", wrapped);
+        Assert.Contains("[Aspire CLI](https://aspire.dev/get-started/install-cli/)", wrapped);
+        Assert.Contains("`aspire run`", wrapped);
+        Assert.Contains("```bash\naspire docs get certificate-configuration\n```", wrapped.Replace("\r\n", "\n"));
     }
 
     [Fact]

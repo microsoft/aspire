@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 
 // Core types (from Aspire.Hosting namespace)
 [assembly: AspireExport(typeof(IDistributedApplicationBuilder))]
+[assembly: AspireExport(typeof(IDistributedApplicationPipeline))]
 [assembly: AspireExport(typeof(DistributedApplication))]
 
 // Note: DistributedApplicationExecutionContext has [AspireExport(ExposeProperties = true)] on the type itself
@@ -43,6 +44,9 @@ using Microsoft.Extensions.Logging;
 [assembly: AspireExport(typeof(ExecutableResource))]
 [assembly: AspireExport(typeof(ProjectResource))]
 [assembly: AspireExport(typeof(ParameterResource))]
+[assembly: AspireExport(typeof(ContainerMountAnnotation), ExposeProperties = true)]
+[assembly: AspireExport(typeof(ContainerImageReference), ExposeProperties = true)]
+[assembly: AspireExport(typeof(ContainerPortReference), ExposeProperties = true)]
 
 // Service types
 [assembly: AspireExport(typeof(IServiceProvider))]

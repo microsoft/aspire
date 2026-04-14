@@ -12,6 +12,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands.Sdk;
@@ -126,7 +127,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         return await InteractionService.ShowStatusAsync(
             "Scanning capabilities...",
             async () => await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken),
-            emoji: KnownEmojis.MagnifyingGlassTiltedRight);
+            emoji: KnownEmojis.MagnifyingGlassTiltedLeft);
     }
 
     private async Task<int> DumpCapabilitiesAsync(

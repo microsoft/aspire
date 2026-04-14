@@ -16,6 +16,12 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      # Install gh aw to enable GitHub Copilot Agent integration
+      - name: Install gh-aw extension
+        uses: github/gh-aw-actions/setup-cli@03e31e064a68e8d5ad890c92f303cfb5a3536006 # v0.67.2
+        with:
+          version: v0.67.2
+
       - name: Build solution
         # a full build is too slow; also do not fail on errors, continue so that
         # copilot can attempt to recover

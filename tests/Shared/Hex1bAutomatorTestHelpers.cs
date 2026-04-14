@@ -116,6 +116,7 @@ internal static class Hex1bAutomatorTestHelpers
                         }
 
                         firstOutputMatched = firstOutputLine.Contains(desiredOutput, StringComparison.Ordinal);
+                        sawPrompt = IsPromptVisible(snapshot, expectedPromptSequence);
                         return true;
                     }
 
@@ -135,18 +136,13 @@ internal static class Hex1bAutomatorTestHelpers
 
             if (!sawPrompt)
             {
-                remaining = effectiveTimeout - stopwatch.Elapsed;
-                if (remaining <= TimeSpan.Zero)
-                {
-                    break;
-                }
-
+                var promptGrace = TimeSpan.FromSeconds(1);
                 try
                 {
-                    await auto.WaitForAnyPromptAsync(counter, remaining);
+                    await auto.WaitForAnyPromptAsync(counter, promptGrace);
                     sawPrompt = true;
                 }
-                catch (TimeoutException) when (stopwatch.Elapsed < effectiveTimeout)
+                catch (TimeoutException) when (stopwatch.Elapsed < effectiveTimeout + promptGrace)
                 {
                     continue;
                 }
@@ -158,7 +154,19 @@ internal static class Hex1bAutomatorTestHelpers
 
             if (firstOutputMatched)
             {
-                return;
+                return; // success
+            }
+
+            remaining = effectiveTimeout - stopwatch.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            var delayBeforeRetry = remaining < effectiveRetryInterval ? remaining : effectiveRetryInterval;
+            if (delayBeforeRetry > TimeSpan.FromMilliseconds(1))
+            {
+                await auto.WaitAsync(delayBeforeRetry);
             }
         }
 

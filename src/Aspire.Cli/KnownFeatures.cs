@@ -29,6 +29,7 @@ internal static class KnownFeatures
     public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
     public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
     public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
+    public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -80,7 +81,12 @@ internal static class KnownFeatures
         [ExperimentalPolyglotPython] = new(
             ExperimentalPolyglotPython,
             "Enable or disable experimental Python language support for polyglot Aspire applications",
-            DefaultValue: false)
+            DefaultValue: false),
+
+        [NuGetSignatureVerificationEnabled] = new(
+            NuGetSignatureVerificationEnabled,
+            "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+            DefaultValue: true)
     };
 
     /// <summary>

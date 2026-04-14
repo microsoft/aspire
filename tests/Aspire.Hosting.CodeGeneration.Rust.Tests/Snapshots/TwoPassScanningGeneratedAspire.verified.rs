@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -1199,6 +1199,55 @@ impl CSharpAppResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Updates a named endpoint via callback
+    pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTP endpoint via callback
+    pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -1634,6 +1683,17 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting/excludeFromMcp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets image push options via callback
+    pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withImagePushOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
     /// Sets the remote image name for publishing
@@ -2825,6 +2885,232 @@ impl ConnectionStringResource {
     }
 }
 
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions
+pub struct ContainerImagePushOptions {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ContainerImagePushOptions {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ContainerImagePushOptions {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the RemoteImageName property
+    pub fn remote_image_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the RemoteImageName property
+    pub fn set_remote_image_name(&self, value: &str) -> Result<ContainerImagePushOptions, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerImagePushOptions::new(handle, self.client.clone()))
+    }
+
+    /// Gets the RemoteImageTag property
+    pub fn remote_image_tag(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the RemoteImageTag property
+    pub fn set_remote_image_tag(&self, value: &str) -> Result<ContainerImagePushOptions, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerImagePushOptions::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext
+pub struct ContainerImagePushOptionsCallbackContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ContainerImagePushOptionsCallbackContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ContainerImagePushOptionsCallbackContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the Resource property
+    pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.resource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets the Resource property
+    pub fn set_resource(&self, value: &IResource) -> Result<ContainerImagePushOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setResource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerImagePushOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the CancellationToken property
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+
+    /// Sets the CancellationToken property
+    pub fn set_cancellation_token(&self, value: Option<&CancellationToken>) -> Result<ContainerImagePushOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        if let Some(token) = value {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("value".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setCancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerImagePushOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Options property
+    pub fn options(&self) -> Result<ContainerImagePushOptions, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.options", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerImagePushOptions::new(handle, self.client.clone()))
+    }
+
+    /// Sets the Options property
+    pub fn set_options(&self, value: &ContainerImagePushOptions) -> Result<ContainerImagePushOptionsCallbackContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerImagePushOptionsCallbackContext::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference
+pub struct ContainerImageReference {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ContainerImageReference {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ContainerImageReference {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation
+pub struct ContainerMountAnnotation {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ContainerMountAnnotation {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ContainerMountAnnotation {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference
+pub struct ContainerPortReference {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ContainerPortReference {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ContainerPortReference {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+}
+
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource
 pub struct ContainerRegistryResource {
     handle: Handle,
@@ -3591,6 +3877,21 @@ impl ContainerResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource to use a programmatically generated Dockerfile
+    pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBuilder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the base image for a Dockerfile build
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3817,6 +4118,55 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEndpoint", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Updates a named endpoint via callback
+    pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTP endpoint via callback
+    pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a network endpoint
@@ -4243,6 +4593,17 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/excludeFromMcp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets image push options via callback
+    pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withImagePushOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
     /// Sets the remote image name for publishing
@@ -4891,6 +5252,316 @@ impl DistributedApplicationResourceEventSubscription {
     }
 }
 
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder
+pub struct DockerfileBuilder {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for DockerfileBuilder {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl DockerfileBuilder {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Adds a global ARG statement to the Dockerfile
+    pub fn arg(&self, name: &str, default_value: Option<&str>) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        if let Some(ref v) = default_value {
+            args.insert("defaultValue".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileBuilderArg", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Adds a FROM statement to start a Dockerfile stage
+    pub fn from(&self, image: &str, stage_name: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("image".to_string(), serde_json::to_value(&image).unwrap_or(Value::Null));
+        if let Some(ref v) = stage_name {
+            args.insert("stageName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileBuilderFrom", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds Dockerfile stages for published container files
+    pub fn add_container_files_stages(&self, resource: &IResource, logger: Option<&ILogger>) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        if let Some(ref v) = logger {
+            args.insert("logger".to_string(), v.handle().to_json());
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileBuilderAddContainerFilesStages", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileBuilder::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext
+pub struct DockerfileBuilderCallbackContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for DockerfileBuilderCallbackContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl DockerfileBuilderCallbackContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the Resource property
+    pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Builder property
+    pub fn builder(&self) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Services property
+    pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IServiceProvider::new(handle, self.client.clone()))
+    }
+
+    /// Gets the CancellationToken property
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage
+pub struct DockerfileStage {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for DockerfileStage {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl DockerfileStage {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Adds an ARG statement to a Dockerfile stage
+    pub fn arg(&self, name: &str, default_value: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        if let Some(ref v) = default_value {
+            args.insert("defaultValue".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageArg", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a WORKDIR statement to a Dockerfile stage
+    pub fn work_dir(&self, path: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("path".to_string(), serde_json::to_value(&path).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/workDir", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a RUN statement to a Dockerfile stage
+    pub fn run(&self, command: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageRun", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a COPY statement to a Dockerfile stage
+    pub fn copy(&self, source: &str, destination: &str, chown: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("source".to_string(), serde_json::to_value(&source).unwrap_or(Value::Null));
+        args.insert("destination".to_string(), serde_json::to_value(&destination).unwrap_or(Value::Null));
+        if let Some(ref v) = chown {
+            args.insert("chown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageCopy", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a COPY --from statement to a Dockerfile stage
+    pub fn copy_from(&self, from: &str, source: &str, destination: &str, chown: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("from".to_string(), serde_json::to_value(&from).unwrap_or(Value::Null));
+        args.insert("source".to_string(), serde_json::to_value(&source).unwrap_or(Value::Null));
+        args.insert("destination".to_string(), serde_json::to_value(&destination).unwrap_or(Value::Null));
+        if let Some(ref v) = chown {
+            args.insert("chown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageCopyFrom", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds an ENV statement to a Dockerfile stage
+    pub fn env(&self, name: &str, value: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/env", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds an EXPOSE statement to a Dockerfile stage
+    pub fn expose(&self, port: f64) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("port".to_string(), serde_json::to_value(&port).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/expose", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a CMD statement to a Dockerfile stage
+    pub fn cmd(&self, command: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/cmd", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds an ENTRYPOINT statement to a Dockerfile stage
+    pub fn entrypoint(&self, command: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/entrypoint", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a RUN statement with mounts to a Dockerfile stage
+    pub fn run_with_mounts(&self, command: &str, mounts: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        args.insert("mounts".to_string(), serde_json::to_value(&mounts).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/runWithMounts", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a USER statement to a Dockerfile stage
+    pub fn user(&self, user: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("user".to_string(), serde_json::to_value(&user).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/user", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds an empty line to a Dockerfile stage
+    pub fn empty_line(&self) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/emptyLine", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds a comment to a Dockerfile stage
+    pub fn comment(&self, comment: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("comment".to_string(), serde_json::to_value(&comment).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/comment", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+
+    /// Adds COPY --from statements for published container files
+    pub fn add_container_files(&self, resource: &IResource, root_destination_path: &str, logger: Option<&ILogger>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("stage".to_string(), self.handle.to_json());
+        args.insert("resource".to_string(), resource.handle().to_json());
+        args.insert("rootDestinationPath".to_string(), serde_json::to_value(&root_destination_path).unwrap_or(Value::Null));
+        if let Some(ref v) = logger {
+            args.insert("logger".to_string(), v.handle().to_json());
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/dockerfileStageAddContainerFiles", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(DockerfileStage::new(handle, self.client.clone()))
+    }
+}
+
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 pub struct DotnetToolResource {
     handle: Handle,
@@ -5230,6 +5901,55 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEndpoint", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Updates a named endpoint via callback
+    pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTP endpoint via callback
+    pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a network endpoint
@@ -5656,6 +6376,17 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/excludeFromMcp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets image push options via callback
+    pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withImagePushOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
     /// Sets the remote image name for publishing
@@ -6272,6 +7003,220 @@ impl EndpointReferenceExpression {
     }
 }
 
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext
+pub struct EndpointUpdateContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for EndpointUpdateContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl EndpointUpdateContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the Name property
+    pub fn name(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.name", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the Protocol property
+    pub fn protocol(&self) -> Result<ProtocolType, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.protocol", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the Protocol property
+    pub fn set_protocol(&self, value: ProtocolType) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setProtocol", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Port property
+    pub fn port(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the Port property
+    pub fn set_port(&self, value: f64) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the TargetPort property
+    pub fn target_port(&self) -> Result<f64, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the TargetPort property
+    pub fn set_target_port(&self, value: f64) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the UriScheme property
+    pub fn uri_scheme(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.uriScheme", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the UriScheme property
+    pub fn set_uri_scheme(&self, value: &str) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setUriScheme", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the TargetHost property
+    pub fn target_host(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetHost", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the TargetHost property
+    pub fn set_target_host(&self, value: &str) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetHost", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Transport property
+    pub fn transport(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.transport", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the Transport property
+    pub fn set_transport(&self, value: &str) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTransport", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the IsExternal property
+    pub fn is_external(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isExternal", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the IsExternal property
+    pub fn set_is_external(&self, value: bool) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsExternal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the IsProxied property
+    pub fn is_proxied(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isProxied", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the IsProxied property
+    pub fn set_is_proxied(&self, value: bool) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsProxied", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ExcludeReferenceEndpoint property
+    pub fn exclude_reference_endpoint(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.excludeReferenceEndpoint", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the ExcludeReferenceEndpoint property
+    pub fn set_exclude_reference_endpoint(&self, value: bool) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setExcludeReferenceEndpoint", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the TlsEnabled property
+    pub fn tls_enabled(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.tlsEnabled", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the TlsEnabled property
+    pub fn set_tls_enabled(&self, value: bool) -> Result<EndpointUpdateContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTlsEnabled", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(EndpointUpdateContext::new(handle, self.client.clone()))
+    }
+}
+
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext
 pub struct EnvironmentCallbackContext {
     handle: Handle,
@@ -6631,6 +7576,55 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEndpoint", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Updates a named endpoint via callback
+    pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTP endpoint via callback
+    pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a network endpoint
@@ -7057,6 +8051,17 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/excludeFromMcp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets image push options via callback
+    pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withImagePushOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
     /// Sets the remote image name for publishing
@@ -8373,6 +9378,22 @@ impl IDistributedApplicationBuilder {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a container resource built from a programmatically generated Dockerfile
+    pub fn add_dockerfile_builder(&self, name: &str, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/addDockerfileBuilder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a .NET tool resource
     pub fn add_dotnet_tool(&self, name: &str, package_id: &str) -> Result<DotnetToolResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8463,6 +9484,15 @@ impl IDistributedApplicationBuilder {
         let result = self.client.invoke_capability("Aspire.Hosting/IDistributedApplicationBuilder.executionContext", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Pipeline property
+    pub fn pipeline(&self) -> Result<IDistributedApplicationPipeline, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/IDistributedApplicationBuilder.pipeline", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IDistributedApplicationPipeline::new(handle, self.client.clone()))
     }
 
     /// Gets the UserSecretsManager property
@@ -8729,6 +9759,59 @@ impl IDistributedApplicationEventing {
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("subscription".to_string(), subscription.handle().to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.Eventing/IDistributedApplicationEventing.unsubscribe", args)?;
+        Ok(())
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline
+pub struct IDistributedApplicationPipeline {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for IDistributedApplicationPipeline {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl IDistributedApplicationPipeline {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Adds a pipeline step to the application
+    pub fn add_step(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("pipeline".to_string(), self.handle.to_json());
+        args.insert("stepName".to_string(), serde_json::to_value(&step_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = depends_on {
+            args.insert("dependsOn".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = required_by {
+            args.insert("requiredBy".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/addStep", args)?;
+        Ok(())
+    }
+
+    /// Configures the application pipeline via a callback
+    pub fn configure(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("pipeline".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/configure", args)?;
         Ok(())
     }
 }
@@ -11019,6 +12102,55 @@ impl ProjectResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Updates a named endpoint via callback
+    pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTP endpoint via callback
+    pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11454,6 +12586,17 @@ impl ProjectResource {
         let result = self.client.invoke_capability("Aspire.Hosting/excludeFromMcp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets image push options via callback
+    pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withImagePushOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
     /// Sets the remote image name for publishing
@@ -12683,6 +13826,21 @@ impl TestDatabaseResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource to use a programmatically generated Dockerfile
+    pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBuilder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the base image for a Dockerfile build
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -12909,6 +14067,55 @@ impl TestDatabaseResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEndpoint", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Updates a named endpoint via callback
+    pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTP endpoint via callback
+    pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a network endpoint
@@ -13335,6 +14542,17 @@ impl TestDatabaseResource {
         let result = self.client.invoke_capability("Aspire.Hosting/excludeFromMcp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets image push options via callback
+    pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withImagePushOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
     /// Sets the remote image name for publishing
@@ -14042,6 +15260,21 @@ impl TestRedisResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource to use a programmatically generated Dockerfile
+    pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBuilder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the base image for a Dockerfile build
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -14299,6 +15532,55 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEndpoint", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Updates a named endpoint via callback
+    pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTP endpoint via callback
+    pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a network endpoint
@@ -14725,6 +16007,17 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/excludeFromMcp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets image push options via callback
+    pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withImagePushOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
     /// Sets the remote image name for publishing
@@ -15574,6 +16867,21 @@ impl TestVaultResource {
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource to use a programmatically generated Dockerfile
+    pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("contextPath".to_string(), serde_json::to_value(&context_path).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = stage {
+            args.insert("stage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBuilder", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ContainerResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the base image for a Dockerfile build
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15800,6 +17108,55 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withReferenceEndpoint", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Updates a named endpoint via callback
+    pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("endpointName".to_string(), serde_json::to_value(&endpoint_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTP endpoint via callback
+    pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Updates an HTTPS endpoint via callback
+    pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        if let Some(ref v) = name {
+            args.insert("name".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = create_if_not_exists {
+            args.insert("createIfNotExists".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpsEndpointCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a network endpoint
@@ -16226,6 +17583,17 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/excludeFromMcp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Sets image push options via callback
+    pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withImagePushOptions", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
     /// Sets the remote image name for publishing

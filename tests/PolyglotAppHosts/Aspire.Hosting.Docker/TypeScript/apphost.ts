@@ -4,6 +4,7 @@ const builder = await createBuilder();
 
 const compose = await builder.addDockerComposeEnvironment("compose");
 const api = await builder.addContainer("api", "nginx:alpine");
+await api.withBindMount("/host/path/data", "/container/data");
 
 await compose.withProperties(async (environment) => {
     await environment.defaultNetworkName.set("validation-network");
@@ -13,6 +14,14 @@ await compose.withProperties(async (environment) => {
     const _dashboardEnabled: boolean = await environment.dashboardEnabled.get();
 
     const _environmentName: string = await environment.name.get();
+});
+
+await compose.configureEnvFile(async (envVars) => {
+    const bindMount = await envVars.get("API_BINDMOUNT_0");
+    await bindMount.description.set("Customized bind mount source");
+    const _bindMountDescription: string | null = await bindMount.description.get();
+    await bindMount.defaultValue.set("./data");
+    const _bindMountDefaultValue: string | null = await bindMount.defaultValue.get();
 });
 
 await compose.withDashboard({ enabled: false });

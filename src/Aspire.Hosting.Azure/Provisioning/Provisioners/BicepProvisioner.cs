@@ -355,24 +355,13 @@ internal sealed class BicepProvisioner(
         resource.Parameters[AzureBicepResource.KnownParameters.Location] = context.Location.Name;
     }
 
-    private const string PortalDeploymentOverviewUrl = "https://portal.azure.com/#view/HubsExtension/DeploymentDetailsBlade/~/overview/id";
-
     private static string GetDeploymentUrl(ProvisioningContext provisioningContext, IResourceGroupResource resourceGroup, string deploymentName)
     {
-        var prefix = PortalDeploymentOverviewUrl;
-
         var subId = provisioningContext.Subscription.Id.ToString();
         var rgName = resourceGroup.Name;
-        var subAndRg = $"{subId}/resourceGroups/{rgName}";
-
-        var deployId = deploymentName;
-
-        var path = $"{subAndRg}/providers/Microsoft.Resources/deployments/{deployId}";
-        var encodedPath = Uri.EscapeDataString(path);
-
-        return $"{prefix}/{encodedPath}";
+        return AzurePortalUrls.GetDeploymentUrl(subId, rgName, deploymentName);
     }
 
     public static string GetDeploymentUrl(ResourceIdentifier deploymentId) =>
-        $"{PortalDeploymentOverviewUrl}/{Uri.EscapeDataString(deploymentId.ToString())}";
+        AzurePortalUrls.GetDeploymentUrl(deploymentId);
 }

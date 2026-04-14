@@ -1,15 +1,34 @@
----
-apiVersion: "keda.sh/v1alpha1"
-kind: "ScaledObject"
+﻿---
+apiVersion: "argoproj.io/v1alpha1"
+kind: "Rollout"
 metadata:
-  name: "myapp-scaler"
+  name: "myapp-rollout"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
-  scaleTargetRef:
-    name: "myapp-rollout"
-    kind: "Rollout"
-  minReplicaCount: 1
-  maxReplicaCount: 3
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "aspire-hosting-tests"
+        app.kubernetes.io/component: "myapp"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - image: "mcr.microsoft.com/dotnet/aspnet:8.0"
+          name: "myapp"
+          envFrom:
+            - configMapRef:
+                name: "myapp-config"
+          ports:
+            - name: "http"
+              protocol: "TCP"
+              containerPort: 8080
+          imagePullPolicy: "IfNotPresent"
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "aspire-hosting-tests"
+      app.kubernetes.io/component: "myapp"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"

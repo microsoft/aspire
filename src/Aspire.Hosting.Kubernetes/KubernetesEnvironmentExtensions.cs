@@ -5,6 +5,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Lifecycle;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Hosting;
 
@@ -16,6 +17,7 @@ public static class KubernetesEnvironmentExtensions
     internal static IDistributedApplicationBuilder AddKubernetesInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
         builder.Services.TryAddEventingSubscriber<KubernetesInfrastructure>();
+        builder.Services.TryAddSingleton<IHelmRunner, DefaultHelmRunner>();
 
         return builder;
     }
@@ -38,7 +40,8 @@ public static class KubernetesEnvironmentExtensions
 
         var resource = new KubernetesEnvironmentResource(name)
         {
-            HelmChartName = builder.Environment.ApplicationName.ToHelmChartName()
+            HelmChartName = builder.Environment.ApplicationName.ToHelmChartName(),
+            Dashboard = builder.CreateDashboard($"{name}-dashboard")
         };
         if (builder.ExecutionContext.IsRunMode)
         {
@@ -48,7 +51,53 @@ public static class KubernetesEnvironmentExtensions
             return builder.CreateResourceBuilder(resource);
 
         }
-        return builder.AddResource(resource);
+
+        var resourceBuilder = builder.AddResource(resource);
+
+        // Default to Helm deployment engine if not already configured
+        EnsureDefaultHelmEngine(resourceBuilder);
+
+        return resourceBuilder;
+    }
+
+    /// <summary>
+    /// Configures the Kubernetes environment to deploy using Helm charts.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="configure">An optional callback to configure Helm chart settings such as namespace, release name, and chart version.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Helm is the default deployment engine. Call this method to customize Helm-specific settings.
+    /// </remarks>
+    /// <example>
+    /// Configure Helm deployment with custom settings:
+    /// <code>
+    /// builder.AddKubernetesEnvironment("k8s")
+    ///     .WithHelm(helm =>
+    ///     {
+    ///         helm.WithNamespace("my-namespace");
+    ///         helm.WithReleaseName("my-release");
+    ///         helm.WithChartVersion("1.0.0");
+    ///     });
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Configures Helm chart deployment settings", RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithHelm(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        Action<HelmChartOptions>? configure = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // Set the Helm deployment engine
+        builder.Resource.DeploymentEngineStepsFactory = HelmDeploymentEngine.CreateStepsAsync;
+
+        if (configure is not null)
+        {
+            var options = new HelmChartOptions(builder);
+            configure(options);
+        }
+
+        return builder;
     }
 
     /// <summary>
@@ -66,5 +115,54 @@ public static class KubernetesEnvironmentExtensions
         configure(builder.Resource);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Enables the Aspire dashboard for telemetry visualization in this Kubernetes environment.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="enabled">Whether to enable the dashboard. Default is true.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// When enabled, an Aspire Dashboard container is deployed alongside the application resources
+    /// in the Kubernetes cluster. All resources with OTLP telemetry support are automatically
+    /// configured to send telemetry data to the dashboard.
+    /// </remarks>
+    [AspireExport(Description = "Enables or disables the Aspire dashboard for the Kubernetes environment")]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithDashboard(this IResourceBuilder<KubernetesEnvironmentResource> builder, bool enabled = true)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.DashboardEnabled = enabled;
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the dashboard properties for this Kubernetes environment.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="configure">A method that can be used for customizing the dashboard resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// Use this overload to customize the dashboard container, for example to set a specific host port
+    /// or enable forwarded headers for ingress access.
+    /// </remarks>
+    [AspireExport("configureDashboard", MethodName = "configureDashboard", Description = "Configures the Aspire dashboard resource for the Kubernetes environment", RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithDashboard(this IResourceBuilder<KubernetesEnvironmentResource> builder, Action<IResourceBuilder<KubernetesAspireDashboardResource>> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        builder.Resource.DashboardEnabled = true;
+
+        configure(builder.Resource.Dashboard ?? throw new InvalidOperationException("Dashboard resource is not initialized"));
+
+        return builder;
+    }
+
+    private static void EnsureDefaultHelmEngine(IResourceBuilder<KubernetesEnvironmentResource> builder)
+    {
+        builder.Resource.DeploymentEngineStepsFactory ??= HelmDeploymentEngine.CreateStepsAsync;
     }
 }

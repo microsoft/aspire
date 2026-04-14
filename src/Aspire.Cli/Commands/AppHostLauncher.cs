@@ -328,7 +328,7 @@ internal sealed class AppHostLauncher(
             }
         }
 
-        interactionService.DisplayMessage(KnownEmojis.MagnifyingGlassTiltedRight, string.Format(
+        interactionService.DisplayMessage(KnownEmojis.MagnifyingGlassTiltedLeft, string.Format(
             CultureInfo.CurrentCulture,
             RunCommandStrings.CheckLogsForDetails,
             childLogFile));

@@ -1,9 +1,16 @@
-parameters:
+﻿parameters:
   ServiceA:
     port_http: 8080
     ServiceA_image: "ServiceA:latest"
 secrets: {}
 config:
+  env1_dashboard:
+    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
+    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   ServiceA:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    HTTP_PORTS: ""
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env1-dashboard-service:18889"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+    OTEL_SERVICE_NAME: "ServiceA"

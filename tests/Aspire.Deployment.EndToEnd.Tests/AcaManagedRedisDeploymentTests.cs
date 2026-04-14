@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -75,13 +76,16 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
                 .Find($"Enter the project name ({workspace.WorkspaceRoot.Name}): ");
 
             var waitingForOutputPathPrompt = new CellPatternSearcher()
-                .Find("Enter the output path:");
+                .Find("Enter the output path");
 
             var waitingForUrlsPrompt = new CellPatternSearcher()
                 .Find("Use *.dev.localhost URLs");
 
             var waitingForRedisPrompt = new CellPatternSearcher()
                 .Find("Use Redis Cache");
+
+            var waitingForAgentInitPrompt = new CellPatternSearcher()
+                .Find("configure AI agent environments");
 
             // Pattern searchers for aspire add prompts
             var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
@@ -92,10 +96,10 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
 
             // Pattern searchers for deployment outcome
             var waitingForPipelineSucceeded = new CellPatternSearcher()
-                .Find("PIPELINE SUCCEEDED");
+                .Find(ConsoleActivityLoggerStrings.PipelineSucceeded);
 
             var waitingForPipelineFailed = new CellPatternSearcher()
-                .Find("PIPELINE FAILED");
+                .Find(ConsoleActivityLoggerStrings.PipelineFailed);
 
             var counter = new SequenceCounter();
             var sequenceBuilder = new Hex1bTerminalInputSequenceBuilder();
@@ -134,7 +138,22 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
                 .Enter() // Select "No" for localhost URLs (default)
                 .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
                 .Enter() // Select "Yes" for Redis Cache (first/default option)
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+                .WaitUntil(s =>
+                {
+                    if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                    {
+                        return true;
+                    }
+                    var successSearcher = new CellPatternSearcher()
+                        .FindPattern(counter.Value.ToString())
+                        .RightText(" OK] $ ");
+                    return successSearcher.Search(s).Count > 0;
+                },
+                    TimeSpan.FromMinutes(5))
+                .Wait(TimeSpan.FromMilliseconds(500))
+                .Type("n") // Decline agent init prompt (or harmless if already at bash prompt)
+                .Enter()
+                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(1));
 
             // Step 4: Navigate to project directory
             output.WriteLine("Step 4: Navigating to project directory...");

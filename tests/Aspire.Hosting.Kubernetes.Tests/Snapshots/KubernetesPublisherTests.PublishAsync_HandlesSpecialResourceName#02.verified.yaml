@@ -1,33 +1,41 @@
----
+﻿---
 apiVersion: "apps/v1"
 kind: "Deployment"
 metadata:
-  name: "special-app-deployment"
+  name: "env-dashboard-deployment"
   labels:
     app.kubernetes.io/name: "my-chart"
-    app.kubernetes.io/component: "SpeciaL-ApP"
+    app.kubernetes.io/component: "env-dashboard"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
   template:
     metadata:
       labels:
         app.kubernetes.io/name: "my-chart"
-        app.kubernetes.io/component: "SpeciaL-ApP"
+        app.kubernetes.io/component: "env-dashboard"
         app.kubernetes.io/instance: "{{ .Release.Name }}"
     spec:
       containers:
-        - image: "{{ .Values.parameters.SpeciaL_ApP.SpeciaL_ApP_image }}"
-          name: "SpeciaL-ApP"
+        - image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
+          name: "env-dashboard"
           envFrom:
             - configMapRef:
-                name: "special-app-config"
-            - secretRef:
-                name: "special-app-secrets"
+                name: "env-dashboard-config"
+          ports:
+            - name: "http"
+              protocol: "TCP"
+              containerPort: 18888
+            - name: "otlp-grpc"
+              protocol: "TCP"
+              containerPort: 18889
+            - name: "otlp-http"
+              protocol: "TCP"
+              containerPort: 18890
           imagePullPolicy: "IfNotPresent"
   selector:
     matchLabels:
       app.kubernetes.io/name: "my-chart"
-      app.kubernetes.io/component: "SpeciaL-ApP"
+      app.kubernetes.io/component: "env-dashboard"
       app.kubernetes.io/instance: "{{ .Release.Name }}"
   replicas: 1
   revisionHistoryLimit: 3

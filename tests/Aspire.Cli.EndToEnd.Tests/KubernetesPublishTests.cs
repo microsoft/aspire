@@ -293,10 +293,8 @@ builder.Build().Run();
             // Phase 6: Cleanup
             // =====================================================================
 
-            // Uninstall the Helm release
-            await auto.TypeAsync("helm uninstall aspire-app");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            // Destroy the deployment using aspire destroy (runs helm uninstall)
+            await auto.AspireDestroyAsync(counter);
 
             // Delete the KinD cluster
             await auto.TypeAsync($"kind delete cluster --name={clusterName}");

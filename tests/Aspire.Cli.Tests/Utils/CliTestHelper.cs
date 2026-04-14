@@ -9,12 +9,13 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
@@ -163,12 +164,15 @@ internal static class CliTestHelper
         // MCP server transport
         services.AddSingleton(options.McpServerTransportFactory);
 
-        // MCP docs services - use test doubles
+        // Documentation services - use test doubles
         services.AddSingleton<IDocsCache, DocsCache>();
         services.AddSingleton<IHttpClientFactory, TestHttpClientFactory>();
         services.AddSingleton<IDocsFetcher, TestDocsFetcher>();
         services.AddSingleton(options.DocsIndexServiceFactory);
         services.AddSingleton(options.DocsSearchServiceFactory);
+        services.AddSingleton<IApiDocsCache, ApiDocsCache>();
+        services.AddSingleton<IApiDocsFetcher, TestApiDocsFetcher>();
+        services.AddSingleton(options.ApiDocsIndexServiceFactory);
 
         services.AddTransient<RootCommand>();
         services.AddTransient<NewCommand>();
@@ -184,6 +188,7 @@ internal static class CliTestHelper
         services.AddTransient<ExecCommand>();
         services.AddTransient<AddCommand>();
         services.AddTransient<DeployCommand>();
+        services.AddTransient<DestroyCommand>();
         services.AddTransient<DoCommand>();
         services.AddTransient<PublishCommand>();
         services.AddTransient<ConfigCommand>();
@@ -216,6 +221,10 @@ internal static class CliTestHelper
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();
+        services.AddTransient<ApiCommand>();
+        services.AddTransient<ApiListCommand>();
+        services.AddTransient<ApiSearchCommand>();
+        services.AddTransient<ApiGetCommand>();
         services.AddTransient<DocsCommand>();
         services.AddTransient<DocsListCommand>();
         services.AddTransient<DocsSearchCommand>();
@@ -293,13 +302,16 @@ internal sealed class CliServiceCollectionTestOptions
             Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
             Interactive = InteractionSupport.Yes,
             ColorSystem = ansi ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
-            Out = new AnsiConsoleOutput(textWriter)
+            Out = new AnsiConsoleOutput(textWriter),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         };
         var console = AnsiConsole.Create(settings);
         if (!ansi)
         {
             // Use a large width to prevent Spectre.Console from word-wrapping output lines.
             console.Profile.Width = int.MaxValue;
+            // Disable link capabilities to prevent OSC 8 hyperlink sequences in output.
+            console.Profile.Capabilities.Links = false;
         }
         return console;
     }
@@ -573,8 +585,9 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var fetcher = serviceProvider.GetRequiredService<IDocsFetcher>();
         var cache = serviceProvider.GetRequiredService<IDocsCache>();
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var logger = serviceProvider.GetRequiredService<ILogger<DocsIndexService>>();
-        return new DocsIndexService(fetcher, cache, logger);
+        return new DocsIndexService(fetcher, cache, configuration, logger);
     };
 
     public Func<IServiceProvider, IDocsSearchService> DocsSearchServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -582,6 +595,15 @@ internal sealed class CliServiceCollectionTestOptions
         var indexService = serviceProvider.GetRequiredService<IDocsIndexService>();
         var logger = serviceProvider.GetRequiredService<ILogger<DocsSearchService>>();
         return new DocsSearchService(indexService, logger);
+    };
+
+    public Func<IServiceProvider, IApiDocsIndexService> ApiDocsIndexServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
+    {
+        var fetcher = serviceProvider.GetRequiredService<IApiDocsFetcher>();
+        var cache = serviceProvider.GetRequiredService<IApiDocsCache>();
+        var configuration = serviceProvider.GetRequiredService<IConfiguration>();
+        var logger = serviceProvider.GetRequiredService<ILogger<ApiDocsIndexService>>();
+        return new ApiDocsIndexService(fetcher, cache, configuration, logger);
     };
 }
 

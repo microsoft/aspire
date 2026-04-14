@@ -142,11 +142,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private string GetPublicPromiseInterfaceName(string typeId) => GetPromiseInterfaceName(GetConcreteClassName(typeId));
 
-    /// <summary>
-    /// Checks if an AtsTypeRef represents a handle type.
-    /// </summary>
     private static bool IsHandleType(AtsTypeRef? typeRef) =>
-        typeRef != null && typeRef.Category == AtsTypeCategory.Handle;
+        typeRef is { Category: AtsTypeCategory.Handle };
 
     /// <summary>
     /// Maps an AtsTypeRef to a TypeScript type using category-based dispatch.
@@ -615,34 +612,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Exclude DTO types - they have their own interfaces, not handle aliases
         var dtoTypeIds = new HashSet<string>(dtoTypes.Select(d => d.TypeId));
         var typeIds = new HashSet<string>();
-        foreach (var cap in capabilities)
+        foreach (var typeId in CollectAllReferencedTypes(capabilities).Keys)
         {
-            if (!string.IsNullOrEmpty(cap.TargetTypeId) && !dtoTypeIds.Contains(cap.TargetTypeId))
+            if (!dtoTypeIds.Contains(typeId))
             {
-                typeIds.Add(cap.TargetTypeId);
-            }
-            if (IsHandleType(cap.ReturnType) && !dtoTypeIds.Contains(cap.ReturnType!.TypeId))
-            {
-                typeIds.Add(GetReturnTypeId(cap)!);
-            }
-            // Add parameter type IDs (for types like IResourceBuilder<IResource>)
-            foreach (var param in cap.Parameters)
-            {
-                if (IsHandleType(param.Type) && !dtoTypeIds.Contains(param.Type!.TypeId))
-                {
-                    typeIds.Add(param.Type!.TypeId);
-                }
-                // Also collect callback parameter types
-                if (param.IsCallback && param.CallbackParameters != null)
-                {
-                    foreach (var cbParam in param.CallbackParameters)
-                    {
-                        if (IsHandleType(cbParam.Type) && !dtoTypeIds.Contains(cbParam.Type.TypeId))
-                        {
-                            typeIds.Add(cbParam.Type.TypeId);
-                        }
-                    }
-                }
+                typeIds.Add(typeId);
             }
         }
 
@@ -1337,7 +1311,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         var className = DeriveClassName(model.TypeId);
         var interfaceName = GetInterfaceName(className);
-        var hasMethods = HasChainableMethods(model);
 
         WriteLine("// ============================================================================");
         WriteLine($"// {interfaceName}");
@@ -1350,6 +1323,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var setters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
         var contextMethods = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.InstanceMethod).ToList();
         var otherMethods = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.Method).ToList();
+        var standardMethods = contextMethods.Concat(otherMethods).ToList();
+        var hasMethods = standardMethods.Count > 0;
 
         var properties = GroupPropertiesByName(getters, setters);
         foreach (var prop in properties)
@@ -1357,7 +1332,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             GenerateInterfaceProperty(prop.PropertyName, prop.Getter, prop.Setter);
         }
 
-        foreach (var method in contextMethods.Concat(otherMethods))
+        foreach (var method in standardMethods)
         {
             GenerateTypeClassInterfaceMethod(className, method);
         }
@@ -1372,7 +1347,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         var promiseInterfaceName = GetPromiseInterfaceName(className);
         WriteLine($"export interface {promiseInterfaceName} extends PromiseLike<{interfaceName}> {{");
-        foreach (var method in contextMethods.Concat(otherMethods))
+        foreach (var method in standardMethods)
         {
             GenerateTypeClassInterfaceMethod(className, method);
         }
@@ -1776,7 +1751,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     private void GenerateArgsObjectWithConditionals(
         string targetParamName,
         List<AtsParameterInfo> requiredParams,
-        List<AtsParameterInfo> optionalParams)
+        List<AtsParameterInfo> optionalParams,
+        string indent = "        ")
     {
         // Build the required args inline
         var requiredArgs = new List<string> { $"{targetParamName}: this._handle" };
@@ -1785,13 +1761,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             requiredArgs.Add(GetRpcArgumentEntry(param));
         }
 
-        WriteLine($"        const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
+        WriteLine($"{indent}const rpcArgs: Record<string, unknown> = {{ {string.Join(", ", requiredArgs)} }};");
 
         // Conditionally add optional params
         foreach (var param in optionalParams)
         {
             var rpcExpression = GetRpcArgumentExpression(param);
-            WriteLine($"        if ({param.Name} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
+            WriteLine($"{indent}if ({param.Name} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
         }
     }
 
@@ -2117,7 +2093,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return $"({paramsString}) => Promise<{returnType}>";
     }
 
-    private void GenerateCallbackRegistration(AtsParameterInfo callbackParam)
+    private void GenerateCallbackRegistration(AtsParameterInfo callbackParam, string indent = "        ")
     {
         var callbackParameters = callbackParam.CallbackParameters;
         var isOptional = callbackParam.IsOptional || callbackParam.IsNullable;
@@ -2141,33 +2117,34 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // For optional callbacks, wrap the registration in a conditional
         if (isOptional)
         {
-            WriteLine($"        const {callbackName}Id = {callbackName} ? registerCallback(async ({paramSignature}) => {{");
+            WriteLine($"{indent}const {callbackName}Id = {callbackName} ? registerCallback(async ({paramSignature}) => {{");
         }
         else
         {
-            WriteLine($"        const {callbackName}Id = registerCallback(async ({paramSignature}) => {{");
+            WriteLine($"{indent}const {callbackName}Id = registerCallback(async ({paramSignature}) => {{");
         }
 
         // Generate the callback body
-        GenerateCallbackBody(callbackParam, callbackParameters);
+        GenerateCallbackBody(callbackParam, callbackParameters, indent);
 
         // Close the callback registration
         if (isOptional)
         {
-            WriteLine("        }) : undefined;");
+            WriteLine(indent + "}) : undefined;");
         }
         else
         {
-            WriteLine("        });");
+            WriteLine(indent + "});");
         }
     }
 
     /// <summary>
     /// Generates the body of a callback function.
     /// </summary>
-    private void GenerateCallbackBody(AtsParameterInfo callbackParam, IReadOnlyList<AtsCallbackParameterInfo>? callbackParameters)
+    private void GenerateCallbackBody(AtsParameterInfo callbackParam, IReadOnlyList<AtsCallbackParameterInfo>? callbackParameters, string indent)
     {
         var callbackName = callbackParam.Name;
+        var bodyIndent = $"{indent}    ";
 
         // Check if callback has a return type - if so, we need to return the value
         var hasReturnType = callbackParam.CallbackReturnType != null
@@ -2177,33 +2154,15 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         if (callbackParameters is null || callbackParameters.Count == 0)
         {
             // No parameters - just call the callback
-            WriteLine($"            {returnPrefix}await {callbackName}();");
+            WriteLine($"{bodyIndent}{returnPrefix}await {callbackName}();");
         }
         else if (callbackParameters.Count == 1)
         {
             // Single parameter callback
             var cbParam = callbackParameters[0];
-            var tsType = MapTypeRefToTypeScript(cbParam.Type);
-            var cbTypeId = cbParam.Type.TypeId;
+            GenerateCallbackParameterConversion(cbParam, $"{cbParam.Name}Data");
 
-            if (cbTypeId == AtsConstants.CancellationToken)
-            {
-                WriteLine($"            const {cbParam.Name} = CancellationToken.fromValue({cbParam.Name}Data);");
-            }
-            else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
-            {
-                // For types with wrapper classes, create an instance of the wrapper
-                var handleType = GetHandleTypeName(cbTypeId);
-                WriteLine($"            const {cbParam.Name}Handle = wrapIfHandle({cbParam.Name}Data) as {handleType};");
-                WriteLine($"            const {cbParam.Name} = new {GetImplementationClassName(wrapperClassName)}({cbParam.Name}Handle, this._client);");
-            }
-            else
-            {
-                // For raw handle types, just wrap and cast
-                WriteLine($"            const {cbParam.Name} = wrapIfHandle({cbParam.Name}Data) as {tsType};");
-            }
-
-            WriteLine($"            {returnPrefix}await {callbackName}({cbParam.Name});");
+            WriteLine($"{bodyIndent}{returnPrefix}await {callbackName}({cbParam.Name});");
         }
         else
         {
@@ -2211,30 +2170,43 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             for (var i = 0; i < callbackParameters.Count; i++)
             {
                 var cbParam = callbackParameters[i];
-                var tsType = MapTypeRefToTypeScript(cbParam.Type);
-                var cbTypeId = cbParam.Type.TypeId;
                 var callbackArgName = $"{cbParam.Name}Data";
 
-                if (cbTypeId == AtsConstants.CancellationToken)
-                {
-                    WriteLine($"            const {cbParam.Name} = CancellationToken.fromValue(args.p{i});");
-                }
-                else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
-                {
-                    // For types with wrapper classes, create an instance of the wrapper
-                    var handleType = GetHandleTypeName(cbTypeId);
-                    WriteLine($"            const {cbParam.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
-                    WriteLine($"            const {cbParam.Name} = new {GetImplementationClassName(wrapperClassName)}({cbParam.Name}Handle, this._client);");
-                }
-                else
-                {
-                    // For raw handle types, just wrap and cast
-                    WriteLine($"            const {cbParam.Name} = wrapIfHandle({callbackArgName}) as {tsType};");
-                }
+                GenerateCallbackParameterConversion(cbParam, callbackArgName);
                 callArgs.Add(cbParam.Name);
             }
 
-            WriteLine($"            {returnPrefix}await {callbackName}({string.Join(", ", callArgs)});");
+            WriteLine($"{bodyIndent}{returnPrefix}await {callbackName}({string.Join(", ", callArgs)});");
+        }
+    }
+
+    private void GenerateCallbackParameterConversion(AtsCallbackParameterInfo callbackParameter, string callbackArgName)
+    {
+        var tsType = MapTypeRefToTypeScript(callbackParameter.Type);
+        var cbTypeId = callbackParameter.Type.TypeId;
+
+        if (cbTypeId == AtsConstants.CancellationToken)
+        {
+            WriteLine($"            const {callbackParameter.Name} = CancellationToken.fromValue({callbackArgName});");
+        }
+        else if (IsDictionaryType(callbackParameter.Type) && !callbackParameter.Type.IsReadOnly)
+        {
+            var keyType = MapTypeRefToTypeScript(callbackParameter.Type.KeyType);
+            var valueType = MapTypeRefToTypeScript(callbackParameter.Type.ValueType);
+            var handleType = GetHandleTypeName(cbTypeId);
+
+            WriteLine($"            const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
+            WriteLine($"            const {callbackParameter.Name} = new AspireDict<{keyType}, {valueType}>({callbackParameter.Name}Handle, this._client, '{cbTypeId}');");
+        }
+        else if (_wrapperClassNames.TryGetValue(cbTypeId, out var wrapperClassName))
+        {
+            var handleType = GetHandleTypeName(cbTypeId);
+            WriteLine($"            const {callbackParameter.Name}Handle = wrapIfHandle({callbackArgName}) as {handleType};");
+            WriteLine($"            const {callbackParameter.Name} = new {GetImplementationClassName(wrapperClassName)}({callbackParameter.Name}Handle, this._client);");
+        }
+        else
+        {
+            WriteLine($"            const {callbackParameter.Name} = wrapIfHandle({callbackArgName}) as {tsType};");
         }
     }
 
@@ -2417,7 +2389,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var handleType = GetHandleTypeName(model.TypeId);
         var className = DeriveClassName(model.TypeId);
         var implementationClassName = GetImplementationClassName(className);
-        var hasMethods = HasChainableMethods(model);
 
         GenerateTypeClassInterface(model);
 
@@ -2431,9 +2402,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var setters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
         var contextMethods = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.InstanceMethod).ToList();
         var otherMethods = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.Method).ToList();
-
-        // Combine methods for thenable generation
         var allMethods = contextMethods.Concat(otherMethods).ToList();
+        var hasMethods = allMethods.Count > 0;
 
         WriteLine($"/**");
         WriteLine($" * Type class for {className}.");

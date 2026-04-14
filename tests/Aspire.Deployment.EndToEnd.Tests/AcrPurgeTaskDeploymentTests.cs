@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -74,10 +75,17 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment (in CI)
+            // Python apphosts need the full bundle because
+            // the prebuilt AppHost server is required for aspire new with Python templates.
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
+                var prNumber = DeploymentE2ETestHelpers.GetPrNumber();
+                if (prNumber > 0)
+                {
+                    output.WriteLine($"Step 2: Installing Aspire bundle from PR #{prNumber}...");
+                    await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
+                }
+                await auto.SourceAspireBundleEnvironmentAsync(counter);
             }
 
             // Step 3: Create Python FastAPI project using aspire new
@@ -97,36 +105,38 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
+                await auto.WaitForAspireAddCompletionAsync(counter);
+            }
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
-
-            // Step 6: Modify apphost.cs to add ACA environment with purge task
-            // Python template uses single-file AppHost (apphost.cs in project root)
+            // Step 6: Modify apphost.ts to add ACA environment with purge task
+            // Python template uses TypeScript AppHost (apphost.ts in project root)
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-            var appHostFilePath = Path.Combine(projectDir, "apphost.cs");
+            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
 
-            output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
-            var buildRunPattern = "builder.Build().Run();";
-            var replacement = """
+            // Add Azure Container App Environment with purge task before build().run()
+            content = content.Replace(
+                "await builder.build().run();",
+                """
 // Add Azure Container App Environment and configure ACR purge task
-var infra = builder.AddAzureContainerAppEnvironment("infra");
+const infra = await builder.addAzureContainerAppEnvironment("infra");
 // Schedule once a month so it never fires during the test; the task is triggered manually via az acr task run
-infra.GetAzureContainerRegistry()
-    .WithPurgeTask("0 0 1 * *", keep: 1);
+await infra.getAzureContainerRegistry()
+    .withPurgeTask("0 0 1 * *", { keep: 1 });
 
-builder.Build().Run();
-""";
+await builder.build().run();
+""");
 
-            content = content.Replace(buildRunPattern, replacement);
             File.WriteAllText(appHostFilePath, content);
 
-            output.WriteLine($"Modified apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Modified apphost.ts at: {appHostFilePath}");
 
             // Step 7: Set environment variables for deployment
             await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
@@ -140,12 +150,12 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitUntilAsync(s =>
             {
-                if (s.ContainsText("PIPELINE SUCCEEDED"))
+                if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
                 {
                     pipelineSucceeded = true;
                     return true;
                 }
-                return s.ContainsText("PIPELINE FAILED");
+                return s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed);
             }, timeout: TimeSpan.FromMinutes(30), description: "pipeline succeeded or failed");
 
             if (!pipelineSucceeded)
@@ -183,7 +193,7 @@ builder.Build().Run();
             output.WriteLine("Modified main.py to force a new container image build");
 
             // Step 11: Second deployment to push new images
-            // Clear the terminal so WaitUntilTextAsync doesn't match "PIPELINE SUCCEEDED" from the first deploy
+            // Clear the terminal so WaitUntilTextAsync doesn't match the pipeline succeeded text from the first deploy
             output.WriteLine("Step 11: Starting second Azure deployment...");
             var pipeline2Succeeded = false;
             await auto.TypeAsync("export TERM=xterm && clear");
@@ -193,12 +203,12 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitUntilAsync(s =>
             {
-                if (s.ContainsText("PIPELINE SUCCEEDED"))
+                if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
                 {
                     pipeline2Succeeded = true;
                     return true;
                 }
-                return s.ContainsText("PIPELINE FAILED");
+                return s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed);
             }, timeout: TimeSpan.FromMinutes(30), description: "pipeline succeeded or failed");
 
             if (!pipeline2Succeeded)

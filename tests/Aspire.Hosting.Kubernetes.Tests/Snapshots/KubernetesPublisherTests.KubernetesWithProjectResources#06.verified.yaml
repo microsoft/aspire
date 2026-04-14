@@ -1,22 +1,36 @@
 ﻿---
 apiVersion: "v1"
-kind: "ConfigMap"
+kind: "Service"
 metadata:
-  name: "api-config"
+  name: "project1-service"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "api"
+    app.kubernetes.io/component: "project1"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
-data:
-  PROJECT1_HTTP: "http://project1-service:{{ .Values.parameters.project1.port_http }}"
-  services__project1__http__0: "http://project1-service:{{ .Values.parameters.project1.port_http }}"
-  PROJECT1_HTTPS: "https://project1-service:{{ .Values.parameters.project1.port_http }}"
-  services__project1__https__0: "https://project1-service:{{ .Values.parameters.project1.port_http }}"
-  PROJECT1_CUSTOM1: "{{ .Values.config.api.PROJECT1_CUSTOM1 }}"
-  services__project1__http__1: "{{ .Values.config.api.services__project1__http__1 }}"
-  PROJECT1_CUSTOM2: "{{ .Values.config.api.PROJECT1_CUSTOM2 }}"
-  services__project1__http__2: "{{ .Values.config.api.services__project1__http__2 }}"
-  PROJECT1_CUSTOM3: "{{ .Values.config.api.PROJECT1_CUSTOM3 }}"
-  services__project1__http__3: "{{ .Values.config.api.services__project1__http__3 }}"
-  PROJECT1_CUSTOM4: "{{ .Values.config.api.PROJECT1_CUSTOM4 }}"
-  services__project1__http__4: "{{ .Values.config.api.services__project1__http__4 }}"
+spec:
+  type: "ClusterIP"
+  selector:
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "project1"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+  ports:
+    - name: "http"
+      protocol: "TCP"
+      port: {{ .Values.parameters.project1.port_http | int }}
+      targetPort: {{ .Values.parameters.project1.port_http | int }}
+    - name: "custom1"
+      protocol: "TCP"
+      port: 8000
+      targetPort: 8000
+    - name: "custom2"
+      protocol: "TCP"
+      port: 7001
+      targetPort: 8001
+    - name: "custom3"
+      protocol: "TCP"
+      port: 7002
+      targetPort: 7002
+    - name: "custom4"
+      protocol: "TCP"
+      port: 7003
+      targetPort: 7004

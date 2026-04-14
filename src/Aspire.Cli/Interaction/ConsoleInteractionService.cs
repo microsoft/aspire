@@ -197,18 +197,11 @@ internal class ConsoleInteractionService : IInteractionService
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NoItemsAvailableForSelection, promptText));
         }
 
-        // Wrap the caller's formatter to produce safe plain text for Spectre.Console.
-        // Spectre's SelectionPrompt treats converter output as markup and its search
-        // highlighting manipulates the markup string directly, which breaks escaped
-        // bracket sequences like [[Prod]]. Stripping markup after formatting ensures
-        // the text is safe for both rendering and search highlighting.
-        var safeFormatter = MakeSafeFormatter(choiceFormatter);
-
         MessageLogger.LogInformation("Selection prompt: {PromptText}", promptText);
 
         var prompt = new SelectionPrompt<T>()
             .Title(promptText)
-            .UseConverter(safeFormatter)
+            .UseConverter(choiceFormatter)
             .AddChoices(choices)
             .PageSize(10)
             .EnableSearch();
@@ -216,7 +209,7 @@ internal class ConsoleInteractionService : IInteractionService
         prompt.SearchHighlightStyle = s_searchHighlightStyle;
 
         var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
-        MessageLogger.LogInformation("Selection result: {Result}", safeFormatter(result));
+        MessageLogger.LogInformation("Selection result: {Result}", choiceFormatter(result));
         return result;
     }
 
@@ -240,13 +233,11 @@ internal class ConsoleInteractionService : IInteractionService
 
         var preSelectedSet = preSelected is not null ? new HashSet<T>(preSelected) : null;
 
-        var safeFormatter = MakeSafeFormatter(choiceFormatter);
-
         MessageLogger.LogInformation("Selection prompt: {PromptText}", promptText);
 
         var prompt = new MultiSelectionPrompt<T>()
             .Title(promptText)
-            .UseConverter(safeFormatter)
+            .UseConverter(choiceFormatter)
             .PageSize(10);
 
         prompt.Required = !optional;
@@ -261,47 +252,8 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
-        MessageLogger.LogInformation("Selection results: {Results}", string.Join(", ", result.Select(safeFormatter)));
+        MessageLogger.LogInformation("Selection results: {Results}", string.Join(", ", result.Select(choiceFormatter)));
         return result;
-    }
-
-    /// <summary>
-    /// Wraps a choice formatter to produce output that is safe for Spectre.Console's
-    /// SelectionPrompt and MultiSelectionPrompt with search enabled. Spectre's search
-    /// highlighting manipulates the markup string directly, which breaks escaped bracket
-    /// sequences like <c>[[Prod]]</c>. This method strips all markup from the formatted
-    /// text and then replaces square brackets with parentheses so that Spectre never
-    /// encounters bracket characters in the display text.
-    /// </summary>
-    /// <remarks>
-    /// This is a workaround for https://github.com/spectreconsole/spectre.console/issues/2054.
-    /// Once the upstream fix is available, this method should be removed and callers should
-    /// use EscapeMarkup() directly. See https://github.com/microsoft/aspire/issues/15309.
-    /// </remarks>
-    internal static Func<T, string> MakeSafeFormatter<T>(Func<T, string> choiceFormatter)
-    {
-        return item =>
-        {
-            var formatted = choiceFormatter(item);
-
-            // Try to strip Spectre markup to get the intended display text.
-            // Markup.Remove() can throw if the formatted text contains unescaped
-            // brackets (e.g. raw "[Prod]"), so fall back to using the text as-is.
-            string plainText;
-            try
-            {
-                plainText = Markup.Remove(formatted);
-            }
-            catch (Exception)
-            {
-                plainText = formatted;
-            }
-
-            // Replace square brackets with parentheses. EscapeMarkup() alone is not
-            // sufficient because Spectre's search highlighting splits the escaped
-            // sequences [[...]] when inserting highlight tags, producing invalid markup.
-            return plainText.Replace('[', '(').Replace(']', ')');
-        };
     }
 
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)

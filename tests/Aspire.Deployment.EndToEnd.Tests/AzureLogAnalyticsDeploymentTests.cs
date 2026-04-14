@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -123,7 +124,7 @@ builder.Build().Run();
             output.WriteLine("Step 7: Starting Azure deployment...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(20));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(20));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify the Azure Log Analytics Workspace was created
@@ -132,7 +133,11 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 9: Exit terminal
+            // Step 9: Clean up Azure resources using aspire destroy
+            output.WriteLine("Step 9: Destroying Azure deployment...");
+            await auto.AspireDestroyAsync(counter);
+
+            // Step 10: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 

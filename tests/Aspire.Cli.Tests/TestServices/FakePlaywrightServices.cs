@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Npm;
+using Semver;
 
 namespace Aspire.Cli.Tests.TestServices;
 
