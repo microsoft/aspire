@@ -108,10 +108,17 @@ internal sealed class AzureKubernetesInfrastructure(
                             $"{{{{ .Values.parameters.{r.Name}.identityClientId }}}}",
                             string.Empty);
 
-                        // Set serviceAccountName on pod spec
-                        if (kubeResource.Workload?.PodTemplate?.Spec is { } podSpec)
+                        // Set serviceAccountName on pod spec and add workload identity label
+                        if (kubeResource.Workload?.PodTemplate is { } podTemplate)
                         {
-                            podSpec.ServiceAccountName = saName;
+                            if (podTemplate.Spec is { } podSpec)
+                            {
+                                podSpec.ServiceAccountName = saName;
+                            }
+
+                            // The workload identity webhook requires this label on the POD
+                            // to inject AZURE_CLIENT_ID, token volume mounts, etc.
+                            podTemplate.Metadata.Labels["azure.workload.identity/use"] = "true";
                         }
                     }));
 
