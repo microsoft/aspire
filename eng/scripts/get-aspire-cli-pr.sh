@@ -611,15 +611,17 @@ get_pr_head_sha() {
 
     say_verbose "Getting HEAD SHA for PR #$pr_number"
 
-    local repo_owner="${REPO%%/*}"
-    local repo_name="${REPO#*/}"
-    if [[ -z "$repo_owner" || -z "$repo_name" || "$repo_owner" == "$REPO" ]]; then
+    local repo_owner repo_name
+    if [[ "$REPO" =~ ^([^/]+)/([^/]+)$ ]]; then
+        repo_owner="${BASH_REMATCH[1]}"
+        repo_name="${BASH_REMATCH[2]}"
+    else
         say_error "Invalid repository format '$REPO'. Expected 'owner/name'."
         exit 1
     fi
 
     local graphql_query='query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { headRefOid } } }'
-    local gh_cmd=(gh api graphql -f query="$graphql_query" -F owner="$repo_owner" -F name="$repo_name" -F number="$pr_number" --jq ".data.repository.pullRequest.headRefOid")
+    local gh_cmd=(gh api graphql -f query="$graphql_query" -f owner="$repo_owner" -f name="$repo_name" -F number="$pr_number" --jq ".data.repository.pullRequest.headRefOid")
 
     say_verbose "Calling GitHub API: ${gh_cmd[*]}"
 

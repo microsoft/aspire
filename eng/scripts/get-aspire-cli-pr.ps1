@@ -865,8 +865,8 @@ function Get-PRHeadSHA {
     $ghCommand = @(
         "gh", "api", "graphql",
         "-f", "query=$graphqlQuery",
-        "-F", "owner=$owner",
-        "-F", "name=$name",
+        "-f", "owner=$owner",
+        "-f", "name=$name",
         "-F", "number=$PRNumber",
         "--jq", ".data.repository.pullRequest.headRefOid"
     )
