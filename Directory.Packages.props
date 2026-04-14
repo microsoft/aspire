@@ -106,7 +106,7 @@
     <PackageVersion Include="JsonPatch.Net" Version="3.3.0" />
     <PackageVersion Include="Markdig" Version="0.45.0" />
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.3.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-rc4" />
+    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.4" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.0" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.0" />
@@ -119,7 +119,7 @@
     <PackageVersion Include="NATS.Net" Version="2.7.2" />
     <PackageVersion Include="NCrontab.Signed" Version="3.4.0" />
     <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.1" />
-    <PackageVersion Include="OpenAI" Version="2.8.0" />
+    <PackageVersion Include="OpenAI" Version="2.9.1" />
     <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.100" />
     <PackageVersion Include="Polly.Core" Version="8.6.5" />
     <PackageVersion Include="Polly.Extensions" Version="8.6.5" />
