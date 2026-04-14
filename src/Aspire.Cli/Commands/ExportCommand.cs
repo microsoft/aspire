@@ -154,7 +154,7 @@ internal sealed class ExportCommand : BaseCommand
                 ? await TelemetryCommandHelpers.GetAllResourcesAsync(client!, baseUrl!, cancellationToken).ConfigureAwait(false)
                 : [];
             IReadOnlyList<ResourceSnapshot> snaps = connection is not null
-                ? await connection.GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false)
+                ? await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false)
                 : [];
             return (resources, snaps);
         });

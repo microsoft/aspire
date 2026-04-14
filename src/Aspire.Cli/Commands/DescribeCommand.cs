@@ -149,7 +149,7 @@ internal sealed class DescribeCommand : BaseCommand
         // so the user can describe any resource by name.
         var effectiveIncludeHidden = includeHidden || resourceName is not null;
         var dashboardUrlsTask = connection.GetDashboardUrlsAsync(cancellationToken);
-        var snapshotsTask = connection.GetResourceSnapshotsAsync(cancellationToken, effectiveIncludeHidden);
+        var snapshotsTask = connection.GetResourceSnapshotsAsync(effectiveIncludeHidden, cancellationToken);
 
         await Task.WhenAll(dashboardUrlsTask, snapshotsTask).ConfigureAwait(false);
 
@@ -218,7 +218,7 @@ internal sealed class DescribeCommand : BaseCommand
         var lastDisplayedContent = new Dictionary<string, object>(StringComparers.ResourceName);
 
         // Stream resource snapshots
-        await foreach (var snapshot in connection.WatchResourceSnapshotsAsync(cancellationToken, includeHidden).ConfigureAwait(false))
+        await foreach (var snapshot in connection.WatchResourceSnapshotsAsync(includeHidden, cancellationToken).ConfigureAwait(false))
         {
             // Update the dictionary with the latest state for this resource
             allResources[snapshot.Name] = snapshot;

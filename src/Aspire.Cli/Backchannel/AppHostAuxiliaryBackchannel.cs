@@ -256,7 +256,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
-    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default, bool includeHidden = false)
+    public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
 
@@ -287,7 +287,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default, bool includeHidden = false)
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
 
@@ -478,7 +478,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         if (!SupportsV2)
         {
             // Fall back to v1
-            var snapshots = await GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
+            var snapshots = await GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
 
             // Apply filter if specified
             if (!string.IsNullOrEmpty(request?.Filter))
@@ -518,7 +518,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             // Fall back to v1
             var filter = request?.Filter;
-            await foreach (var snapshot in WatchResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var snapshot in WatchResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false))
             {
                 if (!string.IsNullOrEmpty(filter) && !snapshot.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
                 {

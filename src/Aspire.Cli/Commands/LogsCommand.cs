@@ -171,7 +171,7 @@ internal sealed class LogsCommand : BaseCommand
         // When a specific resource is requested, always include hidden resources
         // so the user can get logs from any resource by name.
         var effectiveIncludeHidden = includeHidden || resourceName is not null;
-        var snapshots = await connection.GetResourceSnapshotsAsync(cancellationToken, effectiveIncludeHidden).ConfigureAwait(false);
+        var snapshots = await connection.GetResourceSnapshotsAsync(effectiveIncludeHidden, cancellationToken).ConfigureAwait(false);
 
         // Pre-resolve colors for all resource names so that assignment is
         // deterministic regardless of which resources are displayed.
