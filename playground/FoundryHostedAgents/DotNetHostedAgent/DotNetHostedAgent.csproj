@@ -9,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageVersion Update="Microsoft.Extensions.AI" Version="10.3.0" />
-    <PackageVersion Update="Microsoft.Extensions.AI.OpenAI" Version="10.3.0" />
+    <PackageVersion Update="Microsoft.Extensions.AI" Version="10.4.0" />
+    <PackageVersion Update="Microsoft.Extensions.AI.OpenAI" Version="10.4.0" />
   </ItemGroup>
 
   <ItemGroup>

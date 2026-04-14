@@ -106,7 +106,7 @@
     <PackageVersion Include="JsonPatch.Net" Version="3.3.0" />
     <PackageVersion Include="Markdig" Version="0.45.0" />
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.3.0" />
-    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.1.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.4" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.0" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.0" />
