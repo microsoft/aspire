@@ -94,6 +94,46 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    private readonly struct InstanceMethodNameExport : IEquatable<InstanceMethodNameExport>
+    {
+        public InstanceMethodNameExport(string methodName, string source, Location location, string effectiveExportId)
+        {
+            MethodName = methodName;
+            Source = source;
+            Location = location;
+            EffectiveExportId = effectiveExportId;
+        }
+
+        public string MethodName { get; }
+
+        public string Source { get; }
+
+        public Location Location { get; }
+
+        public string EffectiveExportId { get; }
+
+        public bool Equals(InstanceMethodNameExport other)
+        {
+            return MethodName == other.MethodName &&
+                Source == other.Source &&
+                Location.Equals(other.Location) &&
+                EffectiveExportId == other.EffectiveExportId;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is InstanceMethodNameExport other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return StringComparer.Ordinal.GetHashCode(MethodName) ^
+                StringComparer.Ordinal.GetHashCode(Source) ^
+                Location.GetHashCode() ^
+                StringComparer.Ordinal.GetHashCode(EffectiveExportId);
+        }
+    }
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => Diagnostics.SupportedDiagnostics;
 
     public override void Initialize(AnalysisContext context)
@@ -154,8 +194,11 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var generatedMethodNames = new ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>>();
         AnalyzeAssemblyExportedTypes(context.Compilation, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
 
+        // Collection for ASPIREEXPORT015: track instance method names per containing type.
+        var instanceMethodsByPublicName = new ConcurrentDictionary<(string ContainingType, string PublicMethodName), ConcurrentBag<InstanceMethodNameExport>>();
+
         context.RegisterSymbolAction(
-            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames),
+            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames, instanceMethodsByPublicName),
             SymbolKind.Method);
 
         context.RegisterSymbolAction(
@@ -166,6 +209,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         context.RegisterCompilationEndAction(c => ReportDuplicateExports(c, exportsByKey));
         context.RegisterCompilationEndAction(c => ReportDuplicateCapabilityIds(c, capabilityIds));
         context.RegisterCompilationEndAction(c => ReportDuplicateGeneratedMethodNames(c, generatedMethodNames));
+        context.RegisterCompilationEndAction(c => ReportDuplicateInstanceMethodNames(c, instanceMethodsByPublicName));
 
         // Warn when exported builder methods invoke synchronous callback delegates inline. Deferred callbacks
         // that are stored for later execution are fine, and exports that opt into background-thread dispatch
@@ -209,7 +253,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         HashSet<ITypeSymbol> currentAssemblyExportedTypes,
         ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>> exportsByKey,
         ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
-        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        ConcurrentDictionary<(string ContainingType, string PublicMethodName), ConcurrentBag<InstanceMethodNameExport>> instanceMethodsByPublicName)
     {
         var method = (IMethodSymbol)context.Symbol;
 
@@ -247,6 +292,16 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             }
         }
 
+        var containingTypeExportAttribute = GetContainingTypeAspireExportAttribute(method.ContainingType, aspireExportAttribute);
+
+        TrackExportedInstanceMethodName(
+            method,
+            exportAttribute,
+            containingTypeExportAttribute,
+            hasExportIgnore,
+            containingTypeHasExportIgnore,
+            instanceMethodsByPublicName);
+
         // ASPIREEXPORT008: Check for missing export attributes on builder extension methods
         if (exportAttribute is null && !hasExportIgnore && !containingTypeHasExportIgnore && !isObsolete)
         {
@@ -260,7 +315,6 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         var attributeSyntax = exportAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken);
         var location = attributeSyntax?.GetLocation() ?? method.Locations.FirstOrDefault() ?? Location.None;
-        var containingTypeExportAttribute = GetContainingTypeAspireExportAttribute(method.ContainingType, aspireExportAttribute);
 
         // Rule 1: Method must be static
         if (!method.IsStatic && containingTypeExportAttribute is null)
@@ -1373,6 +1427,108 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         bag.Add(new GeneratedMethodNameExport(source, location, effectiveExportId, canShareGeneratedName));
     }
 
+    private static void ReportDuplicateInstanceMethodNames(
+        CompilationAnalysisContext context,
+        ConcurrentDictionary<(string ContainingType, string PublicMethodName), ConcurrentBag<InstanceMethodNameExport>> instanceMethodsByPublicName)
+    {
+        foreach (var kvp in instanceMethodsByPublicName.OrderBy(kvp => kvp.Key.ContainingType, StringComparer.Ordinal).ThenBy(kvp => kvp.Key.PublicMethodName, StringComparer.Ordinal))
+        {
+            var exports = kvp.Value
+                .Distinct()
+                .OrderBy(static e => e.Location.SourceSpan.Start)
+                .ThenBy(static e => e.Source, StringComparer.Ordinal)
+                .ToArray();
+
+            if (exports.Length <= 1 ||
+                exports.Select(static e => e.EffectiveExportId).Distinct(StringComparer.Ordinal).Count() <= 1)
+            {
+                continue;
+            }
+
+            foreach (var export in exports)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_duplicateInstanceMethodName,
+                    export.Location,
+                    export.MethodName,
+                    kvp.Key.ContainingType,
+                    kvp.Key.PublicMethodName));
+            }
+        }
+    }
+
+    private static void TrackExportedInstanceMethodName(
+        IMethodSymbol method,
+        AttributeData? exportAttribute,
+        AttributeData? containingTypeExportAttribute,
+        bool hasExportIgnore,
+        bool containingTypeHasExportIgnore,
+        ConcurrentDictionary<(string ContainingType, string PublicMethodName), ConcurrentBag<InstanceMethodNameExport>> instanceMethodsByPublicName)
+    {
+        if (hasExportIgnore ||
+            containingTypeHasExportIgnore ||
+            !TryGetExportedInstanceMethodPublicName(method, exportAttribute, containingTypeExportAttribute, out var publicMethodName, out var effectiveExportId))
+        {
+            return;
+        }
+
+        var key = (method.ContainingType.ToDisplayString(), publicMethodName);
+        var location = method.Locations.FirstOrDefault() ?? Location.None;
+        var bag = instanceMethodsByPublicName.GetOrAdd(key, _ => []);
+        bag.Add(new InstanceMethodNameExport(method.Name, GetMethodDisplayString(method), location, effectiveExportId));
+    }
+
+    private static bool TryGetExportedInstanceMethodPublicName(
+        IMethodSymbol method,
+        AttributeData? exportAttribute,
+        AttributeData? containingTypeExportAttribute,
+        out string publicMethodName,
+        out string effectiveExportId)
+    {
+        publicMethodName = string.Empty;
+        effectiveExportId = string.Empty;
+
+        if (containingTypeExportAttribute is null ||
+            method.IsStatic ||
+            method.IsImplicitlyDeclared ||
+            method.MethodKind != MethodKind.Ordinary ||
+            method.IsGenericMethod ||
+            method.Name is "GetType" or "ToString" or "Equals" or "GetHashCode")
+        {
+            return false;
+        }
+
+        var isExplicitlyExported = exportAttribute is not null;
+        var isAutoExported = IsExposeMethodsEnabled(containingTypeExportAttribute) && method.DeclaredAccessibility == Accessibility.Public;
+        if (!isExplicitlyExported && !isAutoExported)
+        {
+            return false;
+        }
+
+        var explicitId = exportAttribute is not null ? GetExportId(exportAttribute) : null;
+        if (explicitId is not null)
+        {
+            if (!s_exportIdPattern.IsMatch(explicitId))
+            {
+                return false;
+            }
+
+            effectiveExportId = explicitId;
+            publicMethodName = GetPublicExportMethodName(effectiveExportId);
+            return true;
+        }
+
+        var derivedExportId = GetDerivedExportId(method, containingTypeExportAttribute);
+        if (derivedExportId is null)
+        {
+            return false;
+        }
+
+        effectiveExportId = derivedExportId;
+        publicMethodName = GetPublicExportMethodName(effectiveExportId);
+        return true;
+    }
+
     private static string? GetExportId(AttributeData attribute)
     {
         if (attribute.ConstructorArguments.Length > 0 &&
@@ -1381,6 +1537,12 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             return id;
         }
         return null;
+    }
+
+    private static string GetPublicExportMethodName(string exportId)
+    {
+        var dotIndex = exportId.LastIndexOf('.');
+        return dotIndex >= 0 ? exportId.Substring(dotIndex + 1) : exportId;
     }
 
     private static string? GetDerivedExportId(IMethodSymbol method, AttributeData? containingTypeExportAttribute)
