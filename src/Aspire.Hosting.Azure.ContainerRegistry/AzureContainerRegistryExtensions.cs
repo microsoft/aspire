@@ -36,48 +36,7 @@ public static class AzureContainerRegistryExtensions
 
         builder.AddAzureProvisioning();
 
-        var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
-        {
-            var azureResource = (AzureContainerRegistryResource)infrastructure.AspireResource;
-
-            // Check if this Container Registry has a private endpoint (via annotation)
-            var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
-
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, name) =>
-                {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = name;
-                    return resource;
-                },
-                (infrastructure) =>
-                {
-                    var svc = new ContainerRegistryService(infrastructure.AspireResource.GetBicepIdentifier())
-                    {
-                        // Private endpoints require Premium SKU.
-                        Sku = new() { Name = hasPrivateEndpoint ? ContainerRegistrySkuName.Premium : ContainerRegistrySkuName.Basic },
-                        Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
-                    };
-
-                    // When using private endpoints, disable public network access.
-                    if (hasPrivateEndpoint)
-                    {
-                        svc.PublicNetworkAccess = ContainerRegistryPublicNetworkAccess.Disabled;
-                    }
-
-                    return svc;
-                });
-
-            infrastructure.Add(registry);
-
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name.ToBicepExpression() });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer.ToBicepExpression() });
-
-            // Output the resource id for private endpoint support.
-            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = registry.Id.ToBicepExpression() });
-        };
-
-        var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
+        var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
 
         IResourceBuilder<AzureContainerRegistryResource> resourceBuilder;
 
