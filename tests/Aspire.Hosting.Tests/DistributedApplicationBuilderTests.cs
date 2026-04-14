@@ -122,6 +122,18 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
+    public void PipelineOutputServiceIgnoresInvalidAppHostDirectoryWhenOutputPathSpecified()
+    {
+        var outputPath = OperatingSystem.IsWindows() ? @"C:\tmp\output" : "/tmp/output";
+        var appBuilder = DistributedApplication.CreateBuilder(["--publisher", "manifest", "--output-path", outputPath]);
+        appBuilder.Configuration["AppHost:Directory"] = "\0";
+        using var app = appBuilder.Build();
+
+        var outputService = app.Services.GetRequiredService<IPipelineOutputService>();
+        Assert.Equal(Path.GetFullPath(outputPath), outputService.GetOutputDirectory());
+    }
+
+    [Fact]
     public void ResourceServiceConfig_Secured()
     {
         var appBuilder = DistributedApplication.CreateBuilder();

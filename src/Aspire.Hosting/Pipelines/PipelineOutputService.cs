@@ -38,12 +38,31 @@ internal sealed class PipelineOutputService : IPipelineOutputService
         ArgumentNullException.ThrowIfNull(directoryService);
 
         _outputPath = options.Value.OutputPath is not null ? Path.GetFullPath(options.Value.OutputPath) : null;
-        // DistributedApplicationBuilder publishes the resolved AppHost project directory here.
-        var appHostDirectory = configuration["AppHost:Directory"];
-        _defaultOutputPath = !string.IsNullOrWhiteSpace(appHostDirectory)
-            ? Path.Combine(Path.GetFullPath(appHostDirectory), "aspire-output")
+        _defaultOutputPath = _outputPath is null
+            ? ResolveDefaultOutputPath(configuration)
             : Path.Combine(Environment.CurrentDirectory, "aspire-output");
         _tempDirectory = directoryService.TempDirectory.CreateTempSubdirectory("aspire-pipelines").Path;
+    }
+
+    private static string ResolveDefaultOutputPath(IConfiguration configuration)
+    {
+        // DistributedApplicationBuilder publishes the resolved AppHost directory here.
+        var appHostDirectory = configuration["AppHost:Directory"];
+        var baseDirectory = Environment.CurrentDirectory;
+
+        if (!string.IsNullOrWhiteSpace(appHostDirectory))
+        {
+            try
+            {
+                baseDirectory = Path.GetFullPath(appHostDirectory);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                baseDirectory = Environment.CurrentDirectory;
+            }
+        }
+
+        return Path.Combine(baseDirectory, "aspire-output");
     }
 
     /// <inheritdoc/>
