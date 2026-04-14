@@ -168,21 +168,10 @@ internal sealed class LogsCommand : BaseCommand
         var connection = result.Connection!;
 
         // Always fetch all snapshots so we know which resources are hidden.
-        // When a specific resource is requested, always include hidden resources
-        // so the user can get logs from any resource by name.
-        var effectiveIncludeHidden = includeHidden || resourceName is not null;
         var allSnapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
 
-        // Build the set of hidden resource names for log filtering.
-        // When the user requests hidden resources, use an empty set so nothing is filtered.
-        var hiddenResourceNames = effectiveIncludeHidden
-            ? new HashSet<string>(StringComparers.ResourceName)
-            : new HashSet<string>(allSnapshots.Where(IsHiddenResource).Select(s => s.Name), StringComparers.ResourceName);
-
-        // Derive the display list (visible-only unless hidden requested).
-        var snapshots = effectiveIncludeHidden
-            ? allSnapshots
-            : allSnapshots.Where(s => !IsHiddenResource(s)).ToList();
+        // Filter hidden resources, deriving the visible list and the hidden set for log filtering.
+        var (_, snapshots, hiddenResourceNames) = ResourceSnapshotMapper.FilterHiddenResources(allSnapshots, includeHidden, resourceName);
 
         // Pre-resolve colors for all resource names so that assignment is
         // deterministic regardless of which resources are displayed.
@@ -393,10 +382,5 @@ internal sealed class LogsCommand : BaseCommand
             return ResourceSnapshotMapper.GetResourceName(snapshot, snapshots);
         }
         return resourceName;
-    }
-
-    private static bool IsHiddenResource(ResourceSnapshot snapshot)
-    {
-        return snapshot.IsHidden || string.Equals(snapshot.State, "Hidden", StringComparison.OrdinalIgnoreCase);
     }
 }

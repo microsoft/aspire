@@ -147,14 +147,12 @@ internal sealed class DescribeCommand : BaseCommand
         // dispatching to the snapshot or watch path.
         // When a specific resource is requested, always include hidden resources
         // so the user can describe any resource by name.
-        var effectiveIncludeHidden = includeHidden || resourceName is not null;
         var dashboardUrlsTask = connection.GetDashboardUrlsAsync(cancellationToken);
-        var snapshotsTask = connection.GetResourceSnapshotsAsync(effectiveIncludeHidden, cancellationToken);
-
-        await Task.WhenAll(dashboardUrlsTask, snapshotsTask).ConfigureAwait(false);
+        var allSnapshotsTask = connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken);
 
         var dashboardBaseUrl = TelemetryCommandHelpers.ExtractDashboardBaseUrl((await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken);
-        var snapshots = await snapshotsTask.ConfigureAwait(false);
+        var allSnapshots = await allSnapshotsTask.ConfigureAwait(false);
+        var (effectiveIncludeHidden, snapshots, _) = ResourceSnapshotMapper.FilterHiddenResources(allSnapshots, includeHidden, resourceName);
 
         // Pre-resolve colors for all resource names so that assignment is
         // deterministic regardless of which resources are displayed.
