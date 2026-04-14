@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <!--
+      Prototype integration: emits a brand-new public API surface, no prior
+      package to validate against. Re-enable this when a baseline package
+      ships to nuget.org and breaking-change tracking begins.
+    -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <PackageTags>aspire integration hosting radius radapp deployment</PackageTags>
+    <Description>Provides extensions and resource definitions for an Aspire AppHost to publish and deploy applications to a Radius (radapp.io) compute environment.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+    <PackageReference Include="Azure.Provisioning" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)PublishingContextUtils.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Radius.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,68 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using Aspire.Hosting.Radius.Publishing.Constructs;
+
+namespace Aspire.Hosting.Radius.Publishing;
+
+/// <summary>
+/// Exposes strongly-typed mutable collections of Radius construct classes for
+/// AST customization via the <c>ConfigureRadiusInfrastructure</c> callback.
+/// </summary>
+/// <remarks>
+/// <b>Internal prototype API.</b> The construct shapes here mirror the still-
+/// evolving Radius preview schemas. Holding this type <c>internal</c> for the
+/// prototype window prevents users from binding to construct types that will
+/// likely be reshaped as the Radius schemas stabilize. Tests reach this type
+/// via <c>InternalsVisibleTo</c>.
+/// </remarks>
+public sealed class RadiusInfrastructureOptions
+{
+    /// <summary>
+    /// Gets the list of <c>Radius.Core/environments</c> constructs.
+    /// </summary>
+    public List<RadiusEnvironmentConstruct> Environments { get; } = [];
+
+    /// <summary>
+    /// Gets the list of <c>Radius.Core/applications</c> constructs.
+    /// </summary>
+    public List<RadiusApplicationConstruct> Applications { get; } = [];
+
+    /// <summary>
+    /// Gets the list of <c>Radius.Core/recipePacks</c> constructs.
+    /// </summary>
+    public List<RadiusRecipePackConstruct> RecipePacks { get; } = [];
+
+    /// <summary>
+    /// Gets the list of resource type instance constructs
+    /// (e.g., <c>Radius.Data/redisCaches</c>, <c>Radius.Messaging/rabbitMQQueues</c>).
+    /// </summary>
+    public List<RadiusResourceTypeConstruct> ResourceTypeInstances { get; } = [];
+
+    /// <summary>
+    /// Gets the list of <c>Radius.Compute/containers</c> workload constructs.
+    /// </summary>
+    public List<RadiusContainerConstruct> Containers { get; } = [];
+
+    /// <summary>
+    /// Gets the list of legacy <c>Applications.Core/environments</c> constructs
+    /// emitted when one or more targeted resources fall back to a legacy
+    /// <c>Applications.*</c> type (e.g., Redis, Mongo, RabbitMQ, Dapr).
+    /// </summary>
+    public List<LegacyApplicationEnvironmentConstruct> LegacyEnvironments { get; } = [];
+
+    /// <summary>
+    /// Gets the list of legacy <c>Applications.Core/applications</c> constructs
+    /// paired with <see cref="LegacyEnvironments"/>.
+    /// </summary>
+    public List<LegacyApplicationConstruct> LegacyApplications { get; } = [];
+
+    /// <summary>
+    /// Gets the list of legacy <c>Applications.Core/containers</c> workload
+    /// constructs. Populated instead of <see cref="Containers"/> when the
+    /// environment opts in via <c>WithLegacyContainers()</c>. Used as a
+    /// fallback when the <c>Radius.Compute/containers</c> UDT has no recipe
+    /// registered in the target Radius environment.
+    /// </summary>
+    public List<LegacyContainerConstruct> LegacyContainers { get; } = [];
+}

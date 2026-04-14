@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Radius\Aspire.Hosting.Radius.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Redis\Aspire.Hosting.Redis.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.SqlServer\Aspire.Hosting.SqlServer.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.PostgreSQL\Aspire.Hosting.PostgreSQL.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.MongoDB\Aspire.Hosting.MongoDB.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.RabbitMQ\Aspire.Hosting.RabbitMQ.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
+  </ItemGroup>
+
+</Project>
