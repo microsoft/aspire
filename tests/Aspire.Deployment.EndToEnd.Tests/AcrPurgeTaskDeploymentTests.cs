@@ -126,10 +126,10 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
                 "await builder.build().run();",
                 """
 // Add Azure Container App Environment and configure ACR purge task
-const infra = builder.addAzureContainerAppEnvironment("infra");
+const infra = await builder.addAzureContainerAppEnvironment("infra");
 // Schedule once a month so it never fires during the test; the task is triggered manually via az acr task run
-infra.getAzureContainerRegistry()
-    .withPurgeTask("0 0 1 * *", { keep: 1 });
+const acr = await infra.getAzureContainerRegistry();
+await acr.withPurgeTask("0 0 1 * *", undefined, undefined, 1);
 
 await builder.build().run();
 """);
