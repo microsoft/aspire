@@ -63,8 +63,8 @@ internal static class ContainerRegistryInfrastructure
             });
 
         infrastructure.Add(registry);
-        infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name });
-        infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer });
-        infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = registry.Id });
+        infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name.ToBicepExpression() });
+        infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer.ToBicepExpression() });
+        infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = registry.Id.ToBicepExpression() });
     }
 }
