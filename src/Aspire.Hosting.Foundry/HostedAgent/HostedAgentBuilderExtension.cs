@@ -105,10 +105,10 @@ public static class HostedAgentResourceBuilderExtensions
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            // Remove any existing HTTP/HTTPS endpoints to avoid conflicts
+            // Remove only the default HTTP/HTTPS endpoints that would conflict with the hosted agent endpoints.
             var existingEndpoints = resource.Annotations.OfType<EndpointAnnotation>()
-                .Where(e => string.Equals(e.UriScheme, "http", StringComparison.OrdinalIgnoreCase) ||
-                            string.Equals(e.UriScheme, "https", StringComparison.OrdinalIgnoreCase))
+                .Where(e => string.Equals(e.Name, "http", StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(e.Name, "https", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             foreach (var endpoint in existingEndpoints)
