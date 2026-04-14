@@ -43,7 +43,7 @@ jobs:
             const milestones = await github.rest.issues.listMilestones({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              state: 'all',
+              state: 'open',
             });
 
             const milestone = milestones.data.find(m => m.title === expectedTitle);
