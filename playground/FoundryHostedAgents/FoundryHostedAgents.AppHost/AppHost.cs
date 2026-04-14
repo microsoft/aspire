@@ -18,8 +18,9 @@ builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
     .WithEnvironment("AZURE_TENANT_ID", tenantId)
     .PublishAsHostedAgent(project);
 
-// builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
-//     .WithReference(chat).WaitFor(chat)
-//     .PublishAsHostedAgent();
+builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
+    .WithReference(chat).WaitFor(chat)
+    .PublishAsHostedAgent()
+    .WithEndpoint("http", e => e.TargetPort = 9000);
 
 builder.Build().Run();

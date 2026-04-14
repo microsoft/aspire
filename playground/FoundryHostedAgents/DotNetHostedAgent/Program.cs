@@ -28,6 +28,10 @@ if (!Uri.TryCreate(endpoint, UriKind.Absolute, out Uri? openAiEndpoint) || openA
 Console.WriteLine($"OpenAI Endpoint: {openAiEndpoint}");
 Console.WriteLine($"Model Deployment: {deploymentName}");
 
+// Read the port from environment variable (set by Aspire), default to 8088
+string? portString = Environment.GetEnvironmentVariable("DEFAULT_AD_PORT");
+int port = int.TryParse(portString, out int parsedPort) ? parsedPort : 8088;
+
 [Description("Get a weather forecast")]
 WeatherForecast[]? GetWeatherForecast()
 {
@@ -60,7 +64,7 @@ AIAgent agent = chatClient.AsAIAgent(
     .UseOpenTelemetry(sourceName: "Agents", configure: cfg => cfg.EnableSensitiveData = true)
     .Build();
 
-Console.WriteLine("Weather Agent Server running on http://localhost:8088");
+Console.WriteLine($"Weather Agent Server running on http://localhost:{port}");
 await agent.RunAIAgentAsync(telemetrySourceName: "Agents");
 
 string GetRequiredConnectionValue(DbConnectionStringBuilder connectionBuilder, string key)
