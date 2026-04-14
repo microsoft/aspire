@@ -2253,8 +2253,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
              *
              * @example
              * const builder = await createBuilder();
-             * builder.addRedis("cache");
-             * builder.addContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp");
+             * await builder.addRedis("cache");
+             * await builder.addContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp");
              * const app = await builder.build();
              * await app.run();
              */
