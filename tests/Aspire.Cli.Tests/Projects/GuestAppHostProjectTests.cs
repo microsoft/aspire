@@ -13,6 +13,8 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposable
 {
+    private const string AspNetCoreEnvironmentVariableName = "ASPNETCORE_ENVIRONMENT";
+
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
 
     public void Dispose()
@@ -518,7 +520,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             contextEnvironmentVariables: new Dictionary<string, string>
             {
                 [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Testing",
-                [AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName] = "Staging"
+                [AspNetCoreEnvironmentVariableName] = "Staging"
             },
             launchProfileEnvironmentVariables: null,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());

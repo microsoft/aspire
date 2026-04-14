@@ -10,10 +10,10 @@ internal static class AppHostEnvironmentDefaults
 {
     private const string EnvironmentArgumentName = "--environment";
     private const string EnvironmentArgumentAlias = "-e";
+    private const string AspNetCoreEnvironmentVariableName = "ASPNETCORE_ENVIRONMENT";
 
     internal const string AspireEnvironmentVariableName = "ASPIRE_ENVIRONMENT";
     internal const string DotNetEnvironmentVariableName = "DOTNET_ENVIRONMENT";
-    internal const string AspNetCoreEnvironmentVariableName = "ASPNETCORE_ENVIRONMENT";
     internal const string DevelopmentEnvironmentName = "Development";
     internal const string ProductionEnvironmentName = "Production";
 

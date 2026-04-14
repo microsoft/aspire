@@ -7,6 +7,8 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class AppHostEnvironmentDefaultsTests
 {
+    private const string AspNetCoreEnvironmentVariableName = "ASPNETCORE_ENVIRONMENT";
+
     [Fact]
     public void ApplyEffectiveEnvironment_UsesDefaultWhenNoEnvironmentVariablesAreSet()
     {
@@ -15,7 +17,7 @@ public class AppHostEnvironmentDefaultsTests
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.ProductionEnvironmentName);
 
         Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey(AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName));
+        Assert.False(env.ContainsKey(AspNetCoreEnvironmentVariableName));
     }
 
     [Fact]
@@ -30,7 +32,7 @@ public class AppHostEnvironmentDefaultsTests
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.DevelopmentEnvironmentName);
 
         Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey(AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName));
+        Assert.False(env.ContainsKey(AspNetCoreEnvironmentVariableName));
         Assert.Equal("Staging", env["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -49,7 +51,7 @@ public class AppHostEnvironmentDefaultsTests
             args: ["--environment", "Staging"]);
 
         Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey(AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName));
+        Assert.False(env.ContainsKey(AspNetCoreEnvironmentVariableName));
         Assert.Equal("Development", env["ASPIRE_ENVIRONMENT"]);
     }
 
@@ -59,7 +61,7 @@ public class AppHostEnvironmentDefaultsTests
         var env = new Dictionary<string, string>
         {
             [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Testing",
-            [AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName] = "Staging"
+            [AspNetCoreEnvironmentVariableName] = "Staging"
         };
 
         AppHostEnvironmentDefaults.ApplyEffectiveEnvironment(env, AppHostEnvironmentDefaults.DevelopmentEnvironmentName);
@@ -84,6 +86,6 @@ public class AppHostEnvironmentDefaultsTests
             inherited);
 
         Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey(AppHostEnvironmentDefaults.AspNetCoreEnvironmentVariableName));
+        Assert.False(env.ContainsKey(AspNetCoreEnvironmentVariableName));
     }
 }
