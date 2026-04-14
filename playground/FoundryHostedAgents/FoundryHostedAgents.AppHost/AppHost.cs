@@ -16,7 +16,7 @@ builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
 
 builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
     .WithReference(chat).WaitFor(chat)
-    .PublishAsHostedAgent(project)
-    .WithEndpoint("http", e => e.TargetPort = 9000);
+    .WithEndpoint("http", e => e.TargetPort = 9000)
+    .PublishAsHostedAgent(project);
 
 builder.Build().Run();
