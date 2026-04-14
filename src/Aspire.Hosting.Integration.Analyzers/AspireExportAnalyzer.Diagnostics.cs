@@ -131,6 +131,17 @@ public partial class AspireExportAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{CallbackContextTypeMissingExportId}");
 
+        private const string DuplicateInstanceMethodNameId = "ASPIREEXPORT013";
+        internal static readonly DiagnosticDescriptor s_duplicateInstanceMethodName = new(
+            id: DuplicateInstanceMethodNameId,
+            title: "Exported instance methods must have unique polyglot names",
+            messageFormat: "Exported instance method '{0}' on type '{1}' maps to polyglot method name '{2}', which is already used by another exported instance method. Use [AspireExportIgnore] on unsupported overloads or assign a unique [AspireExport(\"...\")] ID.",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicateInstanceMethodNameId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -143,7 +154,8 @@ public partial class AspireExportAnalyzer
             s_exportNameShouldBeUnique,
             s_exportedSyncDelegateInvokedInline,
             s_redundantExportId,
-            s_callbackContextTypeMissingExport
+            s_callbackContextTypeMissingExport,
+            s_duplicateInstanceMethodName
         );
     }
 }
