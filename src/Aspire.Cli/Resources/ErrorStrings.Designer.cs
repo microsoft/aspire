@@ -355,6 +355,13 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectFilesCreatedButNodeToolsNotFound", resourceCulture);
             }
         }
+        public static string PackageDoesNotExposeGuestAppHostApis
+        {
+            get
+            {
+                return ResourceManager.GetString("PackageDoesNotExposeGuestAppHostApis", resourceCulture);
+            }
+        }
         public static string AppHostsMayNotBeBuildable
         {
             get

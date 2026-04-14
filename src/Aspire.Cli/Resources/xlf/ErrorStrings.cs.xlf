@@ -167,6 +167,11 @@
         <target state="translated">Pro výzvu {0} byl požadován vstup, ale nebyl zadán.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PackageDoesNotExposeGuestAppHostApis">
+        <source>The package '{0}' does not expose any APIs for {1} AppHosts. Aspire can still run your app, but this package did not add anything to the generated SDK.</source>
+        <target state="new">The package '{0}' does not expose any APIs for {1} AppHosts. Aspire can still run your app, but this package did not add anything to the generated SDK.</target>
+        <note>{0} is the package ID, {1} is the guest AppHost language display name. Do not translate 'AppHost' or 'SDK'.</note>
+      </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
         <source>The project could not be analyzed due to a build error. See logs at {0}</source>
         <target state="translated">Projekt se nepodařilo analyzovat kvůli chybě sestavení. Protokoly najdete na {0}</target>
