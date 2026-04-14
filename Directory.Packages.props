@@ -12,6 +12,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Azure SDK for .NET dependencies -->
+    <PackageVersion Include="Azure.AI.AgentServer.AgentFramework" Version="1.0.0-beta.11" />
     <PackageVersion Include="Azure.AI.Inference" Version="1.0.0-beta.5" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.5.0-beta.1" />
     <PackageVersion Include="Azure.AI.Projects" Version="1.2.0-beta.4" />
@@ -105,6 +106,7 @@
     <PackageVersion Include="JsonPatch.Net" Version="3.3.0" />
     <PackageVersion Include="Markdig" Version="0.45.0" />
     <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.3.0" />
+    <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.0.0-rc4" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.4" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.0" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.0" />

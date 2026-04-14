@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnablePreviewFeatures>true</EnablePreviewFeatures>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageVersion Update="Microsoft.Extensions.AI" Version="10.3.0" />
+    <PackageVersion Update="Microsoft.Extensions.AI.OpenAI" Version="10.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Remove="Microsoft.CodeAnalysis.NetAnalyzers" />
+    <PackageReference Remove="Microsoft.VisualStudio.Threading.Analyzers" />
+    <PackageReference Remove="xunit.analyzers" />
+    <PackageReference Remove="Moq.Analyzers" />
+    <PackageReference Remove="Roslynator.Analyzers" />
+    <PackageReference Remove="Roslynator.CodeAnalysis.Analyzers" />
+    <PackageReference Remove="Roslynator.Formatting.Analyzers" />
+    <PackageReference Include="Azure.AI.AgentServer.AgentFramework" />
+    <PackageReference Include="Azure.AI.Projects" />
+    <PackageReference Include="Azure.AI.OpenAI" />
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Components/Aspire.Azure.AI.Inference/Aspire.Azure.AI.Inference.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -18,6 +18,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Foundry" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Python" />
+    <ProjectReference Include="../DotNetHostedAgent/DotNetHostedAgent.csproj" />
   </ItemGroup>
 
 </Project>
