@@ -108,13 +108,15 @@ internal static class FileSystemHelper
     /// <summary>
     /// Shortens a list of paths so each is uniquely identifiable using the minimum
     /// number of trailing path segments. Duplicate filenames get parent directories
-    /// added with a "~" prefix until unique. Non-project files (e.g. single-file
-    /// AppHosts like AppHost.cs) always include at least the parent folder to
-    /// provide context.
+    /// added until unique. Non-project files (e.g. single-file AppHosts like
+    /// AppHost.cs) always include at least the parent folder to provide context.
     /// </summary>
     internal static Dictionary<string, string> ShortenPaths(IReadOnlyList<string> paths)
     {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var comparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var result = new Dictionary<string, string>(comparer);
 
         if (paths.Count == 0)
         {
@@ -122,8 +124,8 @@ internal static class FileSystemHelper
         }
 
         // Split each path into normalized segments
-        var segmentsMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
-        var depthMap = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var segmentsMap = new Dictionary<string, string[]>(comparer);
+        var depthMap = new Dictionary<string, int>(comparer);
 
         foreach (var path in paths)
         {
@@ -179,17 +181,14 @@ internal static class FileSystemHelper
                     {
                         var candidate = Path.Combine(segments[^newDepth..]);
 
-                        // If adding one more parent segment would reach the path root,
-                        // switch to the full original path to avoid displaying
-                        // something like "~\C:\folder\Project.csproj".
-                        var nextIndex = segments.Length - newDepth - 1;
-                        if (nextIndex >= 0)
+                        // Switch to the full original path when the candidate itself
+                        // would include a root/drive segment, to avoid displaying
+                        // something like "C:\folder\Project.csproj" with a tilde prefix.
+                        var firstCandidateIndex = segments.Length - newDepth;
+                        var firstCandidateSegment = segments[firstCandidateIndex];
+                        if (firstCandidateSegment.Length == 0 || Path.IsPathRooted(firstCandidateSegment))
                         {
-                            var nextSegment = segments[nextIndex];
-                            if (nextSegment.Length == 0 || Path.IsPathRooted(nextSegment))
-                            {
-                                candidate = originalPath;
-                            }
+                            candidate = originalPath;
                         }
 
                         result[originalPath] = candidate;

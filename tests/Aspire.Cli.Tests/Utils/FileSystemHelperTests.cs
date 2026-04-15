@@ -296,8 +296,8 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
 
         var result = FileSystemHelper.ShortenPaths(paths);
 
-        Assert.Equal(@"C:\folder1\Project.csproj", result[paths[0]]);
-        Assert.Equal(@"C:\folder2\Project.csproj", result[paths[1]]);
+        Assert.Equal(Path.Combine("folder1", "Project.csproj"), result[paths[0]]);
+        Assert.Equal(Path.Combine("folder2", "Project.csproj"), result[paths[1]]);
     }
 
     [Fact]
