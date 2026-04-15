@@ -371,7 +371,9 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
         return {
             retryable: true,
             failedSteps,
-            reason: `${formatFailedStepLabel(failedSteps, failedStepText)} matched the Windows process initialization failure allowlist (exit code -1073741502 is always an OS-level infrastructure failure).`,
+            reason: failedSteps.length === 0
+                ? 'Job annotations matched the Windows process initialization failure allowlist (exit code -1073741502 is an OS-level infrastructure failure).'
+                : `${formatFailedStepLabel(failedSteps, failedStepText)} matched the Windows process initialization failure allowlist (exit code -1073741502 is an OS-level infrastructure failure).`,
         };
     }
 
