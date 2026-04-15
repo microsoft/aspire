@@ -299,7 +299,7 @@ sealed partial class TestSummaryGenerator
 
                 reportBuilder.AppendLine("```");
 
-                AppendRecordingSection(reportBuilder, recordingsDir, test.TestName);
+                AppendRecordingSection(reportBuilder, recordingsDir, test.TestName, test.Output?.ErrorInfoString);
 
                 reportBuilder.AppendLine();
                 reportBuilder.AppendLine("</div>");
@@ -308,9 +308,16 @@ sealed partial class TestSummaryGenerator
         reportBuilder.AppendLine();
     }
 
-    private static void AppendRecordingSection(StringBuilder reportBuilder, string? recordingsDir, string? testName)
+    private static void AppendRecordingSection(StringBuilder reportBuilder, string? recordingsDir, string? testName, string? errorInfo)
     {
         if (recordingsDir is null || testName is null)
+        {
+            return;
+        }
+
+        // Hex1bAutomationException already includes a terminal snapshot in the error.
+        // Skip the recording section to avoid redundant output.
+        if (errorInfo is not null && errorInfo.Contains("Terminal snapshot at failure", StringComparison.Ordinal))
         {
             return;
         }

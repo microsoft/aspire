@@ -12,7 +12,7 @@ namespace Aspire.TestTools;
 /// </summary>
 static partial class CastFileReader
 {
-    private const int MaxTextLength = 5_000;
+    private const int MaxLines = 100;
 
     /// <summary>
     /// Reads the terminal recording text for a given test method name.
@@ -90,12 +90,20 @@ static partial class CastFileReader
         var rawText = sb.ToString();
         var plainText = StripAnsiEscapes(rawText);
 
-        if (plainText.Length > MaxTextLength)
+        if (plainText.Length == 0)
         {
-            plainText = string.Concat(plainText.AsSpan(0, MaxTextLength), "\n\n… (truncated)");
+            return null;
         }
 
-        return plainText.Length > 0 ? plainText : null;
+        // Keep only the last N lines so the summary shows the most recent output.
+        var lines = plainText.Split('\n');
+        if (lines.Length > MaxLines)
+        {
+            var tail = lines.AsSpan(lines.Length - MaxLines);
+            plainText = $"… ({lines.Length - MaxLines} lines omitted)\n{string.Join('\n', tail.ToArray())}";
+        }
+
+        return plainText;
     }
 
     private static string StripAnsiEscapes(string text)
