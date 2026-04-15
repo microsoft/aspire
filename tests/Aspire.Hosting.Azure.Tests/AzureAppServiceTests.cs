@@ -1036,4 +1036,80 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     {
         public string ValueExpression => "{customValue}";
     }
+
+    [Fact]
+    public async Task CrossEnvironmentReference_AppServiceReferencingContainerApp_GeneratesBicep()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var aca = builder.AddAzureContainerAppEnvironment("aca");
+        var appService = builder.AddAzureAppServiceEnvironment("appService");
+
+        var apiService = builder.AddProject<Project>("apiservice", launchProfileName: null)
+            .WithComputeEnvironment(aca)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        var webfrontend = builder.AddProject<Project>("webfrontend", launchProfileName: null)
+            .WithComputeEnvironment(appService)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithReference(apiService);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        webfrontend.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task CrossEnvironmentReference_ContainerAppReferencingAppService_GeneratesBicep()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var aca = builder.AddAzureContainerAppEnvironment("aca");
+        var appService = builder.AddAzureAppServiceEnvironment("appService");
+
+        var webfrontend = builder.AddProject<Project>("webfrontend", launchProfileName: null)
+            .WithComputeEnvironment(appService)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        var apiService = builder.AddProject<Project>("apiservice", launchProfileName: null)
+            .WithComputeEnvironment(aca)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithReference(webfrontend);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var apiResource = Assert.Single(model.GetProjectResources(), r => r.Name == "apiservice");
+
+        apiResource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
 }

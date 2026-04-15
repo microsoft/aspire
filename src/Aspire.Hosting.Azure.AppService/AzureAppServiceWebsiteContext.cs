@@ -167,10 +167,19 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is EndpointReference ep)
         {
-            var context = environmentContext.GetAppServiceContext(ep.Resource);
-            return isSlot ?
-                (GetEndpointValue(context._slotEndpointMapping[ep.EndpointName], EndpointProperty.Url), secretType) :
-                (GetEndpointValue(context._endpointMapping[ep.EndpointName], EndpointProperty.Url), secretType);
+            if (environmentContext.TryGetAppServiceContext(ep.Resource, out var epContext))
+            {
+                return isSlot ?
+                    (GetEndpointValue(epContext._slotEndpointMapping[ep.EndpointName], EndpointProperty.Url), secretType) :
+                    (GetEndpointValue(epContext._endpointMapping[ep.EndpointName], EndpointProperty.Url), secretType);
+            }
+
+            if (ep.Resource.GetComputeEnvironment() == environmentContext.Environment)
+            {
+                throw new InvalidOperationException($"App Service context not found for resource {ep.Resource.Name}.");
+            }
+
+            // Cross-environment reference — fall through to IManifestExpressionProvider handler
         }
 
         if (value is ParameterResource param)
@@ -206,10 +215,19 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is EndpointReferenceExpression epExpr)
         {
-            var context = environmentContext.GetAppServiceContext(epExpr.Endpoint.Resource);
-            var mapping = isSlot ? context._slotEndpointMapping[epExpr.Endpoint.EndpointName] : context._endpointMapping[epExpr.Endpoint.EndpointName];
-            var val = GetEndpointValue(mapping, epExpr.Property);
-            return (val, secretType);
+            if (environmentContext.TryGetAppServiceContext(epExpr.Endpoint.Resource, out var epExprContext))
+            {
+                var mapping = isSlot ? epExprContext._slotEndpointMapping[epExpr.Endpoint.EndpointName] : epExprContext._endpointMapping[epExpr.Endpoint.EndpointName];
+                var val = GetEndpointValue(mapping, epExpr.Property);
+                return (val, secretType);
+            }
+
+            if (epExpr.Endpoint.Resource.GetComputeEnvironment() == environmentContext.Environment)
+            {
+                throw new InvalidOperationException($"App Service context not found for resource {epExpr.Endpoint.Resource.Name}.");
+            }
+
+            // Cross-environment reference — fall through to IManifestExpressionProvider handler
         }
 
         if (value is ReferenceExpression expr)

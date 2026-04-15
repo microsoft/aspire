@@ -1,0 +1,16 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "webfrontend-website.module.bicep",
+  "params": {
+    "appservice_outputs_azure_container_registry_endpoint": "{appService.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+    "appservice_outputs_planid": "{appService.outputs.planId}",
+    "appservice_outputs_azure_container_registry_managed_identity_id": "{appService.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+    "appservice_outputs_azure_container_registry_managed_identity_client_id": "{appService.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID}",
+    "webfrontend_containerimage": "{webfrontend.containerImage}",
+    "webfrontend_containerport": "{webfrontend.containerPort}",
+    "apiservice_bindings_http_url": "{apiservice.bindings.http.url}",
+    "appservice_outputs_azure_app_service_dashboard_uri": "{appService.outputs.AZURE_APP_SERVICE_DASHBOARD_URI}",
+    "appservice_outputs_azure_website_contributor_managed_identity_id": "{appService.outputs.AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_ID}",
+    "appservice_outputs_azure_website_contributor_managed_identity_principal_id": "{appService.outputs.AZURE_WEBSITE_CONTRIBUTOR_MANAGED_IDENTITY_PRINCIPAL_ID}"
+  }
+}

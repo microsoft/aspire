@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Microsoft.Extensions.Logging;
@@ -69,6 +70,11 @@ internal sealed class ContainerAppEnvironmentContext(
         }
 
         return context;
+    }
+
+    public bool TryGetContainerAppContext(IResource resource, [NotNullWhen(true)] out BaseContainerAppContext? context)
+    {
+        return _containerApps.TryGetValue(resource, out context);
     }
 
     public async Task<AzureBicepResource> CreateContainerAppAsync(IResource resource, AzureProvisioningOptions provisioningOptions, CancellationToken cancellationToken)

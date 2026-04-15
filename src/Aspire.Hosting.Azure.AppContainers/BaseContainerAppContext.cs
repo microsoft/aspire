@@ -222,15 +222,24 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReference ep)
         {
-            var context = ep.Resource == resource
-                ? this
-                : _containerAppEnvironmentContext.GetContainerAppContext(ep.Resource);
+            if (ep.Resource == resource)
+            {
+                var mapping = _endpointMapping[ep.EndpointName];
+                return (GetEndpointValue(mapping, EndpointProperty.Url), secretType);
+            }
 
-            var mapping = context._endpointMapping[ep.EndpointName];
+            if (_containerAppEnvironmentContext.TryGetContainerAppContext(ep.Resource, out var epContext))
+            {
+                var mapping = epContext._endpointMapping[ep.EndpointName];
+                return (GetEndpointValue(mapping, EndpointProperty.Url), secretType);
+            }
 
-            var url = GetEndpointValue(mapping, EndpointProperty.Url);
+            if (ep.Resource.GetComputeEnvironment() == _containerAppEnvironmentContext.Environment)
+            {
+                throw new InvalidOperationException($"Container app context not found for resource {ep.Resource.Name}.");
+            }
 
-            return (url, secretType);
+            // Cross-environment reference — fall through to IManifestExpressionProvider handler
         }
 
         if (value is ParameterResource param)
@@ -274,15 +283,26 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
         if (value is EndpointReferenceExpression epExpr)
         {
-            var context = epExpr.Endpoint.Resource == resource
-                ? this
-                : _containerAppEnvironmentContext.GetContainerAppContext(epExpr.Endpoint.Resource);
+            if (epExpr.Endpoint.Resource == resource)
+            {
+                var mapping = _endpointMapping[epExpr.Endpoint.EndpointName];
+                var val = GetEndpointValue(mapping, epExpr.Property);
+                return (val, secretType);
+            }
 
-            var mapping = context._endpointMapping[epExpr.Endpoint.EndpointName];
+            if (_containerAppEnvironmentContext.TryGetContainerAppContext(epExpr.Endpoint.Resource, out var epExprContext))
+            {
+                var mapping = epExprContext._endpointMapping[epExpr.Endpoint.EndpointName];
+                var val = GetEndpointValue(mapping, epExpr.Property);
+                return (val, secretType);
+            }
 
-            var val = GetEndpointValue(mapping, epExpr.Property);
+            if (epExpr.Endpoint.Resource.GetComputeEnvironment() == _containerAppEnvironmentContext.Environment)
+            {
+                throw new InvalidOperationException($"Container app context not found for resource {epExpr.Endpoint.Resource.Name}.");
+            }
 
-            return (val, secretType);
+            // Cross-environment reference — fall through to IManifestExpressionProvider handler
         }
 
         if (value is ReferenceExpression expr)

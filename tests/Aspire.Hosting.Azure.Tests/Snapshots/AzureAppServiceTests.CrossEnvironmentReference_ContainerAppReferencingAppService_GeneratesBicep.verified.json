@@ -1,0 +1,13 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "apiservice-containerapp.module.bicep",
+  "params": {
+    "aca_outputs_azure_container_apps_environment_default_domain": "{aca.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}",
+    "aca_outputs_azure_container_apps_environment_id": "{aca.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_ID}",
+    "aca_outputs_azure_container_registry_endpoint": "{aca.outputs.AZURE_CONTAINER_REGISTRY_ENDPOINT}",
+    "aca_outputs_azure_container_registry_managed_identity_id": "{aca.outputs.AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID}",
+    "apiservice_containerimage": "{apiservice.containerImage}",
+    "apiservice_containerport": "{apiservice.containerPort}",
+    "webfrontend_bindings_http_url": "{webfrontend.bindings.http.url}"
+  }
+}
