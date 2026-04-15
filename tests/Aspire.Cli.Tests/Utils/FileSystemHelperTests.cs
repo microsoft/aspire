@@ -449,4 +449,19 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(Path.Combine("Folder", "Project.csproj"), result[paths[0]]);
         Assert.Equal(Path.Combine("folder", "Project.csproj"), result[paths[1]]);
     }
+
+    [Fact]
+    public void ShortenPaths_DuplicatePaths_ReturnsSingleEntry()
+    {
+        var paths = new List<string>
+        {
+            "/home/user/folder1/Project.csproj",
+            "/home/user/folder1/Project.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths);
+
+        Assert.Single(result);
+        Assert.Equal("Project.csproj", result[paths[0]]);
+    }
 }
