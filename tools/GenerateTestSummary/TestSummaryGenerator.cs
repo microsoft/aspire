@@ -315,7 +315,17 @@ sealed partial class TestSummaryGenerator
             return;
         }
 
-        var recordingText = CastFileReader.ReadRecordingText(recordingsDir, testName);
+        // The .cast file is named by the test method name (via [CallerMemberName]),
+        // but TRX TestName is fully qualified (e.g., "Namespace.Class.Method").
+        // Extract just the method name portion.
+        var methodName = testName;
+        var lastDot = testName.LastIndexOf('.');
+        if (lastDot >= 0 && lastDot < testName.Length - 1)
+        {
+            methodName = testName[(lastDot + 1)..];
+        }
+
+        var recordingText = CastFileReader.ReadRecordingText(recordingsDir, methodName);
         if (recordingText is null)
         {
             return;
