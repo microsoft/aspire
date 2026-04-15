@@ -1,33 +1,23 @@
-﻿@description('The location for the resource(s) to be deployed.')
+@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource aks 'Microsoft.ContainerService/managedClusters@2026-01-01' = {
-  name: 'aks'
+resource aks 'Microsoft.ContainerService/managedClusters@2025-03-01' = {
+  name: take('aks-${uniqueString(resourceGroup().id)}', 63)
   location: location
-  tags: {
-    'aspire-resource-name': 'aks'
-  }
-  identity: {
-    type: 'SystemAssigned'
-  }
-  sku: {
-    name: 'Base'
-    tier: 'Free'
-  }
   properties: {
-    dnsPrefix: 'aks-dns'
     agentPoolProfiles: [
       {
         name: 'system'
-        vmSize: 'Standard_D4s_v5'
-        minCount: 1
-        maxCount: 3
         count: 1
+        vmSize: 'Standard_D4s_v5'
+        osType: 'Linux'
+        maxCount: 3
+        minCount: 1
         enableAutoScaling: true
         mode: 'System'
-        osType: 'Linux'
       }
     ]
+    dnsPrefix: 'aks-dns'
     oidcIssuerProfile: {
       enabled: true
     }
@@ -37,11 +27,26 @@ resource aks 'Microsoft.ContainerService/managedClusters@2026-01-01' = {
       }
     }
   }
+  identity: {
+    type: 'SystemAssigned'
+  }
+  sku: {
+    name: 'Base'
+    tier: 'Free'
+  }
+  tags: {
+    'aspire-resource-name': 'aks'
+  }
 }
 
 output id string = aks.id
+
 output name string = aks.name
+
 output clusterFqdn string = aks.properties.fqdn
+
 output oidcIssuerUrl string = aks.properties.oidcIssuerProfile.issuerURL
+
 output kubeletIdentityObjectId string = aks.properties.identityProfile.kubeletidentity.objectId
+
 output nodeResourceGroup string = aks.properties.nodeResourceGroup
