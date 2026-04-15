@@ -69,6 +69,16 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
             trust: true);
     }
 
+    public EnsureCertificateResult EnsureHttpCertificateExists()
+    {
+        var now = DateTimeOffset.Now;
+        return certificateManager.EnsureAspNetCoreHttpsDevelopmentCertificate(
+            now,
+            now.Add(TimeSpan.FromDays(365)),
+            trust: false,
+            isInteractive: false);
+    }
+
     /// Win32 ERROR_CANCELLED (0x4C7) encoded as an HRESULT (0x800704C7).
     /// Thrown when the user dismisses the Windows certificate-store security dialog.
     private const int UserCancelledHResult = unchecked((int)0x800704C7);
