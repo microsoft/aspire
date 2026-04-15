@@ -403,7 +403,7 @@ internal sealed class CliServiceCollectionTestOptions
         var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
         var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        return new CertificateService(certificateToolRunner, interactiveService, telemetry, serviceProvider.GetRequiredService<ICliHostEnvironment>());
+        return new CertificateService(certificateToolRunner, interactiveService, telemetry);
     };
 
     public Func<IServiceProvider, IDotNetCliExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
