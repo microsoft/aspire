@@ -3176,6 +3176,16 @@ class EndpointReference(HandleWrapperBase):
         args: Dict[str, Any] = { "context": serialize_value(self._handle) }
         return self._client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled", args)
 
+    @_cached_property
+    def is_http_scheme_named_endpoint(self) -> bool:
+        """Gets the IsHttpSchemeNamedEndpoint property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @_cached_property
     def exclude_reference_endpoint(self) -> bool:
         """Gets the ExcludeReferenceEndpoint property"""
         args: Dict[str, Any] = { "context": serialize_value(self._handle) }

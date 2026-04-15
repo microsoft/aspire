@@ -5535,6 +5535,14 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Gets the IsHttpSchemeNamedEndpoint property
+    pub fn is_http_scheme_named_endpoint(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
     /// Gets the ExcludeReferenceEndpoint property
     pub fn exclude_reference_endpoint(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();

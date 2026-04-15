@@ -1142,6 +1142,67 @@ export class DistributedApplicationModelPromise implements PromiseLike<Distribut
 // EndpointReference
 // ============================================================================
 
+export interface EndpointReference {
+    toJSON(): MarshalledHandle;
+    resource: {
+        get: () => Promise<ResourceWithEndpoints>;
+    };
+    endpointName: {
+        get: () => Promise<string>;
+    };
+    errorMessage: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+    isAllocated: {
+        get: () => Promise<boolean>;
+    };
+    exists: {
+        get: () => Promise<boolean>;
+    };
+    isHttp: {
+        get: () => Promise<boolean>;
+    };
+    isHttps: {
+        get: () => Promise<boolean>;
+    };
+    tlsEnabled: {
+        get: () => Promise<boolean>;
+    };
+    isHttpSchemeNamedEndpoint: {
+        get: () => Promise<boolean>;
+    };
+    excludeReferenceEndpoint: {
+        get: () => Promise<boolean>;
+    };
+    port: {
+        get: () => Promise<number>;
+    };
+    targetPort: {
+        get: () => Promise<number>;
+    };
+    host: {
+        get: () => Promise<string>;
+    };
+    scheme: {
+        get: () => Promise<string>;
+    };
+    url: {
+        get: () => Promise<string>;
+    };
+    getValueAsync(options?: GetValueAsyncOptions): Promise<string>;
+    getTlsValue(enabledValue: ReferenceExpression, disabledValue: ReferenceExpression): Promise<ReferenceExpression>;
+}
+
+export interface EndpointReferencePromise extends PromiseLike<EndpointReference> {
+    getValueAsync(options?: GetValueAsyncOptions): Promise<string>;
+    getTlsValue(enabledValue: ReferenceExpression, disabledValue: ReferenceExpression): Promise<ReferenceExpression>;
+}
+
+// ============================================================================
+// EndpointReferenceImpl
+// ============================================================================
+
 /**
  * Type class for EndpointReference.
  */
@@ -1233,6 +1294,16 @@ export class EndpointReference {
         get: async (): Promise<boolean> => {
             return await this._client.invokeCapability<boolean>(
                 'Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled',
+                { context: this._handle }
+            );
+        },
+    };
+
+    /** Gets the IsHttpSchemeNamedEndpoint property */
+    isHttpSchemeNamedEndpoint = {
+        get: async (): Promise<boolean> => {
+            return await this._client.invokeCapability<boolean>(
+                'Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint',
                 { context: this._handle }
             );
         },
