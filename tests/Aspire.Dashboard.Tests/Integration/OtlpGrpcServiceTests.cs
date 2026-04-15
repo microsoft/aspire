@@ -225,7 +225,7 @@ public class OtlpGrpcServiceTests
         await File.WriteAllTextAsync(configPath, configJson.ToString()).DefaultTimeout();
 
         logger.LogInformation("Waiting for options change.");
-        var options = await tcs.Task;
+        var options = await tcs.Task.DefaultTimeout();
 
         logger.LogInformation("Assert new API key.");
         Assert.Equal("Different", options.Otlp.PrimaryApiKey);
