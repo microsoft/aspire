@@ -229,10 +229,9 @@ internal sealed class AzureKubernetesInfrastructure(
                 var resourceGroup = await GetResourceGroupAsync(azPath, clusterName, context)
                     .ConfigureAwait(false);
 
-                // Write credentials to an isolated kubeconfig file managed by the
-                // IFileSystemService. The temp directory is tracked and cleaned up
-                // automatically when the DI container disposes, ensuring credentials
-                // don't persist on disk after the pipeline completes.
+                // Fetch kubeconfig content to stdout using --file - to avoid az CLI
+                // writing credentials with potentially permissive file permissions.
+                // We then write the content ourselves to a temp file with controlled access.
                 var fileSystemService = context.Services.GetRequiredService<IFileSystemService>();
                 var kubeConfigDir = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-aks");
                 var kubeConfigPath = Path.Combine(kubeConfigDir.Path, "kubeconfig");
@@ -243,13 +242,23 @@ internal sealed class AzureKubernetesInfrastructure(
 
                 var result = await RunAzCommandAsync(
                     azPath,
-                    $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file \"{kubeConfigPath}\" --overwrite-existing",
+                    $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file -",
                     context.Logger).ConfigureAwait(false);
 
                 if (result.ExitCode != 0)
                 {
                     throw new InvalidOperationException(
                         $"az aks get-credentials failed (exit code {result.ExitCode}): {result.StandardError}");
+                }
+
+                // Write kubeconfig content to a temp file we control.
+                // The IFileSystemService temp directory is auto-cleaned on dispose.
+                await File.WriteAllTextAsync(kubeConfigPath, result.StandardOutput, context.CancellationToken).ConfigureAwait(false);
+
+                // On Unix, restrict file permissions to owner-only (0600)
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(kubeConfigPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
                 }
 
                 // Set the kubeconfig path on the inner K8s environment so
