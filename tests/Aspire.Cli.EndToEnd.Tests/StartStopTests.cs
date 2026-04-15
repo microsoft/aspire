@@ -34,6 +34,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        var testBodyFailed = false;
 
         try
         {
@@ -66,6 +67,11 @@ public sealed class StartStopTests(ITestOutputHelper output)
             // Docker network cleanup can lag behind aspire stop on contended CI runners.
             await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(5));
         }
+        catch
+        {
+            testBodyFailed = true;
+            throw;
+        }
         finally
         {
             try
@@ -85,7 +91,12 @@ public sealed class StartStopTests(ITestOutputHelper output)
             }
             catch (Exception ex)
             {
-                output.WriteLine($"Failed to exit Docker test terminal cleanly: {ex}");
+                if (!testBodyFailed)
+                {
+                    throw;
+                }
+
+                output.WriteLine($"Failed to exit Docker test terminal cleanly after test failure: {ex}");
             }
         }
     }
