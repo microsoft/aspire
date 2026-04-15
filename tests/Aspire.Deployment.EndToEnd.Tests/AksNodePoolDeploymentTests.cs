@@ -102,59 +102,38 @@ public sealed class AksNodePoolDeploymentTests(ITestOutputHelper output)
 
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
-            // Step 6: Modify AppHost.cs to add AKS environment with custom node pool
+            // Step 6: Write complete AppHost.cs with AKS environment and custom node pool
+            // (full rewrite to avoid string-replacement failures caused by line-ending or whitespace differences)
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
             var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
 
-            output.WriteLine($"Modifying AppHost.cs at: {appHostFilePath}");
+            output.WriteLine($"Writing AppHost.cs at: {appHostFilePath}");
 
-            var content = File.ReadAllText(appHostFilePath);
+            var appHostContent = $"""
+                #pragma warning disable ASPIREPIPELINES001
 
-            var oldCode = $"""
-var apiService = builder.AddProject<Projects.{projectName}_ApiService>("apiservice");
+                var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.{projectName}_Web>("webfrontend")
-    .WithExternalHttpEndpoints()
-    .WithReference(apiService)
-    .WaitFor(apiService);
+                var aks = builder.AddAzureKubernetesEnvironment("aks");
+                var computePool = aks.AddNodePool("compute", "Standard_D4s_v5", 1, 3);
 
-builder.Build().Run();
-""";
+                var apiService = builder.AddProject<Projects.{projectName}_ApiService>("apiservice")
+                    .WithHttpHealthCheck("/health")
+                    .WithNodePool(computePool);
 
-            var newCode = $"""
-var aks = builder.AddAzureKubernetesEnvironment("aks");
-var computePool = aks.AddNodePool("compute", "Standard_D4s_v5", 1, 3);
+                builder.AddProject<Projects.{projectName}_Web>("webfrontend")
+                    .WithExternalHttpEndpoints()
+                    .WithHttpHealthCheck("/health")
+                    .WithReference(apiService)
+                    .WaitFor(apiService);
 
-var apiService = builder.AddProject<Projects.{projectName}_ApiService>("apiservice")
-    .WithHttpHealthCheck("/health")
-    .WithComputeEnvironment(aks)
-    .WithNodePool(computePool);
+                builder.Build().Run();
+                """;
 
-builder.AddProject<Projects.{projectName}_Web>("webfrontend")
-    .WithExternalHttpEndpoints()
-    .WithHttpHealthCheck("/health")
-    .WithReference(apiService)
-    .WithComputeEnvironment(aks);
+            File.WriteAllText(appHostFilePath, appHostContent);
 
-builder.Build().Run();
-""";
-
-            content = content.Replace(oldCode, newCode);
-
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
-            {
-                content = "#pragma warning disable ASPIREPIPELINES001\n" + content;
-            }
-
-            if (!content.Contains("#pragma warning disable ASPIREAZURE003"))
-            {
-                content = "#pragma warning disable ASPIREAZURE003\n" + content;
-            }
-
-            File.WriteAllText(appHostFilePath, content);
-
-            output.WriteLine("Modified AppHost.cs with AddAzureKubernetesEnvironment and custom node pool");
+            output.WriteLine("Wrote complete AppHost.cs with AddAzureKubernetesEnvironment and custom node pool");
 
             // Step 7: Navigate to AppHost project directory
             output.WriteLine("Step 7: Navigating to AppHost directory...");

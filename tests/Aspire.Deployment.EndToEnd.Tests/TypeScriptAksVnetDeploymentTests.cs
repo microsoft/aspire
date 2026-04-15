@@ -133,6 +133,7 @@ public sealed class TypeScriptAksVnetDeploymentTests(ITestOutputHelper output)
                 output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
 
                 var content = File.ReadAllText(appHostFilePath);
+                var originalContent = content;
 
                 // Add VNet, subnet, and AKS environment with subnet integration before build().run()
                 content = content.Replace(
@@ -148,6 +149,11 @@ await aks.withSubnet(subnet);
 
 await builder.build().run();
 """);
+
+                if (content == originalContent)
+                {
+                    throw new InvalidOperationException("apphost.ts was not modified. Template may have changed.");
+                }
 
                 File.WriteAllText(appHostFilePath, content);
 

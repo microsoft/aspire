@@ -89,7 +89,8 @@ public sealed class AksExplicitRegistryDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Step 5: Add required packages
+            // Step 5: Add Aspire.Hosting.Azure.Kubernetes package
+            // (Aspire.Hosting.Azure.Kubernetes already depends on Aspire.Hosting.Azure.ContainerRegistry)
             output.WriteLine("Step 5: Adding Azure Kubernetes hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Kubernetes");
             await auto.EnterAsync();
@@ -102,71 +103,38 @@ public sealed class AksExplicitRegistryDeploymentTests(ITestOutputHelper output)
 
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
 
-            output.WriteLine("Step 5b: Adding Azure Container Registry hosting package...");
-            await auto.TypeAsync("aspire add Aspire.Hosting.Azure.ContainerRegistry");
-            await auto.EnterAsync();
-
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
-
-            // Step 6: Modify AppHost.cs to add AKS environment with explicit ACR
+            // Step 6: Write complete AppHost.cs with AKS environment and explicit ACR
+            // (full rewrite to avoid string-replacement failures caused by line-ending or whitespace differences)
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
             var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
 
-            output.WriteLine($"Modifying AppHost.cs at: {appHostFilePath}");
+            output.WriteLine($"Writing AppHost.cs at: {appHostFilePath}");
 
-            var content = File.ReadAllText(appHostFilePath);
+            var appHostContent = $"""
+                #pragma warning disable ASPIREPIPELINES001
 
-            var oldCode = $"""
-var apiService = builder.AddProject<Projects.{projectName}_ApiService>("apiservice");
+                var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddProject<Projects.{projectName}_Web>("webfrontend")
-    .WithExternalHttpEndpoints()
-    .WithReference(apiService)
-    .WaitFor(apiService);
+                var acr = builder.AddAzureContainerRegistry("myacr");
+                var aks = builder.AddAzureKubernetesEnvironment("aks")
+                    .WithContainerRegistry(acr);
 
-builder.Build().Run();
-""";
+                var apiService = builder.AddProject<Projects.{projectName}_ApiService>("apiservice")
+                    .WithHttpHealthCheck("/health");
 
-            var newCode = $"""
-var acr = builder.AddAzureContainerRegistry("myacr");
-var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithContainerRegistry(acr);
+                builder.AddProject<Projects.{projectName}_Web>("webfrontend")
+                    .WithExternalHttpEndpoints()
+                    .WithHttpHealthCheck("/health")
+                    .WithReference(apiService)
+                    .WaitFor(apiService);
 
-var apiService = builder.AddProject<Projects.{projectName}_ApiService>("apiservice")
-    .WithHttpHealthCheck("/health")
-    .WithComputeEnvironment(aks);
+                builder.Build().Run();
+                """;
 
-builder.AddProject<Projects.{projectName}_Web>("webfrontend")
-    .WithExternalHttpEndpoints()
-    .WithHttpHealthCheck("/health")
-    .WithReference(apiService)
-    .WithComputeEnvironment(aks);
+            File.WriteAllText(appHostFilePath, appHostContent);
 
-builder.Build().Run();
-""";
-
-            content = content.Replace(oldCode, newCode);
-
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
-            {
-                content = "#pragma warning disable ASPIREPIPELINES001\n" + content;
-            }
-
-            if (!content.Contains("#pragma warning disable ASPIREAZURE003"))
-            {
-                content = "#pragma warning disable ASPIREAZURE003\n" + content;
-            }
-
-            File.WriteAllText(appHostFilePath, content);
-
-            output.WriteLine("Modified AppHost.cs with AddAzureKubernetesEnvironment and explicit ACR");
+            output.WriteLine("Wrote complete AppHost.cs with AddAzureKubernetesEnvironment and explicit ACR");
 
             // Step 7: Navigate to AppHost project directory
             output.WriteLine("Step 7: Navigating to AppHost directory...");

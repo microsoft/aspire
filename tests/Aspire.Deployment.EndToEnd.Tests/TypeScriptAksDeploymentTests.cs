@@ -120,6 +120,7 @@ public sealed class TypeScriptAksDeploymentTests(ITestOutputHelper output)
                 output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
 
                 var content = File.ReadAllText(appHostFilePath);
+                var originalContent = content;
 
                 // Add Azure Kubernetes Environment before build().run()
                 // When there's exactly one compute environment, all resources auto-target it.
@@ -131,6 +132,11 @@ await builder.addAzureKubernetesEnvironment("aks");
 
 await builder.build().run();
 """);
+
+                if (content == originalContent)
+                {
+                    throw new InvalidOperationException("apphost.ts was not modified. Template may have changed.");
+                }
 
                 File.WriteAllText(appHostFilePath, content);
 

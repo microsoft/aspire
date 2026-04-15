@@ -118,6 +118,7 @@ public sealed class TypeScriptAksNodePoolDeploymentTests(ITestOutputHelper outpu
                 output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
 
                 var content = File.ReadAllText(appHostFilePath);
+                var originalContent = content;
 
                 // Add Azure Kubernetes Environment with a custom node pool before build().run()
                 content = content.Replace(
@@ -125,10 +126,15 @@ public sealed class TypeScriptAksNodePoolDeploymentTests(ITestOutputHelper outpu
                     """
 // Add Azure Kubernetes Environment with a custom node pool
 const aks = await builder.addAzureKubernetesEnvironment("aks");
-const pool = await aks.addNodePool("compute", "Standard_D4s_v5", 1, 3);
+await aks.addNodePool("compute", "Standard_D4s_v5", 1, 3);
 
 await builder.build().run();
 """);
+
+                if (content == originalContent)
+                {
+                    throw new InvalidOperationException("apphost.ts was not modified. Template may have changed.");
+                }
 
                 File.WriteAllText(appHostFilePath, content);
 
