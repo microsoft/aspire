@@ -12,11 +12,6 @@
         <target state="new">Continuously stream resource state changes</target>
         <note />
       </trans-unit>
-      <trans-unit id="HeaderEndpoints">
-        <source>Endpoints</source>
-        <target state="translated">Uç noktalar</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HeaderHealth">
         <source>Health</source>
         <target state="translated">Sistem Durumu</target>
@@ -35,6 +30,11 @@
       <trans-unit id="HeaderType">
         <source>Type</source>
         <target state="translated">Tür</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderURLs">
+        <source>URLs</source>
+        <target state="new">URLs</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">

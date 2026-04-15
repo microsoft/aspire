@@ -428,13 +428,13 @@
     <value>Mount type</value>
   </data>
   <data name="ClearAllResources" xml:space="preserve">
-    <value>Remove all</value>
+    <value>Remove all telemetry</value>
   </data>
   <data name="ClearSelectedResource" xml:space="preserve">
-    <value>Remove for {0}</value>
+    <value>Remove telemetry for {0}</value>
   </data>
   <data name="ClearPendingSelectedResource" xml:space="preserve">
-    <value>Remove for resource</value>
+    <value>Remove telemetry for resource</value>
   </data>
   <data name="ChartContainerOverflowDescription" xml:space="preserve">
     <value>Some dimensions for the metric have been dropped by the OpenTelemetry SDK.</value>
