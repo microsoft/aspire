@@ -65,15 +65,6 @@ const ignoredFailureStepOverridePatterns = [
     /Failed to download action .*api\.github\.com.*(502|503|504|Bad Gateway)/i,
 ];
 
-const postTestCleanupFailureStepPatterns = [
-    /^Check for hang dump files$/i,
-    /^Upload logs, and test results$/i,
-    /^Copy CLI E2E recordings for upload$/i,
-    /^Upload CLI E2E recordings$/i,
-    /^Generate test results summary$/i,
-    /^Post Checkout code$/i,
-];
-
 const windowsProcessInitializationFailurePatterns = [
     /Process completed with exit code -1073741502/i,
     /\b0xC0000142\b/i,
@@ -366,8 +357,6 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
     const annotationsText = toAnnotationText(annotationsOrText);
     const matchesTransientAnnotation = matchesAny(annotationsText, transientAnnotationPatterns);
     const matchesIgnoredFailureStepOverride = matchesAny(annotationsText, ignoredFailureStepOverridePatterns);
-    const hasOnlyPostTestCleanupFailures = failedSteps.length > 0
-        && failedSteps.every(step => matchesAny(step, postTestCleanupFailureStepPatterns));
     const matchesWindowsProcessInitializationFailure = matchesAny(annotationsText, windowsProcessInitializationFailurePatterns);
 
     if (matchesTransientAnnotation && failedSteps.length === 0) {
@@ -378,11 +367,11 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
         };
     }
 
-    if (hasOnlyPostTestCleanupFailures && matchesWindowsProcessInitializationFailure) {
+    if (matchesWindowsProcessInitializationFailure) {
         return {
             retryable: true,
             failedSteps,
-            reason: `Post-test cleanup steps '${failedStepText}' matched the Windows process initialization failure override allowlist.`,
+            reason: `${formatFailedStepLabel(failedSteps, failedStepText)} matched the Windows process initialization failure allowlist (exit code -1073741502 is always an OS-level infrastructure failure).`,
         };
     }
 
