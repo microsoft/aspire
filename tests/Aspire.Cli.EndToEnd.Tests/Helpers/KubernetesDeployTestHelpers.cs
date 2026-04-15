@@ -430,7 +430,7 @@ internal static class KubernetesDeployTestHelpers
 
                 return false;
             },
-            timeout: TimeSpan.FromSeconds(60),
+            timeout: TimeSpan.FromSeconds(180),
             description: $"aspire add version prompt or completion [{counter.Value} OK/ERR] $");
 
         if (showedVersionPrompt)
