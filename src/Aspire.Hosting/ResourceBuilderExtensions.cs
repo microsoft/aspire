@@ -718,7 +718,7 @@ public static class ResourceBuilderExtensions
                     // Use the endpoint's scheme for "http" and "https" endpoint names to handle
                     // TLS upgrades correctly. For all other endpoint names, use the endpoint name
                     // so that .NET service discovery's named endpoint resolution can match them.
-                    var schemeKey = IsHttpSchemeEndpointName(endpointName) ? endpoint.Scheme : endpointName;
+                    var schemeKey = endpoint.IsHttpSchemeNamedEndpoint ? endpoint.Scheme : endpointName;
                     if (!schemeIndexTracker.TryGetValue(schemeKey, out var index))
                     {
                         index = 0;
@@ -737,17 +737,6 @@ public static class ResourceBuilderExtensions
                 }
             }
         };
-    }
-
-    /// <summary>
-    /// Determines whether the endpoint name is a standard HTTP scheme name ("http" or "https").
-    /// These names are special-cased in service discovery key generation to use the actual URI scheme
-    /// instead of the endpoint name, because TLS upgrades can cause the name and scheme to diverge.
-    /// </summary>
-    private static bool IsHttpSchemeEndpointName(string endpointName)
-    {
-        return string.Equals(endpointName, "http", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(endpointName, "https", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

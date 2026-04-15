@@ -498,7 +498,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                         // Use the endpoint's scheme for "http" and "https" endpoint names to handle
                         // TLS upgrades correctly. For all other endpoint names, use the endpoint name
                         // so that .NET service discovery's named endpoint resolution can match them.
-                        var schemeKey = IsHttpSchemeEndpointName(endpointName) ? port.TargetEndpoint.Scheme : endpointName;
+                        var schemeKey = port.TargetEndpoint.IsHttpSchemeNamedEndpoint ? port.TargetEndpoint.Scheme : endpointName;
                         if (!schemeIndexTracker.TryGetValue(schemeKey, out var index))
                         {
                             index = 0;
@@ -832,10 +832,4 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
     [GeneratedRegex(@"^[\w\-=_]{1,50}$")]
     private static partial Regex LabelRegex();
-
-    private static bool IsHttpSchemeEndpointName(string endpointName)
-    {
-        return string.Equals(endpointName, "http", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(endpointName, "https", StringComparison.OrdinalIgnoreCase);
-    }
 }
