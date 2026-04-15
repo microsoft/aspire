@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting;
 
 /// <summary>
 /// Represents an annotation for customizing the PVC provisioning policy of a Kubernetes resource.
@@ -28,6 +29,7 @@ public static class KubernetesProvisioningPolicyAnnotationExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="shouldDynamicallyProvision">Whether or not PVs should be dynamically provisioned. If set to true, *-pv.yaml files will not be generated for the resource.</param>
     /// <returns>The resource builder.</returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithDynamicProvisioning<T>(this IResourceBuilder<T> builder, bool shouldDynamicallyProvision = false) where T : IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);

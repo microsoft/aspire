@@ -56,7 +56,7 @@
       "commandName": "Project",
       "launchBrowser": true,
       "dotnetRunMessages": true,
-      "commandLineArgs": "--publisher k8s --output-path publish/k8s",
+      "commandLineArgs": "--publisher k8s --target kube --output-path publish/k8s",
       "applicationUrl": "http://localhost:16440",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
