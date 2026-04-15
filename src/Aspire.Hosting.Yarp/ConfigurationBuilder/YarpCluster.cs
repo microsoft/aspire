@@ -35,14 +35,12 @@ public class YarpCluster
         // the named endpoint prefix since the scheme key already matches the scheme.
         // For all other endpoint names, use the named endpoint DNS-SD convention
         // which .NET service discovery resolves via the endpoint name in the config key.
-        var endpointName = endpoint.EndpointName;
-        if (string.Equals(endpointName, "http", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(endpointName, "https", StringComparison.OrdinalIgnoreCase))
+        if (endpoint.IsHttpSchemeNamedEndpoint)
         {
             return $"{endpoint.Scheme}://{endpoint.Resource.Name}";
         }
 
-        return $"{endpoint.Scheme}://_{endpointName}.{endpoint.Resource.Name}";
+        return $"{endpoint.Scheme}://_{endpoint.EndpointName}.{endpoint.Resource.Name}";
     }
 
     /// <summary>
