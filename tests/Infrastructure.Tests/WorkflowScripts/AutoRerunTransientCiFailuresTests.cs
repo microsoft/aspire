@@ -124,28 +124,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task AllowsNarrowOverrideForWindowsPostTestCleanupProcessInitializationFailures()
-    {
-        WorkflowJob job = CreateJob(failedSteps:
-        [
-            "Upload logs, and test results",
-            "Copy CLI E2E recordings for upload",
-            "Upload CLI E2E recordings",
-            "Generate test results summary",
-            "Post Checkout code"
-        ]);
-
-        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code -1073741502.");
-
-        Assert.Single(result.RetryableJobs);
-        Assert.Equal(
-            "Post-test cleanup steps 'Upload logs, and test results | Copy CLI E2E recordings for upload | Upload CLI E2E recordings | Generate test results summary | Post Checkout code' matched the Windows process initialization failure override allowlist.",
-            result.RetryableJobs[0].Reason);
-    }
-
-    [Fact]
-    [RequiresTools(["node"])]
-    public async Task AllowsNarrowOverrideForWindowsPostTestCleanupProcessInitializationFailuresIncludingHangDumpStep()
+    public async Task RetriesWindowsProcessInitializationFailuresRegardlessOfFailedStepNames()
     {
         WorkflowJob job = CreateJob(failedSteps:
         [
@@ -160,14 +139,12 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code -1073741502.");
 
         Assert.Single(result.RetryableJobs);
-        Assert.Equal(
-            "Post-test cleanup steps 'Check for hang dump files | Upload logs, and test results | Copy CLI E2E recordings for upload | Upload CLI E2E recordings | Generate test results summary | Post Checkout code' matched the Windows process initialization failure override allowlist.",
-            result.RetryableJobs[0].Reason);
+        Assert.Contains("Windows process initialization failure allowlist", result.RetryableJobs[0].Reason);
     }
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task DoesNotOverrideWindowsProcessInitializationFailuresWhenTestExecutionAlsoFailed()
+    public async Task RetriesWindowsProcessInitializationFailuresEvenWhenTestExecutionStepFailed()
     {
         WorkflowJob job = CreateJob(failedSteps:
         [
@@ -178,11 +155,20 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code -1073741502.");
 
-        Assert.Empty(result.RetryableJobs);
-        Assert.Single(result.SkippedJobs);
-        Assert.Equal(
-            "Failed steps 'Run tests (Windows) | Upload logs, and test results | Generate test results summary' include a test execution failure, so the job was not retried without a high-confidence infrastructure override.",
-            result.SkippedJobs[0].Reason);
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("Windows process initialization failure allowlist", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RetriesWindowsProcessInitializationFailuresOnBuildStep()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Build test project"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code -1073741502.");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("Windows process initialization failure allowlist", result.RetryableJobs[0].Reason);
     }
 
     [Fact]

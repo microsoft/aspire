@@ -74,7 +74,6 @@ const postTestCleanupFailureStepPatterns = [
     /^Upload CLI E2E recordings$/i,
     /^Generate test results summary$/i,
     /^Post Checkout code$/i,
-    /^Check for hang dump files$/i,
 ];
 
 const windowsProcessInitializationFailurePatterns = [
@@ -380,9 +379,9 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
     const annotationsText = toAnnotationText(annotationsOrText);
     const matchesTransientAnnotation = matchesAny(annotationsText, transientAnnotationPatterns);
     const matchesIgnoredFailureStepOverride = matchesAny(annotationsText, ignoredFailureStepOverridePatterns);
+    const matchesWindowsProcessInitializationFailure = matchesAny(annotationsText, windowsProcessInitializationFailurePatterns);
     const hasOnlyPostTestCleanupFailures = failedSteps.length > 0
         && failedSteps.every(step => matchesAny(step, postTestCleanupFailureStepPatterns));
-    const matchesWindowsProcessInitializationFailure = matchesAny(annotationsText, windowsProcessInitializationFailurePatterns);
 
     if (matchesTransientAnnotation && failedSteps.length === 0) {
         return {
@@ -392,11 +391,11 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
         };
     }
 
-    if (hasOnlyPostTestCleanupFailures && matchesWindowsProcessInitializationFailure) {
+    if (matchesWindowsProcessInitializationFailure) {
         return {
             retryable: true,
             failedSteps,
-            reason: `Post-test cleanup steps '${failedStepText}' matched the Windows process initialization failure override allowlist.`,
+            reason: `${formatFailedStepLabel(failedSteps, failedStepText)} matched the Windows process initialization failure allowlist (exit code -1073741502 is always an OS-level infrastructure failure).`,
         };
     }
 

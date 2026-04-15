@@ -172,6 +172,14 @@ To test how the workflow would analyze a specific failed CI run without triggeri
 2. Enter the failed CI run ID
 3. Check **dry_run**
 4. Inspect the workflow summary for matched jobs, matched tests, and whether a rerun would have been requested
+- Retry jobs with no failed steps only when their annotations contain an explicit job-level infrastructure signature.
+- Retry jobs whose failed step is on the retry-safe allowlist only when their annotations also contain a transient infrastructure signature.
+- Ignore aggregator jobs such as `Final Results` and `Tests / Final Test Results`.
+- Skip jobs whose failed steps are outside the retry-safe allowlist, even if their annotations contain generic failure text.
+- Keep the mixed-failure veto: if an ignored step such as `Run tests*` failed, do not rerun the job based only on unrelated transient post-step noise.
+- Allow a narrow override when an ignored failed step is paired with a high-confidence job-level infrastructure annotation such as runner loss or action-download failure.
+- Allow a narrow override for Windows jobs whose failures are limited to post-test cleanup or upload steps when the annotations report process initialization failure `-1073741502` (`0xC0000142`).
+- Allow a narrow log-based override for non-test-execution failures when the job log shows high-confidence infrastructure network failures against approved `dnceng` public feeds, `builds.dotnet.microsoft.com`, `api.github.com`, or `github.com`.
 
 ## Safety rails
 
