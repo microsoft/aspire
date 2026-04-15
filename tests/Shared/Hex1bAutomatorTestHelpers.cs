@@ -525,20 +525,28 @@ internal static class Hex1bAutomatorTestHelpers
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(5);
         var pipelineSucceeded = false;
+        string? terminalOutput = null;
 
         await auto.WaitUntilAsync(s =>
         {
+            if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed))
+            {
+                terminalOutput = s.GetText();
+                return true;
+            }
+
             if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
             {
                 pipelineSucceeded = true;
                 return true;
             }
-            return s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed);
+
+            return false;
         }, timeout: effectiveTimeout, description: "pipeline succeeded or failed");
 
         if (!pipelineSucceeded)
         {
-            throw new InvalidOperationException("Pipeline failed unexpectedly. Check the terminal output for details.");
+            throw new InvalidOperationException($"Pipeline failed unexpectedly. Terminal output:{Environment.NewLine}{terminalOutput}");
         }
     }
 }
