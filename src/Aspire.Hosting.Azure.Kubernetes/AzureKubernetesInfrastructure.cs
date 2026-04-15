@@ -1,11 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Pipeline types are experimental
-#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is experimental
+#pragma warning disable ASPIREPIPELINES001 // Pipeline step types used for push/deploy dependency wiring
+#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource.ProvisionInfrastructureStepName for pipeline ordering
 
-using System.Diagnostics;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
@@ -221,16 +222,8 @@ internal sealed class AzureKubernetesInfrastructure(
         {
             try
             {
-                // The cluster name is the resource name — we set it directly in the Bicep template.
-                // We don't use NameOutputReference.GetValueAsync() because it triggers parameter
-                // resolution that may not be available at this point in the pipeline.
                 var clusterName = environment.Name;
 
-                // Get the resource group from the deployment state. The deployment state
-                // is loaded into IConfiguration by the deploy-prereq step and contains
-                // Azure:ResourceGroup from the provisioning context.
-                // We read it via IConfiguration which is populated from the deployment
-                // state JSON file before pipeline steps execute.
                 var azPath = FindAzCli();
                 var resourceGroup = await GetResourceGroupAsync(azPath, clusterName, context)
                     .ConfigureAwait(false);
@@ -239,47 +232,19 @@ internal sealed class AzureKubernetesInfrastructure(
                 var kubeConfigDir = Directory.CreateTempSubdirectory("aspire-aks");
                 var kubeConfigPath = Path.Combine(kubeConfigDir.FullName, "kubeconfig");
 
-                var arguments = $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file \"{kubeConfigPath}\" --overwrite-existing";
-
                 context.Logger.LogInformation(
                     "Fetching AKS credentials: cluster={ClusterName}, resourceGroup={ResourceGroup}",
                     clusterName, resourceGroup);
 
-                using var process = new Process();
-                process.StartInfo = new ProcessStartInfo
-                {
-                    FileName = azPath,
-                    Arguments = arguments,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
+                var result = await RunAzCommandAsync(
+                    azPath,
+                    $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file \"{kubeConfigPath}\" --overwrite-existing",
+                    context.Logger).ConfigureAwait(false);
 
-                process.Start();
-
-                var stdoutTask = process.StandardOutput.ReadToEndAsync(context.CancellationToken);
-                var stderrTask = process.StandardError.ReadToEndAsync(context.CancellationToken);
-
-                await process.WaitForExitAsync(context.CancellationToken).ConfigureAwait(false);
-
-                var stdout = await stdoutTask.ConfigureAwait(false);
-                var stderr = await stderrTask.ConfigureAwait(false);
-
-                if (!string.IsNullOrWhiteSpace(stdout))
-                {
-                    context.Logger.LogDebug("az (stdout): {Output}", stdout);
-                }
-
-                if (!string.IsNullOrWhiteSpace(stderr))
-                {
-                    context.Logger.LogDebug("az (stderr): {Error}", stderr);
-                }
-
-                if (process.ExitCode != 0)
+                if (result.ExitCode != 0)
                 {
                     throw new InvalidOperationException(
-                        $"az aks get-credentials failed (exit code {process.ExitCode}): {stderr.Trim()}");
+                        $"az aks get-credentials failed (exit code {result.ExitCode}): {result.StandardError}");
                 }
 
                 // Set the kubeconfig path on the inner K8s environment so
@@ -314,44 +279,13 @@ internal sealed class AzureKubernetesInfrastructure(
 
     private static string FindAzCli()
     {
-        // Check PATH first
-        var pathDirs = Environment.GetEnvironmentVariable("PATH")?.Split(Path.PathSeparator) ?? [];
-        var azNames = OperatingSystem.IsWindows()
-            ? new[] { "az.CMD", "az.cmd", "az.exe" }
-            : new[] { "az" };
-
-        foreach (var dir in pathDirs)
+        var azPath = PathLookupHelper.FindFullPathFromPath("az");
+        if (azPath is null)
         {
-            foreach (var azName in azNames)
-            {
-                var candidate = Path.Combine(dir, azName);
-                if (File.Exists(candidate))
-                {
-                    return candidate;
-                }
-            }
+            throw new InvalidOperationException(
+                "Azure CLI (az) not found. Install it from https://learn.microsoft.com/cli/azure/install-azure-cli");
         }
-
-        // Check common Windows locations
-        if (OperatingSystem.IsWindows())
-        {
-            var commonPaths = new[]
-            {
-                @"C:\Program Files\Microsoft SDKs\Azure\CLI2\wbin\az.CMD",
-                @"C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin\az.CMD",
-            };
-
-            foreach (var path in commonPaths)
-            {
-                if (File.Exists(path))
-                {
-                    return path;
-                }
-            }
-        }
-
-        throw new InvalidOperationException(
-            "Azure CLI (az) not found. Install it from https://learn.microsoft.com/cli/azure/install-azure-cli");
+        return azPath;
     }
 
     /// <summary>
@@ -378,27 +312,18 @@ internal sealed class AzureKubernetesInfrastructure(
             "Resource group not in deployment state, querying Azure for cluster '{ClusterName}'",
             clusterName);
 
-        var arguments = $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv";
+        var result = await RunAzCommandAsync(
+            azPath,
+            $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv",
+            context.Logger).ConfigureAwait(false);
 
-        using var process = new Process();
-        process.StartInfo = new ProcessStartInfo
+        if (result.ExitCode != 0)
         {
-            FileName = azPath,
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+            throw new InvalidOperationException(
+                $"az resource list failed (exit code {result.ExitCode}): {result.StandardError}");
+        }
 
-        process.Start();
-
-        var stdout = await process.StandardOutput.ReadToEndAsync(context.CancellationToken).ConfigureAwait(false);
-        await process.StandardError.ReadToEndAsync(context.CancellationToken).ConfigureAwait(false);
-
-        await process.WaitForExitAsync(context.CancellationToken).ConfigureAwait(false);
-
-        resourceGroup = stdout.Trim().ReplaceLineEndings("").Trim();
+        resourceGroup = result.StandardOutput.Trim().ReplaceLineEndings("").Trim();
 
         if (string.IsNullOrEmpty(resourceGroup))
         {
@@ -409,4 +334,41 @@ internal sealed class AzureKubernetesInfrastructure(
 
         return resourceGroup;
     }
+
+    /// <summary>
+    /// Runs an az CLI command using the shared ProcessSpec/ProcessUtil infrastructure.
+    /// Returns the captured stdout, stderr, and exit code.
+    /// </summary>
+    private static async Task<AzCommandResult> RunAzCommandAsync(
+        string azPath,
+        string arguments,
+        ILogger logger)
+    {
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+
+        var spec = new ProcessSpec(azPath)
+        {
+            Arguments = arguments,
+            OnOutputData = data => stdout.AppendLine(data),
+            OnErrorData = data => stderr.AppendLine(data),
+            ThrowOnNonZeroReturnCode = false
+        };
+
+        logger.LogDebug("Running: {AzPath} {Arguments}", azPath, arguments);
+
+        var (task, disposable) = ProcessUtil.Run(spec);
+
+        try
+        {
+            var result = await task.ConfigureAwait(false);
+            return new AzCommandResult(result.ExitCode, stdout.ToString(), stderr.ToString());
+        }
+        finally
+        {
+            await disposable.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    private sealed record AzCommandResult(int ExitCode, string StandardOutput, string StandardError);
 }
