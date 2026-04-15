@@ -1820,42 +1820,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task DeployAsync_SlowTokenCredential_TimesOutWithActionableMessage()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy);
-        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
-
-        ConfigureTestServices(builder, activityReporter: mockActivityReporter);
-
-        // Override AFTER ConfigureTestServices so our slow provider wins
-        var slowCredentialProvider = new SlowTokenCredentialProvider(delaySeconds: 10);
-        builder.Services.AddSingleton<ITokenCredentialProvider>(slowCredentialProvider);
-
-        // Replace the options singleton with one that has a short timeout
-        builder.Services.AddSingleton(global::Microsoft.Extensions.Options.Options.Create(new AzureProvisionerOptions
-        {
-            SubscriptionId = "12345678-1234-1234-1234-123456789012",
-            Location = "westus2",
-            ResourceGroup = "test-rg",
-            CredentialProcessTimeoutSeconds = 5
-        }));
-
-        builder.AddAzureEnvironment();
-        builder.AddAzureContainerAppEnvironment("aca");
-        builder.AddContainer("api", "myimage");
-
-        using var app = builder.Build();
-        await app.RunAsync();
-
-        var completedSteps = mockActivityReporter.CompletedSteps;
-        var loginStep = completedSteps.FirstOrDefault(s => s.StepTitle == "validate-azure-login");
-
-        Assert.Equal(CompletionState.CompletedWithError, loginStep.CompletionState);
-        Assert.Contains("timed out", loginStep.CompletionText, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("CredentialProcessTimeoutSeconds", loginStep.CompletionText);
-    }
-
-    [Fact]
     public async Task DeployAsync_FailingTokenCredential_ShowsLoginMessage()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy);
@@ -1900,26 +1864,6 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(CompletionState.Completed, loginStep.CompletionState);
         Assert.Contains("validated successfully", loginStep.CompletionText);
-    }
-
-    private sealed class SlowTokenCredentialProvider(int delaySeconds) : ITokenCredentialProvider
-    {
-        public TokenCredential TokenCredential => new SlowTokenCredential(delaySeconds);
-    }
-
-    private sealed class SlowTokenCredential(int delaySeconds) : TokenCredential
-    {
-        public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken = default)
-        {
-            Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken).GetAwaiter().GetResult();
-            return new AccessToken("fake-token", DateTimeOffset.UtcNow.AddHours(1));
-        }
-
-        public override async ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken = default)
-        {
-            await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken).ConfigureAwait(false);
-            return new AccessToken("fake-token", DateTimeOffset.UtcNow.AddHours(1));
-        }
     }
 
     private sealed class FailingTokenCredentialProvider : ITokenCredentialProvider

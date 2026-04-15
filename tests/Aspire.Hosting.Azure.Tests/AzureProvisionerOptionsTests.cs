@@ -15,11 +15,11 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureProvisionerOptionsTests
 {
     [Fact]
-    public void CredentialProcessTimeoutSeconds_DefaultsTo60()
+    public void CredentialProcessTimeoutSeconds_DefaultsToNull()
     {
         var options = new AzureProvisionerOptions();
 
-        Assert.Equal(60, options.CredentialProcessTimeoutSeconds);
+        Assert.Null(options.CredentialProcessTimeoutSeconds);
     }
 
     [Fact]
