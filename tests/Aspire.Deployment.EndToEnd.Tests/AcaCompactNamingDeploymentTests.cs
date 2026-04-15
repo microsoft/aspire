@@ -134,7 +134,7 @@ builder.Build().Run();
             output.WriteLine("Step 7: Deploying with compact naming...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify storage account was created and name contains uniqueString

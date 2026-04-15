@@ -154,7 +154,7 @@ builder.Build().Run();
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             // Wait for pipeline to complete successfully
-            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(20));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(20));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify the Azure Storage account was created

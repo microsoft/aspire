@@ -329,7 +329,7 @@ internal static class KubernetesDeployTestHelpers
         }
 
         // Wait for pipeline completion
-        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(10));
+        await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(10));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
     }
 

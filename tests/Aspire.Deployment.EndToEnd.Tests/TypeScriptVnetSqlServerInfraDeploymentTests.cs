@@ -229,7 +229,7 @@ await builder.build().run();
             output.WriteLine("Step 7: Starting Azure deployment...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(25));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(25));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify VNet infrastructure

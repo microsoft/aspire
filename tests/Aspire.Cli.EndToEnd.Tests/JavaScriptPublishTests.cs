@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.TestUtilities;
 using Hex1b.Automation;
@@ -75,7 +74,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire deploy --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(5));
+        await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(5));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for services and verify — verify.sh captures diagnostics first, then asserts
