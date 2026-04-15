@@ -293,47 +293,6 @@ public static class AzureKubernetesEnvironmentExtensions
     }
 
     /// <summary>
-    /// Enables Container Insights monitoring on the AKS cluster.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="logAnalytics">Optional Log Analytics workspace. If not provided, one will be auto-created.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Enables Container Insights monitoring on the AKS cluster")]
-    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithContainerInsights(
-        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
-        IResourceBuilder<AzureLogAnalyticsWorkspaceResource>? logAnalytics = null)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.Resource.ContainerInsightsEnabled = true;
-
-        if (logAnalytics is not null)
-        {
-            builder.Resource.LogAnalyticsWorkspace = logAnalytics.Resource;
-        }
-
-        return builder;
-    }
-
-    /// <summary>
-    /// Configures the AKS environment to use a specific Azure Log Analytics workspace.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="workspaceBuilder">The Log Analytics workspace resource builder.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Configures the AKS environment to use a Log Analytics workspace")]
-    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithAzureLogAnalyticsWorkspace(
-        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
-        IResourceBuilder<AzureLogAnalyticsWorkspaceResource> workspaceBuilder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(workspaceBuilder);
-
-        builder.Resource.LogAnalyticsWorkspace = workspaceBuilder.Resource;
-        return builder;
-    }
-
-    /// <summary>
     /// Enables workload identity on the AKS environment, allowing pods to authenticate
     /// to Azure services using federated credentials.
     /// </summary>

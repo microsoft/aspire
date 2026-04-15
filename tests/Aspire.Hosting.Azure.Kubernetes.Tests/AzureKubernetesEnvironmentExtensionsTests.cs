@@ -51,43 +51,6 @@ public class AzureKubernetesEnvironmentExtensionsTests
     }
 
     [Fact]
-    public void AddAzureKubernetesEnvironment_WithContainerInsights()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .WithContainerInsights();
-
-        Assert.True(aks.Resource.ContainerInsightsEnabled);
-        Assert.Null(aks.Resource.LogAnalyticsWorkspace);
-    }
-
-    [Fact]
-    public void AddAzureKubernetesEnvironment_WithContainerInsightsAndWorkspace()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var logAnalytics = builder.AddAzureLogAnalyticsWorkspace("law");
-        var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .WithContainerInsights(logAnalytics);
-
-        Assert.True(aks.Resource.ContainerInsightsEnabled);
-        Assert.Same(logAnalytics.Resource, aks.Resource.LogAnalyticsWorkspace);
-    }
-
-    [Fact]
-    public void AddAzureKubernetesEnvironment_WithAzureLogAnalyticsWorkspace()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var logAnalytics = builder.AddAzureLogAnalyticsWorkspace("law");
-        var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .WithAzureLogAnalyticsWorkspace(logAnalytics);
-
-        Assert.Same(logAnalytics.Resource, aks.Resource.LogAnalyticsWorkspace);
-    }
-
-    [Fact]
     public void AddAzureKubernetesEnvironment_DefaultNodePool()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
