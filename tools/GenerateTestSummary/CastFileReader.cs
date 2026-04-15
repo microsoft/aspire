@@ -3,15 +3,17 @@
 
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Aspire.TestTools;
 
 /// <summary>
 /// Reads asciicast v2 (.cast) recording files and extracts terminal output text.
-/// ANSI escape codes are preserved so the output can be rendered with color
-/// inside a <c>```ansi</c> fenced code block in GitHub markdown.
+/// Only SGR color/style codes (<c>\e[...m</c>) are preserved for rendering inside
+/// a <c>```ansi</c> fenced code block in GitHub markdown. All other escape sequences
+/// (cursor movement, private modes, OSC, etc.) are stripped.
 /// </summary>
-static class CastFileReader
+static partial class CastFileReader
 {
     private const int MaxLines = 100;
 
@@ -88,7 +90,7 @@ static class CastFileReader
             }
         }
 
-        var text = sb.ToString();
+        var text = StripNonSgrEscapes(sb.ToString());
 
         if (text.Length == 0)
         {
@@ -105,4 +107,27 @@ static class CastFileReader
 
         return text;
     }
+
+    /// <summary>
+    /// Strips all ANSI escape sequences except SGR (Select Graphic Rendition)
+    /// codes which control color and text style (<c>\e[...m</c>).
+    /// GitHub's <c>```ansi</c> block only renders SGR; other sequences
+    /// (cursor movement, private modes, OSC, etc.) render as garbage.
+    /// </summary>
+    private static string StripNonSgrEscapes(string text)
+    {
+        return NonSgrEscapeRegex().Replace(text, string.Empty);
+    }
+
+    /// <summary>
+    /// Matches ANSI escape sequences that are NOT SGR (<c>\e[...m</c>):
+    /// <list type="bullet">
+    /// <item>CSI sequences ending in any letter except 'm': <c>\e[...X</c> (cursor, erase, scroll, modes)</item>
+    /// <item>CSI private mode sequences: <c>\e[?...h</c>, <c>\e[?...l</c>, etc.</item>
+    /// <item>OSC sequences: <c>\e]...BEL</c> or <c>\e]...\e\\</c></item>
+    /// <item>Two-character escapes: <c>\eX</c> where X is not '[' or ']'</item>
+    /// </list>
+    /// </summary>
+    [GeneratedRegex(@"\x1b\[\?[0-9;]*[A-Za-z]|\x1b\[[0-9;]*[A-La-lN-Zn-z]|\x1b\][^\x07]*(?:\x07|\x1b\\)|\x1b[^[\]m][^\x1b]?")]
+    private static partial Regex NonSgrEscapeRegex();
 }
