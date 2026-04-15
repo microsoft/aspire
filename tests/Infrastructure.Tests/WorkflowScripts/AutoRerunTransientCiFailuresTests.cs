@@ -145,6 +145,28 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task AllowsNarrowOverrideForWindowsPostTestCleanupProcessInitializationFailuresIncludingHangDumpStep()
+    {
+        WorkflowJob job = CreateJob(failedSteps:
+        [
+            "Check for hang dump files",
+            "Upload logs, and test results",
+            "Copy CLI E2E recordings for upload",
+            "Upload CLI E2E recordings",
+            "Generate test results summary",
+            "Post Checkout code"
+        ]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code -1073741502.");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal(
+            "Post-test cleanup steps 'Check for hang dump files | Upload logs, and test results | Copy CLI E2E recordings for upload | Upload CLI E2E recordings | Generate test results summary | Post Checkout code' matched the Windows process initialization failure override allowlist.",
+            result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DoesNotOverrideWindowsProcessInitializationFailuresWhenTestExecutionAlsoFailed()
     {
         WorkflowJob job = CreateJob(failedSteps:

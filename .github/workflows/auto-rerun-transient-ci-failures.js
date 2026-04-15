@@ -68,6 +68,7 @@ const ignoredFailureStepOverridePatterns = [
 ];
 
 const postTestCleanupFailureStepPatterns = [
+    /^Check for hang dump files$/i,
     /^Upload logs, and test results$/i,
     /^Copy CLI E2E recordings for upload$/i,
     /^Upload CLI E2E recordings$/i,
