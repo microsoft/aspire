@@ -19,6 +19,8 @@ internal enum TypeScriptAppHostToolchain
 
 internal static class TypeScriptAppHostToolchainResolver
 {
+    internal const int MaxParentSearchDepth = 8;
+
     private const string PackageJsonFileName = "package.json";
     private const string BunLockFileName = "bun.lock";
     private const string BunBinaryLockFileName = "bun.lockb";
@@ -36,27 +38,30 @@ internal static class TypeScriptAppHostToolchainResolver
 
     public static TypeScriptAppHostToolchain Resolve(DirectoryInfo appHostDirectory)
     {
-        if (TryGetToolchainFromPackageJson(appHostDirectory, out var configuredToolchain))
+        foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory))
         {
-            return configuredToolchain;
-        }
+            if (TryGetToolchainFromPackageJson(candidateDirectory, out var configuredToolchain))
+            {
+                return configuredToolchain;
+            }
 
-        if (File.Exists(Path.Combine(appHostDirectory.FullName, BunLockFileName)) ||
-            File.Exists(Path.Combine(appHostDirectory.FullName, BunBinaryLockFileName)))
-        {
-            return TypeScriptAppHostToolchain.Bun;
-        }
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, BunLockFileName)) ||
+                File.Exists(Path.Combine(candidateDirectory.FullName, BunBinaryLockFileName)))
+            {
+                return TypeScriptAppHostToolchain.Bun;
+            }
 
-        if (File.Exists(Path.Combine(appHostDirectory.FullName, PnpmLockFileName)))
-        {
-            return TypeScriptAppHostToolchain.Pnpm;
-        }
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, PnpmLockFileName)))
+            {
+                return TypeScriptAppHostToolchain.Pnpm;
+            }
 
-        if (File.Exists(Path.Combine(appHostDirectory.FullName, YarnLockFileName)) ||
-            File.Exists(Path.Combine(appHostDirectory.FullName, YarnConfigFileName)) ||
-            Directory.Exists(Path.Combine(appHostDirectory.FullName, YarnDirectoryName)))
-        {
-            return TypeScriptAppHostToolchain.Yarn;
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, YarnLockFileName)) ||
+                File.Exists(Path.Combine(candidateDirectory.FullName, YarnConfigFileName)) ||
+                Directory.Exists(Path.Combine(candidateDirectory.FullName, YarnDirectoryName)))
+            {
+                return TypeScriptAppHostToolchain.Yarn;
+            }
         }
 
         return TypeScriptAppHostToolchain.Npm;
@@ -81,6 +86,11 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Pnpm => "pnpm",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
+    }
+
+    public static string GetInstallCommand(TypeScriptAppHostToolchain toolchain)
+    {
+        return $"{GetCommandName(toolchain)} install";
     }
 
     public static string GetDisplayName(TypeScriptAppHostToolchain toolchain)
@@ -230,23 +240,9 @@ internal static class TypeScriptAppHostToolchainResolver
             var packageManagerName = packageManager.Split('@', 2)[0];
             return TryParseToolchain(packageManagerName, out toolchain);
         }
-        catch (JsonException)
-        {
-            return SetUnknownToolchain(out toolchain);
-        }
-        catch (IOException)
-        {
-            return SetUnknownToolchain(out toolchain);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return SetUnknownToolchain(out toolchain);
-        }
-        catch (SecurityException)
-        {
-            return SetUnknownToolchain(out toolchain);
-        }
-        catch (NotSupportedException)
+        catch (Exception ex) when (ex is JsonException or IOException
+            or UnauthorizedAccessException or SecurityException
+            or NotSupportedException)
         {
             return SetUnknownToolchain(out toolchain);
         }
@@ -254,23 +250,28 @@ internal static class TypeScriptAppHostToolchainResolver
 
     private static bool TryParseToolchain(string packageManagerName, out TypeScriptAppHostToolchain toolchain)
     {
-        switch (packageManagerName.ToLowerInvariant())
+        TypeScriptAppHostToolchain? result = packageManagerName.ToLowerInvariant() switch
         {
-            case "npm":
-                toolchain = TypeScriptAppHostToolchain.Npm;
-                return true;
-            case "bun":
-                toolchain = TypeScriptAppHostToolchain.Bun;
-                return true;
-            case "yarn":
-                toolchain = TypeScriptAppHostToolchain.Yarn;
-                return true;
-            case "pnpm":
-                toolchain = TypeScriptAppHostToolchain.Pnpm;
-                return true;
-            default:
-                toolchain = default;
-                return false;
+            "npm" => TypeScriptAppHostToolchain.Npm,
+            "bun" => TypeScriptAppHostToolchain.Bun,
+            "yarn" => TypeScriptAppHostToolchain.Yarn,
+            "pnpm" => TypeScriptAppHostToolchain.Pnpm,
+            _ => null
+        };
+
+        toolchain = result ?? default;
+        return result.HasValue;
+    }
+
+    private static IEnumerable<DirectoryInfo> EnumerateCandidateDirectories(DirectoryInfo appHostDirectory)
+    {
+        // Allow nested AppHosts to pick up workspace-level lockfiles/packageManager settings
+        // without accidentally walking all the way to an unrelated parent directory.
+        var currentDirectory = appHostDirectory;
+        for (var depth = 0; currentDirectory is not null && depth <= MaxParentSearchDepth; depth++)
+        {
+            yield return currentDirectory;
+            currentDirectory = currentDirectory.Parent;
         }
     }
 

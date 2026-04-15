@@ -56,6 +56,37 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenWorkspaceRootDefinesToolchain_ReturnsParentToolchain()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.12.1\" }");
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("apps").CreateSubdirectory("apphost");
+        File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Pnpm, toolchain);
+    }
+
+    [Fact]
+    public void Resolve_WhenToolchainConfigurationIsBeyondMaxDepth_ReturnsNpm()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
+
+        var currentDirectory = workspace.WorkspaceRoot;
+        for (var i = 0; i < TypeScriptAppHostToolchainResolver.MaxParentSearchDepth + 1; i++)
+        {
+            currentDirectory = currentDirectory.CreateSubdirectory($"level{i}");
+        }
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(currentDirectory);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Npm, toolchain);
+    }
+
+    [Fact]
     public void ApplyToRuntimeSpec_WhenBunSelected_UsesBunCommandsAndPreservesExtensionLaunch()
     {
         var baseRuntimeSpec = CreateBaseRuntimeSpec();
