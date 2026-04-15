@@ -83,8 +83,6 @@ hivePath="$installPrefix/hives/pr-$prNumber/packages"
 cliVersion="$("$cliPath" --version)"
 ```
 
-If later template-based commands fail with bundle extraction or layout validation errors, use the troubleshooting guidance below.
-
 #### Container mode (preferred)
 
 Run from the repository root so the repo-local scripts are available. Use a fresh host temp directory as the mounted workspace:
@@ -98,8 +96,6 @@ runner() {
 
 runner "$prNumber"
 ```
-
-If later template-based commands fail with bundle extraction or layout validation errors, use the troubleshooting guidance below.
 
 On Windows PowerShell hosts, use the PowerShell runner instead:
 
@@ -117,8 +113,6 @@ $env:ASPIRE_CONTAINER_USER = "0:0"
 
 runner $prNumber
 ```
-
-If later template-based commands fail with bundle extraction or layout validation errors, use the troubleshooting guidance below.
 
 For follow-up commands in the same mounted workspace, run:
 
@@ -472,9 +466,9 @@ The PR does not have a "Dogfood this PR with:" comment.
 ### Bundle extraction or layout validation failure
 If a fresh PR install fails with messages like `Bundle extraction failed` or `Bundle was extracted ... but layout validation failed`:
 
-1. Run the installed CLI's `setup --force` explicitly using the installed binary path.
-2. Retry a small number of times before giving up. Fresh PR installs have hit transient extraction races.
-3. If it still fails, report it as a CLI bundle issue and stop template-based scenarios.
+1. Capture the exact error output and treat it as a CLI install or bundle failure.
+2. Stop template-based scenarios and report the failure instead of adding repair steps that a normal user would not perform.
+3. Only reach for deeper recovery or debugging steps if the user explicitly asks you to investigate the install or bundle failure itself.
 
 ### Unexpected prompt during automation
 If `aspire new` fails with `Failed to read input in non-interactive mode` or `Cannot show selection prompt since the current terminal isn't interactive`:
@@ -607,7 +601,7 @@ Dashboard correctly displays the new Redis resource type.
 - **Fresh projects** - Always use `aspire new` for each scenario, don't reuse projects
 - **Container mode** - Prefer the repo-local `./eng/scripts/aspire-pr-container` scripts and a fresh temp workspace when Docker is available
 - **Ask before container cleanup** - At the end of a container-mode run, ask whether to keep the mounted workspace around for inspection
-- **Bundle troubleshooting** - If template-based commands fail with bundle extraction or layout validation errors after install, run the installed CLI's `setup --force` and retry briefly
+- **Bundle failures** - If template-based commands fail with bundle extraction or layout validation errors after install, capture and report the failure instead of adding non-standard repair steps
 - **Non-interactive project creation** - Pass both `--name` and `--output`; for `aspire-starter`, also pass `--test-framework None --use-redis-cache false` unless intentionally testing those prompts
 - **TTY project creation** - In TTY-attached runs, `aspire new` may ask about configuring AI agent environments; answer explicitly or keep stdin non-interactive
 - **Explicit AppHost path** - Prefer `--apphost <path>` for scripted `wait`, `describe`, `resource`, and `stop` commands
