@@ -149,11 +149,12 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
+                await auto.WaitForAspireAddCompletionAsync(counter);
             }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            }
 
             // Step 4b: Add Aspire.Hosting.Azure.Network
             output.WriteLine("Step 4b: Adding Azure Network hosting package...");
@@ -162,11 +163,12 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
+                await auto.WaitForAspireAddCompletionAsync(counter);
             }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            }
 
             // Step 4c: Add Aspire.Hosting.Azure.Sql
             output.WriteLine("Step 4c: Adding Azure SQL hosting package...");
@@ -175,11 +177,12 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
 
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
+                await auto.WaitForAspireAddCompletionAsync(counter);
             }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            }
 
             // Step 5: Modify apphost.ts to add VNet + PE + SQL infrastructure
             {

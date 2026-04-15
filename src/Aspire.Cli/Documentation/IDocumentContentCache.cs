@@ -1,12 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Cli.Mcp.Docs;
+namespace Aspire.Cli.Documentation;
 
 /// <summary>
-/// Interface for caching aspire.dev documentation content with ETag support.
+/// Interface for caching documentation content with ETag support.
 /// </summary>
-internal interface IDocsCache
+internal interface IDocumentContentCache
 {
     /// <summary>
     /// Gets cached documentation content by key.
@@ -39,20 +39,6 @@ internal interface IDocsCache
     /// <param name="etag">The ETag value, or null to clear the cached ETag.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     Task SetETagAsync(string url, string? etag, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Gets the cached parsed document index.
-    /// </summary>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The cached documents, or null if not found.</returns>
-    Task<LlmsDocument[]?> GetIndexAsync(CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Sets the parsed document index in the cache.
-    /// </summary>
-    /// <param name="documents">The parsed documents to cache.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    Task SetIndexAsync(LlmsDocument[] documents, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Invalidates the cache for a key.

@@ -103,38 +103,40 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI && DeploymentE2ETestHelpers.GetPrNumber() <= 0)
+            if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
+                await auto.WaitForAspireAddCompletionAsync(counter);
+            }
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
-
-            // Step 6: Modify apphost.cs to add ACA environment with purge task
-            // Python template uses single-file AppHost (apphost.cs in project root)
+            // Step 6: Modify apphost.ts to add ACA environment with purge task
+            // Python template uses TypeScript AppHost (apphost.ts in project root)
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-            var appHostFilePath = Path.Combine(projectDir, "apphost.cs");
+            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
 
-            output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
-            var buildRunPattern = "builder.Build().Run();";
-            var replacement = """
+            // Add Azure Container App Environment with purge task before build().run()
+            content = content.Replace(
+                "await builder.build().run();",
+                """
 // Add Azure Container App Environment and configure ACR purge task
-var infra = builder.AddAzureContainerAppEnvironment("infra");
+const infra = await builder.addAzureContainerAppEnvironment("infra");
 // Schedule once a month so it never fires during the test; the task is triggered manually via az acr task run
-infra.GetAzureContainerRegistry()
-    .WithPurgeTask("0 0 1 * *", keep: 1);
+await infra.getAzureContainerRegistry()
+    .withPurgeTask("0 0 1 * *", { keep: 1 });
 
-builder.Build().Run();
-""";
+await builder.build().run();
+""");
 
-            content = content.Replace(buildRunPattern, replacement);
             File.WriteAllText(appHostFilePath, content);
 
-            output.WriteLine($"Modified apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Modified apphost.ts at: {appHostFilePath}");
 
             // Step 7: Set environment variables for deployment
             await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");

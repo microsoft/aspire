@@ -3,6 +3,7 @@
 
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
+using Semver;
 
 namespace Aspire.Hosting.Kubernetes;
 
@@ -129,7 +130,7 @@ public sealed partial class HelmChartOptions
 
     private static void ValidateChartVersion(string version)
     {
-        if (!Aspire.SemVersion.TryParse(version, Aspire.SemVersionStyles.Strict, out _))
+        if (!SemVersion.TryParse(version, SemVersionStyles.Strict, out _))
         {
             throw new ArgumentException($"Helm chart version '{version}' is invalid. Use a semantic version such as '1.0.0' or '1.0.0-beta.1'.", nameof(version));
         }

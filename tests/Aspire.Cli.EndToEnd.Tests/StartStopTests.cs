@@ -4,6 +4,7 @@
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -16,6 +17,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class StartStopTests(ITestOutputHelper output)
 {
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16191")]
     public async Task CreateStartAndStopAspireProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -58,8 +60,8 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         await auto.ClearScreenAsync(counter);
 
-        // Ensure the test-specific Docker network is cleaned up (which signifies end of container cleanup) 
-        await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(2));
+        // Docker network cleanup can lag behind aspire stop on contended CI runners.
+        await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(5));
 
         // Exit the shell
         await auto.TypeAsync("exit");

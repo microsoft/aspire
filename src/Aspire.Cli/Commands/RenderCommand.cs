@@ -35,6 +35,8 @@ internal sealed class RenderCommand : BaseCommand
         ["showstatus"] = "Show status spinner (first 5 emojis)",
         ["showstatus-markup"] = "Show status with markup rendered",
         ["showstatus-escaped"] = "Show status with markup escaped",
+        ["choice"] = "Selection prompt with formatted choices",
+        ["choice-simple"] = "Selection prompt without formatter",
         ["mixed"] = "Mixed interaction service methods",
         ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
         ["exit"] = "Exit",
@@ -145,6 +147,10 @@ internal sealed class RenderCommand : BaseCommand
                     return await TestShowStatusWithMarkupAsync(cancellationToken);
                 case "showstatus-escaped":
                     return await TestShowStatusEscapedAsync(cancellationToken);
+                case "choice":
+                    return await TestChoiceWithFormatterAsync(cancellationToken);
+                case "choice-simple":
+                    return await TestChoiceSimpleAsync(cancellationToken);
                 case "mixed":
                     await TestMixedMethodsAsync(cancellationToken);
                     return ExitCodeConstants.Success;
@@ -246,6 +252,42 @@ internal sealed class RenderCommand : BaseCommand
             },
             emoji: KnownEmojis.Package);
 
+        return ExitCodeConstants.Success;
+    }
+
+    private async Task<int> TestChoiceWithFormatterAsync(CancellationToken cancellationToken)
+    {
+        var packages = new[]
+        {
+            ("Aspire.Hosting.Redis", "9.2.0", "[green]stable[/]"),
+            ("Aspire.Hosting.PostgreSQL", "9.2.0", "[green]stable[/]"),
+            ("Aspire.Hosting.RabbitMQ", "9.1.0", "[yellow]preview[/]"),
+            ("Aspire.Hosting.MongoDB [Deprecated]", "9.0.0", "[red]deprecated[/]"),
+            ("Aspire.Hosting.Kafka", "9.2.0", "[green]stable[/]"),
+            ("Aspire.Hosting.MySql [Preview]", "9.1.0", "[yellow]preview[/]"),
+        };
+
+        var selected = await InteractionService.PromptForSelectionAsync(
+            "Select a [bold blue]package[/] to install:",
+            packages,
+            p => $"{p.Item1.EscapeMarkup()} [dim]v{p.Item2}[/] ({p.Item3})",
+            cancellationToken);
+
+        InteractionService.DisplayMessage(KnownEmojis.Package, $"Selected: {selected.Item1} v{selected.Item2}");
+        return ExitCodeConstants.Success;
+    }
+
+    private async Task<int> TestChoiceSimpleAsync(CancellationToken cancellationToken)
+    {
+        var environments = new[] { "Development", "Staging", "Production" };
+
+        var selected = await InteractionService.PromptForSelectionAsync(
+            "Select a target environment:",
+            environments,
+            e => e,
+            cancellationToken);
+
+        InteractionService.DisplayMessage(KnownEmojis.Rocket, $"Deploying to {selected}...");
         return ExitCodeConstants.Success;
     }
 

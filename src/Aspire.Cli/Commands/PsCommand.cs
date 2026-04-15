@@ -217,10 +217,9 @@ internal sealed class PsCommand : BaseCommand
             var dashboard = "-";
             if (!string.IsNullOrEmpty(appHost.DashboardUrl))
             {
-                if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out var dashboardUri))
+                if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out _))
                 {
-                    var displayText = $"{dashboardUri.Scheme}://{dashboardUri.Authority}";
-                    dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(displayText)}[/]";
+                    dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(appHost.DashboardUrl)}[/]";
                 }
                 else
                 {

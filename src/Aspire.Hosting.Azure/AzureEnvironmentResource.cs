@@ -149,11 +149,10 @@ public sealed class AzureEnvironmentResource : Resource
         var location = provisioningContext.Location.Name;
 
         var tenantId = provisioningContext.Tenant.TenantId;
-        var portalUrl = AzurePortalUrls.GetResourceGroupUrl(subscriptionId, resourceGroupName, tenantId);
-        var resourceGroupValue = $"[{resourceGroupName}]({portalUrl})";
 
         ctx.Summary.Add("☁️ Target", "Azure");
-        ctx.Summary.Add("📦 Resource Group", new MarkdownString(resourceGroupValue));
+        ctx.Summary.Add("📦 Resource Group", AzurePortalUrls.GetResourceGroupLink(subscriptionId, resourceGroupName, tenantId));
+        ctx.Summary.Add("📜 Deployments", AzurePortalUrls.GetResourceGroupDeploymentsLink(subscriptionId, resourceGroupName, tenantId));
         ctx.Summary.Add("🔑 Subscription", subscriptionId);
         ctx.Summary.Add("🌐 Location", location);
     }

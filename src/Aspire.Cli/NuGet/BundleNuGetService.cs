@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Microsoft.Extensions.Logging;
 
@@ -38,16 +39,22 @@ internal sealed class BundleNuGetService : INuGetService
 {
     private readonly ILayoutDiscovery _layoutDiscovery;
     private readonly LayoutProcessRunner _layoutProcessRunner;
+    private readonly IFeatures _features;
+    private readonly CliExecutionContext _executionContext;
     private readonly ILogger<BundleNuGetService> _logger;
     private readonly string _cacheDirectory;
 
     public BundleNuGetService(
         ILayoutDiscovery layoutDiscovery,
         LayoutProcessRunner layoutProcessRunner,
+        IFeatures features,
+        CliExecutionContext executionContext,
         ILogger<BundleNuGetService> logger)
     {
         _layoutDiscovery = layoutDiscovery;
         _layoutProcessRunner = layoutProcessRunner;
+        _features = features;
+        _executionContext = executionContext;
         _logger = logger;
         _cacheDirectory = GetCacheDirectory();
     }
@@ -142,12 +149,16 @@ internal sealed class BundleNuGetService : INuGetService
         _logger.LogDebug("aspire-managed path: {ManagedPath}", managedPath);
         _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", restoreArgs));
 
+        var environmentVariables = new Dictionary<string, string>();
+        NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _executionContext);
+
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             restoreArgs,
+            environmentVariables: environmentVariables,
             ct: ct);
 
-        // Log stderr output (verbose info from NuGetHelper)
+        // Log stderr at debug level for diagnostics
         if (!string.IsNullOrWhiteSpace(error))
         {
             _logger.LogDebug("NuGetHelper restore stderr: {Error}", error);
@@ -190,9 +201,10 @@ internal sealed class BundleNuGetService : INuGetService
         (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             layoutArgs,
+            environmentVariables: environmentVariables,
             ct: ct);
 
-        // Log stderr output (verbose info from NuGetHelper)
+        // Log stderr at debug level for diagnostics
         if (!string.IsNullOrWhiteSpace(error))
         {
             _logger.LogDebug("NuGetHelper layout stderr: {Error}", error);

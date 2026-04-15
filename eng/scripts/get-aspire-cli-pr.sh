@@ -611,12 +611,33 @@ get_pr_head_sha() {
 
     say_verbose "Getting HEAD SHA for PR #$pr_number"
 
-    local head_sha
-    if ! head_sha=$(gh_api_call "${GH_REPOS_BASE}/pulls/$pr_number" ".head.sha" "Failed to get HEAD SHA for PR #$pr_number"); then
-        say_info "This could mean:"
-        say_info "  - The PR number does not exist"
-        say_info "  - You don't have access to the repository"
+    local repo_owner repo_name
+    if [[ "$REPO" =~ ^([^/]+)/([^/]+)$ ]]; then
+        repo_owner="${BASH_REMATCH[1]}"
+        repo_name="${BASH_REMATCH[2]}"
+    else
+        say_error "Invalid repository format '$REPO'. Expected 'owner/name'."
         exit 1
+    fi
+
+    local graphql_query='query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { headRefOid } } }'
+    local gh_cmd=(gh api graphql -f query="$graphql_query" -f owner="$repo_owner" -f name="$repo_name" -F number="$pr_number" --jq ".data.repository.pullRequest.headRefOid")
+
+    say_verbose "Calling GitHub API: ${gh_cmd[*]}"
+
+    local head_sha
+    if head_sha=$("${gh_cmd[@]}" 2>/dev/null) && [[ -n "$head_sha" && "$head_sha" != "null" ]]; then
+        # GraphQL succeeded with a valid SHA
+        :
+    else
+        say_verbose "GraphQL PR head lookup failed or returned empty, falling back to REST API"
+
+        if ! head_sha=$(gh_api_call "${GH_REPOS_BASE}/pulls/$pr_number" ".head.sha" "Failed to get HEAD SHA for PR #$pr_number using REST fallback"); then
+            say_info "This could mean:"
+            say_info "  - The PR number does not exist"
+            say_info "  - You don't have access to the repository"
+            exit 1
+        fi
     fi
 
     if [[ -z "$head_sha" || "$head_sha" == "null" ]]; then

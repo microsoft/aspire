@@ -103,6 +103,7 @@ public class MarkdownToSpectreConverterTests
     [Theory]
     [InlineData("[link text](https://example.com)", "[cyan][link=https://example.com]link text[/][/]")]
     [InlineData("Visit [GitHub](https://github.com) for more info.", "Visit [cyan][link=https://github.com]GitHub[/][/] for more info.")]
+    [InlineData("[CreateBuilder(string[])](https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)", "[cyan][link=https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string]CreateBuilder(string[[]])[/][/]")]
     public void ConvertToSpectre_WithLinks_ConvertsCorrectly(string markdown, string expected)
     {
         // Act
@@ -110,6 +111,17 @@ public class MarkdownToSpectreConverterTests
 
         // Assert
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ConvertLinksToPlainText_WithBracketedLinkText_ConvertsCorrectly()
+    {
+        var result = MarkdownToSpectreConverter.ConvertLinksToPlainText(
+            "[CreateBuilder(string[])](https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)");
+
+        Assert.Equal(
+            "CreateBuilder(string[]) (https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)",
+            result);
     }
 
     [Fact]

@@ -56,7 +56,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-
+    <PackageReference Include="Semver" />
     <PackageReference Include="Sigstore" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
@@ -74,7 +74,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)SmolSemVer.cs" Link="SmolSemVer.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />

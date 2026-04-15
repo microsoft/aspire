@@ -22,7 +22,7 @@ jobs:
       jobs:
       - job: BuildNative_${{ replace(targetRid, '-', '_') }}
         displayName: ${{ replace(targetRid, '-', '_') }}
-        timeoutInMinutes: 40
+        timeoutInMinutes: 60
 
         variables:
         - TeamName: ${{ parameters.teamName }}

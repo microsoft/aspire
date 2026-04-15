@@ -4,6 +4,7 @@
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -22,6 +23,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16188")]
     public async Task AllPublishMethodsBuildDockerImages()
     {
         using var workspace = TemporaryWorkspace.Create(output);

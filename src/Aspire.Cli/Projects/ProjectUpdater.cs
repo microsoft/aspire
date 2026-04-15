@@ -13,6 +13,7 @@ using Aspire.Cli.Resources;
 using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Projects;

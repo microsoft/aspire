@@ -884,8 +884,8 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         {
             // Simulate what the real cache does: filter by prerelease flag
             var filtered = prerelease
-                ? packages.Where(p => SemVersion.Parse(p.Version).IsPrerelease)
-                : packages.Where(p => !SemVersion.Parse(p.Version).IsPrerelease);
+                ? packages.Where(p => Semver.SemVersion.Parse(p.Version).IsPrerelease)
+                : packages.Where(p => !Semver.SemVersion.Parse(p.Version).IsPrerelease);
             return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(filtered.ToList());
         }
 

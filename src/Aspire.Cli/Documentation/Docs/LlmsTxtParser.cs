@@ -3,7 +3,7 @@
 
 using System.Buffers;
 
-namespace Aspire.Cli.Mcp.Docs;
+namespace Aspire.Cli.Documentation.Docs;
 
 /// <summary>
 /// Represents a parsed document from llms.txt format.
@@ -66,6 +66,8 @@ internal sealed class LlmsSection
 /// </remarks>
 internal static partial class LlmsTxtParser
 {
+    private const int MaxDocumentTitleLength = 200;
+
     /// <summary>
     /// Parses llms.txt content into a collection of documents using parallel processing.
     /// </summary>
@@ -121,7 +123,7 @@ internal static partial class LlmsTxtParser
         var position = 0;
 
         // Check if content starts with H1
-        if (IsH1Start(span))
+        if (IsDocumentBoundary(span))
         {
             boundaries.Add(0);
         }
@@ -137,13 +139,35 @@ internal static partial class LlmsTxtParser
 
             position += newlineIndex + 1;
 
-            if (position < span.Length && IsH1Start(span[position..]))
+            if (position < span.Length && IsDocumentBoundary(span[position..]))
             {
                 boundaries.Add(position);
             }
         }
 
         return boundaries;
+    }
+
+    private static bool IsDocumentBoundary(ReadOnlySpan<char> span)
+    {
+        if (!IsH1Start(span))
+        {
+            return false;
+        }
+
+        var lineEnd = span.IndexOf('\n');
+        var titleLine = lineEnd >= 0 ? span[..lineEnd] : span;
+        var title = ExtractHeadingText(titleLine);
+        if (title.Length is 0 || title.Length > MaxDocumentTitleLength)
+        {
+            return false;
+        }
+
+        // Some landing pages emit a second H1 inline with the rest of the body content.
+        // Those should stay inside the current document rather than starting a new one.
+        return title.IndexOf("## ", StringComparison.Ordinal) < 0
+            && title.IndexOf("[Section titled", StringComparison.Ordinal) < 0
+            && title.IndexOf("](", StringComparison.Ordinal) < 0;
     }
 
     /// <summary>

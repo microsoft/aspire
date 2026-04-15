@@ -127,7 +127,7 @@
     <value>The path to the Aspire AppHost project file</value>
   </data>
   <data name="OutputPathArgumentDescription" xml:space="preserve">
-    <value>The output path for the generated artifacts. Defaults to './aspire-output' if not specified.</value>
+    <value>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</value>
   </data>
   <data name="GeneratingArtifacts" xml:space="preserve">
     <value>Generating artifacts...</value>

@@ -5,7 +5,7 @@ using System.Globalization;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace Aspire.Cli.Mcp.Docs;
+namespace Aspire.Cli.Documentation.Docs;
 
 /// <summary>
 /// Service for searching Aspire documentation.

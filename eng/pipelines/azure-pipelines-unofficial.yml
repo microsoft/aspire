@@ -318,13 +318,11 @@ extends:
                 artifactVersion: $(aspireArtifactVersion)
                 channel: $(installerChannel)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
-                validateUrls: false
-                runInstallTest: false
+                skipUrlValidation: true
 
           - job: Homebrew
             displayName: Homebrew Cask
             timeoutInMinutes: 30
-            condition: and(succeeded(), eq(variables['installerChannel'], 'stable'))
             pool:
               name: Azure Pipelines
               vmImage: macOS-latest-internal
@@ -343,5 +341,4 @@ extends:
                 version: $(aspireVersion)
                 artifactVersion: $(aspireArtifactVersion)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
-                validateUrls: false
-                runInstallTest: false
+                skipUrlValidation: true

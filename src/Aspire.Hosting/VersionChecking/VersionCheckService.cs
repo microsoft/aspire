@@ -12,6 +12,7 @@ using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Hosting.VersionChecking;
 
@@ -166,7 +167,7 @@ internal sealed class VersionCheckService : BackgroundService
         {
             return false;
         }
-        return version1.IsAtLeast(version2);
+        return SemVersion.ComparePrecedence(version1, version2) >= 0;
     }
 
     public static bool IsVersionGreater(SemVersion? version1, SemVersion? version2)
@@ -175,7 +176,7 @@ internal sealed class VersionCheckService : BackgroundService
         {
             return false;
         }
-        return version1.IsNewerThan(version2);
+        return SemVersion.ComparePrecedence(version1, version2) > 0;
     }
 
     private bool TryGetConfigVersion(string key, [NotNullWhen(true)] out SemVersion? knownLatestVersion)
