@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.IO.Compression;
-using System.Xml.Linq;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -245,7 +243,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         foreach (var packageFile in Directory.EnumerateFiles(source, "*.nupkg", SearchOption.TopDirectoryOnly))
         {
-            if (TryGetPackageId(packageFile) is { Length: > 0 } packageId)
+            if (TryGetPackageIdFromPackageFileName(packageFile) is { Length: > 0 } packageId)
             {
                 packageIds.Add(packageId);
             }
@@ -254,35 +252,27 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return packageIds;
     }
 
-    private static string? TryGetPackageId(string packageFile)
+    private static string? TryGetPackageIdFromPackageFileName(string packageFile)
     {
-        try
+        var packageFileName = Path.GetFileNameWithoutExtension(packageFile);
+        if (string.IsNullOrWhiteSpace(packageFileName))
         {
-            using var archive = ZipFile.OpenRead(packageFile);
-            var nuspecEntry = archive.Entries.FirstOrDefault(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
-            if (nuspecEntry is null)
+            return null;
+        }
+
+        var separatorIndex = packageFileName.IndexOf('.');
+        while (separatorIndex >= 0 && separatorIndex < packageFileName.Length - 1)
+        {
+            var versionCandidate = packageFileName[(separatorIndex + 1)..];
+            if (SemVersion.TryParse(versionCandidate, SemVersionStyles.Strict, out _))
             {
-                return null;
+                return packageFileName[..separatorIndex];
             }
 
-            using var stream = nuspecEntry.Open();
-            var document = XDocument.Load(stream);
-            var metadata = document.Root?.Elements().FirstOrDefault(e => e.Name.LocalName == "metadata");
-            var id = metadata?.Elements().FirstOrDefault(e => e.Name.LocalName == "id")?.Value;
-            return string.IsNullOrWhiteSpace(id) ? null : id;
+            separatorIndex = packageFileName.IndexOf('.', separatorIndex + 1);
         }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (InvalidDataException)
-        {
-            return null;
-        }
-        catch (System.Xml.XmlException)
-        {
-            return null;
-        }
+
+        return null;
     }
 
     private static bool IsScopedAspireMapping(PackageMapping mapping)

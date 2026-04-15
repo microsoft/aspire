@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.IO.Compression;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -971,18 +970,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     private static void CreatePackage(string directory, string packageId, string version)
     {
         var packagePath = Path.Combine(directory, $"{packageId}.{version}.nupkg");
-        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
-        var nuspecEntry = archive.CreateEntry($"{packageId}.nuspec");
-        using var writer = new StreamWriter(nuspecEntry.Open());
-        writer.Write($$"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <package>
-              <metadata>
-                <id>{{packageId}}</id>
-                <version>{{version}}</version>
-              </metadata>
-            </package>
-            """);
+        File.WriteAllText(packagePath, string.Empty);
     }
 }
 
