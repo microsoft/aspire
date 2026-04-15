@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // GENERATED CODE - DO NOT EDIT
 
 package aspire
@@ -7683,6 +7683,18 @@ func (s *EndpointReference) TlsEnabled() (*bool, error) {
 		"context": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// IsHttpSchemeNamedEndpoint gets the IsHttpSchemeNamedEndpoint property
+func (s *EndpointReference) IsHttpSchemeNamedEndpoint() (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
 	}

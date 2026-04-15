@@ -1,4 +1,4 @@
-#   -------------------------------------------------------------
+﻿#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -3647,6 +3647,15 @@ class EndpointReference:
         """Gets the TlsEnabled property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+    @_cached_property
+    def is_http_scheme_named_endpoint(self) -> bool:
+        """Gets the IsHttpSchemeNamedEndpoint property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint',
             {'context': self._handle}
         )
         return typing.cast(bool, result)
