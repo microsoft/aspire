@@ -715,27 +715,39 @@ public static class ResourceBuilderExtensions
 
                 if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ServiceDiscovery))
                 {
-                    // Use the endpoint's scheme (not name) in the service discovery key so that
-                    // .NET service discovery can correctly match the scheme segment to the URI scheme.
-                    var scheme = endpoint.Scheme;
-                    if (!schemeIndexTracker.TryGetValue(scheme, out var index))
+                    // Use the endpoint's scheme for "http" and "https" endpoint names to handle
+                    // TLS upgrades correctly. For all other endpoint names, use the endpoint name
+                    // so that .NET service discovery's named endpoint resolution can match them.
+                    var schemeKey = IsHttpSchemeEndpointName(endpointName) ? endpoint.Scheme : endpointName;
+                    if (!schemeIndexTracker.TryGetValue(schemeKey, out var index))
                     {
                         index = 0;
                     }
 
                     // Find the next unused index for this scheme in case of collisions with other callbacks.
-                    var key = $"services__{serviceName}__{scheme}__{index}";
+                    var key = $"services__{serviceName}__{schemeKey}__{index}";
                     while (context.EnvironmentVariables.ContainsKey(key))
                     {
                         index++;
-                        key = $"services__{serviceName}__{scheme}__{index}";
+                        key = $"services__{serviceName}__{schemeKey}__{index}";
                     }
 
                     context.EnvironmentVariables[key] = endpoint;
-                    schemeIndexTracker[scheme] = index + 1;
+                    schemeIndexTracker[schemeKey] = index + 1;
                 }
             }
         };
+    }
+
+    /// <summary>
+    /// Determines whether the endpoint name is a standard HTTP scheme name ("http" or "https").
+    /// These names are special-cased in service discovery key generation to use the actual URI scheme
+    /// instead of the endpoint name, because TLS upgrades can cause the name and scheme to diverge.
+    /// </summary>
+    private static bool IsHttpSchemeEndpointName(string endpointName)
+    {
+        return string.Equals(endpointName, "http", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(endpointName, "https", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -1016,7 +1028,7 @@ public static class ResourceBuilderExtensions
     /// Resource authors can opt out individual endpoints by setting <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> to <c>true</c>
     /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.ExcludeReferenceEndpoint = true)</c>) to exclude them from this method's behavior.
     /// Endpoints that have been excluded (such as management or health check endpoints) can still be referenced explicitly using
-    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference)"/>
+    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference, string)"/>
     /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
     /// </para>
     /// </remarks>
@@ -1048,7 +1060,7 @@ public static class ResourceBuilderExtensions
     /// Resource authors can opt out individual endpoints by setting <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> to <c>true</c>
     /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.ExcludeReferenceEndpoint = true)</c>) to exclude them from this method's behavior.
     /// Endpoints that have been excluded (such as management or health check endpoints) can still be referenced explicitly using
-    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference)"/>
+    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference, string)"/>
     /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
     /// </para>
     /// </remarks>
@@ -1201,15 +1213,17 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource where the service discovery information will be injected.</param>
     /// <param name="endpointReference">The endpoint from which to extract the url.</param>
+    /// <param name="name">Optional service name to use for service discovery. When specified, the endpoint will be registered
+    /// under this name instead of the source resource's name, enabling differentiation of multiple logical services from a single resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withReferenceEndpoint", Description = "Adds a reference to an endpoint")]
-    public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, EndpointReference endpointReference)
+    public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, EndpointReference endpointReference, string? name = null)
         where TDestination : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(endpointReference);
 
-        ApplyEndpoints(builder, endpointReference.Resource, endpointReference.EndpointName);
+        ApplyEndpoints(builder, endpointReference.Resource, endpointReference.EndpointName, name);
         return builder;
     }
 
@@ -1219,15 +1233,15 @@ public static class ResourceBuilderExtensions
         // When adding an endpoint we get to see whether there is an EndpointReferenceAnnotation
         // on the resource, if there is then it means we have already been here before and we can just
         // skip this and note the endpoint that we want to apply to the environment in the future
-        // in a single pass. There is one EndpointReferenceAnnotation per endpoint source.
+        // in a single pass. There is one EndpointReferenceAnnotation per (endpoint source, service name) pair.
         var endpointReferenceAnnotation = builder.Resource.Annotations
             .OfType<EndpointReferenceAnnotation>()
-            .Where(sra => sra.Resource == resourceWithEndpoints)
+            .Where(sra => sra.Resource == resourceWithEndpoints && sra.ServiceName == name)
             .SingleOrDefault();
 
         if (endpointReferenceAnnotation == null)
         {
-            endpointReferenceAnnotation = new EndpointReferenceAnnotation(resourceWithEndpoints);
+            endpointReferenceAnnotation = new EndpointReferenceAnnotation(resourceWithEndpoints) { ServiceName = name };
             if (builder.Resource.IsContainer())
             {
                 endpointReferenceAnnotation.ContextNetworkID = KnownNetworkIdentifiers.DefaultAspireContainerNetwork;
