@@ -31,20 +31,6 @@ public class AzureKubernetesEnvironmentExtensionsTests
     }
 
     [Fact]
-    public async Task AddAzureKubernetesEnvironment_WithVersion()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .WithVersion("1.30");
-
-        Assert.Equal("1.30", aks.Resource.KubernetesVersion);
-
-        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
-        await Verify(manifest.BicepText, extension: "bicep");
-    }
-
-    [Fact]
     public void AddNodePool_ReturnsNodePoolResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -160,17 +146,6 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
         Assert.Throws<ArgumentException>(() =>
             builder.AddAzureKubernetesEnvironment(""));
-    }
-
-    [Fact]
-    public void WithVersion_ThrowsOnEmptyVersion()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var aks = builder.AddAzureKubernetesEnvironment("aks");
-
-        Assert.Throws<ArgumentException>(() =>
-            aks.WithVersion(""));
     }
 
     [Fact]

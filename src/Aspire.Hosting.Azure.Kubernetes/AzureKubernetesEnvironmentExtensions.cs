@@ -42,8 +42,7 @@ public static class AzureKubernetesEnvironmentExtensions
     /// </remarks>
     /// <example>
     /// <code>
-    /// var aks = builder.AddAzureKubernetesEnvironment("aks")
-    ///     .WithVersion("1.30");
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks");
     /// </code>
     /// </example>
     [AspireExport(Description = "Adds an Azure Kubernetes Service environment resource")]
@@ -133,24 +132,6 @@ public static class AzureKubernetesEnvironmentExtensions
         }));
 
         return builder.AddResource(resource);
-    }
-
-    /// <summary>
-    /// Configures the Kubernetes version for the AKS cluster.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="version">The Kubernetes version (e.g., "1.30").</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Sets the Kubernetes version for the AKS cluster")]
-    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithVersion(
-        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
-        string version)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(version);
-
-        builder.Resource.KubernetesVersion = version;
-        return builder;
     }
 
     /// <summary>
