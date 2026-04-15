@@ -150,7 +150,7 @@
   <data name="HeaderHealth" xml:space="preserve">
     <value>Health</value>
   </data>
-  <data name="HeaderEndpoints" xml:space="preserve">
-    <value>Endpoints</value>
+  <data name="HeaderURLs" xml:space="preserve">
+    <value>URLs</value>
   </data>
 </root>

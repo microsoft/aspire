@@ -301,20 +301,20 @@ internal sealed class ResourceContainerImageManager(
 
         try
         {
-
             logger.LogInformation("Building image: {ResourceName}", resource.Name);
 
-            var success = await ExecuteDotnetPublishAsync(resource, options, cancellationToken).ConfigureAwait(false);
+            await ExecuteDotnetPublishAsync(resource, options, cancellationToken).ConfigureAwait(false);
 
-            if (!success)
-            {
-                logger.LogError("Building image for {ResourceName} failed", resource.Name);
-                throw new DistributedApplicationException($"Failed to build container image for resource '{resource.Name}'.");
-            }
-            else
-            {
-                logger.LogInformation("Building image for {ResourceName} completed", resource.Name);
-            }
+            logger.LogInformation("Building image for {ResourceName} completed", resource.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Building image for {ResourceName} failed", resource.Name);
+            throw;
         }
         finally
         {
@@ -322,7 +322,7 @@ internal sealed class ResourceContainerImageManager(
         }
     }
 
-    private async Task<bool> ExecuteDotnetPublishAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
+    private async Task ExecuteDotnetPublishAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
     {
         // This is a resource project so we'll use the .NET SDK to build the container image.
         if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
@@ -378,16 +378,21 @@ internal sealed class ResourceContainerImageManager(
         }
 #pragma warning restore ASPIREDOCKERFILEBUILDER001
 
+        var buildOutput = new BuildOutputCapture();
+
         var spec = new ProcessSpec("dotnet")
         {
             Arguments = arguments,
+            ThrowOnNonZeroReturnCode = false,
             OnOutputData = output =>
             {
                 logger.LogDebug("dotnet publish {ProjectPath} (stdout): {Output}", projectMetadata.ProjectPath, output);
+                buildOutput.Add(output);
             },
             OnErrorData = error =>
             {
                 logger.LogDebug("dotnet publish {ProjectPath} (stderr): {Error}", projectMetadata.ProjectPath, error);
+                buildOutput.Add(error);
             }
         };
 
@@ -406,15 +411,17 @@ internal sealed class ResourceContainerImageManager(
 
             if (processResult.ExitCode != 0)
             {
-                logger.LogError("dotnet publish for project {ProjectPath} failed with exit code {ExitCode}.", projectMetadata.ProjectPath, processResult.ExitCode);
-                return false;
+                throw new ProcessFailedException(
+                    $"Failed to build container image for resource '{resource.Name}' from project '{projectMetadata.ProjectPath}' with exit code {processResult.ExitCode}.",
+                    processResult.ExitCode,
+                    buildOutput.ToArray(),
+                    buildOutput.TotalLineCount);
             }
             else
             {
                 logger.LogDebug(
                     ".NET CLI completed with exit code: {ExitCode}",
                     processResult.ExitCode);
-                return true;
             }
         }
     }
