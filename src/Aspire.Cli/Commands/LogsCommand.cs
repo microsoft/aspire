@@ -166,6 +166,7 @@ internal sealed class LogsCommand : BaseCommand
         }
 
         var connection = result.Connection!;
+        using var resourceWatcher = new ResourceWatcher(connection);
 
         // Always fetch all snapshots so we know which resources are hidden.
         var allSnapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
@@ -197,16 +198,17 @@ internal sealed class LogsCommand : BaseCommand
 
         if (follow)
         {
-            return await ExecuteWatchAsync(connection, resourceName, format, tail, timestamps, snapshots, hiddenResourceNames, cancellationToken);
+            return await ExecuteWatchAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, snapshots, hiddenResourceNames, !effectiveIncludeHidden, cancellationToken);
         }
         else
         {
-            return await ExecuteGetAsync(connection, resourceName, format, tail, timestamps, snapshots, hiddenResourceNames, cancellationToken);
+            return await ExecuteGetAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, snapshots, hiddenResourceNames, !effectiveIncludeHidden, cancellationToken);
         }
     }
 
     private async Task<int> ExecuteGetAsync(
         IAppHostAuxiliaryBackchannel connection,
+        ResourceWatcher resourceWatcher,
         string? resourceName,
         OutputFormat format,
         int? tail,
@@ -218,7 +220,7 @@ internal sealed class LogsCommand : BaseCommand
         // Collect all logs, parsing into LogEntry with resolved resource names sorted by timestamp
         var entries = await _interactionService.ShowStatusAsync(
             LogsCommandStrings.GettingLogs,
-            async () => await CollectLogsAsync(connection, resourceName, snapshots, hiddenResourceNames, cancellationToken).ConfigureAwait(false));
+            async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, snapshots, hiddenResourceNames, filterHiddenResources, cancellationToken).ConfigureAwait(false));
 
         // Apply tail filter (tail.Value is guaranteed >= 1 by earlier validation)
         if (tail.HasValue && entries.Count > tail.Value)
@@ -257,6 +259,7 @@ internal sealed class LogsCommand : BaseCommand
 
     private async Task<int> ExecuteWatchAsync(
         IAppHostAuxiliaryBackchannel connection,
+        ResourceWatcher resourceWatcher,
         string? resourceName,
         OutputFormat format,
         int? tail,
@@ -272,7 +275,7 @@ internal sealed class LogsCommand : BaseCommand
         {
             var entries = await _interactionService.ShowStatusAsync(
                 LogsCommandStrings.GettingLogs,
-                async () => await CollectLogsAsync(connection, resourceName, snapshots, hiddenResourceNames, cancellationToken).ConfigureAwait(false));
+                async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, snapshots, hiddenResourceNames, filterHiddenResources, cancellationToken).ConfigureAwait(false));
 
             // Output last N lines
             var tailedEntries = entries.Count > tail.Value
@@ -293,7 +296,24 @@ internal sealed class LogsCommand : BaseCommand
             // initial snapshot are included by default.
             if (resourceName is null && hiddenResourceNames.Contains(logLine.ResourceName))
             {
-                continue;
+                if (hiddenResourceNames.Contains(logLine.ResourceName))
+                {
+                    continue;
+                }
+
+                if (!snapshotsByName.ContainsKey(logLine.ResourceName))
+                {
+                    var resource = resourceWatcher.GetResource(logLine.ResourceName);
+                    if (resource is not null)
+                    {
+                        snapshotsByName[resource.Name] = resource;
+                        if (ResourceSnapshotMapper.IsHiddenResource(resource))
+                        {
+                            hiddenResourceNames.Add(resource.Name);
+                            continue;
+                        }
+                    }
+                }
             }
 
             var entry = ParseLogLine(logLine, logParser, snapshots);
@@ -310,6 +330,7 @@ internal sealed class LogsCommand : BaseCommand
     /// </summary>
     private static async Task<IList<LogEntry>> CollectLogsAsync(
         IAppHostAuxiliaryBackchannel connection,
+        ResourceWatcher resourceWatcher,
         string? resourceName,
         IReadOnlyList<ResourceSnapshot> snapshots,
         HashSet<string> hiddenResourceNames,
@@ -322,7 +343,24 @@ internal sealed class LogsCommand : BaseCommand
             // When streaming all resources, skip logs from hidden resources
             if (resourceName is null && hiddenResourceNames.Contains(logLine.ResourceName))
             {
-                continue;
+                if (hiddenResourceNames.Contains(logLine.ResourceName))
+                {
+                    continue;
+                }
+
+                if (!snapshotsByName.ContainsKey(logLine.ResourceName))
+                {
+                    var resource = resourceWatcher.GetResource(logLine.ResourceName);
+                    if (resource is not null)
+                    {
+                        snapshotsByName[resource.Name] = resource;
+                        if (ResourceSnapshotMapper.IsHiddenResource(resource))
+                        {
+                            hiddenResourceNames.Add(resource.Name);
+                            continue;
+                        }
+                    }
+                }
             }
 
             logEntries.InsertSorted(ParseLogLine(logLine, logParser, snapshots));
@@ -374,7 +412,7 @@ internal sealed class LogsCommand : BaseCommand
         return timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fffK", CultureInfo.InvariantCulture);
     }
 
-    private static string ResolveResourceName(string resourceName, IReadOnlyList<ResourceSnapshot> snapshots)
+    private static string ResolveResourceName(string resourceName, IEnumerable<ResourceSnapshot> snapshots)
     {
         var snapshot = snapshots.FirstOrDefault(s => string.Equals(s.Name, resourceName, StringComparisons.ResourceName));
         if (snapshot is not null)
