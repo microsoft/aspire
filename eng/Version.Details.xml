@@ -93,65 +93,65 @@
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-runtime</Uri>
       <Sha>19c07820cb72aafc554c3bc8fe3c54010f5123f0</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.AspNetCore.OpenApi" Version="9.0.14">
+    <Dependency Name="Microsoft.AspNetCore.OpenApi" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="9.0.14">
+    <Dependency Name="Microsoft.AspNetCore.OutputCaching.StackExchangeRedis" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.14">
+    <Dependency Name="Microsoft.Extensions.Caching.StackExchangeRedis" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.14">
+    <Dependency Name="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.14">
+    <Dependency Name="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.Extensions.Features" Version="9.0.14">
+    <Dependency Name="Microsoft.Extensions.Features" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.AspNetCore.Authentication.Certificate" Version="9.0.14">
+    <Dependency Name="Microsoft.AspNetCore.Authentication.Certificate" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.14">
+    <Dependency Name="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.14">
+    <Dependency Name="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.AspNetCore.TestHost" Version="9.0.14">
+    <Dependency Name="Microsoft.AspNetCore.TestHost" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.EntityFrameworkCore.Cosmos" Version="9.0.14">
+    <Dependency Name="Microsoft.EntityFrameworkCore.Cosmos" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-efcore</Uri>
-      <Sha>1bea6ab613ce7346af69753850e0dd7eb774bc8a</Sha>
+      <Sha>001e1d31c562c1d246e5a6531b607bf6c851f688</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.14">
+    <Dependency Name="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-efcore</Uri>
-      <Sha>1bea6ab613ce7346af69753850e0dd7eb774bc8a</Sha>
+      <Sha>001e1d31c562c1d246e5a6531b607bf6c851f688</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.EntityFrameworkCore.Tools" Version="9.0.14">
+    <Dependency Name="Microsoft.EntityFrameworkCore.Tools" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-efcore</Uri>
-      <Sha>1bea6ab613ce7346af69753850e0dd7eb774bc8a</Sha>
+      <Sha>001e1d31c562c1d246e5a6531b607bf6c851f688</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.EntityFrameworkCore.Design" Version="9.0.14">
+    <Dependency Name="Microsoft.EntityFrameworkCore.Design" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-efcore</Uri>
-      <Sha>1bea6ab613ce7346af69753850e0dd7eb774bc8a</Sha>
+      <Sha>001e1d31c562c1d246e5a6531b607bf6c851f688</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.AspNetCore.SignalR.Client" Version="9.0.14">
+    <Dependency Name="Microsoft.AspNetCore.SignalR.Client" Version="9.0.15">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-aspnetcore</Uri>
-      <Sha>baa6b294e728e6171378b4e8c52e42e7c4d4ed63</Sha>
+      <Sha>324a351f7f1ae6c17b6a8661903e2a7921a7d75c</Sha>
     </Dependency>
     <Dependency Name="Microsoft.Extensions.Caching.Memory" Version="9.0.14">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-runtime</Uri>
