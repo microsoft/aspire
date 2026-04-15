@@ -339,12 +339,9 @@ sealed partial class TestSummaryGenerator
         }
 
         reportBuilder.AppendLine();
-        reportBuilder.AppendLine("""
-            <details><summary>🎬 <b>Terminal Recording</b></summary>
-
-        """);
+        reportBuilder.AppendLine("<details><summary>🎬 <b>Terminal Recording</b></summary>");
         reportBuilder.AppendLine();
-        reportBuilder.AppendLine("```");
+        reportBuilder.AppendLine("```ansi");
         reportBuilder.AppendLine(recordingText);
         reportBuilder.AppendLine("```");
         reportBuilder.AppendLine();

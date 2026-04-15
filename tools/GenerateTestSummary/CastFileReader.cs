@@ -3,23 +3,24 @@
 
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace Aspire.TestTools;
 
 /// <summary>
-/// Reads asciicast v2 (.cast) recording files and extracts plain text content.
+/// Reads asciicast v2 (.cast) recording files and extracts terminal output text.
+/// ANSI escape codes are preserved so the output can be rendered with color
+/// inside a <c>```ansi</c> fenced code block in GitHub markdown.
 /// </summary>
-static partial class CastFileReader
+static class CastFileReader
 {
     private const int MaxLines = 100;
 
     /// <summary>
     /// Reads the terminal recording text for a given test method name.
-    /// Looks for a .cast file in the specified recordings directory,
-    /// extracts the output event text, and strips ANSI escape codes.
+    /// Looks for a .cast file in the specified recordings directory and
+    /// extracts the output event text, preserving ANSI escape codes.
     /// </summary>
-    /// <returns>The extracted plain text, or <c>null</c> if no recording file was found.</returns>
+    /// <returns>The extracted text (with ANSI codes), or <c>null</c> if no recording file was found.</returns>
     public static string? ReadRecordingText(string recordingsDir, string testMethodName)
     {
         if (!Directory.Exists(recordingsDir))
@@ -87,36 +88,21 @@ static partial class CastFileReader
             }
         }
 
-        var rawText = sb.ToString();
-        var plainText = StripAnsiEscapes(rawText);
+        var text = sb.ToString();
 
-        if (plainText.Length == 0)
+        if (text.Length == 0)
         {
             return null;
         }
 
         // Keep only the last N lines so the summary shows the most recent output.
-        var lines = plainText.Split('\n');
+        var lines = text.Split('\n');
         if (lines.Length > MaxLines)
         {
             var tail = lines.AsSpan(lines.Length - MaxLines);
-            plainText = $"… ({lines.Length - MaxLines} lines omitted)\n{string.Join('\n', tail.ToArray())}";
+            text = $"… ({lines.Length - MaxLines} lines omitted)\n{string.Join('\n', tail.ToArray())}";
         }
 
-        return plainText;
+        return text;
     }
-
-    private static string StripAnsiEscapes(string text)
-    {
-        return AnsiEscapeRegex().Replace(text, string.Empty);
-    }
-
-    /// <summary>
-    /// Matches ANSI escape sequences:
-    /// - CSI sequences: ESC [ ... letter (e.g., colors, cursor movement)
-    /// - OSC sequences: ESC ] ... BEL (e.g., terminal title)
-    /// - Two-character escapes: ESC followed by a single character
-    /// </summary>
-    [GeneratedRegex(@"\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07|\x1b[^[\]][^\x1b]?")]
-    private static partial Regex AnsiEscapeRegex();
 }
