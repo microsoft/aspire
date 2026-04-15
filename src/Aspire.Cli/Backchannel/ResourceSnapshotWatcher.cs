@@ -16,6 +16,7 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly TaskCompletionSource _initialLoadTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _watchTask;
+    private volatile Exception? _watchException;
 
     public ResourceSnapshotWatcher(IAppHostAuxiliaryBackchannel connection, bool includeHidden = false)
     {
@@ -61,9 +62,18 @@ internal sealed class ResourceSnapshotWatcher : IDisposable
         }
         catch (Exception ex)
         {
-            _initialLoadTcs.TrySetException(ex);
+            if (!_initialLoadTcs.TrySetException(ex))
+            {
+                // Initial load already completed; store for callers to detect.
+                _watchException = ex;
+            }
         }
     }
+
+    /// <summary>
+    /// Gets the exception that terminated the watch loop after the initial load, or <see langword="null"/> if the watch is still running.
+    /// </summary>
+    public Exception? WatchException => _watchException;
 
     private void EnsureInitialLoadComplete()
     {

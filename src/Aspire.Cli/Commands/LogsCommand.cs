@@ -316,6 +316,8 @@ internal sealed class LogsCommand : BaseCommand
     {
         var logParser = new LogParser(ConsoleColor.Black);
         var logEntries = new LogEntries(int.MaxValue) { BaseLineNumber = 1 };
+        // Snapshot the resource list once for the non-follow path since it doesn't change.
+        var allSnapshots = resourceWatcher.GetAllResources().ToList();
         await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
         {
             // When streaming all resources, skip logs from hidden resources
@@ -328,7 +330,7 @@ internal sealed class LogsCommand : BaseCommand
                 }
             }
 
-            logEntries.InsertSorted(ParseLogLine(logLine, logParser, resourceWatcher.GetAllResources()));
+            logEntries.InsertSorted(ParseLogLine(logLine, logParser, allSnapshots));
         }
         return logEntries.GetEntries();
     }

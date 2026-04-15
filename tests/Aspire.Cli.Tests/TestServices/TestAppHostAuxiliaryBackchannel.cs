@@ -71,7 +71,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
         var snapshots = includeHidden
             ? ResourceSnapshots
-            : ResourceSnapshots.Where(s => !IsHiddenResource(s)).ToList();
+            : ResourceSnapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
         return Task.FromResult(snapshots);
     }
 
@@ -88,7 +88,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
         foreach (var snapshot in ResourceSnapshots)
         {
-            if (!includeHidden && IsHiddenResource(snapshot))
+            if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
             {
                 continue;
             }
@@ -96,11 +96,6 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
             yield return snapshot;
         }
         await Task.CompletedTask;
-    }
-
-    private static bool IsHiddenResource(ResourceSnapshot snapshot)
-    {
-        return snapshot.IsHidden || string.Equals(snapshot.State, "Hidden", StringComparison.OrdinalIgnoreCase);
     }
 
     public async IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(

@@ -271,7 +271,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
             if (!includeHidden)
             {
-                snapshots = snapshots.Where(s => !IsHiddenResource(s)).ToList();
+                snapshots = snapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
             }
 
             // Sort resources by name for consistent ordering.
@@ -312,18 +312,13 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         await foreach (var snapshot in snapshots.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            if (!includeHidden && IsHiddenResource(snapshot))
+            if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
             {
                 continue;
             }
 
             yield return snapshot;
         }
-    }
-
-    private static bool IsHiddenResource(ResourceSnapshot snapshot)
-    {
-        return snapshot.IsHidden || string.Equals(snapshot.State, "Hidden", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc />
