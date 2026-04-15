@@ -26,26 +26,46 @@ if (string.IsNullOrWhiteSpace(subscriptionId))
 
 Console.WriteLine($"Using subscription: {subscriptionId}");
 
-// Fetch resource SKUs filtered to virtualMachines
-var url = $"https://management.azure.com/subscriptions/{subscriptionId}/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq 'eastus'";
-var json = await RunAzCommand($"rest --method get --url \"{url}\"").ConfigureAwait(false);
+// Query all US regions for VM SKUs to build a comprehensive unified list.
+// Different regions offer different VM sizes, so querying multiple regions
+// ensures we capture the full set available across the US.
+string[] usRegions = [
+    "eastus", "eastus2", "centralus", "northcentralus", "southcentralus",
+    "westus", "westus2", "westus3", "westcentralus"
+];
 
-if (string.IsNullOrWhiteSpace(json))
+var allSkus = new List<ResourceSku>();
+foreach (var region in usRegions)
 {
-    Console.Error.WriteLine("Error: Failed to fetch VM SKUs from Azure REST API.");
+    Console.WriteLine($"Querying VM SKUs for {region}...");
+    var url = $"https://management.azure.com/subscriptions/{subscriptionId}/providers/Microsoft.Compute/skus?api-version=2021-07-01&$filter=location eq '{region}'";
+    var json = await RunAzCommand($"rest --method get --url \"{url}\"").ConfigureAwait(false);
+
+    if (string.IsNullOrWhiteSpace(json))
+    {
+        Console.Error.WriteLine($"Warning: Failed to fetch VM SKUs for {region}, skipping.");
+        continue;
+    }
+
+    var skuResponse = JsonSerializer.Deserialize<SkuResponse>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    if (skuResponse?.Value is not null)
+    {
+        allSkus.AddRange(skuResponse.Value);
+        Console.WriteLine($"  Found {skuResponse.Value.Count} SKUs in {region}");
+    }
+}
+
+if (allSkus.Count == 0)
+{
+    Console.Error.WriteLine("Error: Failed to fetch VM SKUs from any US region.");
     return 1;
 }
 
-var skuResponse = JsonSerializer.Deserialize<SkuResponse>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-if (skuResponse is null || skuResponse.Value is null)
-{
-    Console.Error.WriteLine("Error: Failed to parse SKU response.");
-    return 1;
-}
-
-// Filter to virtualMachines resource type and group by family
-var vmSkus = skuResponse.Value
+// Filter to virtualMachines, deduplicate by name (keep first occurrence for capability data)
+var vmSkus = allSkus
     .Where(s => s.ResourceType == "virtualMachines" && !string.IsNullOrEmpty(s.Name))
+    .GroupBy(s => s.Name)
+    .Select(g => g.First())
     .Select(s => new VmSizeInfo
     {
         Name = s.Name!,
@@ -170,8 +190,12 @@ internal static partial class VmSizeClassGenerator
         sb.AppendLine("/// Provides well-known Azure VM size constants for use with AKS node pools.");
         sb.AppendLine("/// </summary>");
         sb.AppendLine("/// <remarks>");
-        sb.AppendLine("/// This class is auto-generated. To update, run the GenVmSizes tool:");
+        sb.AppendLine("/// This class is auto-generated from Azure Resource SKUs across all US regions.");
+        sb.AppendLine("/// To update, run the GenVmSizes tool:");
         sb.AppendLine("/// <code>dotnet run --project src/Aspire.Hosting.Azure.Kubernetes/tools GenVmSizes.cs</code>");
+        sb.AppendLine("/// VM size availability varies by region. This list is a union of sizes available");
+        sb.AppendLine("/// across eastus, eastus2, centralus, northcentralus, southcentralus, westus, westus2,");
+        sb.AppendLine("/// westus3, and westcentralus. Not all sizes may be available in every region.");
         sb.AppendLine("/// </remarks>");
         sb.AppendLine("public static partial class AksNodeVmSizes");
         sb.AppendLine("{");
