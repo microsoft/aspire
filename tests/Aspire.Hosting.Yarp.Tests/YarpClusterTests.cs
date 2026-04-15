@@ -49,10 +49,10 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
         var httpsEndpoint = resource.GetEndpoint("https");
 
         var httpCluster = new YarpCluster(httpEndpoint);
-        Assert.Equal("http://_http.ServiceC", httpCluster.Targets[0]);
+        Assert.Equal("http://ServiceC", httpCluster.Targets[0]);
 
         var httpsCluster = new YarpCluster(httpsEndpoint);
-        Assert.Equal("https://_https.ServiceC", httpsCluster.Targets[0]);
+        Assert.Equal("https://ServiceC", httpsCluster.Targets[0]);
     }
 
     [Fact]
