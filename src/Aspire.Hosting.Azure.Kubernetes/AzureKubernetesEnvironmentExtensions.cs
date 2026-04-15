@@ -8,6 +8,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Kubernetes;
+using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
@@ -69,7 +70,7 @@ public static class AzureKubernetesEnvironmentExtensions
         // Scope the Helm chart name to this AKS environment to avoid
         // conflicts when multiple environments deploy to the same cluster
         // or when re-deploying with different environment names.
-        k8sEnvBuilder.Resource.HelmChartName = $"{builder.Environment.ApplicationName}-{name}".ToLowerInvariant().Replace(' ', '-');
+        k8sEnvBuilder.Resource.HelmChartName = $"{builder.Environment.ApplicationName}-{name}".ToHelmChartName();
 
         // Create the unified AKS environment resource
         var resource = new AzureKubernetesEnvironmentResource(name, ConfigureAksInfrastructure);

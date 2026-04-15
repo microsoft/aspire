@@ -45,4 +45,4 @@ jobs:
             area-integrations
             area-engineering-systems
           title: "[Automated] Update Azure VM Sizes"
-          body: "Auto-generated update of Azure VM size descriptors (AzureVmSizes.Generated.cs)."
+          body: "Auto-generated update of Azure VM size descriptors (AksNodeVmSizes.Generated.cs)."

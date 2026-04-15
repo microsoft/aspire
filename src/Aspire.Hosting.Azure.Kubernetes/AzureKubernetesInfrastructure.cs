@@ -169,6 +169,7 @@ internal sealed class AzureKubernetesInfrastructure(
         environment.NodePools.Add(defaultConfig);
 
         var defaultPool = new AksNodePoolResource("workload", defaultConfig, environment);
+        defaultPool.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
         appModel.Resources.Add(defaultPool);
         return defaultPool;
     }

@@ -23,7 +23,8 @@ Then, in the _AppHost.cs_ file of `AppHost`, add an AKS environment and deploy s
 ```csharp
 var aks = builder.AddAzureKubernetesEnvironment("aks");
 
-var myService = builder.AddProject<Projects.MyService>();
+var myService = builder.AddProject<Projects.MyService>()
+    .WithComputeEnvironment(aks);
 ```
 
 ## Additional documentation
