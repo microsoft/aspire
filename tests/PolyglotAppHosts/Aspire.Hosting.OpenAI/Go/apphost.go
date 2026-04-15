@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.OpenAI
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,13 +12,16 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter", nil)
+	apiKey := builder.AddParameterWithOpts("openai-api-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 
-	openai := builder.AddOpenAI("resource")
-	openai.AddModel("resource", "deployment")
+	openai := builder.AddOpenAI("openai")
+	openai.WithEndpoint("https://api.openai.com/v1")
+	openai.WithApiKey(apiKey)
 	if err = openai.Err(); err != nil {
 		log.Fatalf("openai: %v", err)
 	}
+
+	openai.AddModel("chat-model", "gpt-4o-mini")
 
 	app, err := builder.Build()
 	if err != nil {

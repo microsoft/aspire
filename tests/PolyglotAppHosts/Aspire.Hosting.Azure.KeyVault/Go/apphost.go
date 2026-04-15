@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.KeyVault
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,26 +12,49 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	vault := builder.AddAzureKeyVault("resource")
-	builder.AddParameter("parameter", nil)
-	builder.AddParameter("parameter", nil)
+	// ── 1. addAzureKeyVault ──────────────────────────────────────────────────
+	vault := builder.AddAzureKeyVault("vault")
 
-	_, _ = vault.WithKeyVaultRoleAssignments(vault, nil)
+	// ── 2. addParameter (secret params) ──────────────────────────────────────
+	secretParam := builder.AddParameterWithOpts("secret-param",
+		&aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
+	namedSecretParam := builder.AddParameterWithOpts("named-secret-param",
+		&aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 
-	secretFromParameter := vault.AddSecret("resource", nil)
+	// ── 3. withKeyVaultRoleAssignments ────────────────────────────────────────
+	vault.WithKeyVaultRoleAssignments(vault, []aspire.AzureKeyVaultRole{
+		aspire.AzureKeyVaultRoleKeyVaultReader,
+		aspire.AzureKeyVaultRoleKeyVaultSecretsUser,
+	})
 
-	secretFromExpression := vault.AddSecretFromExpression("resource", nil)
+	// ── 4. addSecret ─────────────────────────────────────────────────────────
+	secretFromParameter := vault.AddSecret("param-secret", secretParam)
 
-	namedSecretFromParameter := vault.AddSecretWithName("resource", "resource", nil)
+	// ── 5. addSecretFromExpression ────────────────────────────────────────────
+	secretFromExpression := vault.AddSecretFromExpression("expr-secret",
+		aspire.RefExpr("secret-value-%s", secretParam))
 
-	namedSecretFromExpression := vault.AddSecretWithNameFromExpression("resource", "resource", nil)
+	// ── 6. addSecretWithName ──────────────────────────────────────────────────
+	namedSecretFromParameter := vault.AddSecretWithName(
+		"secret-resource-param", "named-param-secret", namedSecretParam)
 
-	_, _ = vault.GetSecret("resource")
+	// ── 7. addSecretWithNameFromExpression ────────────────────────────────────
+	namedSecretFromExpression := vault.AddSecretWithNameFromExpression(
+		"secret-resource-expr", "named-expr-secret",
+		aspire.RefExpr("named-secret-value"))
 
-	_, _ = secretFromParameter.WithKeyVaultRoleAssignments(vault, nil)
-	_, _ = secretFromExpression.WithKeyVaultRoleAssignments(vault, nil)
-	_, _ = namedSecretFromParameter.WithKeyVaultRoleAssignments(vault, nil)
-	_, _ = namedSecretFromExpression.WithKeyVaultRoleAssignments(vault, nil)
+	// ── 8. getSecret ──────────────────────────────────────────────────────────
+	_, _ = vault.GetSecret("param-secret")
+
+	// ── 9. role assignments on each secret resource ───────────────────────────
+	secretFromParameter.WithKeyVaultRoleAssignments(vault,
+		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultSecretsUser})
+	secretFromExpression.WithKeyVaultRoleAssignments(vault,
+		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultReader})
+	namedSecretFromParameter.WithKeyVaultRoleAssignments(vault,
+		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultSecretsOfficer})
+	namedSecretFromExpression.WithKeyVaultRoleAssignments(vault,
+		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultReader})
 
 	app, err := builder.Build()
 	if err != nil {

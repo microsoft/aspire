@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Docker
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,22 +12,67 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	compose := builder.AddDockerComposeEnvironment("resource")
-	compose.WithProperties(nil)
-	compose.WithDashboard(nil)
-	compose.WithDashboard(nil)
-	compose.ConfigureDashboard(nil)
+	// ── 1. addDockerComposeEnvironment ───────────────────────────────────────
+	compose := builder.AddDockerComposeEnvironment("compose")
+	api := builder.AddContainer("api", "nginx:alpine")
+
+	// ── 2. withProperties (typed callback) ────────────────────────────────────
+	compose.WithProperties(func(environment *aspire.DockerComposeEnvironmentResource) {
+		environment.SetDefaultNetworkName("validation-network")
+		_, _ = environment.DefaultNetworkName()
+		environment.SetDashboardEnabled(true)
+		_, _ = environment.DashboardEnabled()
+		_, _ = environment.Name()
+	})
+
+	// ── 3. withDashboard (WithOpts + simple) ──────────────────────────────────
+	compose.WithDashboardWithOpts(&aspire.WithDashboardOptions{Enabled: aspire.BoolPtr(false)})
+	compose.WithDashboard()
+
+	// ── 4. configureDashboard (typed callback) ─────────────────────────────────
+	compose.ConfigureDashboard(func(dashboard *aspire.DockerComposeAspireDashboardResource) {
+		dashboard.WithHostPortWithOpts(&aspire.WithHostPortOptions{Port: aspire.Float64Ptr(18888)})
+		dashboard.WithForwardedHeadersWithOpts(&aspire.WithForwardedHeadersOptions{Enabled: aspire.BoolPtr(true)})
+
+		_, _ = dashboard.Name()
+
+		primaryEndpoint, _ := dashboard.PrimaryEndpoint()
+		if primaryEndpoint != nil {
+			_, _ = primaryEndpoint.Url()
+			_, _ = primaryEndpoint.Host()
+			_, _ = primaryEndpoint.Port()
+		}
+
+		otlpGrpcEndpoint, _ := dashboard.OtlpGrpcEndpoint()
+		if otlpGrpcEndpoint != nil {
+			_, _ = otlpGrpcEndpoint.Url()
+			_, _ = otlpGrpcEndpoint.Port()
+		}
+	})
+
+	// ── 5. publishAsDockerComposeService (two-param typed callback) ───────────
+	_, _ = api.PublishAsDockerComposeService(func(composeService *aspire.DockerComposeServiceResource, service *aspire.Service) {
+		service.SetContainerName("validation-api")
+		service.SetPullPolicy("always")
+		service.SetRestart("unless-stopped")
+
+		_, _ = composeService.Name()
+		composeEnv, _ := composeService.Parent()
+		if composeEnv != nil {
+			_, _ = composeEnv.Name()
+		}
+
+		_, _ = service.ContainerName()
+		_, _ = service.PullPolicy()
+		_, _ = service.Restart()
+	})
+
+	// ── 6. property getters ───────────────────────────────────────────────────
 	_, _ = compose.DefaultNetworkName()
 	_, _ = compose.DashboardEnabled()
 	_, _ = compose.Name()
 	if err = compose.Err(); err != nil {
 		log.Fatalf("compose: %v", err)
-	}
-
-	api := builder.AddContainer("resource", "image")
-	_, _ = api.PublishAsDockerComposeService(nil)
-	if err = api.Err(); err != nil {
-		log.Fatalf("api: %v", err)
 	}
 
 	app, err := builder.Build()

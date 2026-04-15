@@ -198,6 +198,18 @@ func (d *AspireDict[K, V]) EnsureHandle() *Handle {
 	return d.resolvedHandle
 }
 
+// StringPtr returns a pointer to s.
+func StringPtr(s string) *string { return &s }
+
+// IntPtr returns a pointer to i.
+func IntPtr(i int) *int { return &i }
+
+// BoolPtr returns a pointer to b.
+func BoolPtr(b bool) *bool { return &b }
+
+// Float64Ptr returns a pointer to f.
+func Float64Ptr(f float64) *float64 { return &f }
+
 // SerializeValue converts a value to its JSON representation.
 func SerializeValue(value any) any {
 	if value == nil {

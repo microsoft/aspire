@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.AppService
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,18 +12,61 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	builder.AddParameter("parameter", nil)
-	builder.AddParameter("parameter", nil)
-	_ = builder.AddAzureApplicationInsights("resource")
+	applicationInsightsLocation := builder.AddParameter("applicationInsightsLocation")
+	deploymentSlot := builder.AddParameter("deploymentSlot")
+	existingApplicationInsights := builder.AddAzureApplicationInsights("existingApplicationInsights")
 
-	env := builder.AddAzureAppServiceEnvironment("resource")
-	_, _ = env.GetResourceName()
+	environment := builder.AddAzureAppServiceEnvironment("appservice-environment").
+		WithDashboard().
+		WithDashboardWithOpts(&aspire.WithDashboardOptions{Enable: aspire.BoolPtr(false)}).
+		WithAzureApplicationInsights().
+		WithAzureApplicationInsightsLocation("westus").
+		WithAzureApplicationInsightsLocationParameter(applicationInsightsLocation).
+		WithAzureApplicationInsightsResource(existingApplicationInsights).
+		WithDeploymentSlotParameter(deploymentSlot).
+		WithDeploymentSlot("staging")
 
-	website := builder.AddContainer("resource", "image")
+	website := builder.AddContainer("frontend", "nginx")
+	_, err = website.PublishAsAzureAppServiceWebsite(
+		func(_ *aspire.AzureResourceInfrastructure, _ *aspire.WebSite) {},
+		func(_ *aspire.AzureResourceInfrastructure, _ *aspire.WebSiteSlot) {},
+	)
+	if err != nil {
+		log.Fatalf("website.PublishAsAzureAppServiceWebsite: %v", err)
+	}
+	_, err = website.SkipEnvironmentVariableNameChecks()
+	if err != nil {
+		log.Fatalf("website.SkipEnvironmentVariableNameChecks: %v", err)
+	}
+
+	worker := builder.AddExecutable("worker", "dotnet", ".", []string{"run"})
+	_, err = worker.PublishAsAzureAppServiceWebsite(
+		func(_ *aspire.AzureResourceInfrastructure, _ *aspire.WebSite) {},
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("worker.PublishAsAzureAppServiceWebsite: %v", err)
+	}
+	_, err = worker.SkipEnvironmentVariableNameChecks()
+	if err != nil {
+		log.Fatalf("worker.SkipEnvironmentVariableNameChecks: %v", err)
+	}
+
+	api := builder.AddProject("api", "../Fake.Api/Fake.Api.csproj", "https")
+	_, err = api.PublishAsAzureAppServiceWebsite(
+		nil,
+		func(_ *aspire.AzureResourceInfrastructure, _ *aspire.WebSiteSlot) {},
+	)
+	if err != nil {
+		log.Fatalf("api.PublishAsAzureAppServiceWebsite: %v", err)
+	}
+	_, err = api.SkipEnvironmentVariableNameChecks()
+	if err != nil {
+		log.Fatalf("api.SkipEnvironmentVariableNameChecks: %v", err)
+	}
+
+	_, _ = environment.GetResourceName()
 	_, _ = website.GetResourceName()
-
-	_ = builder.AddExecutable("resource", "echo", ".", nil)
-	_ = builder.AddProject("resource", ".", "default")
 
 	app, err := builder.Build()
 	if err != nil {

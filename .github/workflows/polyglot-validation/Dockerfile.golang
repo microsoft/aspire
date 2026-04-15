@@ -2,7 +2,7 @@
 # This Dockerfile sets up an environment for validating the Go AppHost SDK
 #
 # Usage:
-#   docker build -f Dockerfile.go -t polyglot-go .
+#   docker build -f Dockerfile.golang -t polyglot-go .
 #   docker run --rm \
 #     -v "$(pwd):/workspace" \
 #     -v /var/run/docker.sock:/var/run/docker.sock \

@@ -211,62 +211,295 @@ func RegisterCancellation(token *CancellationToken, client *AspireClient) string
 	return id
 }
 
+// ── connection ────────────────────────────────────────────────────────────────
+//
+// connection owns all I/O for a single live socket connection. It is created by
+// AspireClient.Connect and torn down by connection.close. AspireClient holds a
+// *connection pointer and replaces it with nil on disconnect; all other state
+// lives here, not on AspireClient.
+//
+// Concurrency model:
+//   - connection.mu guards only pending and closed. It is never held during a
+//     socket read, a socket write, or a send to a pending channel.
+//   - The writer goroutine (writeLoop) is the sole writer to rawConn; the reader
+//     goroutine (readLoop) is the sole reader. Neither holds connection.mu during
+//     I/O.
+//   - Callers (InvokeCapability etc.) write to writeQueue (a buffered channel)
+//     and block on their per-request respCh. No caller goroutine ever touches
+//     the socket directly.
+
+type connection struct {
+	rawConn io.ReadWriteCloser
+	reader  *bufio.Reader
+	client  *AspireClient // passed through to invokeCallback → WrapIfHandle
+
+	writeQueue chan map[string]any // buffered outbound queue; writeLoop drains it
+	done       chan struct{}       // closed exactly once when connection closes
+
+	mu      sync.Mutex
+	pending map[int64]chan map[string]any
+	closed  bool
+
+	nextID  atomic.Int64
+	onClose func(error) // called once, outside all locks, after full teardown
+}
+
+func newConnection(rawConn io.ReadWriteCloser, client *AspireClient, onClose func(error)) *connection {
+	return &connection{
+		rawConn:    rawConn,
+		reader:     bufio.NewReader(rawConn),
+		client:     client,
+		writeQueue: make(chan map[string]any, 64),
+		done:       make(chan struct{}),
+		pending:    make(map[int64]chan map[string]any),
+		onClose:    onClose,
+	}
+}
+
+// start launches the reader and writer goroutines. Call after the connection
+// has been stored in AspireClient so that onClose can safely clear it.
+func (c *connection) start() {
+	go c.readLoop()
+	go c.writeLoop()
+}
+
+// close tears down the connection exactly once. It is safe to call from
+// multiple goroutines concurrently; only the first caller proceeds.
+//
+// Teardown order (no lock held during I/O):
+//  1. Claim ownership under mu (idempotency guard).
+//  2. Close rawConn — causes readMessage to return an error → readLoop exits.
+//  3. Close done — signals writeLoop and any sendRequest waiters.
+//  4. Drain pending channels with a synthetic error response.
+//  5. Call onClose outside all locks.
+func (c *connection) close(err error) {
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return
+	}
+	c.closed = true
+	pending := c.pending
+	c.pending = nil
+	c.mu.Unlock()
+
+	c.rawConn.Close()
+	close(c.done)
+
+	if err == nil {
+		err = errors.New("connection closed")
+	}
+	errResp := map[string]any{
+		"error": map[string]any{
+			"code":    -32000,
+			"message": err.Error(),
+		},
+	}
+	for _, ch := range pending {
+		ch <- errResp // buffered (cap 1), never blocks
+	}
+
+	c.onClose(err)
+}
+
+// writeLoop is the sole writer goroutine. It drains writeQueue and writes each
+// message to rawConn without holding any lock.
+func (c *connection) writeLoop() {
+	for {
+		select {
+		case msg := <-c.writeQueue:
+			if err := writeMessage(c.rawConn, msg); err != nil {
+				c.close(err)
+				return
+			}
+		case <-c.done:
+			return
+		}
+	}
+}
+
+// readLoop is the sole reader goroutine. It reads messages from rawConn
+// without holding any lock and dispatches them.
+func (c *connection) readLoop() {
+	for {
+		msg, err := readMessage(c.reader)
+		if err != nil {
+			c.close(err)
+			return
+		}
+		c.dispatch(msg)
+	}
+}
+
+// dispatch routes an incoming message: server-initiated requests (callbacks)
+// are handled in their own goroutines so they can make nested capability calls
+// without blocking the read loop; responses are delivered to their pending channel.
+func (c *connection) dispatch(msg map[string]any) {
+	if _, hasMethod := msg["method"]; hasMethod {
+		go c.handleCallbackRequest(msg)
+		return
+	}
+	if id, ok := msg["id"]; ok {
+		if reqID, ok := jsonRPCID(id); ok {
+			c.mu.Lock()
+			ch := c.pending[reqID]
+			delete(c.pending, reqID)
+			c.mu.Unlock()
+			if ch != nil {
+				ch <- msg // buffered (cap 1), never blocks
+			}
+		}
+		// Unknown id type: ignore rather than panic.
+	}
+}
+
+// enqueue puts an outbound message on the write queue without blocking. If the
+// connection is already closing, the message is silently discarded.
+func (c *connection) enqueue(msg map[string]any) {
+	select {
+	case c.writeQueue <- msg:
+	case <-c.done:
+	}
+}
+
+// handleCallbackRequest processes a server-initiated request. It runs in its
+// own goroutine (spawned by dispatch) so it can call sendRequest freely.
+func (c *connection) handleCallbackRequest(message map[string]any) {
+	method := getString(message, "method")
+	requestID := message["id"]
+
+	if method != "invokeCallback" {
+		if requestID != nil {
+			c.enqueue(map[string]any{
+				"jsonrpc": "2.0",
+				"id":      requestID,
+				"error":   map[string]any{"code": -32601, "message": fmt.Sprintf("Unknown method: %s", method)},
+			})
+		}
+		return
+	}
+
+	params, _ := message["params"].([]any)
+	var callbackID string
+	var args any
+	if len(params) > 0 {
+		callbackID, _ = params[0].(string)
+	}
+	if len(params) > 1 {
+		args = params[1]
+	}
+
+	result, err := invokeCallback(callbackID, args, c.client)
+	if err != nil {
+		c.enqueue(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      requestID,
+			"error":   map[string]any{"code": -32000, "message": err.Error()},
+		})
+	} else {
+		c.enqueue(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      requestID,
+			"result":  result,
+		})
+	}
+}
+
+// sendRequest sends a JSON-RPC request over the write queue and blocks until
+// the matching response arrives. No lock is held during the wait or during I/O.
+//
+// Registration order: pending[id] is recorded before the message enters
+// writeQueue, so the reader goroutine can always find the response channel.
+func (c *connection) sendRequest(method string, params []any) (any, error) {
+	id := c.nextID.Add(1)
+	respCh := make(chan map[string]any, 1)
+	msg := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"method":  method,
+		"params":  params,
+	}
+
+	// Register before enqueuing so the reader can always find the channel.
+	c.mu.Lock()
+	if c.closed {
+		c.mu.Unlock()
+		return nil, errors.New("not connected to AppHost")
+	}
+	c.pending[id] = respCh
+	c.mu.Unlock()
+
+	// Send to write queue; abort cleanly if the connection is already closing.
+	select {
+	case c.writeQueue <- msg:
+	case <-c.done:
+		c.mu.Lock()
+		delete(c.pending, id) // no-op if close() already cleared the map
+		c.mu.Unlock()
+		return nil, errors.New("not connected to AppHost")
+	}
+
+	// Wait for response. If done fires first, drain respCh in case the response
+	// arrived in the same scheduler turn before done was noticed.
+	select {
+	case resp := <-respCh:
+		return extractResult(resp)
+	case <-c.done:
+		select {
+		case resp := <-respCh:
+			return extractResult(resp)
+		default:
+			return nil, errors.New("not connected to AppHost")
+		}
+	}
+}
+
+// ── AspireClient ──────────────────────────────────────────────────────────────
+//
+// AspireClient manages the connection lifecycle. It delegates all I/O to the
+// *connection it holds. A single mutex guards the connection pointer and the
+// disconnect-callback list; nothing else.
+
 // AspireClient manages the connection to the AppHost server.
-// It uses a background reader goroutine so that server-initiated callbacks
-// (invokeCallback) can freely call InvokeCapability without deadlocking.
 type AspireClient struct {
 	socketPath string
 
-	// mu guards conn, connected, and disconnectCallbacks.
+	// mu guards conn and disconnectCallbacks.
 	mu                  sync.Mutex
-	conn                io.ReadWriteCloser
-	connected           bool
+	conn                *connection
 	disconnectCallbacks []func()
-
-	nextID atomic.Int64
-
-	// writeMu protects all writes to conn; separate from read path.
-	writeMu sync.Mutex
-
-	// pending maps in-flight request IDs to their response channels.
-	pendingMu sync.Mutex
-	pending   map[int64]chan map[string]any
 }
 
 // NewAspireClient creates a new client for the given socket path.
 func NewAspireClient(socketPath string) *AspireClient {
-	return &AspireClient{
-		socketPath: socketPath,
-		pending:    make(map[int64]chan map[string]any),
-	}
+	return &AspireClient{socketPath: socketPath}
 }
 
 // Connect establishes the connection to the AppHost server and starts the
-// background reader goroutine.
+// background reader and writer goroutines.
 func (c *AspireClient) Connect() error {
 	c.mu.Lock()
-	if c.connected {
+	if c.conn != nil {
 		c.mu.Unlock()
 		return nil
 	}
 
-	conn, err := openConnection(c.socketPath)
+	rawConn, err := openConnection(c.socketPath)
 	if err != nil {
 		c.mu.Unlock()
 		return fmt.Errorf("failed to connect to AppHost: %w", err)
 	}
 
-	reader := bufio.NewReader(conn)
+	conn := newConnection(rawConn, c, c.onConnectionClose)
 	c.conn = conn
-	c.connected = true
 	c.mu.Unlock()
 
-	go c.readLoop(conn, reader)
+	conn.start()
 	return nil
 }
 
 // OnDisconnect registers a callback to be invoked exactly once when the
-// connection is closed, whether by Disconnect or by a read error.
+// connection is closed, whether by Disconnect or by a read/write error.
 func (c *AspireClient) OnDisconnect(callback func()) {
 	c.mu.Lock()
 	c.disconnectCallbacks = append(c.disconnectCallbacks, callback)
@@ -316,102 +549,47 @@ func (c *AspireClient) CancelToken(tokenID string) bool {
 }
 
 // Disconnect closes the connection. Safe to call multiple times and to race
-// with the background readLoop — only the first caller for a given connection
-// runs the teardown.
+// with the background goroutines — only the first closer runs the teardown.
 func (c *AspireClient) Disconnect() {
 	c.mu.Lock()
 	conn := c.conn
+	c.conn = nil
 	c.mu.Unlock()
-	c.closeConnection(conn, nil)
+	if conn != nil {
+		conn.close(nil)
+	}
 }
 
-// closeConnection tears down the connection identified by conn.
-// It is a no-op if conn is no longer the active connection (guards against an
-// old readLoop goroutine racing with a reconnect).
-//
-// Teardown order:
-//  1. Claim ownership: check conn == c.conn under mu, then nil-out c.conn so
-//     no new writes can start and any concurrent closeConnection call returns.
-//  2. Acquire writeMu to wait for any in-flight write to finish, then close
-//     the socket — prevents a nil dereference in writeMessage.
-//  3. Drain pending requests so blocked sendRequest callers are unblocked
-//     before any reconnect can register new pending entries.
-//  4. Run disconnect callbacks outside all locks.
-func (c *AspireClient) closeConnection(conn io.ReadWriteCloser, err error) {
-	if conn == nil {
-		return
-	}
-
-	// 1. Only the first caller for this specific conn proceeds.
+// sendRequest snapshots the active connection and delegates to it.
+func (c *AspireClient) sendRequest(method string, params []any) (any, error) {
 	c.mu.Lock()
-	if c.conn != conn {
-		c.mu.Unlock()
-		return
+	conn := c.conn
+	c.mu.Unlock()
+	if conn == nil {
+		return nil, errors.New("not connected to AppHost")
 	}
-	c.connected = false
-	c.conn = nil
+	return conn.sendRequest(method, params)
+}
+
+// onConnectionClose is the onClose callback passed to each connection. It clears
+// the conn pointer (in case Disconnect didn't already) and fires the registered
+// disconnect callbacks, all outside any lock.
+func (c *AspireClient) onConnectionClose(_ error) {
+	c.mu.Lock()
+	c.conn = nil // may already be nil if Disconnect() ran concurrently
 	callbacks := c.disconnectCallbacks
 	c.disconnectCallbacks = nil
 	c.mu.Unlock()
-
-	// 2. Wait for any in-flight write to finish, then close the socket.
-	c.writeMu.Lock()
-	conn.Close()
-	c.writeMu.Unlock()
-
-	// 3. Unblock any waiting sendRequest callers.
-	if err == nil {
-		err = errors.New("connection closed")
-	}
-	c.drainPendingWithError(err)
-
-	// 4. Notify callers outside all locks.
 	for _, cb := range callbacks {
 		cb()
 	}
 }
 
-// sendRequest sends a JSON-RPC request and waits for the matching response.
-// It does NOT hold any lock while waiting, so callbacks invoked by the server
-// can freely call sendRequest (InvokeCapability) without deadlocking.
-func (c *AspireClient) sendRequest(method string, params []any) (any, error) {
-	// Fail fast if the connection is already gone. This also closes the race
-	// window where readLoop could drain pending and exit between our pending
-	// registration and write, leaving the new entry stranded forever.
-	c.mu.Lock()
-	if !c.connected || c.conn == nil {
-		c.mu.Unlock()
-		return nil, errors.New("not connected to AppHost")
-	}
-	c.mu.Unlock()
+// ── Package-level I/O helpers ─────────────────────────────────────────────────
 
-	requestID := c.nextID.Add(1)
-	ch := make(chan map[string]any, 1)
-
-	c.pendingMu.Lock()
-	c.pending[requestID] = ch
-	c.pendingMu.Unlock()
-
-	message := map[string]any{
-		"jsonrpc": "2.0",
-		"id":      requestID,
-		"method":  method,
-		"params":  params,
-	}
-
-	c.writeMu.Lock()
-	err := c.writeMessage(message)
-	c.writeMu.Unlock()
-
-	if err != nil {
-		c.pendingMu.Lock()
-		delete(c.pending, requestID)
-		c.pendingMu.Unlock()
-		return nil, err
-	}
-
-	response := <-ch
-
+// extractResult interprets a decoded JSON-RPC response map and returns its
+// result value or an error. It is called by connection.sendRequest.
+func extractResult(response map[string]any) (any, error) {
 	if errObj, hasErr := response["error"]; hasErr {
 		errMap, _ := errObj.(map[string]any)
 		return nil, errors.New(getString(errMap, "message"))
@@ -419,162 +597,24 @@ func (c *AspireClient) sendRequest(method string, params []any) (any, error) {
 	return response["result"], nil
 }
 
-// readLoop runs as a background goroutine, reading messages from the server
-// and dispatching them: responses go to pending channels, server-initiated
-// requests (e.g. invokeCallback) are handled in their own goroutines so they
-// can make nested capability calls.
-//
-// conn and reader are captured per-connection so that a stale readLoop goroutine
-// from a previous connection cannot interfere with a new connection's state.
-func (c *AspireClient) readLoop(conn io.ReadWriteCloser, reader *bufio.Reader) {
-	for {
-		response, err := c.readMessage(reader)
-		if err != nil {
-			// closeConnection is scoped to conn: an old goroutine racing with a
-			// reconnect will find c.conn != conn and return without touching the
-			// new connection. Pending drain happens inside closeConnection.
-			c.closeConnection(conn, err)
-			return
-		}
-
-		if _, hasMethod := response["method"]; hasMethod {
-			// Server-initiated request (e.g. invokeCallback). Handle in a goroutine
-			// so it can call InvokeCapability without blocking the read loop.
-			go c.handleCallbackRequest(response)
-			continue
-		}
-
-		// Response to one of our requests. JSON numbers decode as float64, but
-		// the spec also allows string IDs — handle both safely.
-		if id, ok := response["id"]; ok {
-			if reqID, ok := jsonRPCID(id); ok {
-				c.pendingMu.Lock()
-				ch, exists := c.pending[reqID]
-				if exists {
-					delete(c.pending, reqID)
-				}
-				c.pendingMu.Unlock()
-				if exists {
-					ch <- response
-				}
-			}
-			// Unknown id type: ignore rather than panic.
-		}
-	}
-}
-
-// jsonRPCID converts a JSON-RPC id value to an int64 key used to look up the
-// pending request. The JSON-RPC spec allows numeric or string IDs; standard
-// Go JSON decoding produces float64 for numbers, but servers may also emit
-// string IDs that contain a numeric value (e.g. "42"). All four forms are
-// handled. Returns false for null, missing, or non-numeric string IDs.
-func jsonRPCID(id any) (int64, bool) {
-	switch v := id.(type) {
-	case float64:
-		return int64(v), true
-	case int64:
-		return v, true
-	case json.Number:
-		n, err := v.Int64()
-		return n, err == nil
-	case string:
-		n, err := strconv.ParseInt(v, 10, 64)
-		return n, err == nil
-	default:
-		return 0, false
-	}
-}
-
-// drainPendingWithError closes all pending request channels with a synthetic
-// error response so that blocked callers are unblocked when the connection drops.
-func (c *AspireClient) drainPendingWithError(err error) {
-	c.pendingMu.Lock()
-	pending := c.pending
-	c.pending = make(map[int64]chan map[string]any)
-	c.pendingMu.Unlock()
-
-	errResponse := map[string]any{
-		"error": map[string]any{
-			"code":    -32000,
-			"message": err.Error(),
-		},
-	}
-	for _, ch := range pending {
-		ch <- errResponse
-	}
-}
-
-func (c *AspireClient) writeMessage(message map[string]any) error {
-	// Snapshot conn under mu so closeConnection can't nil it between our
-	// nil-check and the Write calls (caller holds writeMu for the duration).
-	c.mu.Lock()
-	conn := c.conn
-	c.mu.Unlock()
-	if conn == nil {
-		return errors.New("not connected to AppHost")
-	}
-	body, err := json.Marshal(message)
+// writeMessage serialises msg as a Content-Length-framed JSON-RPC message and
+// writes it to w. Called only from writeLoop — no lock is held.
+func writeMessage(w io.Writer, msg map[string]any) error {
+	body, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(body))
-	if _, err = conn.Write([]byte(header)); err != nil {
+	if _, err = w.Write([]byte(header)); err != nil {
 		return err
 	}
-	_, err = conn.Write(body)
+	_, err = w.Write(body)
 	return err
 }
 
-func (c *AspireClient) handleCallbackRequest(message map[string]any) {
-	method := getString(message, "method")
-	requestID := message["id"]
-
-	if method != "invokeCallback" {
-		if requestID != nil {
-			c.writeMu.Lock()
-			c.writeMessage(map[string]any{
-				"jsonrpc": "2.0",
-				"id":      requestID,
-				"error":   map[string]any{"code": -32601, "message": fmt.Sprintf("Unknown method: %s", method)},
-			})
-			c.writeMu.Unlock()
-		}
-		return
-	}
-
-	params, _ := message["params"].([]any)
-	var callbackID string
-	var args any
-	if len(params) > 0 {
-		callbackID, _ = params[0].(string)
-	}
-	if len(params) > 1 {
-		args = params[1]
-	}
-
-	result, err := invokeCallback(callbackID, args, c)
-	c.writeMu.Lock()
-	if err != nil {
-		c.writeMessage(map[string]any{
-			"jsonrpc": "2.0",
-			"id":      requestID,
-			"error":   map[string]any{"code": -32000, "message": err.Error()},
-		})
-	} else {
-		c.writeMessage(map[string]any{
-			"jsonrpc": "2.0",
-			"id":      requestID,
-			"result":  result,
-		})
-	}
-	c.writeMu.Unlock()
-}
-
-func (c *AspireClient) readMessage(reader *bufio.Reader) (map[string]any, error) {
-	if reader == nil {
-		return nil, errors.New("not connected")
-	}
-
+// readMessage reads one Content-Length-framed JSON-RPC message from r. Called
+// only from readLoop — no lock is held.
+func readMessage(reader *bufio.Reader) (map[string]any, error) {
 	headers := make(map[string]string)
 	for {
 		line, err := reader.ReadString('\n')
@@ -608,6 +648,28 @@ func (c *AspireClient) readMessage(reader *bufio.Reader) (map[string]any, error)
 		return nil, err
 	}
 	return message, nil
+}
+
+// jsonRPCID converts a JSON-RPC id value to an int64 key used to look up the
+// pending request. The JSON-RPC spec allows numeric or string IDs; standard
+// Go JSON decoding produces float64 for numbers, but servers may also emit
+// string IDs that contain a numeric value (e.g. "42"). All four forms are
+// handled. Returns false for null, missing, or non-numeric string IDs.
+func jsonRPCID(id any) (int64, bool) {
+	switch v := id.(type) {
+	case float64:
+		return int64(v), true
+	case int64:
+		return v, true
+	case json.Number:
+		n, err := v.Int64()
+		return n, err == nil
+	case string:
+		n, err := strconv.ParseInt(v, 10, 64)
+		return n, err == nil
+	default:
+		return 0, false
+	}
 }
 
 func invokeCallback(callbackID string, args any, client *AspireClient) (any, error) {

@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Valkey
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,13 +12,25 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter", nil)
+	// ---- AddValkey with password and port ----
+	password := builder.AddParameterWithOpts("valkey-password", &aspire.AddParameterOptions{Secret: func() *bool { b := true; return &b }()})
+	valkey := builder.AddValkeyWithOpts("cache", &aspire.AddValkeyOptions{
+		Port:     func() *float64 { p := float64(6380); return &p }(),
+		Password: password,
+	})
 
-	valkey := builder.AddValkey("resource", nil, nil)
+	// ---- Fluent chaining ----
+	valkey.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: func() *string { s := "valkey-data"; return &s }()})
+	valkey.WithDataBindMountWithOpts(".", &aspire.WithDataBindMountOptions{IsReadOnly: func() *bool { b := true; return &b }()})
+	valkey.WithPersistenceWithOpts(&aspire.WithPersistenceOptions{
+		Interval:            func() *float64 { v := float64(100000000); return &v }(),
+		KeysChangedThreshold: func() *float64 { v := float64(1); return &v }(),
+	})
 	if err = valkey.Err(); err != nil {
 		log.Fatalf("valkey: %v", err)
 	}
 
+	// ---- Property access on ValkeyResource ----
 	_, _ = valkey.PrimaryEndpoint()
 	_, _ = valkey.Host()
 	_, _ = valkey.Port()

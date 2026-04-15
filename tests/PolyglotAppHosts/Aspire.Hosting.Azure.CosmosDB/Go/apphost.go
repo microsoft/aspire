@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.CosmosDB
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,23 +12,56 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	cosmos := builder.AddAzureCosmosDB("resource")
+	// ── 1. addAzureCosmosDB ──────────────────────────────────────────────────
+	cosmos := builder.AddAzureCosmosDB("cosmos")
+
+	// ── 2. withDefaultAzureSku ───────────────────────────────────────────────
 	cosmos.WithDefaultAzureSku()
 
-	db := cosmos.AddCosmosDatabase("resource", nil)
-	_ = db.AddContainer("resource", "image", nil)
-	_ = db.AddContainerWithPartitionKeyPaths("resource", []string{"/id"}, nil)
+	// ── 3. addCosmosDatabase (simple) + addCosmosDatabaseWithOpts ────────────
+	db := cosmos.AddCosmosDatabase("app-db")
+	_ = cosmos.AddCosmosDatabaseWithOpts("app-db-named", &aspire.AddCosmosDatabaseOptions{
+		DatabaseName: aspire.StringPtr("appdb"),
+	})
 
+	// ── 4. addContainer (simple) + addContainerWithOpts ───────────────────────
+	_ = db.AddContainer("orders", "/orderId")
+	_ = db.AddContainerWithOpts("orders-named", "/orderId", &aspire.AzureCosmosDBDatabaseResourceAddContainerOptions{
+		ContainerName: aspire.StringPtr("orders-container"),
+	})
+
+	// ── 5. addContainerWithPartitionKeyPaths (simple) + WithOpts ─────────────
+	_ = db.AddContainerWithPartitionKeyPaths("events", []string{"/tenantId", "/eventId"})
+	_ = db.AddContainerWithPartitionKeyPathsWithOpts("events-named", []string{"/tenantId", "/eventId"},
+		&aspire.AddContainerWithPartitionKeyPathsOptions{
+			ContainerName: aspire.StringPtr("events-container"),
+		})
+
+	// ── 6. withAccessKeyAuthentication ───────────────────────────────────────
 	cosmos.WithAccessKeyAuthentication()
 
-	_ = builder.AddAzureKeyVault("resource")
-	cosmos.WithAccessKeyAuthenticationWithKeyVault(nil)
+	// ── 7. withAccessKeyAuthenticationWithKeyVault ───────────────────────────
+	keyVault := builder.AddAzureKeyVault("kv")
+	cosmos.WithAccessKeyAuthenticationWithKeyVault(
+		aspire.NewIAzureKeyVaultResource(keyVault.Handle(), keyVault.Client()))
 
-	cosmosEmulator := builder.AddAzureCosmosDB("resource")
-	cosmosEmulator.RunAsEmulator(nil)
+	// ── 8. runAsEmulator (typed callback) ─────────────────────────────────────
+	cosmosEmulator := builder.AddAzureCosmosDB("cosmos-emulator")
+	cosmosEmulator.RunAsEmulator(func(emulator *aspire.AzureCosmosDBEmulatorResource) {
+		emulator.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{
+			Name: aspire.StringPtr("cosmos-emulator-data"),
+		})
+		emulator.WithGatewayPort(18081)
+		emulator.WithPartitionCount(25)
+	})
 
-	cosmosPreview := builder.AddAzureCosmosDB("resource")
-	cosmosPreview.RunAsPreviewEmulator(nil)
+	// ── 9. runAsPreviewEmulator (typed callback) ───────────────────────────────
+	cosmosPreview := builder.AddAzureCosmosDB("cosmos-preview-emulator")
+	cosmosPreview.RunAsPreviewEmulator(func(emulator *aspire.AzureCosmosDBEmulatorResource) {
+		emulator.WithDataExplorerWithOpts(&aspire.WithDataExplorerOptions{
+			Port: aspire.Float64Ptr(11234),
+		})
+	})
 
 	app, err := builder.Build()
 	if err != nil {

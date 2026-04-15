@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Nats
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,32 +12,60 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	nats := builder.AddNats("resource", nil, nil, nil)
+	// addNats — factory method with default options
+	nats := builder.AddNats("messaging")
+
+	// withJetStream — enable JetStream support
 	nats.WithJetStream()
-	nats.WithDataVolume(nil, nil)
+
+	// withDataVolume — add persistent data volume
+	nats.WithDataVolume()
+
 	if err = nats.Err(); err != nil {
 		log.Fatalf("nats: %v", err)
 	}
 
-	builder.AddNats("resource", nil, nil, nil)
+	// addNats — with port, withJetStream, withDataVolume (named + isReadOnly), withLifetime
+	nats2 := builder.AddNatsWithOpts("messaging2", &aspire.AddNatsOptions{Port: aspire.Float64Ptr(4223)})
+	nats2.WithJetStream()
+	nats2.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{
+		Name:       aspire.StringPtr("nats-data"),
+		IsReadOnly: aspire.BoolPtr(false),
+	})
+	nats2.WithLifetime(aspire.ContainerLifetimePersistent)
+	if err = nats2.Err(); err != nil {
+		log.Fatalf("nats2: %v", err)
+	}
 
-	nats3 := builder.AddNats("resource", nil, nil, nil)
-	nats3.WithDataBindMount("/tmp", nil)
+	// withDataBindMount — bind mount a host directory
+	nats3 := builder.AddNats("messaging3")
+	nats3.WithDataBindMount("/tmp/nats-data")
 	if err = nats3.Err(); err != nil {
 		log.Fatalf("nats3: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter", nil)
-	_, _ = builder.AddParameter("parameter", nil)
-	builder.AddNats("resource", nil, nil, nil)
+	// addNats — with custom userName and password parameters
+	customUser := builder.AddParameter("nats-user")
+	customPass := builder.AddParameterWithOpts("nats-pass", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
+	nats4 := builder.AddNatsWithOpts("messaging4", &aspire.AddNatsOptions{
+		UserName: customUser,
+		Password: customPass,
+	})
+	if err = nats4.Err(); err != nil {
+		log.Fatalf("nats4: %v", err)
+	}
 
-	consumer := builder.AddContainer("resource", "image")
-	consumer.WithReference(nil, nil, nil, nil)
-	consumer.WithReference(nil, nil, nil, nil)
+	// withReference — a container referencing a NATS resource (connection string)
+	consumer := builder.AddContainer("consumer", "myimage")
+	consumer.WithReference(aspire.NewIResource(nats.Handle(), nats.Client()))
+	consumer.WithReferenceWithOpts(aspire.NewIResource(nats4.Handle(), nats4.Client()), &aspire.WithReferenceOptions{
+		ConnectionName: aspire.StringPtr("messaging4-connection"),
+	})
 	if err = consumer.Err(); err != nil {
 		log.Fatalf("consumer: %v", err)
 	}
 
+	// Property access on NatsServerResource
 	_, _ = nats.PrimaryEndpoint()
 	_, _ = nats.Host()
 	_, _ = nats.Port()

@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.PostgreSQL
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,15 +12,40 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	pg := builder.AddAzurePostgresFlexibleServer("resource")
-	_ = pg.AddDatabase("resource", nil)
+	// ── 1. addAzurePostgres ───────────────────────────────────────────────────
+	pg := builder.AddAzurePostgresFlexibleServer("pg")
+	_ = pg.AddDatabase("mydb")
 
-	pgAuth := builder.AddAzurePostgresFlexibleServer("resource")
-	pgAuth.WithPasswordAuthentication(nil, nil)
+	// ── 2. withPasswordAuthentication ────────────────────────────────────────
+	pgAuth := builder.AddAzurePostgresFlexibleServer("pg-auth")
+	pgAuth.WithPasswordAuthentication()
 
-	pgContainer := builder.AddAzurePostgresFlexibleServer("resource")
-	pgContainer.RunAsContainer(nil)
-	_ = pgContainer.AddDatabase("resource", nil)
+	// ── 3. withPasswordAuthenticationWithKeyVault ─────────────────────────────
+	kv := builder.AddAzureKeyVault("kv")
+	pgAuth.WithPasswordAuthenticationWithKeyVault(
+		aspire.NewIAzureKeyVaultResource(kv.Handle(), kv.Client()),
+	)
+
+	// ── 4. runAsContainer ─────────────────────────────────────────────────────
+	pgEmulator := builder.AddAzurePostgresFlexibleServer("pg-emulator")
+	pgEmulator.RunAsContainer(nil)
+
+	// ── 5. property accessors ─────────────────────────────────────────────────
+	_, _ = pg.GetConnectionProperty("connectionString")
+	_, _ = pg.GetConnectionProperty("host")
+	_, _ = pg.GetConnectionProperty("port")
+	_, _ = pg.GetConnectionProperty("username")
+	_, _ = pgAuth.GetConnectionProperty("password")
+
+	if err = pg.Err(); err != nil {
+		log.Fatalf("pg: %v", err)
+	}
+	if err = pgAuth.Err(); err != nil {
+		log.Fatalf("pgAuth: %v", err)
+	}
+	if err = pgEmulator.Err(); err != nil {
+		log.Fatalf("pgEmulator: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

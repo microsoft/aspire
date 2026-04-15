@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Milvus
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,46 +12,79 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	milvus := builder.AddMilvus("resource", nil, nil)
-	milvus.AddDatabase("resource", nil)
-	milvus.AddDatabase("resource", nil)
-	milvus.WithAttu(nil, nil)
-	milvus.WithDataVolume(nil, nil)
-	if err = milvus.Err(); err != nil {
-		log.Fatalf("milvus: %v", err)
+	// 1. addMilvus: basic Milvus server resource
+	milvus := builder.AddMilvus("milvus")
+
+	// 2. addMilvus: with custom apiKey parameter
+	customKey := builder.AddParameterWithOpts("milvus-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
+	milvus2 := builder.AddMilvusWithOpts("milvus2", &aspire.AddMilvusOptions{ApiKey: customKey})
+
+	// 3. addMilvus: with explicit gRPC port
+	builder.AddMilvusWithOpts("milvus3", &aspire.AddMilvusOptions{GrpcPort: aspire.Float64Ptr(19531)})
+
+	// 4. addDatabase: add database to Milvus server
+	db := milvus.AddDatabase("mydb")
+	if err = db.Err(); err != nil {
+		log.Fatalf("db: %v", err)
 	}
 
-	param, err := builder.AddParameter("parameter", nil)
-	if err != nil {
-		log.Fatalf("AddParameter: %v", err)
-	}
-	milvus2 := builder.AddMilvus("resource", param, nil)
-	milvus2.WithAttu(nil, nil)
-	milvus2.WithDataVolume(nil, nil)
-	if err = milvus2.Err(); err != nil {
-		log.Fatalf("milvus2: %v", err)
-	}
+	// 5. addDatabase: with custom database name
+	milvus.AddDatabaseWithOpts("db2", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("customdb")})
 
-	builder.AddMilvus("resource", nil, nil)
-	builder.AddMilvus("resource", nil, nil)
-	builder.AddMilvus("resource", nil, nil)
-	builder.AddMilvus("resource", nil, nil)
-	builder.AddMilvus("resource", nil, nil)
-	builder.AddMilvus("resource", nil, nil)
+	// 6. withAttu: add Attu administration tool (no options)
+	milvus.WithAttu(nil)
 
-	api := builder.AddContainer("resource", "image")
-	api.WithReference(nil, nil, nil, nil)
-	api.WithReference(nil, nil, nil, nil)
+	// 7. withAttu: with container name
+	milvus2.WithAttuWithOpts(&aspire.WithAttuOptions{ContainerName: aspire.StringPtr("my-attu")}, nil)
+
+	// 8. withAttu: with configureContainer callback
+	builder.AddMilvus("milvus-attu-cfg").WithAttu(func(container *aspire.AttuResource) {
+		container.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(3001)})
+	})
+
+	// 9. withDataVolume: persistent data volume
+	milvus.WithDataVolume()
+
+	// 10. withDataVolume: with custom name
+	milvus2.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("milvus-data")})
+
+	// 11. withDataBindMount: bind mount for data
+	builder.AddMilvus("milvus-bind").WithDataBindMount("./milvus-data")
+
+	// 12. withDataBindMount: with read-only flag
+	builder.AddMilvus("milvus-bind-ro").WithDataBindMountWithOpts("./milvus-data-ro", &aspire.WithDataBindMountOptions{IsReadOnly: aspire.BoolPtr(true)})
+
+	// 13. withConfigurationFile: custom milvus.yaml
+	builder.AddMilvus("milvus-cfg").WithConfigurationFile("./milvus.yaml")
+
+	// 14. Fluent chaining: multiple With* methods
+	milvusChained := builder.AddMilvus("milvus-chained")
+	milvusChained.WithLifetime(aspire.ContainerLifetimePersistent)
+	milvusChained.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("milvus-chained-data")})
+	milvusChained.WithAttu(nil)
+
+	// 15. withReference: use Milvus database from a container resource
+	api := builder.AddContainer("api", "myregistry/myapp")
+	api.WithReference(aspire.NewIResource(db.Handle(), db.Client()))
+
+	// 16. withReference: use Milvus server directly
+	api.WithReference(aspire.NewIResource(milvus.Handle(), milvus.Client()))
 	if err = api.Err(); err != nil {
 		log.Fatalf("api: %v", err)
 	}
 
+	// Property access on MilvusServerResource
 	_, _ = milvus.PrimaryEndpoint()
 	_, _ = milvus.Host()
 	_, _ = milvus.Port()
 	_, _ = milvus.Token()
 	_, _ = milvus.UriExpression()
 	_, _ = milvus.ConnectionStringExpression()
+	_ = milvus.Databases()
+
+	if err = milvus.Err(); err != nil {
+		log.Fatalf("milvus: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

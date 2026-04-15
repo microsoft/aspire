@@ -23,8 +23,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
     private TextWriter _writer = null!;
     private readonly Dictionary<string, string> _structNames = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _resourceBuilderStructNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _dtoNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _enumNames = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, OptionsStructInfo?> _optionsForCapability = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, OptionsStructInfo> _optionsStructsByName = new(StringComparer.Ordinal);
+
+    private sealed record OptionsStructInfo(string StructName, IReadOnlyList<AtsParameterInfo> Params);
+
     /// <inheritdoc />
     public string Language => "Go";
 
@@ -80,9 +86,12 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var capabilitiesByTarget = GroupCapabilitiesByTarget(capabilities);
         var collectionTypes = CollectListAndDictTypeIds(capabilities);
 
+        PlanOptionsStructs(capabilities);
+
         WriteHeader();
         GenerateEnumTypes(enumTypes);
         GenerateDtoTypes(dtoTypes);
+        GenerateOptionsStructs();
         GenerateHandleTypes(handleTypes, capabilitiesByTarget);
         GenerateHandleWrapperRegistrations(handleTypes, collectionTypes);
         GenerateConnectionHelpers();
@@ -193,6 +202,242 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         }
     }
 
+    // ── Options struct planning ───────────────────────────────────────────────────
+
+    /// <summary>
+    /// Pre-generation pass: for each capability, determine whether an options struct
+    /// is needed (when it has optional, non-callback, non-CancellationToken params).
+    /// Populates <c>_optionsForCapability</c> and <c>_optionsStructsByName</c>.
+    /// Must be called after <c>_structNames</c>, <c>_enumNames</c>, and <c>_dtoNames</c>
+    /// are all populated.
+    /// </summary>
+    private void PlanOptionsStructs(IReadOnlyList<AtsCapabilityInfo> capabilities)
+    {
+        _optionsForCapability.Clear();
+        _optionsStructsByName.Clear();
+
+        // Build a set of all type names already declared by DTOs, enums, and handle wrappers so
+        // that generated options struct names do not collide with them.
+        var reservedTypeNames = new HashSet<string>(
+            _dtoNames.Values.Concat(_enumNames.Values).Concat(_structNames.Values),
+            StringComparer.Ordinal);
+
+        foreach (var capability in capabilities)
+        {
+            var targetParam = capability.TargetParameterName ?? "builder";
+            var optionalNonCallback = capability.Parameters
+                .Where(p => !string.Equals(p.Name, targetParam, StringComparison.Ordinal)
+                         && p.IsOptional && !p.IsCallback && !IsCancellationToken(p))
+                .ToList();
+
+            if (optionalNonCallback.Count == 0)
+            {
+                _optionsForCapability[capability.CapabilityId] = null;
+                continue;
+            }
+
+            var methodName = ToPascalCase(capability.MethodName);
+            var canonicalShape = ComputeCanonicalShape(optionalNonCallback);
+
+            // Try simple name first: MethodOptions
+            var candidateName = methodName + "Options";
+
+            if (_optionsStructsByName.TryGetValue(candidateName, out var existing))
+            {
+                if (ComputeCanonicalShape(existing.Params) == canonicalShape)
+                {
+                    // Reuse existing struct with same shape
+                    _optionsForCapability[capability.CapabilityId] = existing;
+                    continue;
+                }
+
+                // Name collision within options structs — qualify with receiver struct name
+                var receiverStructName = _structNames.GetValueOrDefault(capability.TargetTypeId ?? "", "");
+                candidateName = receiverStructName + methodName + "Options";
+            }
+            else if (reservedTypeNames.Contains(candidateName))
+            {
+                // Name collision with an existing DTO / enum / handle type — qualify with receiver
+                var receiverStructName = _structNames.GetValueOrDefault(capability.TargetTypeId ?? "", "");
+                candidateName = receiverStructName + methodName + "Options";
+            }
+
+            var info = GetOrCreateOptionsStruct(candidateName, optionalNonCallback, canonicalShape, reservedTypeNames);
+            _optionsForCapability[capability.CapabilityId] = info;
+        }
+    }
+
+    private OptionsStructInfo GetOrCreateOptionsStruct(
+        string candidateName,
+        IReadOnlyList<AtsParameterInfo> optionalParams,
+        string canonicalShape,
+        HashSet<string> reservedTypeNames)
+    {
+        if (_optionsStructsByName.TryGetValue(candidateName, out var existing))
+        {
+            if (ComputeCanonicalShape(existing.Params) == canonicalShape)
+            {
+                return existing;
+            }
+
+            // Still a collision with a different shape — append numeric suffix
+            var counter = 2;
+            var baseName = candidateName;
+            while (true)
+            {
+                candidateName = baseName + counter;
+                if (!_optionsStructsByName.ContainsKey(candidateName) && !reservedTypeNames.Contains(candidateName))
+                {
+                    break;
+                }
+
+                if (_optionsStructsByName.TryGetValue(candidateName, out var other)
+                    && ComputeCanonicalShape(other.Params) == canonicalShape)
+                {
+                    return other;
+                }
+
+                counter++;
+            }
+        }
+        else if (reservedTypeNames.Contains(candidateName))
+        {
+            // Reserved by a DTO/enum/handle — append numeric suffix
+            var counter = 2;
+            var baseName = candidateName;
+            while (true)
+            {
+                candidateName = baseName + counter;
+                if (!_optionsStructsByName.ContainsKey(candidateName) && !reservedTypeNames.Contains(candidateName))
+                {
+                    break;
+                }
+
+                if (_optionsStructsByName.TryGetValue(candidateName, out var other)
+                    && ComputeCanonicalShape(other.Params) == canonicalShape)
+                {
+                    return other;
+                }
+
+                counter++;
+            }
+        }
+
+        var info = new OptionsStructInfo(candidateName, optionalParams);
+        _optionsStructsByName[candidateName] = info;
+        return info;
+    }
+
+    private string ComputeCanonicalShape(IReadOnlyList<AtsParameterInfo> @params) =>
+        string.Join(";", @params
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .Select(p => $"{p.Name}:{MapTypeRefToGo(p.Type, p.IsOptional)}"));
+
+    // ── Options struct code generation ───────────────────────────────────────────
+
+    private void GenerateOptionsStructs()
+    {
+        if (_optionsStructsByName.Count == 0)
+        {
+            return;
+        }
+
+        WriteLine("// ============================================================================");
+        WriteLine("// Options Structs");
+        WriteLine("// ============================================================================");
+        WriteLine();
+
+        foreach (var (_, info) in _optionsStructsByName)
+        {
+            WriteLine($"// {info.StructName} holds optional parameters.");
+            WriteLine($"type {info.StructName} struct {{");
+            foreach (var p in info.Params)
+            {
+                var fieldName = ToPascalCase(p.Name);
+                var fieldType = MapTypeRefToGo(p.Type, p.IsOptional);
+                var jsonTag = $"`json:\"{p.Name},omitempty\"`";
+                WriteLine($"\t{fieldName} {fieldType} {jsonTag}");
+            }
+
+            WriteLine("}");
+            WriteLine();
+
+            WriteLine($"func (o *{info.StructName}) ToMap() map[string]any {{");
+            WriteLine("\tm := map[string]any{}");
+            foreach (var p in info.Params)
+            {
+                var fieldName = ToPascalCase(p.Name);
+                var baseType = MapTypeRefToGo(p.Type, false);
+                // If the base type is NOT nilable (e.g. string, bool, float64, enum), then the
+                // optional form adds a *, so we must dereference when reading the field value.
+                var valueExpr = !IsNilableGoType(baseType) ? $"*o.{fieldName}" : $"o.{fieldName}";
+                WriteLine($"\tif o.{fieldName} != nil {{");
+                WriteLine($"\t\tm[\"{p.Name}\"] = SerializeValue({valueExpr})");
+                WriteLine("\t}");
+            }
+
+            WriteLine("\treturn m");
+            WriteLine("}");
+            WriteLine();
+        }
+    }
+
+    // ── Capability method helpers ─────────────────────────────────────────────────
+
+    private string GetCallbackParamType(AtsParameterInfo cb)
+    {
+        if (cb.CallbackParameters is { Count: > 0 })
+        {
+            var parts = cb.CallbackParameters
+                .Select(cp => $"{GetLocalIdentifier(cp.Name)} {MapTypeRefToGo(cp.Type, false)}")
+                .ToList();
+            return $"func({string.Join(", ", parts)})";
+        }
+
+        return "func(...any) any";
+    }
+
+    private void EmitCallbackRegistration(string paramName, AtsParameterInfo cb)
+    {
+        if (cb.CallbackParameters is { Count: > 0 })
+        {
+            // Typed callback — emit an inline RegisterCallback adapter that handles all params
+            var cbParams = cb.CallbackParameters;
+            WriteLine($"\tif {paramName} != nil {{");
+            WriteLine($"\t\t{paramName}Fn := {paramName}");
+            WriteLine($"\t\treqArgs[\"{cb.Name}\"] = RegisterCallback(func(args ...any) any {{");
+            WriteLine($"\t\t\tif len(args) >= {cbParams.Count} {{");
+            // Nested type-assertion ifs for each callback parameter
+            var indent = "\t\t\t\t";
+            for (var i = 0; i < cbParams.Count; i++)
+            {
+                var cp = cbParams[i];
+                var argType = MapTypeRefToGo(cp.Type, false);
+                var argLocal = GetLocalIdentifier(cp.Name);
+                WriteLine($"{indent}if {argLocal}, ok := args[{i}].({argType}); ok {{");
+                indent += "\t";
+            }
+            var callArgs = string.Join(", ", cbParams.Select(cp => GetLocalIdentifier(cp.Name)));
+            WriteLine($"{indent}{paramName}Fn({callArgs})");
+            for (var i = 0; i < cbParams.Count; i++)
+            {
+                indent = indent[..^1];
+                WriteLine($"{indent}}}");
+            }
+            WriteLine("\t\t\t}");
+            WriteLine("\t\t\treturn nil");
+            WriteLine($"\t\t}})");
+            WriteLine("\t}");
+        }
+        else
+        {
+            // Untyped callback — current behaviour
+            WriteLine($"\tif {paramName} != nil {{");
+            WriteLine($"\t\treqArgs[\"{cb.Name}\"] = RegisterCallback({paramName})");
+            WriteLine("\t}");
+        }
+    }
+
     private void GenerateHandleTypes(
         IReadOnlyList<GoHandleType> handleTypes,
         Dictionary<string, List<AtsCapabilityInfo>> capabilitiesByTarget)
@@ -290,40 +535,97 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             return;
         }
 
-        // A method is "fluent" when it is on a resource builder AND its return value is either:
-        //   - void (no useful return), OR
-        //   - the same type as the receiver (self-return, i.e. the IResourceBuilder<T>.With* pattern).
-        //
-        // A method is "child-fluent" when it is on a resource builder AND returns a *different*
-        // resource builder type (e.g. Add* producing a child resource). The child builder carries
-        // any error so callers can chain directly: builder.AddRedis("cache").WithDataVolume(nil, nil).Err()
+        // Categorize parameters into non-overlapping buckets.
+        var requiredParams = parameters
+            .Where(p => !p.IsOptional && !p.IsCallback && !IsCancellationToken(p))
+            .ToList();
+        var callbackParams = parameters.Where(p => p.IsCallback).ToList();
+        var cancellationParams = parameters.Where(IsCancellationToken).ToList();
+
+        _optionsForCapability.TryGetValue(capability.CapabilityId, out var optionsInfo);
+
+        // Simple version — required + callbacks + CTs only (optional non-cb params omitted).
+        EmitCapabilityMethod(structName, isResourceBuilder, capability, methodName,
+            requiredParams, callbackParams, cancellationParams, optionsInfo: null);
+
+        // WithOpts version — emitted only when there are optional non-callback params.
+        if (optionsInfo != null)
+        {
+            EmitCapabilityMethod(structName, isResourceBuilder, capability, methodName + "WithOpts",
+                requiredParams, callbackParams, cancellationParams, optionsInfo);
+        }
+    }
+
+    /// <summary>
+    /// Emits a single Go function for a capability.
+    /// When <paramref name="optionsInfo"/> is null this is the simple version (no optional params).
+    /// When non-null this is the <c>WithOpts</c> version that accepts an options struct.
+    /// </summary>
+    private void EmitCapabilityMethod(
+        string structName,
+        bool isResourceBuilder,
+        AtsCapabilityInfo capability,
+        string methodName,
+        List<AtsParameterInfo> requiredParams,
+        List<AtsParameterInfo> callbackParams,
+        List<AtsParameterInfo> cancellationParams,
+        OptionsStructInfo? optionsInfo)
+    {
+        var targetParamName = capability.TargetParameterName ?? "builder";
         var returnTypeId = capability.ReturnType?.TypeId;
         var isVoid = returnTypeId == AtsConstants.Void;
+        var hasReturn = !isVoid;
         var returnsSameType = _structNames.TryGetValue(returnTypeId ?? "", out var retStructName)
             && retStructName == structName;
+
+        // A method is "fluent" if it's on a resource builder and returns void or itself.
         var isFluent = isResourceBuilder && (isVoid || returnsSameType);
 
         var returnType = MapTypeRefToGo(capability.ReturnType, false);
-        var hasReturn = !isVoid;
+        var returnChildStructName = retStructName ?? returnType.TrimStart('*');
 
-        // Child-fluent: returns a different resource builder type (Add* pattern).
-        var returnsChildBuilder = !isFluent && isResourceBuilder && hasReturn
-            && capability.ReturnsBuilder
-            && !returnsSameType;
+        // A method is "child-fluent" if it returns a DIFFERENT resource builder whose Go struct
+        // embeds ResourceBuilderBase.  If ReturnsBuilder is true but the Go struct uses
+        // HandleWrapperBase (e.g. IComputeResource), it cannot carry an embedded error, so we
+        // treat it like a plain returning method instead.
+        var returnChildIsResourceBuilder = _resourceBuilderStructNames.Contains(returnChildStructName);
+        var returnsChildBuilder = capability.ReturnsBuilder && !returnsSameType && returnChildIsResourceBuilder;
+
+        // When a capability from a parent/interface type (e.g. ContainerResource) is expanded onto a
+        // concrete subtype (e.g. YarpResource), the return type still refers to the original type.
+        // We detect this by comparing the return struct name against the original capability target's
+        // struct name.  When they match we treat the method as fluent on the current concrete struct
+        // rather than constructing an intermediate parent-type builder (which would lose the subtype).
+        var originalTargetStructName = capability.TargetTypeId is not null
+            && _structNames.TryGetValue(capability.TargetTypeId, out var ots)
+            ? ots
+            : structName;
+        var returnsOriginalTargetType = returnChildStructName == originalTargetStructName;
+
+        // "Returns-self-expanded" is true when a child-builder-returning method should actually be
+        // fluent because the returned type is the original (parent) target that was expanded onto the
+        // current concrete struct.
+        var isExpandedFluent = returnsChildBuilder && isResourceBuilder && returnsOriginalTargetType;
 
         string returnSignature;
-        if (isFluent || returnsChildBuilder)
+        if (isFluent || isExpandedFluent)
         {
-            // Both fluent patterns return a single pointer — self or child.
-            returnSignature = isFluent
-                ? $"*{structName}"
-                : returnType.StartsWith("*", StringComparison.Ordinal)
-                    ? returnType
-                    : $"*{returnType}";
+            // Fluent on self — the caller stays on the current concrete builder type,
+            // enabling TypeScript-style method chaining even when the .NET API returns
+            // a different (parent) resource builder.
+            returnSignature = $"*{structName}";
+        }
+        else if (returnsChildBuilder)
+        {
+            // Genuine child-builder method (e.g. AddHub on EventHubsResource returning HubResource)
+            // or non-resource-builder context (e.g. AddContainer on IDistributedApplicationBuilder).
+            returnSignature = returnType.StartsWith("*", StringComparison.Ordinal)
+                ? returnType
+                : $"*{returnType}";
         }
         else if (hasReturn)
         {
-            // Don't add extra * if return type already starts with *
+            // Don't add extra * if return type already starts with *.
             returnSignature = returnType.StartsWith("*", StringComparison.Ordinal) || returnType == "any"
                 ? $"({returnType}, error)"
                 : $"(*{returnType}, error)";
@@ -335,19 +637,51 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         // Build parameter list
         var paramList = new StringBuilder();
-        foreach (var parameter in parameters)
+
+        // Required (non-optional, non-callback, non-CT) params — same in both versions.
+        foreach (var p in requiredParams)
         {
             if (paramList.Length > 0)
             {
                 paramList.Append(", ");
             }
-            var paramName = GetLocalIdentifier(parameter.Name);
-            var paramType = parameter.IsCallback
-                ? "func(...any) any"
-                : IsCancellationToken(parameter)
-                    ? "*CancellationToken"
-                    : MapTypeRefToGo(parameter.Type, parameter.IsOptional);
-            paramList.Append(CultureInfo.InvariantCulture, $"{paramName} {paramType}");
+
+            paramList.Append(CultureInfo.InvariantCulture,
+                $"{GetLocalIdentifier(p.Name)} {MapTypeRefToGo(p.Type, p.IsOptional)}");
+        }
+
+        // Options struct param (WithOpts version only).
+        if (optionsInfo != null)
+        {
+            if (paramList.Length > 0)
+            {
+                paramList.Append(", ");
+            }
+
+            paramList.Append(CultureInfo.InvariantCulture, $"options *{optionsInfo.StructName}");
+        }
+
+        // Callback params (typed where CallbackParameters are known).
+        foreach (var cb in callbackParams)
+        {
+            if (paramList.Length > 0)
+            {
+                paramList.Append(", ");
+            }
+
+            paramList.Append(CultureInfo.InvariantCulture,
+                $"{GetLocalIdentifier(cb.Name)} {GetCallbackParamType(cb)}");
+        }
+
+        // CancellationToken params.
+        foreach (var ct in cancellationParams)
+        {
+            if (paramList.Length > 0)
+            {
+                paramList.Append(", ");
+            }
+
+            paramList.Append(CultureInfo.InvariantCulture, $"{GetLocalIdentifier(ct.Name)} *CancellationToken");
         }
 
         // Generate comment
@@ -356,22 +690,24 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine($"// {methodName} {char.ToLowerInvariant(capability.Description[0])}{capability.Description[1..]}");
         }
 
-        // Use 'reqArgs' as local variable name to avoid conflict with parameters named 'args'
+        // Use 'reqArgs' as local variable name to avoid conflict with parameters named 'args'.
         WriteLine($"func (s *{structName}) {methodName}({paramList}) {returnSignature} {{");
 
-        if (isFluent)
+        if (isFluent || isExpandedFluent)
         {
             // Short-circuit: if a previous call in the chain already failed, skip and return self.
+            // This covers both void-or-self-returning methods and expanded parent-returning methods
+            // on resource builders — both are fluent on the current concrete struct.
             WriteLine("\tif s.err != nil {");
             WriteLine("\t\treturn s");
             WriteLine("\t}");
         }
-        else if (returnsChildBuilder)
+        else if (returnsChildBuilder && isResourceBuilder)
         {
-            // Short-circuit: propagate the parent's error into a new child builder.
-            var childStructName = returnType.TrimStart('*');
+            // Genuine child-builder on a resource builder: propagate the error into the child
+            // builder so callers can keep chaining on the returned type.
             WriteLine("\tif s.err != nil {");
-            WriteLine($"\t\treturn &{childStructName}{{ResourceBuilderBase: NewErroredResourceBuilder(s.err)}}");
+            WriteLine($"\t\treturn &{returnChildStructName}{{ResourceBuilderBase: NewErroredResourceBuilder(s.err)}}");
             WriteLine("\t}");
         }
 
@@ -379,54 +715,64 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"\t\t\"{targetParamName}\": SerializeValue(s.Handle()),");
         WriteLine("\t}");
 
-        foreach (var parameter in parameters)
+        // Serialize required params.
+        foreach (var p in requiredParams)
         {
-            var paramName = GetLocalIdentifier(parameter.Name);
-            if (parameter.IsCallback)
+            var paramName = GetLocalIdentifier(p.Name);
+            var paramTypeStr = MapTypeRefToGo(p.Type, p.IsOptional);
+            if (p.IsOptional && IsNilableGoType(paramTypeStr))
             {
                 WriteLine($"\tif {paramName} != nil {{");
-                WriteLine($"\t\treqArgs[\"{parameter.Name}\"] = RegisterCallback({paramName})");
-                WriteLine("\t}");
-                continue;
-            }
-
-            if (IsCancellationToken(parameter))
-            {
-                WriteLine($"\tif {paramName} != nil {{");
-                WriteLine($"\t\treqArgs[\"{parameter.Name}\"] = RegisterCancellation({paramName}, s.Client())");
-                WriteLine("\t}");
-                continue;
-            }
-
-            var paramTypeStr = MapTypeRefToGo(parameter.Type, parameter.IsOptional);
-            var isNilableType = IsNilableGoType(paramTypeStr);
-
-            if (parameter.IsOptional && isNilableType)
-            {
-                WriteLine($"\tif {paramName} != nil {{");
-                WriteLine($"\t\treqArgs[\"{parameter.Name}\"] = SerializeValue({paramName})");
+                WriteLine($"\t\treqArgs[\"{p.Name}\"] = SerializeValue({paramName})");
                 WriteLine("\t}");
             }
             else
             {
-                WriteLine($"\treqArgs[\"{parameter.Name}\"] = SerializeValue({paramName})");
+                WriteLine($"\treqArgs[\"{p.Name}\"] = SerializeValue({paramName})");
             }
         }
 
-        if (isFluent)
+        // Merge options into reqArgs (WithOpts version only).
+        if (optionsInfo != null)
         {
-            // Discard the returned handle: in .NET the same builder is always returned,
-            // so we continue chaining on s and store any error in s.err.
+            WriteLine("\tif options != nil {");
+            WriteLine("\t\tfor k, v := range options.ToMap() {");
+            WriteLine("\t\t\treqArgs[k] = v");
+            WriteLine("\t\t}");
+            WriteLine("\t}");
+        }
+
+        // Register callbacks (typed or untyped).
+        foreach (var cb in callbackParams)
+        {
+            EmitCallbackRegistration(GetLocalIdentifier(cb.Name), cb);
+        }
+
+        // Register cancellation tokens.
+        foreach (var ct in cancellationParams)
+        {
+            var paramName = GetLocalIdentifier(ct.Name);
+            WriteLine($"\tif {paramName} != nil {{");
+            WriteLine($"\t\treqArgs[\"{ct.Name}\"] = RegisterCancellation({paramName}, s.Client())");
+            WriteLine("\t}");
+        }
+
+        // Emit invocation and return.
+        if (isFluent || isExpandedFluent)
+        {
+            // Discard the returned handle and continue chaining on self.  This covers both
+            // "returns void or self" (isFluent) and "expanded parent-type method on a concrete
+            // subtype" (isExpandedFluent) — the latter preserves the concrete type for chaining.
             WriteLine($"\t_, s.err = s.Client().InvokeCapability(\"{capability.CapabilityId}\", reqArgs)");
             WriteLine("\treturn s");
         }
         else if (returnsChildBuilder)
         {
-            // Return the child builder, wrapping errors so the chain can continue.
-            var childStructName = returnType.TrimStart('*');
+            // Genuine child-builder method: return the new child, wrapping errors so the chain
+            // can continue on the returned type.
             WriteLine($"\tresult, err := s.Client().InvokeCapability(\"{capability.CapabilityId}\", reqArgs)");
             WriteLine("\tif err != nil {");
-            WriteLine($"\t\treturn &{childStructName}{{ResourceBuilderBase: NewErroredResourceBuilder(err)}}");
+            WriteLine($"\t\treturn &{returnChildStructName}{{ResourceBuilderBase: NewErroredResourceBuilder(err)}}");
             WriteLine("\t}");
             WriteLine($"\treturn result.({returnSignature})");
         }
@@ -436,7 +782,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("\tif err != nil {");
             WriteLine("\t\treturn nil, err");
             WriteLine("\t}");
-            // Cast appropriately based on whether return type is already a pointer
+            // Cast appropriately based on whether return type is already a pointer.
             if (returnType.StartsWith("*", StringComparison.Ordinal))
             {
                 WriteLine($"\treturn result.({returnType}), nil");
@@ -643,12 +989,18 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         var handleTypeMap = context.HandleTypes.ToDictionary(t => t.AtsTypeId, StringComparer.Ordinal);
         var results = new List<GoHandleType>();
+        _resourceBuilderStructNames.Clear();
         foreach (var typeId in handleTypeIds)
         {
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
                 isResourceBuilder = typeInfo.IsResourceBuilder;
+            }
+
+            if (isResourceBuilder)
+            {
+                _resourceBuilderStructNames.Add(_structNames[typeId]);
             }
 
             results.Add(new GoHandleType(typeId, _structNames[typeId], isResourceBuilder));
@@ -666,6 +1018,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         {
             if (string.IsNullOrEmpty(capability.TargetTypeId))
             {
+                // Entry-point capability (no explicit target type) — assign to IDistributedApplicationBuilder
+                // so it is emitted as a method on the builder struct.
+                if (!result.TryGetValue(AtsConstants.BuilderTypeId, out var builderList))
+                {
+                    builderList = new List<AtsCapabilityInfo>();
+                    result[AtsConstants.BuilderTypeId] = builderList;
+                }
+                builderList.Add(capability);
                 continue;
             }
 

@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Redis
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -16,55 +13,53 @@ func main() {
 	}
 
 	// addRedis — full overload with port and password parameter
-	secret := true
-	password := builder.AddParameter("redis-password", &secret)
-
-	cache := builder.AddRedis("cache", nil, password).WithDataVolume(nil, nil).WithPersistence(nil, nil)
+	password := builder.AddParameterWithOpts("redis-password", &aspire.AddParameterOptions{Secret: func() *bool { b := true; return &b }()})
+	cache := builder.AddRedisWithOpts("cache", &aspire.AddRedisOptions{Password: password})
+	cache.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: func() *string { s := "redis-data"; return &s }()})
+	cache.WithPersistenceWithOpts(&aspire.WithPersistenceOptions{
+		Interval:             func() *float64 { v := float64(600000000); return &v }(),
+		KeysChangedThreshold: func() *float64 { v := float64(5); return &v }(),
+	})
 	if err = cache.Err(); err != nil {
 		log.Fatalf("cache: %v", err)
 	}
 
 	// addRedisWithPort — overload with explicit port
-	var port float64 = 6380
-	// withDataBindMount + withHostPort on cache2 — fluent chain
-	secret2 := true
-	newPassword := builder.AddParameter("new-redis-password", &secret2)
-	cache2 := builder.AddRedisWithPort("cache2", port).WithDataBindMount("/tmp/redis-data", nil).WithHostPort(6380).WithPassword(newPassword)
+	cache2 := builder.AddRedisWithPort("cache2", 6380)
+	cache2.WithDataBindMount("/tmp/redis-data")
 	if err = cache2.Err(); err != nil {
 		log.Fatalf("cache2: %v", err)
 	}
 
-	// withHostPort on cache — stand-alone (after the first chain)
+	// withHostPort on cache — stand-alone
 	cache.WithHostPort(6379)
 	if err = cache.Err(); err != nil {
-		log.Fatalf("cache: %v", err)
+		log.Fatalf("cache host port: %v", err)
 	}
 
-	// withRedisCommander — fluent (1 return value)
-	cache.WithRedisCommander(func(args ...any) any {
-		if len(args) > 0 {
-			if commander, ok := args[0].(interface {
-				WithHostPort(float64) *aspire.ContainerResource
-			}); ok {
-				commander.WithHostPort(8081)
-			}
-		}
-		return nil
-	}, nil)
+	// withPassword on cache2
+	newPassword := builder.AddParameterWithOpts("new-redis-password", &aspire.AddParameterOptions{Secret: func() *bool { b := true; return &b }()})
+	cache2.WithPassword(newPassword)
+	if err = cache2.Err(); err != nil {
+		log.Fatalf("cache2 password: %v", err)
+	}
 
-	// withRedisInsight — fluent (1 return value)
-	cache.WithRedisInsight(func(args ...any) any {
-		if len(args) > 0 {
-			if insight, ok := args[0].(interface {
-				WithHostPort(float64) *aspire.ContainerResource
-			}); ok {
-				insight.WithHostPort(5540)
-			}
-		}
-		return nil
-	}, nil)
+	// withRedisCommander — with configureContainer callback
+	cache.WithRedisCommanderWithOpts(&aspire.WithRedisCommanderOptions{ContainerName: func() *string { s := "my-commander"; return &s }()}, func(commander *aspire.RedisCommanderResource) {
+		commander.WithHostPort(8081)
+	})
 
-	// ---- Property access on RedisResource (ExposeProperties = true) ----
+	// withRedisInsight — with configureContainer callback
+	cache.WithRedisInsightWithOpts(&aspire.WithRedisInsightOptions{ContainerName: func() *string { s := "my-insight"; return &s }()}, func(insight *aspire.RedisInsightResource) {
+		insight.WithHostPort(5540)
+		insight.WithDataVolumeWithOpts(&aspire.RedisInsightResourceWithDataVolumeOptions{Name: func() *string { s := "insight-data"; return &s }()})
+		insight.WithDataBindMount("/tmp/insight-data")
+	})
+	if err = cache.Err(); err != nil {
+		log.Fatalf("cache after commander/insight: %v", err)
+	}
+
+	// ---- Property access on RedisResource ----
 	_, _ = cache.PrimaryEndpoint()
 	_, _ = cache.Host()
 	_, _ = cache.Port()

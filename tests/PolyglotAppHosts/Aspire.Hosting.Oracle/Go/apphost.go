@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Oracle
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,41 +12,67 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	oracle := builder.AddOracle("resource", nil, nil)
+	// addOracle: factory method with defaults
+	oracle := builder.AddOracle("oracledb")
 	if err = oracle.Err(); err != nil {
 		log.Fatalf("oracle: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter", nil)
-	builder.AddOracle("resource", nil, nil)
-
-	db := oracle.AddDatabase("resource", nil)
-	if err = db.Err(); err != nil {
-		log.Fatalf("db: %v", err)
-	}
-	_ = db
-
-	oracle.AddDatabase("resource", nil)
-	oracle.WithDataVolume(nil)
-	oracle.WithReference(nil, nil, nil, nil)
-	oracle.WithReference(nil, nil, nil, nil)
-	oracle.WithReference(nil, nil, nil, nil)
-
-	oracle2 := builder.AddOracle("resource", nil, nil)
-	oracle2.WithDataVolume(nil)
-	oracle2.WithDataBindMount("/tmp")
-	oracle2.WithInitFiles("./init")
-	oracle2.WithDbSetupBindMount("/tmp")
+	// addOracle: with custom password and port
+	customPassword := builder.AddParameterWithOpts("oracle-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
+	oracle2 := builder.AddOracleWithOpts("oracledb2", &aspire.AddOracleOptions{
+		Password: customPassword,
+		Port:     aspire.Float64Ptr(1522),
+	})
 	if err = oracle2.Err(); err != nil {
 		log.Fatalf("oracle2: %v", err)
 	}
 
-	oracle3 := builder.AddOracle("resource", nil, nil)
-	oracle3.AddDatabase("resource", nil)
+	// addDatabase: child resource with default databaseName
+	db := oracle.AddDatabase("mydb")
+	if err = db.Err(); err != nil {
+		log.Fatalf("db: %v", err)
+	}
+
+	// addDatabase: child resource with explicit databaseName
+	oracle.AddDatabaseWithOpts("inventory", &aspire.AddDatabaseOptions{
+		DatabaseName: aspire.StringPtr("inventorydb"),
+	})
+
+	// withDataVolume: data persistence (default name)
+	oracle.WithDataVolume()
+
+	// withDataVolume: data persistence (custom name)
+	oracle2.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("oracle-data")})
+
+	// withDataBindMount
+	oracle2.WithDataBindMount("./oracle-data")
+
+	// withInitFiles
+	oracle2.WithInitFiles("./init-scripts")
+
+	// withDbSetupBindMount
+	oracle2.WithDbSetupBindMount("./setup-scripts")
+
+	// withReference: connection string reference from another oracle resource
+	otherOracle := builder.AddOracle("other-oracle")
+	otherDb := otherOracle.AddDatabase("otherdb")
+	oracle.WithReference(aspire.NewIResource(otherDb.Handle(), otherDb.Client()))
+	oracle.WithReferenceWithOpts(aspire.NewIResource(otherDb.Handle(), otherDb.Client()), &aspire.WithReferenceOptions{
+		ConnectionName: aspire.StringPtr("secondary-db"),
+	})
+	oracle.WithReference(aspire.NewIResource(otherOracle.Handle(), otherOracle.Client()))
+
+	// Fluent chaining: multiple methods chained
+	oracle3 := builder.AddOracle("oracledb3")
+	oracle3.WithLifetime(aspire.ContainerLifetimePersistent)
+	oracle3.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("oracle3-data")})
+	oracle3.AddDatabase("chaineddb")
 	if err = oracle3.Err(); err != nil {
 		log.Fatalf("oracle3: %v", err)
 	}
 
+	// Property access on OracleDatabaseServerResource
 	_, _ = oracle.PrimaryEndpoint()
 	_, _ = oracle.Host()
 	_, _ = oracle.Port()
@@ -57,6 +80,13 @@ func main() {
 	_, _ = oracle.UriExpression()
 	_, _ = oracle.JdbcConnectionString()
 	_, _ = oracle.ConnectionStringExpression()
+
+	// Property access on OracleDatabaseResource
+	_, _ = db.DatabaseName()
+	_, _ = db.UriExpression()
+	_, _ = db.JdbcConnectionString()
+	_, _ = db.Parent()
+	_, _ = db.ConnectionStringExpression()
 
 	app, err := builder.Build()
 	if err != nil {

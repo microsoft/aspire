@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.ApplicationInsights
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,9 +12,15 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_ = builder.AddAzureApplicationInsights("resource")
+	_ = builder.AddAzureApplicationInsights("insights")
 
-	_ = builder.AddAzureLogAnalyticsWorkspace("resource")
+	logAnalytics := builder.AddAzureLogAnalyticsWorkspace("logs")
+
+	appInsightsWithWorkspace := builder.AddAzureApplicationInsights("insights-with-workspace")
+	appInsightsWithWorkspace.WithLogAnalyticsWorkspace(logAnalytics)
+	if err = appInsightsWithWorkspace.Err(); err != nil {
+		log.Fatalf("appInsightsWithWorkspace: %v", err)
+	}
 
 	app, err := builder.Build()
 	if err != nil {

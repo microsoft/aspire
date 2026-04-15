@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.JavaScript
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,28 +12,56 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	nodeApp := builder.AddNodeApp("resource", "node", ".")
-	nodeApp.WithNpm(nil, nil, nil)
-	nodeApp.WithBun(nil, nil)
-	nodeApp.WithYarn(nil, nil)
-	nodeApp.WithPnpm(nil, nil)
-	nodeApp.WithBuildScript("build", nil)
-	nodeApp.WithRunScript("start", nil)
+	nodeApp := builder.AddNodeApp("node-app", "./node-app", "server.js")
+	nodeApp.WithNpmWithOpts(&aspire.WithNpmOptions{
+		Install:        aspire.BoolPtr(false),
+		InstallCommand: aspire.StringPtr("install"),
+		InstallArgs:    []string{"--ignore-scripts"},
+	})
+	nodeApp.WithBunWithOpts(&aspire.WithBunOptions{
+		Install:     aspire.BoolPtr(false),
+		InstallArgs: []string{"--frozen-lockfile"},
+	})
+	nodeApp.WithYarnWithOpts(&aspire.WithYarnOptions{
+		Install:     aspire.BoolPtr(false),
+		InstallArgs: []string{"--immutable"},
+	})
+	nodeApp.WithPnpmWithOpts(&aspire.WithPnpmOptions{
+		Install:     aspire.BoolPtr(false),
+		InstallArgs: []string{"--frozen-lockfile"},
+	})
+	nodeApp.WithBuildScriptWithOpts("build", &aspire.WithBuildScriptOptions{
+		Args: []string{"--mode", "production"},
+	})
+	nodeApp.WithRunScriptWithOpts("dev", &aspire.WithRunScriptOptions{
+		Args: []string{"--host", "0.0.0.0"},
+	})
 	if err = nodeApp.Err(); err != nil {
 		log.Fatalf("nodeApp: %v", err)
 	}
 
-	javaScriptApp := builder.AddJavaScriptApp("resource", "node", nil)
-	javaScriptApp.WithEnvironment("KEY", "value")
+	javaScriptApp := builder.AddJavaScriptAppWithOpts("javascript-app", "./javascript-app", &aspire.AddJavaScriptAppOptions{
+		RunScriptName: aspire.StringPtr("start"),
+	})
+	javaScriptApp.WithEnvironment("NODE_ENV", "development")
 	if err = javaScriptApp.Err(); err != nil {
 		log.Fatalf("javaScriptApp: %v", err)
 	}
 
-	viteApp := builder.AddViteApp("resource", "node", nil)
-	viteApp.WithViteConfig("vite.config.ts")
-	viteApp.WithPnpm(nil, nil)
-	viteApp.WithBuildScript("build", nil)
-	viteApp.WithRunScript("start", nil)
+	viteApp := builder.AddViteAppWithOpts("vite-app", "./vite-app", &aspire.AddViteAppOptions{
+		RunScriptName: aspire.StringPtr("dev"),
+	})
+	viteApp.WithViteConfig("./vite.custom.config.ts")
+	viteApp.WithPnpmWithOpts(&aspire.WithPnpmOptions{
+		Install:     aspire.BoolPtr(false),
+		InstallArgs: []string{"--prod"},
+	})
+	viteApp.WithBuildScriptWithOpts("build", &aspire.WithBuildScriptOptions{
+		Args: []string{"--mode", "production"},
+	})
+	viteApp.WithRunScriptWithOpts("dev", &aspire.WithRunScriptOptions{
+		Args: []string{"--host"},
+	})
 	if err = viteApp.Err(); err != nil {
 		log.Fatalf("viteApp: %v", err)
 	}

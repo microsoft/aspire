@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Foundry
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,7 +12,7 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	foundry := builder.AddFoundry("resource")
+	foundry := builder.AddFoundry("foundry")
 	foundry.AddDeploymentFromModel("resource", nil)
 	if err = foundry.Err(); err != nil {
 		log.Fatalf("foundry: %v", err)

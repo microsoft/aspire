@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Seq
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,16 +12,22 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter", nil)
+	// ---- AddSeq with admin password parameter ----
+	adminPassword := builder.AddParameterWithOpts("seq-admin-password", &aspire.AddParameterOptions{Secret: func() *bool { b := true; return &b }()})
+	seq := builder.AddSeqWithOpts("seq", adminPassword, &aspire.AddSeqOptions{Port: func() *float64 { p := float64(5341); return &p }()})
 
-	seq := builder.AddSeq("resource", nil, nil)
-	seq.WithDataVolume(nil, nil)
-	seq.WithDataVolume(nil, nil)
-	seq.WithDataBindMount("/tmp", nil)
+	// ---- WithDataVolume ----
+	seq.WithDataVolume()
+	seq.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: func() *string { s := "seq-data"; return &s }(), IsReadOnly: func() *bool { b := false; return &b }()})
+
+	// ---- WithDataBindMount ----
+	seq.WithDataBindMountWithOpts("./seq-data", &aspire.WithDataBindMountOptions{IsReadOnly: func() *bool { b := true; return &b }()})
+
 	if err = seq.Err(); err != nil {
 		log.Fatalf("seq: %v", err)
 	}
 
+	// ---- Property access on SeqResource ----
 	_, _ = seq.PrimaryEndpoint()
 	_, _ = seq.Host()
 	_, _ = seq.Port()

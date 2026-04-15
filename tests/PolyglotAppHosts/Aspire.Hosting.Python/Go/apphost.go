@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Python
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,16 +12,24 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddPythonApp("resource", ".", "script.py")
-	_, _ = builder.AddPythonModule("resource", ".", "module")
-	_, _ = builder.AddPythonExecutable("resource", ".", "script.py")
+	builder.AddPythonApp("python-script", ".", "main.py")
+	builder.AddPythonModule("python-module", ".", "uvicorn")
+	builder.AddPythonExecutable("python-executable", ".", "pytest")
 
-	uvicorn := builder.AddUvicornApp("resource", ".", "app:app")
-	uvicorn.WithVirtualEnvironment(".venv", nil)
+	uvicorn := builder.AddUvicornApp("python-uvicorn", ".", "main:app")
+	uvicorn.WithVirtualEnvironmentWithOpts(".venv", &aspire.WithVirtualEnvironmentOptions{
+		CreateIfNotExists: aspire.BoolPtr(false),
+	})
 	uvicorn.WithDebugging()
-	uvicorn.WithEntrypoint(aspire.EntrypointType("uvicorn"), "app:app")
-	uvicorn.WithPip(nil, nil)
-	uvicorn.WithUv(nil, nil)
+	uvicorn.WithEntrypoint(aspire.EntrypointTypeModule, "uvicorn")
+	uvicorn.WithPipWithOpts(&aspire.WithPipOptions{
+		Install:     aspire.BoolPtr(true),
+		InstallArgs: []string{"install", "-r", "requirements.txt"},
+	})
+	uvicorn.WithUvWithOpts(&aspire.WithUvOptions{
+		Install: aspire.BoolPtr(false),
+		Args:    []string{"sync"},
+	})
 	if err = uvicorn.Err(); err != nil {
 		log.Fatalf("uvicorn: %v", err)
 	}

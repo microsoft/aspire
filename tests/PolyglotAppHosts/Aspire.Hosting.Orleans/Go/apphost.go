@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Orleans
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,26 +12,65 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddConnectionString("connection-string", nil)
+	provider := builder.AddConnectionStringWithOpts("provider", &aspire.AddConnectionStringOptions{
+		EnvironmentVariableName: aspire.StringPtr("ORLEANS_PROVIDER_CONNECTION_STRING"),
+	})
 
-	orleans := builder.AddOrleans("resource")
-	if err = orleans.Err(); err != nil {
-		log.Fatalf("orleans: %v", err)
+	orleans, err := builder.AddOrleans("orleans")
+	if err != nil {
+		log.Fatalf("AddOrleans: %v", err)
 	}
-	orService, err := orleans.AsClient()
+
+	if _, err = orleans.WithClusterId("cluster-id"); err != nil {
+		log.Fatalf("WithClusterId: %v", err)
+	}
+	if _, err = orleans.WithServiceId("service-id"); err != nil {
+		log.Fatalf("WithServiceId: %v", err)
+	}
+	if _, err = orleans.WithClustering(provider); err != nil {
+		log.Fatalf("WithClustering: %v", err)
+	}
+	if _, err = orleans.WithDevelopmentClustering(); err != nil {
+		log.Fatalf("WithDevelopmentClustering: %v", err)
+	}
+	if _, err = orleans.WithGrainStorage("grain-storage", provider); err != nil {
+		log.Fatalf("WithGrainStorage: %v", err)
+	}
+	if _, err = orleans.WithMemoryGrainStorage("memory-grain-storage"); err != nil {
+		log.Fatalf("WithMemoryGrainStorage: %v", err)
+	}
+	if _, err = orleans.WithStreaming("streaming", provider); err != nil {
+		log.Fatalf("WithStreaming: %v", err)
+	}
+	if _, err = orleans.WithMemoryStreaming("memory-streaming"); err != nil {
+		log.Fatalf("WithMemoryStreaming: %v", err)
+	}
+	if _, err = orleans.WithBroadcastChannel("broadcast"); err != nil {
+		log.Fatalf("WithBroadcastChannel: %v", err)
+	}
+	if _, err = orleans.WithReminders(provider); err != nil {
+		log.Fatalf("WithReminders: %v", err)
+	}
+	if _, err = orleans.WithMemoryReminders(); err != nil {
+		log.Fatalf("WithMemoryReminders: %v", err)
+	}
+	if _, err = orleans.WithGrainDirectory("grain-directory", provider); err != nil {
+		log.Fatalf("WithGrainDirectory: %v", err)
+	}
+
+	orleansClient, err := orleans.AsClient()
 	if err != nil {
 		log.Fatalf("AsClient: %v", err)
 	}
-	_ = orService
 
-	silo := builder.AddContainer("resource", "image")
+	silo := builder.AddContainer("silo", "redis")
 	silo.WithOrleansReference(orleans)
 	if err = silo.Err(); err != nil {
 		log.Fatalf("silo: %v", err)
 	}
 
-	client := builder.AddContainer("resource", "image")
-	client.WithOrleansClientReference(orService)
+	client := builder.AddContainer("client", "redis")
+	client.WithOrleansClientReference(orleansClient)
 	if err = client.Err(); err != nil {
 		log.Fatalf("client: %v", err)
 	}

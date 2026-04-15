@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.Kusto
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,11 +12,13 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	kusto := builder.AddAzureKustoCluster("resource")
+	kusto := builder.AddAzureKustoCluster("kusto")
 
-	defaultDatabase := kusto.AddReadWriteDatabase("resource", nil)
+	defaultDatabase := kusto.AddReadWriteDatabase("samples")
 
-	customDatabase := kusto.AddReadWriteDatabase("resource", nil)
+	customDatabase := kusto.AddReadWriteDatabaseWithOpts("analytics", &aspire.DatabaseOptions{
+		DatabaseName: aspire.StringPtr("AnalyticsDb")
+	})
 
 	defaultDatabase.WithCreationScript("./script.kql")
 	customDatabase.WithCreationScript("./script.kql")

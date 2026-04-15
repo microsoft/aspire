@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.SqlServer
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,25 +12,39 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	sqlServer := builder.AddSqlServer("resource", nil, nil)
-	sqlServer.AddDatabase("resource", nil)
+	// Test 1: Basic SQL Server resource creation
+	sqlServer := builder.AddSqlServer("sql")
+
+	// Test 2: Add database to SQL Server
+	sqlServer.AddDatabase("mydb")
 	if err = sqlServer.Err(); err != nil {
 		log.Fatalf("sqlServer: %v", err)
 	}
 
-	builder.AddSqlServer("resource", nil, nil)
-	builder.AddSqlServer("resource", nil, nil)
+	// Test 3: Test withDataVolume
+	builder.AddSqlServer("sql-volume").WithDataVolume()
 
-	_, _ = builder.AddParameter("parameter", nil)
-	builder.AddSqlServer("resource", nil, nil)
+	// Test 4: Test withHostPort
+	builder.AddSqlServer("sql-port").WithHostPort(11433)
 
-	sqlChained := builder.AddSqlServer("resource", nil, nil)
-	sqlChained.AddDatabase("resource", nil)
-	sqlChained.AddDatabase("resource", nil)
+	// Test 5: Test password parameter
+	customPassword := builder.AddParameterWithOpts("sql-password", &aspire.AddParameterOptions{Secret: func() *bool { b := true; return &b }()})
+	builder.AddSqlServerWithOpts("sql-custom-pass", &aspire.AddSqlServerOptions{Password: customPassword})
+
+	// Test 6: Chained configuration - multiple With* methods
+	sqlChained := builder.AddSqlServer("sql-chained")
+	sqlChained.WithLifetime(aspire.ContainerLifetimePersistent)
+	sqlChained.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: func() *string { s := "sql-chained-data"; return &s }()})
+	sqlChained.WithHostPort(12433)
+
+	// Test 7: Add multiple databases to same server
+	sqlChained.AddDatabase("db1")
+	sqlChained.AddDatabaseWithOpts("db2", &aspire.AddDatabaseOptions{DatabaseName: func() *string { s := "customdb2"; return &s }()})
 	if err = sqlChained.Err(); err != nil {
 		log.Fatalf("sqlChained: %v", err)
 	}
 
+	// ---- Property access on SqlServerServerResource ----
 	_, _ = sqlServer.PrimaryEndpoint()
 	_, _ = sqlServer.Host()
 	_, _ = sqlServer.Port()
@@ -41,6 +52,7 @@ func main() {
 	_, _ = sqlServer.JdbcConnectionString()
 	_, _ = sqlServer.UserNameReference()
 	_, _ = sqlServer.ConnectionStringExpression()
+	_ = sqlServer.Databases()
 
 	app, err := builder.Build()
 	if err != nil {

@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.RabbitMQ
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,13 +12,24 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	rabbitmq := builder.AddRabbitMQ("resource", nil, nil, nil)
-	rabbitmq.WithDataVolume(nil, nil)
+	// ---- AddRabbitMQ ----
+	rabbitmq := builder.AddRabbitMQ("messaging")
+	rabbitmq.WithDataVolume()
 	rabbitmq.WithManagementPlugin()
 	if err = rabbitmq.Err(); err != nil {
 		log.Fatalf("rabbitmq: %v", err)
 	}
 
+	// ---- Fluent chaining with Lifetime, DataVolume, ManagementPluginWithPort ----
+	rabbitmq2 := builder.AddRabbitMQ("messaging2")
+	rabbitmq2.WithLifetime(aspire.ContainerLifetimePersistent)
+	rabbitmq2.WithDataVolume()
+	rabbitmq2.WithManagementPluginWithPort(15673)
+	if err = rabbitmq2.Err(); err != nil {
+		log.Fatalf("rabbitmq2: %v", err)
+	}
+
+	// ---- Property access on RabbitMQServerResource ----
 	_, _ = rabbitmq.PrimaryEndpoint()
 	_, _ = rabbitmq.ManagementEndpoint()
 	_, _ = rabbitmq.Host()

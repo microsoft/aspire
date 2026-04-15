@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.WebPubSub
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,29 +12,53 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	webpubsub := builder.AddAzureWebPubSub("resource")
+	// ── 1. addAzureWebPubSub ──────────────────────────────────────────────────
+	webpubsub := builder.AddAzureWebPubSub("webpubsub")
 
-	hub := webpubsub.AddHub("resource", nil)
+	// ── 2. addHub — simple (no options) ──────────────────────────────────────
+	hub := webpubsub.AddHub("myhub")
 
-	webpubsub.AddHub("resource", nil)
+	// ── 3. addHub — with hubName option ──────────────────────────────────────
+	_ = webpubsub.AddHubWithOpts("hub2",
+		&aspire.AddHubOptions{HubName: aspire.StringPtr("customhub")})
 
-	hub.AddEventHandler(nil, nil, nil)
-	hub.AddEventHandler(nil, nil, nil)
+	// ── 4. addEventHandler — simple (no options) ──────────────────────────────
+	hub.AddEventHandler(aspire.RefExpr("https://example.com/handler"))
+
+	// ── 5. addEventHandler — with userEventPattern and systemEvents ───────────
+	hub.AddEventHandlerWithOpts(
+		aspire.RefExpr("https://example.com/handler2"),
+		&aspire.AddEventHandlerOptions{
+			UserEventPattern: aspire.StringPtr("event1"),
+			SystemEvents:     []string{"connect", "connected"},
+		},
+	)
+
+	// ── 6. container with role assignments and references ─────────────────────
+	container := builder.AddContainer("mycontainer", "mcr.microsoft.com/dotnet/samples:aspnetapp")
+	container.WithWebPubSubRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
+		aspire.AzureWebPubSubRoleWebPubSubServiceOwner,
+		aspire.AzureWebPubSubRoleWebPubSubServiceReader,
+		aspire.AzureWebPubSubRoleWebPubSubContributor,
+	})
+
+	// ── 7. withWebPubSubRoleAssignments on the WebPubSub resource itself ──────
+	webpubsub.WithWebPubSubRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
+		aspire.AzureWebPubSubRoleWebPubSubServiceReader,
+	})
+
+	// ── 8. withReference — pass as IResource via handle conversion ────────────
+	container.WithReference(aspire.NewIResource(webpubsub.Handle(), webpubsub.Client()))
+	container.WithReference(aspire.NewIResource(hub.Handle(), hub.Client()))
+
 	if err = hub.Err(); err != nil {
 		log.Fatalf("hub: %v", err)
 	}
-
-	webpubsub.WithWebPubSubRoleAssignments(webpubsub, nil)
-	if err = webpubsub.Err(); err != nil {
-		log.Fatalf("webpubsub: %v", err)
-	}
-
-	container := builder.AddContainer("resource", "image")
-	container.WithWebPubSubRoleAssignments(webpubsub, nil)
-	container.WithReference(nil, nil, nil, nil)
-	container.WithReference(nil, nil, nil, nil)
 	if err = container.Err(); err != nil {
 		log.Fatalf("container: %v", err)
+	}
+	if err = webpubsub.Err(); err != nil {
+		log.Fatalf("webpubsub: %v", err)
 	}
 
 	app, err := builder.Build()

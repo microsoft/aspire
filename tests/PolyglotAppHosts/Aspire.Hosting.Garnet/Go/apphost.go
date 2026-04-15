@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Garnet
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,7 +12,7 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	garnet := builder.AddGarnet("resource", nil, nil)
+	garnet := builder.AddGarnet("cache")
 	_, _ = garnet.PrimaryEndpoint()
 	_, _ = garnet.Host()
 	_, _ = garnet.Port()

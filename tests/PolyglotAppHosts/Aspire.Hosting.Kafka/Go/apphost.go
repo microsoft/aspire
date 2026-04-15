@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Kafka
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,10 +12,19 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	kafka := builder.AddKafka("resource", nil)
+	// addKafka — factory method with no options
+	kafka := builder.AddKafka("broker")
 
-	kafkaWithUI := kafka.WithKafkaUI(nil, nil)
-	kafkaWithUI.WithDataVolume(nil, nil)
+	// withKafkaUI — adds Kafka UI management container with callback and container name
+	kafkaWithUI := kafka.WithKafkaUIWithOpts(
+		&aspire.WithKafkaUIOptions{ContainerName: aspire.StringPtr("my-kafka-ui")},
+		func(ui *aspire.KafkaUIContainerResource) {
+			ui.WithHostPort(9000)
+		},
+	)
+
+	// withDataVolume — adds a data volume
+	kafkaWithUI.WithDataVolume()
 
 	_, _ = kafka.PrimaryEndpoint()
 	_, _ = kafka.Host()
@@ -29,8 +35,9 @@ func main() {
 		log.Fatalf("kafka: %v", err)
 	}
 
-	kafka2 := builder.AddKafka("resource", nil)
-	kafka2.WithDataBindMount("/tmp", nil)
+	// withDataBindMount — adds a data bind mount
+	kafka2 := builder.AddKafkaWithOpts("broker2", &aspire.AddKafkaOptions{Port: aspire.Float64Ptr(19092)})
+	kafka2.WithDataBindMount("/tmp/kafka-data")
 	if err = kafka2.Err(); err != nil {
 		log.Fatalf("kafka2: %v", err)
 	}

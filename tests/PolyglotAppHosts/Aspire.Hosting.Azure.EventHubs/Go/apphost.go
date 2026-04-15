@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.EventHubs
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,16 +12,50 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	eventHubs := builder.AddAzureEventHubs("resource")
-	_, _ = eventHubs.WithEventHubsRoleAssignments(eventHubs, nil)
+	// ── 1. addAzureEventHubs ─────────────────────────────────────────────────
+	eventHubs := builder.AddAzureEventHubs("eventhubs")
 
-	hub := eventHubs.AddHub("resource", nil)
-	hub.WithProperties(nil)
+	// ── 2. withEventHubsRoleAssignments ──────────────────────────────────────
+	_ = eventHubs.WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+		aspire.AzureEventHubsRoleAzureEventHubsDataOwner,
+	})
 
-	consumerGroup := hub.AddConsumerGroup("resource", nil)
-	_, _ = consumerGroup.WithEventHubsRoleAssignments(eventHubs, nil)
+	// ── 3. addHub (simple) + addHubWithOpts ───────────────────────────────────
+	_ = eventHubs.AddHub("orders-simple")
+	hub := eventHubs.AddHubWithOpts("orders", &aspire.AddHubOptions{
+		HubName: aspire.StringPtr("orders-hub"),
+	})
 
-	eventHubs.RunAsEmulator(nil)
+	// ── 4. withProperties (typed callback) ────────────────────────────────────
+	hub.WithProperties(func(configuredHub *aspire.AzureEventHubResource) {
+		configuredHub.SetHubName("orders-hub")
+		_, _ = configuredHub.HubName()
+		configuredHub.SetPartitionCount(2)
+		_, _ = configuredHub.PartitionCount()
+	})
+
+	// ── 5. property getters ───────────────────────────────────────────────────
+	_, _ = hub.Parent()
+	_, _ = hub.ConnectionStringExpression()
+
+	// ── 6. addConsumerGroup (simple) + addConsumerGroupWithOpts ───────────────
+	_ = hub.AddConsumerGroup("processors-simple")
+	consumerGroup := hub.AddConsumerGroupWithOpts("processors", &aspire.AddConsumerGroupOptions{
+		GroupName: aspire.StringPtr("processor-group"),
+	})
+	_ = consumerGroup.WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+		aspire.AzureEventHubsRoleAzureEventHubsDataReceiver,
+	})
+
+	// ── 7. runAsEmulator (typed callback) ─────────────────────────────────────
+	eventHubs.RunAsEmulator(func(emulator *aspire.AzureEventHubsEmulatorResource) {
+		emulator.
+			WithHostPort(5673).
+			WithConfigurationFile("./eventhubs.config.json").
+			WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+				aspire.AzureEventHubsRoleAzureEventHubsDataSender,
+			})
+	})
 
 	app, err := builder.Build()
 	if err != nil {

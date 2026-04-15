@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.Storage
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,14 +12,29 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	storage := builder.AddAzureStorage("resource")
+	// ── 1. addAzureStorage ────────────────────────────────────────────────────
+	storage := builder.AddAzureStorage("storage")
+
+	// ── 2. runAsEmulator (no callback) ───────────────────────────────────────
 	storage.RunAsEmulator(nil)
-	storage.WithStorageRoleAssignments(storage, nil)
-	storage.AddBlobs("resource")
-	storage.AddTables("resource")
-	storage.AddQueues("resource")
-	storage.AddQueue("resource", nil)
-	storage.AddBlobContainer("resource", nil)
+
+	// ── 3. withStorageRoleAssignments ─────────────────────────────────────────
+	storage.WithStorageRoleAssignments(storage, []aspire.AzureStorageRole{
+		aspire.AzureStorageRoleStorageBlobDataContributor,
+		aspire.AzureStorageRoleStorageQueueDataContributor,
+	})
+
+	// ── 4. addBlobs / addTables / addQueues ───────────────────────────────────
+	storage.AddBlobs("blobs")
+	storage.AddTables("tables")
+	storage.AddQueues("queues")
+
+	// ── 5. addQueue (single queue resource) ───────────────────────────────────
+	storage.AddQueue("orders")
+
+	// ── 6. addBlobContainer ───────────────────────────────────────────────────
+	storage.AddBlobContainer("images")
+
 	if err = storage.Err(); err != nil {
 		log.Fatalf("storage: %v", err)
 	}

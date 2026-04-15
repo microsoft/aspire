@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting (core)
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -21,106 +18,173 @@ func main() {
 
 	// addContainer (pre-existing)
 	container := builder.AddContainer("mycontainer", "nginx")
+	if err = container.Err(); err != nil {
+		log.Fatalf("container: %v", err)
+	}
+
+	// addContainer with tag options
+	taggedContainer := builder.AddContainer("mytaggedcontainer", "nginx")
+	taggedContainer.WithImageWithOpts("nginx", &aspire.WithImageOptions{Tag: aspire.StringPtr("stable-alpine")})
 
 	// addDockerfile
-	dockerContainer := builder.AddDockerfile("dockerapp", "./app", nil, nil)
+	dockerContainer := builder.AddDockerfile("dockerapp", "./app")
+	if err = dockerContainer.Err(); err != nil {
+		log.Fatalf("dockerContainer: %v", err)
+	}
 
 	// addExecutable (pre-existing)
-	_ = builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
+	exe := builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
 
 	// addProject (pre-existing)
-	_ = builder.AddProject("myproject", "./src/MyProject", "https")
+	project := builder.AddProject("myproject", "./src/MyProject", "https")
+	_ = builder.AddProjectWithoutLaunchProfile("myproject-noprofile", "./src/MyProject")
 
 	// addCSharpApp
 	_ = builder.AddCSharpApp("csharpapp", "./src/CSharpApp")
+
+	// addContainer as cache reference (base SDK doesn't have addRedis)
+	cache := builder.AddContainer("cache", "redis")
 
 	// addDotnetTool
 	tool := builder.AddDotnetTool("mytool", "dotnet-ef")
 
 	// addParameterFromConfiguration
-	configParam := builder.AddParameterFromConfiguration("myconfig", "MyConfig:Key", nil)
-	secret := true
-	_ = builder.AddParameterFromConfiguration("mysecret", "MyConfig:Secret", &secret)
+	configParam := builder.AddParameterFromConfiguration("myconfig", "MyConfig:Key")
+	secretParam := builder.AddParameterFromConfigurationWithOpts("mysecret", "MyConfig:Secret",
+		&aspire.AddParameterFromConfigurationOptions{Secret: aspire.BoolPtr(true)})
+
+	// addParameterWithGeneratedValue with opts (secret + persist)
+	generatedParam := builder.AddParameterWithGeneratedValueWithOpts("generated-secret",
+		&aspire.GenerateParameterDefault{
+			MinLength: 24,
+			Lower:     true,
+			Upper:     true,
+			Numeric:   true,
+			Special:   false,
+			MinUpper:  2,
+			MinNumeric: 2,
+		},
+		&aspire.AddParameterWithGeneratedValueOptions{
+			Secret:  aspire.BoolPtr(true),
+			Persist: aspire.BoolPtr(true),
+		})
 
 	// ===================================================================
-	// Container-specific methods on ContainerResource (fluent)
+	// Container-specific methods on ContainerResource
 	// ===================================================================
 
-	// withImageRegistry — fluent, chains on ContainerResource
+	// withDockerfileBaseImage (WithOpts variant for build image option)
+	container.WithDockerfileBaseImageWithOpts(&aspire.WithDockerfileBaseImageOptions{
+		BuildImage: aspire.StringPtr("mcr.microsoft.com/dotnet/sdk:8.0"),
+	})
+
+	// withBuildArg
+	dockerContainer.WithBuildArg("STATIC_BRANDING", "/app/static/branding/custom")
+	dockerContainer.WithBuildArg("CONFIG_BRANDING", configParam)
+
+	// withContainerCertificatePaths (WithOpts variant)
+	container.WithContainerCertificatePathsWithOpts(&aspire.WithContainerCertificatePathsOptions{
+		CustomCertificatesDestination:   aspire.StringPtr("/usr/lib/ssl/aspire/custom"),
+		DefaultCertificateBundlePaths:   []string{"/etc/ssl/certs/ca-certificates.crt"},
+		DefaultCertificateDirectoryPaths: []string{"/etc/ssl/certs", "/usr/local/share/ca-certificates"},
+	})
+
+	// withImageRegistry
 	container.WithImageRegistry("docker.io")
-	if err = container.Err(); err != nil {
-		log.Fatalf("container: %v", err)
-	}
-
-	// withDockerfileBaseImage — non-fluent (returns *IResource)
-	if _, err = container.WithDockerfileBaseImage(nil, nil); err != nil {
-		log.Fatalf("WithDockerfileBaseImage: %v", err)
-	}
 
 	// ===================================================================
 	// Endpoints and connection strings
 	// ===================================================================
 
-	if _, err = dockerContainer.WithHttpEndpoint(nil, nil, nil, nil, nil); err != nil {
-		log.Fatalf("WithHttpEndpoint: %v", err)
-	}
+	dockerContainer.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{
+		Name:       aspire.StringPtr("http"),
+		TargetPort: aspire.Float64Ptr(80),
+	})
 
 	endpoint, err := dockerContainer.GetEndpoint("http")
 	if err != nil {
 		log.Fatalf("GetEndpoint: %v", err)
 	}
 
-	expr := aspire.RefExpr("Host={0}", endpoint)
+	expr := aspire.RefExpr("Host=%s", endpoint)
 
-	_ = builder.AddConnectionStringBuilder("customcs", func(args ...any) any {
-		return nil
-	})
+	// addConnectionStringBuilder (typed callback)
+	builtConnectionString := builder.AddConnectionStringBuilder("customcs",
+		func(csBuilder *aspire.ReferenceExpressionBuilder) {
+			_, _ = csBuilder.IsEmpty()
+			_ = csBuilder.AppendLiteral("Host=")
+			_ = csBuilder.AppendValueProvider(endpoint)
+			_ = csBuilder.AppendLiteral(";Key=")
+			_ = csBuilder.AppendValueProvider(secretParam)
+			_, _ = csBuilder.Build()
+		})
 
-	envConnectionString := builder.AddConnectionString("envcs", nil)
+	builtConnectionString.WithConnectionProperty("Host", expr)
+	builtConnectionString.WithConnectionPropertyValue("Mode", "Development")
+
+	envConnectionString := builder.AddConnectionString("envcs")
 
 	// ===================================================================
-	// ResourceBuilderExtensions on ContainerResource (non-fluent)
+	// ResourceBuilderExtensions on ContainerResource
 	// ===================================================================
 
 	// withEnvironment - EndpointReference
-	if _, err = container.WithEnvironmentEndpoint("MY_ENDPOINT", endpoint); err != nil {
-		log.Fatalf("WithEnvironmentEndpoint: %v", err)
-	}
+	container.WithEnvironmentEndpoint("MY_ENDPOINT", endpoint)
 
-	// withEnvironment — with ReferenceExpression
-	if _, err = container.WithEnvironmentExpression("MY_EXPR", expr); err != nil {
-		log.Fatalf("WithEnvironmentExpression: %v", err)
-	}
+	// withEnvironment — with ReferenceExpression (via WithEnvironment any overload)
+	container.WithEnvironment("MY_EXPR", expr)
 
 	// withEnvironment — with ParameterResource
-	if _, err = container.WithEnvironmentParameter("MY_PARAM", configParam); err != nil {
-		log.Fatalf("WithEnvironmentParameter: %v", err)
-	}
+	container.WithEnvironmentParameter("MY_PARAM", configParam)
+	container.WithEnvironmentParameter("MY_GENERATED_PARAM", generatedParam)
 
 	// withEnvironment — with connection string resource
-	if _, err = container.WithEnvironmentConnectionString("MY_CONN", envConnectionString); err != nil {
-		log.Fatalf("WithEnvironmentConnectionString: %v", err)
-	}
+	container.WithEnvironmentConnectionString("MY_CONN", envConnectionString)
+
+	// withConnectionProperty
+	builtConnectionString.WithConnectionProperty("Endpoint", expr)
+	builtConnectionString.WithConnectionPropertyValue("Protocol", "https")
 
 	// excludeFromManifest
-	if _, err = container.ExcludeFromManifest(); err != nil {
-		log.Fatalf("ExcludeFromManifest: %v", err)
-	}
+	_ = container.ExcludeFromManifest()
 
 	// excludeFromMcp
-	if _, err = container.ExcludeFromMcp(); err != nil {
-		log.Fatalf("ExcludeFromMcp: %v", err)
-	}
+	_ = container.ExcludeFromMcp()
 
-	// waitForCompletion (pre-existing)
-	if _, err = container.WaitForCompletion(nil, nil); err != nil {
-		log.Fatalf("WaitForCompletion: %v", err)
-	}
+	// waitForCompletion
+	_ = container.WaitForCompletion(aspire.NewIResource(exe.Handle(), exe.Client()))
+
+	// withDeveloperCertificateTrust
+	container.WithDeveloperCertificateTrust(true)
+
+	// withCertificateTrustScope
+	container.WithCertificateTrustScope(aspire.CertificateTrustScopeSystem)
+
+	// withHttpsDeveloperCertificate
+	container.WithHttpsDeveloperCertificate()
+
+	// withoutHttpsCertificate
+	container.WithoutHttpsCertificate()
 
 	// withChildRelationship
-	if _, err = container.WithChildRelationship(nil); err != nil {
-		log.Fatalf("WithChildRelationship: %v", err)
-	}
+	_ = container.WithChildRelationship(aspire.NewIResource(exe.Handle(), exe.Client()))
+
+	// withRelationship
+	_ = container.WithRelationship(aspire.NewIResource(taggedContainer.Handle(), taggedContainer.Client()), "peer")
+
+	// project.withReference(cache)
+	_ = project.WithReference(aspire.NewIResource(cache.Handle(), cache.Client()))
+
+	// withIconName (WithOpts variant for iconVariant)
+	iconVariant := aspire.IconVariantFilled
+	container.WithIconNameWithOpts("Database", &aspire.WithIconNameOptions{
+		IconVariant: &iconVariant,
+	})
+
+	// withHttpProbe (WithOpts variant for path)
+	container.WithHttpProbeWithOpts(aspire.ProbeTypeLiveness, &aspire.WithHttpProbeOptions{
+		Path: aspire.StringPtr("/health"),
+	})
 
 	// withRemoteImageName
 	if _, err = container.WithRemoteImageName("myregistry.azurecr.io/myapp"); err != nil {
@@ -132,15 +196,13 @@ func main() {
 		log.Fatalf("WithRemoteImageTag: %v", err)
 	}
 
-	// withRequiredCommand
-	if _, err = container.WithRequiredCommand("docker", nil); err != nil {
-		log.Fatalf("WithRequiredCommand: %v", err)
-	}
+	// withMcpServer (WithOpts variant for path)
+	_ = container.WithMcpServerWithOpts(&aspire.WithMcpServerOptions{
+		Path: aspire.StringPtr("/mcp"),
+	})
 
-	// withMcpServer
-	if _, err = container.WithMcpServer(nil, nil); err != nil {
-		log.Fatalf("WithMcpServer: %v", err)
-	}
+	// withRequiredCommand
+	_ = container.WithRequiredCommand("docker")
 
 	// ===================================================================
 	// DotnetToolResourceExtensions — all With-tool methods are fluent
@@ -157,26 +219,38 @@ func main() {
 		log.Fatalf("tool: %v", err)
 	}
 
-	// PublishAsDockerFile — non-fluent (returns *ExecutableResource)
-	if _, err = tool.PublishAsDockerFile(); err != nil {
-		log.Fatalf("PublishAsDockerFile: %v", err)
-	}
+	// publishAsDockerFile
+	_ = tool.PublishAsDockerFile()
+
+	// withReferenceEnvironment (project)
+	_ = project.WithReferenceEnvironment(&aspire.ReferenceEnvironmentInjectionOptions{
+		ConnectionString: true,
+		ServiceDiscovery: true,
+	})
 
 	// ===================================================================
 	// Pipeline step factory
 	// ===================================================================
 
-	if _, err = container.WithPipelineStepFactory("custom-build-step", func(args ...any) any {
-		return nil
-	}, nil, nil, nil, nil); err != nil {
-		log.Fatalf("WithPipelineStepFactory: %v", err)
-	}
+	_ = container.WithPipelineStepFactoryWithOpts("custom-build-step",
+		&aspire.WithPipelineStepFactoryOptions{
+			DependsOn:   []string{"build"},
+			RequiredBy:  []string{"deploy"},
+			Tags:        []string{"custom-build"},
+			Description: aspire.StringPtr("Custom pipeline step"),
+		},
+		func(stepCtx *aspire.PipelineStepContext) {
+			// stepCtx holds the pipeline step execution context
+			_ = stepCtx
+		})
 
-	if _, err = container.WithPipelineConfiguration(func(args ...any) any {
-		return nil
-	}); err != nil {
-		log.Fatalf("WithPipelineConfiguration: %v", err)
-	}
+	_ = container.WithPipelineConfiguration(func(configCtx *aspire.PipelineConfigurationContext) {
+		_ = configCtx
+	})
+
+	_ = container.WithPipelineConfiguration(func(configCtx *aspire.PipelineConfigurationContext) {
+		_ = configCtx
+	})
 
 	// ===================================================================
 	// Builder properties
@@ -188,6 +262,7 @@ func main() {
 		_, _ = hostEnvironment.IsDevelopment()
 		_, _ = hostEnvironment.IsProduction()
 		_, _ = hostEnvironment.IsStaging()
+		_, _ = hostEnvironment.IsEnvironment("Development")
 	}
 
 	builderConfiguration, err := builder.GetConfiguration()
@@ -199,16 +274,24 @@ func main() {
 		_, _ = builderConfiguration.Exists("MyConfig:Key")
 	}
 
-	// Subscriptions
-	beforeStartSub, err := builder.SubscribeBeforeStart(func(args ...any) any {
-		return nil
+	builderExecutionContext, err := builder.ExecutionContext()
+	if err == nil && builderExecutionContext != nil {
+		serviceProvider, _ := builderExecutionContext.ServiceProvider()
+		if serviceProvider != nil {
+			_, _ = serviceProvider.GetDistributedApplicationModel()
+		}
+	}
+
+	// Subscriptions (typed callbacks)
+	beforeStartSub, err := builder.SubscribeBeforeStart(func(e *aspire.BeforeStartEvent) {
+		_ = e
 	})
 	if err != nil {
 		log.Fatalf("SubscribeBeforeStart: %v", err)
 	}
 
-	afterResourcesSub, err := builder.SubscribeAfterResourcesCreated(func(args ...any) any {
-		return nil
+	afterResourcesSub, err := builder.SubscribeAfterResourcesCreated(func(e *aspire.AfterResourcesCreatedEvent) {
+		_ = e
 	})
 	if err != nil {
 		log.Fatalf("SubscribeAfterResourcesCreated: %v", err)
@@ -220,68 +303,33 @@ func main() {
 		builderEventing.Unsubscribe(afterResourcesSub)
 	}
 
-	// Resource events
-	if _, err = container.OnBeforeResourceStarted(func(args ...any) any { return nil }); err != nil {
-		log.Fatalf("OnBeforeResourceStarted: %v", err)
-	}
-	if _, err = container.OnResourceStopped(func(args ...any) any { return nil }); err != nil {
-		log.Fatalf("OnResourceStopped: %v", err)
-	}
-	if _, err = container.OnInitializeResource(func(args ...any) any { return nil }); err != nil {
-		log.Fatalf("OnInitializeResource: %v", err)
-	}
-	if _, err = container.OnResourceEndpointsAllocated(func(args ...any) any { return nil }); err != nil {
-		log.Fatalf("OnResourceEndpointsAllocated: %v", err)
-	}
-	if _, err = container.OnResourceReady(func(args ...any) any { return nil }); err != nil {
-		log.Fatalf("OnResourceReady: %v", err)
-	}
+	// Resource events — typed callbacks
+	_ = container.OnBeforeResourceStarted(func(e *aspire.BeforeResourceStartedEvent) { _ = e })
+	_ = container.OnResourceStopped(func(e *aspire.ResourceStoppedEvent) { _ = e })
+	_ = builtConnectionString.OnConnectionStringAvailable(func(e *aspire.ConnectionStringAvailableEvent) { _ = e })
+	_ = container.OnInitializeResource(func(e *aspire.InitializeResourceEvent) { _ = e })
+	_ = container.OnResourceEndpointsAllocated(func(e *aspire.ResourceEndpointsAllocatedEvent) { _ = e })
+	_ = container.OnResourceReady(func(e *aspire.ResourceReadyEvent) { _ = e })
 
 	// ===================================================================
-	// Pre-existing exports
+	// Pre-existing exports — all return resource builder types
 	// ===================================================================
 
-	if _, err = container.WithEnvironment("MY_VAR", "value"); err != nil {
-		log.Fatalf("WithEnvironment: %v", err)
-	}
-	if _, err = container.WithEndpoint(nil, nil, nil, nil, nil, nil, nil, nil); err != nil {
-		log.Fatalf("WithEndpoint: %v", err)
-	}
-	if _, err = container.WithHttpEndpoint(nil, nil, nil, nil, nil); err != nil {
-		log.Fatalf("WithHttpEndpoint: %v", err)
-	}
-	if _, err = container.WithHttpsEndpoint(nil, nil, nil, nil, nil); err != nil {
-		log.Fatalf("WithHttpsEndpoint: %v", err)
-	}
-	if _, err = container.WithExternalHttpEndpoints(); err != nil {
-		log.Fatalf("WithExternalHttpEndpoints: %v", err)
-	}
-	if _, err = container.AsHttp2Service(); err != nil {
-		log.Fatalf("AsHttp2Service: %v", err)
-	}
-	if _, err = container.WithArgs([]string{"--verbose"}); err != nil {
-		log.Fatalf("WithArgs: %v", err)
-	}
-	if _, err = container.WithParentRelationship(nil); err != nil {
-		log.Fatalf("WithParentRelationship: %v", err)
-	}
-	if _, err = container.WithExplicitStart(); err != nil {
-		log.Fatalf("WithExplicitStart: %v", err)
-	}
-	if _, err = container.WithUrl("http://localhost:8080", nil); err != nil {
-		log.Fatalf("WithUrl: %v", err)
-	}
-	if _, err = container.WithUrlExpression(expr, nil); err != nil {
-		log.Fatalf("WithUrlExpression: %v", err)
-	}
-	if _, err = container.WithHttpHealthCheck(nil, nil, nil); err != nil {
-		log.Fatalf("WithHttpHealthCheck: %v", err)
-	}
-	if _, err = container.WithCommand("restart", "Restart", func(args ...any) any {
-		return &aspire.ExecuteCommandResult{Success: true}
-	}, nil); err != nil {
-		log.Fatalf("WithCommand: %v", err)
-	}
+	_ = container.WithEnvironment("MY_VAR", "value")
+	_ = container.WithEndpoint()
+	_ = container.WithHttpEndpoint()
+	_ = container.WithHttpsEndpoint()
+	_ = container.WithExternalHttpEndpoints()
+	_ = container.AsHttp2Service()
+	_ = container.WithArgs([]string{"--verbose"})
+	_ = container.WithParentRelationship(aspire.NewIResource(exe.Handle(), exe.Client()))
+	_ = container.WithExplicitStart()
+	_ = container.WithUrl("http://localhost:8080")
+	_ = container.WithUrlExpression(expr)
+	_ = container.WithHttpHealthCheck()
+	_ = container.WithCommand("restart", "Restart", func(ctx *aspire.ExecuteCommandContext) {
+		_ = ctx
+	})
 
 	app, err := builder.Build()
 	if err != nil {

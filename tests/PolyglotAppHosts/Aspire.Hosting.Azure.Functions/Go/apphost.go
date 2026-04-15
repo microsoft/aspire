@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.Functions
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,13 +12,18 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	funcApp := builder.AddAzureFunctionsProject("resource", ".")
+	funcApp := builder.AddAzureFunctionsProject("myfunc", "../MyFunctions/MyFunctions.csproj")
 
-	storage1 := builder.AddAzureStorage("resource")
-	funcApp.WithHostStorage(storage1)
+	storage := builder.AddAzureStorage("funcstorage")
+	funcApp.WithHostStorage(storage)
 
-	_ = builder.AddAzureStorage("resource")
-	_, _ = funcApp.WithReference(nil, nil, nil, nil)
+	chainedFunc := builder.AddAzureFunctionsProject("chained-func", "../OtherFunc/OtherFunc.csproj")
+	chainedFunc.WithHostStorage(storage)
+	chainedFunc.WithEnvironment("MY_KEY", "my-value")
+	chainedFunc.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(7071)})
+
+	anotherStorage := builder.AddAzureStorage("appstorage")
+	funcApp.WithReference(aspire.NewIResource(anotherStorage.Handle(), anotherStorage.Client()))
 
 	app, err := builder.Build()
 	if err != nil {

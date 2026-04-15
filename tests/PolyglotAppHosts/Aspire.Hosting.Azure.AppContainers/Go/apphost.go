@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.AppContainers
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,41 +12,60 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_ = builder.AddAzureContainerAppEnvironment("resource")
-
-	env2 := builder.AddAzureContainerAppEnvironment("resource").WithDashboard(nil).WithHttpsUpgrade(nil)
-	if err = env2.Err(); err != nil {
-		log.Fatalf("env2: %v", err)
+	// ── 1. addAzureContainerAppEnvironment + fluent chain ────────────────────
+	env := builder.AddAzureContainerAppEnvironment("myenv")
+	env.
+		WithAzdResourceNaming().
+		WithCompactResourceNaming().
+		WithDashboardWithOpts(&aspire.WithDashboardOptions{Enable: aspire.BoolPtr(true)}).
+		WithHttpsUpgradeWithOpts(&aspire.WithHttpsUpgradeOptions{Upgrade: aspire.BoolPtr(false)})
+	if err = env.Err(); err != nil {
+		log.Fatalf("env: %v", err)
 	}
 
-	laws := builder.AddAzureLogAnalyticsWorkspace("resource")
-	env3 := builder.AddAzureContainerAppEnvironment("resource").WithAzureLogAnalyticsWorkspace(laws)
-	if err = env3.Err(); err != nil {
-		log.Fatalf("env3: %v", err)
-	}
+	// ── 2. simple withDashboard / withHttpsUpgrade (no args) ─────────────────
+	env2 := builder.AddAzureContainerAppEnvironment("myenv2")
+	env2.WithDashboard()
+	env2.WithHttpsUpgrade()
 
-	builder.AddParameter("parameter", nil)
-	builder.AddParameter("parameter", nil)
+	// ── 3. withAzureLogAnalyticsWorkspace ────────────────────────────────────
+	laws := builder.AddAzureLogAnalyticsWorkspace("laws")
+	env3 := builder.AddAzureContainerAppEnvironment("myenv3")
+	env3.WithAzureLogAnalyticsWorkspace(laws)
 
-	web := builder.AddContainer("resource", "image").PublishAsAzureContainerApp(func(args ...any) any { return nil })
-	if err = web.Err(); err != nil {
-		log.Fatalf("web: %v", err)
-	}
+	// ── 4. parameters ────────────────────────────────────────────────────────
+	customDomain := builder.AddParameter("customDomain")
+	certificateName := builder.AddParameter("certificateName")
 
-	api := builder.AddExecutable("resource", "echo", ".", nil)
+	// ── 5. publishAsAzureContainerApp (with callback) ────────────────────────
+	web := builder.AddContainer("web", "myregistry/web:latest")
+	web.PublishAsAzureContainerApp(func(_ *aspire.AzureResourceInfrastructure, _ *aspire.ContainerApp) {
+		// ContainerApp configuration — sdk exposes handle wrapper only
+		_ = customDomain
+		_ = certificateName
+	})
+
+	// ── 6. publishAsAzureContainerAppJob (parameterless) ─────────────────────
+	api := builder.AddExecutable("api", "dotnet", ".", []string{"run"})
 	_, _ = api.PublishAsAzureContainerAppJob()
 
-	worker := builder.AddContainer("resource", "image")
+	worker := builder.AddContainer("worker", "myregistry/worker:latest")
 	_, _ = worker.PublishAsAzureContainerAppJob()
 
-	processor := builder.AddContainer("resource", "image")
-	_, _ = processor.PublishAsConfiguredAzureContainerAppJob(nil)
+	// ── 7. publishAsConfiguredAzureContainerAppJob (with callback) ───────────
+	processor := builder.AddContainer("processor", "myregistry/processor:latest")
+	_, _ = processor.PublishAsConfiguredAzureContainerAppJob(
+		func(_ *aspire.AzureResourceInfrastructure, _ *aspire.ContainerAppJob) {})
 
-	scheduler := builder.AddContainer("resource", "image")
-	_, _ = scheduler.PublishAsScheduledAzureContainerAppJob("0 * * * *")
+	// ── 8. publishAsScheduledAzureContainerAppJob (cron, no callback) ────────
+	scheduler := builder.AddContainer("scheduler", "myregistry/scheduler:latest")
+	_, _ = scheduler.PublishAsScheduledAzureContainerAppJob("0 0 * * *")
 
-	reporter := builder.AddContainer("resource", "image")
-	_, _ = reporter.PublishAsConfiguredScheduledAzureContainerAppJob("0 * * * *", nil)
+	// ── 9. publishAsConfiguredScheduledAzureContainerAppJob (cron + callback) ─
+	reporter := builder.AddContainer("reporter", "myregistry/reporter:latest")
+	_, _ = reporter.PublishAsConfiguredScheduledAzureContainerAppJob(
+		"0 */6 * * *",
+		func(_ *aspire.AzureResourceInfrastructure, _ *aspire.ContainerAppJob) {})
 
 	app, err := builder.Build()
 	if err != nil {

@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.GitHub.Models
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,29 +12,51 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	githubModel := builder.AddGitHubModel("resource", aspire.GitHubModelName("gpt-4o"), nil)
-
-	param := builder.AddParameter("parameter", nil)
-	if err = param.Err(); err != nil {
-		log.Fatalf("param: %v", err)
-	}
-	builder.AddGitHubModel("resource", aspire.GitHubModelName("gpt-4o"), nil)
-
-	builder.AddGitHubModelById("resource", "model-id", nil)
-
-	builder.AddParameter("parameter", nil)
-	githubModel.WithApiKey(param)
-	githubModel.EnableHealthCheck()
+	// 1) addGitHubModel — using the GitHubModelName enum
+	githubModel := builder.AddGitHubModel("chat", aspire.GitHubModelNameOpenAIGpt4o)
 	if err = githubModel.Err(); err != nil {
 		log.Fatalf("githubModel: %v", err)
 	}
 
-	container := builder.AddContainer("resource", "image")
-	container.WithReference(nil, nil, nil, nil)
-	container.WithReference(nil, nil, nil, nil)
+	// 2) addGitHubModel — with organization parameter
+	orgParam := builder.AddParameter("gh-org")
+	if err = orgParam.Err(); err != nil {
+		log.Fatalf("orgParam: %v", err)
+	}
+	githubModelWithOrg := builder.AddGitHubModelWithOpts("chat-org", aspire.GitHubModelNameOpenAIGpt4oMini, &aspire.AddGitHubModelOptions{
+		Organization: orgParam,
+	})
+	if err = githubModelWithOrg.Err(); err != nil {
+		log.Fatalf("githubModelWithOrg: %v", err)
+	}
+
+	// 3) addGitHubModelById — using a model identifier string for models not in the enum
+	customModel := builder.AddGitHubModelById("custom-chat", "custom-vendor/custom-model")
+	if err = customModel.Err(); err != nil {
+		log.Fatalf("customModel: %v", err)
+	}
+
+	// 4) withApiKey — configure a custom API key parameter
+	apiKey := builder.AddParameterWithOpts("gh-api-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
+	if err = apiKey.Err(); err != nil {
+		log.Fatalf("apiKey: %v", err)
+	}
+	githubModel.WithApiKey(apiKey)
+
+	// 5) enableHealthCheck — integration-specific no-args health check
+	githubModel.EnableHealthCheck()
+
+	// 6) withReference — pass GitHubModelResource as a connection string source to a container
+	container := builder.AddContainer("my-service", "mcr.microsoft.com/dotnet/samples:latest")
+	container.WithReference(aspire.NewIResource(githubModel.Handle(), githubModel.Client()))
 	if err = container.Err(); err != nil {
 		log.Fatalf("container: %v", err)
 	}
+
+	// 7) withReference — with custom connection name
+	container.WithReferenceWithOpts(aspire.NewIResource(githubModelWithOrg.Handle(), githubModelWithOrg.Client()), &aspire.WithReferenceOptions{
+		ConnectionName: aspire.StringPtr("github-model-org"),
+	})
 
 	app, err := builder.Build()
 	if err != nil {

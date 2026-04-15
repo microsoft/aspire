@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Qdrant
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,21 +12,30 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_, _ = builder.AddParameter("parameter", nil)
-	builder.AddQdrant("resource", nil, nil, nil)
+	// ---- AddQdrant with apiKey and ports ----
+	customApiKey := builder.AddParameterWithOpts("qdrant-key", &aspire.AddParameterOptions{Secret: func() *bool { b := true; return &b }()})
+	builder.AddQdrantWithOpts("qdrant-custom", &aspire.AddQdrantOptions{
+		ApiKey:   customApiKey,
+		GrpcPort: func() *float64 { p := float64(16334); return &p }(),
+		HttpPort: func() *float64 { p := float64(16333); return &p }(),
+	})
 
-	qdrant := builder.AddQdrant("resource", nil, nil, nil)
-	qdrant.WithDataVolume(nil, nil)
+	// ---- Simple AddQdrant ----
+	qdrant := builder.AddQdrant("qdrant")
+	qdrant.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: func() *string { s := "qdrant-data"; return &s }()})
+	qdrant.WithDataBindMountWithOpts(".", &aspire.WithDataBindMountOptions{IsReadOnly: func() *bool { b := true; return &b }()})
 	if err = qdrant.Err(); err != nil {
 		log.Fatalf("qdrant: %v", err)
 	}
 
-	consumer := builder.AddContainer("resource", "image")
-	consumer.WithReference(nil, nil, nil, nil)
+	// ---- WithReference on consumer ----
+	consumer := builder.AddContainer("consumer", "busybox")
+	consumer.WithReferenceWithOpts(aspire.NewIResource(qdrant.Handle(), qdrant.Client()), &aspire.WithReferenceOptions{ConnectionName: func() *string { s := "qdrant"; return &s }()})
 	if err = consumer.Err(); err != nil {
 		log.Fatalf("consumer: %v", err)
 	}
 
+	// ---- Property access on QdrantServerResource ----
 	_, _ = qdrant.PrimaryEndpoint()
 	_, _ = qdrant.GrpcHost()
 	_, _ = qdrant.GrpcPort()

@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.Azure.AppConfiguration
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,9 +12,25 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	appConfig := builder.AddAzureAppConfiguration("resource")
-	_, _ = appConfig.WithAppConfigurationRoleAssignments(appConfig, nil)
-	appConfig.RunAsEmulator(nil)
+	// ── 1. addAzureAppConfiguration ──────────────────────────────────────────
+	appConfig := builder.AddAzureAppConfiguration("appconfig")
+
+	// ── 2. withAppConfigurationRoleAssignments ────────────────────────────────
+	appConfig.WithAppConfigurationRoleAssignments(appConfig, []aspire.AzureAppConfigurationRole{
+		aspire.AzureAppConfigurationRoleAppConfigurationDataOwner,
+		aspire.AzureAppConfigurationRoleAppConfigurationDataReader,
+	})
+
+	// ── 3. runAsEmulator (typed callback) ─────────────────────────────────────
+	appConfig.RunAsEmulator(func(emulator *aspire.AzureAppConfigurationEmulatorResource) {
+		emulator.WithDataBindMountWithOpts(&aspire.WithDataBindMountOptions{
+			Path: aspire.StringPtr(".aace/appconfig"),
+		})
+		emulator.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{
+			Name: aspire.StringPtr("appconfig-data"),
+		})
+		emulator.WithHostPort(8483)
+	})
 	if err = appConfig.Err(); err != nil {
 		log.Fatalf("appConfig: %v", err)
 	}

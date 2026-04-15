@@ -1,6 +1,3 @@
-// Aspire Go validation AppHost - Aspire.Hosting.DevTunnels
-// Mirrors the TypeScript/Python/Java fixture for API surface validation.
-// Run `aspire restore --apphost apphost.go` to generate the SDK, then `go build ./...`.
 package main
 
 import (
@@ -15,42 +12,80 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	tunnel := builder.AddDevTunnel("resource", nil, nil, nil, nil)
+	// ── 1. addDevTunnel (simple) ──────────────────────────────────────────────
+	tunnel := builder.AddDevTunnel("mytunnel")
 
-	tunnel2 := builder.AddDevTunnel("resource", nil, nil, nil, nil)
+	// ── 2. addDevTunnelWithOpts (tunnelId) ────────────────────────────────────
+	tunnel2 := builder.AddDevTunnelWithOpts("mytunnel2", &aspire.AddDevTunnelOptions{
+		TunnelId: aspire.StringPtr("custom-tunnel-id"),
+	})
 
-	builder.AddDevTunnel("resource", nil, nil, nil, nil)
+	// ── 3. withAnonymousAccess ────────────────────────────────────────────────
+	builder.AddDevTunnel("anon-tunnel").WithAnonymousAccess()
 
-	web := builder.AddContainer("resource", "image")
-	endpoint, err := web.GetEndpoint("default")
+	// ── 4. container with endpoint ───────────────────────────────────────────
+	web := builder.AddContainer("web", "nginx")
+	web.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(80)})
+
+	// ── 5. withTunnelReference ────────────────────────────────────────────────
+	webEndpoint, err := web.GetEndpoint("http")
 	if err != nil {
 		log.Fatalf("GetEndpoint: %v", err)
 	}
-	tunnel.WithTunnelReference(endpoint)
+	tunnel.WithTunnelReference(webEndpoint)
 	if err = tunnel.Err(); err != nil {
 		log.Fatalf("tunnel: %v", err)
 	}
 
-	web2 := builder.AddContainer("resource", "image")
-	endpoint2, err := web2.GetEndpoint("default")
+	// ── 6. withTunnelReferenceAnonymous ───────────────────────────────────────
+	web2 := builder.AddContainer("web2", "nginx")
+	web2.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(8080)})
+	web2Endpoint, err := web2.GetEndpoint("http")
 	if err != nil {
-		log.Fatalf("GetEndpoint: %v", err)
+		log.Fatalf("GetEndpoint web2: %v", err)
 	}
-	tunnel2.WithTunnelReferenceAnonymous(endpoint2, false)
+	tunnel2.WithTunnelReferenceAnonymous(web2Endpoint, true)
 	if err = tunnel2.Err(); err != nil {
 		log.Fatalf("tunnel2: %v", err)
 	}
 
-	tunnel3 := builder.AddDevTunnel("resource", nil, nil, nil, nil)
-	builder.AddContainer("resource", "image")
-	tunnel3.WithTunnelReferenceAll(nil, false)
+	// ── 7. withTunnelReferenceAll ─────────────────────────────────────────────
+	tunnel3 := builder.AddDevTunnel("all-endpoints-tunnel")
+	web3 := builder.AddContainer("web3", "nginx")
+	web3.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(80)})
+	tunnel3.WithTunnelReferenceAll(aspire.NewIResourceWithEndpoints(web3.Handle(), web3.Client()), false)
 	if err = tunnel3.Err(); err != nil {
 		log.Fatalf("tunnel3: %v", err)
 	}
 
-	builder.AddDevTunnel("resource", nil, nil, nil, nil)
+	// ── 8. getTunnelEndpoint ──────────────────────────────────────────────────
+	web4 := builder.AddContainer("web4", "nginx")
+	web4.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(80)})
+	web4Endpoint, err := web4.GetEndpoint("http")
+	if err != nil {
+		log.Fatalf("GetEndpoint web4: %v", err)
+	}
+	tunnel4 := builder.AddDevTunnel("get-endpoint-tunnel")
+	tunnel4.WithTunnelReference(web4Endpoint)
+	_, _ = tunnel4.GetTunnelEndpoint(web4Endpoint)
 
-	builder.AddDevTunnel("resource", nil, nil, nil, nil)
+	// ── 9. addDevTunnelWithOpts (all options) ─────────────────────────────────
+	tunnel5 := builder.AddDevTunnelWithOpts("configured-tunnel", &aspire.AddDevTunnelOptions{
+		TunnelId:        aspire.StringPtr("configured-tunnel-id"),
+		AllowAnonymous:  aspire.BoolPtr(true),
+		Description:     aspire.StringPtr("Configured by the polyglot validation app"),
+		Labels:          []string{"validation", "polyglot"},
+	})
+	web5 := builder.AddContainer("web5", "nginx")
+	web5.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(9090)})
+	web5Endpoint, err := web5.GetEndpoint("http")
+	if err != nil {
+		log.Fatalf("GetEndpoint web5: %v", err)
+	}
+	tunnel5.WithTunnelReferenceAnonymous(web5Endpoint, true)
+
+	// ── 10. chained configuration ─────────────────────────────────────────────
+	builder.AddDevTunnel("chained-tunnel").WithAnonymousAccess()
 
 	app, err := builder.Build()
 	if err != nil {
