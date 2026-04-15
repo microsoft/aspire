@@ -108,8 +108,20 @@ static async Task<string?> RunAzCommand(string arguments)
         return null;
     }
 
-    var output = await process.StandardOutput.ReadToEndAsync().ConfigureAwait(false);
+    // Read stdout and stderr concurrently to avoid deadlock when
+    // the process fills the stderr pipe buffer.
+    var stdoutTask = process.StandardOutput.ReadToEndAsync();
+    var stderrTask = process.StandardError.ReadToEndAsync();
+
     await process.WaitForExitAsync().ConfigureAwait(false);
+
+    var output = await stdoutTask.ConfigureAwait(false);
+    var stderr = await stderrTask.ConfigureAwait(false);
+
+    if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(stderr))
+    {
+        Console.Error.WriteLine($"az {arguments}: {stderr.Trim()}");
+    }
 
     return process.ExitCode == 0 ? output : null;
 }

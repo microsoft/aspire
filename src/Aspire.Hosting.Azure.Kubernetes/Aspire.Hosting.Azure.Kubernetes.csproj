@@ -3,7 +3,6 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <EnablePackageValidation>false</EnablePackageValidation>
     <PackageTags>aspire integration hosting azure kubernetes aks</PackageTags>
@@ -14,10 +13,6 @@
   <ItemGroup>
     <Compile Remove="tools\**\*.cs" />
     <Compile Include="$(SharedDir)BicepFormattingHelpers.cs" LinkBase="Shared\BicepFormattingHelpers.cs" />
-    <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessResult.cs" Link="Process\ProcessResult.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" Link="Process\ProcessSpec.cs" />
-    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.cs" Link="Process\ProcessUtil.cs" />
   </ItemGroup>
 
   <ItemGroup>

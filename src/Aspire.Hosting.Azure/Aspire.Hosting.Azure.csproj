@@ -41,6 +41,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Azure.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Azure.ContainerRegistry" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Kubernetes" />
   </ItemGroup>
 
 </Project>

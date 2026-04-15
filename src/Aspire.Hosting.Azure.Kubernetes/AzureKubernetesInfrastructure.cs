@@ -270,7 +270,8 @@ internal sealed class AzureKubernetesInfrastructure(
                 var result = await RunAzCommandAsync(
                     azPath,
                     $"aks get-credentials --resource-group \"{resourceGroup}\" --name \"{clusterName}\" --file -",
-                    context.Logger).ConfigureAwait(false);
+                    context.Logger,
+                    context.Services).ConfigureAwait(false);
 
                 if (result.ExitCode != 0)
                 {
@@ -356,7 +357,8 @@ internal sealed class AzureKubernetesInfrastructure(
         var result = await RunAzCommandAsync(
             azPath,
             $"resource list --resource-type Microsoft.ContainerService/managedClusters --name \"{clusterName}\" --query [0].resourceGroup -o tsv",
-            context.Logger).ConfigureAwait(false);
+            context.Logger,
+            context.Services).ConfigureAwait(false);
 
         if (result.ExitCode != 0)
         {
@@ -377,13 +379,14 @@ internal sealed class AzureKubernetesInfrastructure(
     }
 
     /// <summary>
-    /// Runs an az CLI command using the shared ProcessSpec/ProcessUtil infrastructure.
+    /// Runs an az CLI command using IProcessRunner from DI.
     /// Returns the captured stdout, stderr, and exit code.
     /// </summary>
     private static async Task<AzCommandResult> RunAzCommandAsync(
         string azPath,
         string arguments,
-        ILogger logger)
+        ILogger logger,
+        IServiceProvider services)
     {
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
@@ -398,7 +401,8 @@ internal sealed class AzureKubernetesInfrastructure(
 
         logger.LogDebug("Running: {AzPath} {Arguments}", azPath, arguments);
 
-        var (task, disposable) = ProcessUtil.Run(spec);
+        var processRunner = services.GetRequiredService<IProcessRunner>();
+        var (task, disposable) = processRunner.Run(spec);
 
         try
         {

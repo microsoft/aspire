@@ -8,6 +8,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Kubernetes;
+using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
@@ -202,6 +203,9 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(vmSize);
+        ArgumentOutOfRangeException.ThrowIfNegative(minCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(maxCount);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(minCount, maxCount);
 
         var config = new AksNodePoolConfig(name, vmSize, minCount, maxCount, AksNodePoolMode.User);
         builder.Resource.NodePools.Add(config);
@@ -256,7 +260,7 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(subnet);
 
-        builder.WithAnnotation(new AksSubnetAnnotation(subnet.Resource.Id));
+        builder.WithAnnotation(new AksSubnetAnnotation(subnet.Resource.Id), ResourceAnnotationMutationBehavior.Replace);
         return builder;
     }
 
@@ -621,6 +625,21 @@ public static class AzureKubernetesEnvironmentExtensions
         });
 
         // Federated identity credentials for workload identity
+        // Resolve the K8s namespace for the service account subject.
+        // If not explicitly configured, defaults to "default".
+        var k8sNamespace = "default";
+        if (aksResource.KubernetesEnvironment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
+        {
+            // Use the namespace expression's format string as the literal value.
+            // Dynamic (parameter-based) namespaces are not supported for federated
+            // credentials since Azure AD needs a fixed subject at provision time.
+            var nsFormat = nsAnnotation.Namespace.Format;
+            if (!string.IsNullOrEmpty(nsFormat) && !nsFormat.Contains('{'))
+            {
+                k8sNamespace = nsFormat;
+            }
+        }
+
         foreach (var (resourceName, identityResource) in aksResource.WorkloadIdentities)
         {
             var saName = $"{resourceName}-sa";
@@ -644,7 +663,7 @@ public static class AzureKubernetesEnvironmentExtensions
                         new MemberExpression(new IdentifierExpression(aks.BicepIdentifier), "properties"),
                         "oidcIssuerProfile"),
                     "issuerURL"),
-                Subject = $"system:serviceaccount:default:{saName}",
+                Subject = $"system:serviceaccount:{k8sNamespace}:{saName}",
                 Audiences = { "api://AzureADTokenExchange" }
             };
             infrastructure.Add(fedCred);
