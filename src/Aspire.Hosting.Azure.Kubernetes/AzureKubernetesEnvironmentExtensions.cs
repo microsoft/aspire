@@ -154,23 +154,6 @@ public static class AzureKubernetesEnvironmentExtensions
     }
 
     /// <summary>
-    /// Configures the SKU tier for the AKS cluster.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="tier">The SKU tier.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Sets the SKU tier for the AKS cluster")]
-    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSkuTier(
-        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
-        AksSkuTier tier)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.Resource.SkuTier = tier;
-        return builder;
-    }
-
-    /// <summary>
     /// Adds a node pool to the AKS cluster.
     /// </summary>
     /// <param name="builder">The AKS environment resource builder.</param>
@@ -219,21 +202,6 @@ public static class AzureKubernetesEnvironmentExtensions
 
         return builder.ApplicationBuilder.AddResource(nodePool)
             .ExcludeFromManifest();
-    }
-
-    /// <summary>
-    /// Configures the AKS cluster as a private cluster with a private API server endpoint.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Configures the AKS cluster as a private cluster")]
-    public static IResourceBuilder<AzureKubernetesEnvironmentResource> AsPrivateCluster(
-        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.Resource.IsPrivateCluster = true;
-        return builder;
     }
 
     /// <summary>

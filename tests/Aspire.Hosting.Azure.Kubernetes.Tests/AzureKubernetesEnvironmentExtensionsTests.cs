@@ -45,17 +45,6 @@ public class AzureKubernetesEnvironmentExtensionsTests
     }
 
     [Fact]
-    public void AddAzureKubernetesEnvironment_WithSkuTier()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .WithSkuTier(AksSkuTier.Standard);
-
-        Assert.Equal(AksSkuTier.Standard, aks.Resource.SkuTier);
-    }
-
-    [Fact]
     public void AddNodePool_ReturnsNodePoolResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -73,17 +62,6 @@ public class AzureKubernetesEnvironmentExtensionsTests
         Assert.Equal(5, gpuPool.Resource.Config.MaxCount);
         Assert.Equal(AksNodePoolMode.User, gpuPool.Resource.Config.Mode);
         Assert.Same(aks.Resource, gpuPool.Resource.AksParent);
-    }
-
-    [Fact]
-    public void AddAzureKubernetesEnvironment_AsPrivateCluster()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var aks = builder.AddAzureKubernetesEnvironment("aks")
-            .AsPrivateCluster();
-
-        Assert.True(aks.Resource.IsPrivateCluster);
     }
 
     [Fact]
