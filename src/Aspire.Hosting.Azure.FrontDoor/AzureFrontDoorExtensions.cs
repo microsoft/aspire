@@ -93,8 +93,7 @@ public static class AzureFrontDoorExtensions
                 {
                     Parent = profile,
                     Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 46),
-                    Location = new AzureLocation("Global"),
-                    EnabledState = EnabledState.Enabled
+                    Location = new AzureLocation("Global")
                 };
                 infrastructure.Add(endpoint);
 
@@ -102,21 +101,7 @@ public static class AzureFrontDoorExtensions
                 var originGroup = new FrontDoorOriginGroup($"{originName}OriginGroup")
                 {
                     Parent = profile,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-og-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90),
-                    HealthProbeSettings = new HealthProbeSettings
-                    {
-                        ProbePath = "/",
-                        ProbeRequestType = HealthProbeRequestType.Head,
-                        ProbeProtocol = HealthProbeProtocol.Https,
-                        ProbeIntervalInSeconds = 240
-                    },
-                    LoadBalancingSettings = new LoadBalancingSettings
-                    {
-                        SampleSize = 4,
-                        SuccessfulSamplesRequired = 3,
-                        AdditionalLatencyInMilliseconds = 50
-                    },
-                    SessionAffinityState = EnabledState.Disabled
+                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-og-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90)
                 };
                 infrastructure.Add(originGroup);
 
@@ -126,13 +111,7 @@ public static class AzureFrontDoorExtensions
                     Parent = originGroup,
                     Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90),
                     HostName = hostParam,
-                    OriginHostHeader = hostParam,
-                    HttpPort = 80,
-                    HttpsPort = 443,
-                    Priority = 1,
-                    Weight = 1000,
-                    EnabledState = EnabledState.Enabled,
-                    EnforceCertificateNameCheck = true
+                    OriginHostHeader = hostParam
                 };
                 infrastructure.Add(origin);
 
@@ -142,30 +121,9 @@ public static class AzureFrontDoorExtensions
                     Parent = endpoint,
                     Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-route-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90),
                     OriginGroupId = originGroup.Id,
-                    PatternsToMatch = ["/*"],
                     ForwardingProtocol = ForwardingProtocol.HttpsOnly,
                     LinkToDefaultDomain = LinkToDefaultDomain.Enabled,
-                    HttpsRedirect = HttpsRedirect.Enabled,
-                    EnabledState = EnabledState.Enabled,
-                    OriginPath = "/",
-                    SupportedProtocols = [FrontDoorEndpointProtocol.Http, FrontDoorEndpointProtocol.Https],
-                    CacheConfiguration = new FrontDoorRouteCacheConfiguration
-                    {
-                        QueryStringCachingBehavior = FrontDoorQueryStringCachingBehavior.IgnoreQueryString,
-                        CompressionSettings = new RouteCacheCompressionSettings
-                        {
-                            IsCompressionEnabled = true,
-                            ContentTypesToCompress =
-                            [
-                                "text/plain",
-                                "text/html",
-                                "text/css",
-                                "application/javascript",
-                                "application/json",
-                                "image/svg+xml"
-                            ]
-                        }
-                    }
+                    HttpsRedirect = HttpsRedirect.Enabled
                 };
                 // Route must wait for origin to be created — without this, ARM deploys
                 // the route in parallel and fails because the origin group has no origins yet.
