@@ -93,18 +93,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearAllResources">
-        <source>Remove all</source>
-        <target state="translated">Quitar todo</target>
+        <source>Remove all telemetry</source>
+        <target state="needs-review-translation">Quitar todo</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
-        <source>Remove for resource</source>
-        <target state="translated">Quitar para el recurso</target>
+        <source>Remove telemetry for resource</source>
+        <target state="needs-review-translation">Quitar para el recurso</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
-        <source>Remove for {0}</source>
-        <target state="translated">Quitar para {0}</target>
+        <source>Remove telemetry for {0}</source>
+        <target state="needs-review-translation">Quitar para {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
