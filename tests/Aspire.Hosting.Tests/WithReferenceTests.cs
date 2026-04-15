@@ -931,25 +931,6 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public async Task EndpointWithCustomNameUsesEndpointNameAsSchemeKey()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("projecta")
-                .WithEndpoint(name: "prometheus", scheme: "http", targetPort: 9090)
-                .WithEndpoint("prometheus", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 9090));
-
-        var projectB = builder.AddProject<ProjectB>("b")
-            .WithReference(projectA.GetEndpoint("prometheus"), name: "my-metrics");
-
-        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
-
-        // Custom name as service name, endpoint name as scheme key (not "http")
-        Assert.Equal("http://localhost:9090", config["services__my-metrics__prometheus__0"]);
-        Assert.Equal("http://localhost:9090", config["my_metrics_PROMETHEUS"]);
-    }
-
-    [Fact]
     public async Task HttpEndpointWithTlsUsesActualSchemeAsKey()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -989,25 +970,22 @@ public class WithReferenceTests
     }
 
     [Fact]
-    public async Task PerEndpointNameCreatesIndependentServiceDiscoveryEntries()
+    public async Task PerEndpointNameOverridesServiceName()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var projectA = builder.AddProject<ProjectA>("projecta")
                 .WithEndpoint(name: "data", scheme: "http", targetPort: 8080)
-                .WithEndpoint("data", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8080))
-                .WithEndpoint(name: "admin", scheme: "http", targetPort: 9090)
-                .WithEndpoint("admin", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 9090));
+                .WithEndpoint("data", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8080));
 
         var projectB = builder.AddProject<ProjectB>("b")
-            .WithReference(projectA.GetEndpoint("data"), name: "projecta-data")
-            .WithReference(projectA.GetEndpoint("admin"), name: "projecta-admin");
+            .WithReference(projectA, "projecta-data")
+            .WithReference(projectA.GetEndpoint("data"));
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectB.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        // Each gets its own service name and uses endpoint name as scheme key
+        // Service name overridden via WithReference(resource, name), endpoint name as scheme key
         Assert.Equal("http://localhost:8080", config["services__projecta-data__data__0"]);
-        Assert.Equal("http://localhost:9090", config["services__projecta-admin__admin__0"]);
     }
 
     private sealed class TestResourceWithConnectionStringAndServiceDiscovery(string name) : ContainerResource(name), IResourceWithConnectionString, IResourceWithServiceDiscovery
