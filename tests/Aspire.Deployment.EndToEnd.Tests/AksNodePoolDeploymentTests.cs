@@ -116,7 +116,7 @@ public sealed class AksNodePoolDeploymentTests(ITestOutputHelper output)
                 var builder = DistributedApplication.CreateBuilder(args);
 
                 var aks = builder.AddAzureKubernetesEnvironment("aks");
-                var computePool = aks.AddNodePool("compute", "Standard_D4s_v5", 1, 3);
+                var computePool = aks.AddNodePool("compute", "Standard_D2s_v5", 1, 3);
 
                 var apiService = builder.AddProject<Projects.{projectName}_ApiService>("apiservice")
                     .WithHttpHealthCheck("/health")

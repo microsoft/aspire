@@ -9,7 +9,7 @@ resource aks 'Microsoft.ContainerService/managedClusters@2025-03-01' = {
       {
         name: 'system'
         count: 1
-        vmSize: 'Standard_D4s_v5'
+        vmSize: 'Standard_D2s_v5'
         osType: 'Linux'
         maxCount: 3
         minCount: 1

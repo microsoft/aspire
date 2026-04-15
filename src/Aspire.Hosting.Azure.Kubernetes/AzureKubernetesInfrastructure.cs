@@ -165,7 +165,7 @@ internal sealed class AzureKubernetesInfrastructure(
         }
 
         // No user pool configured — create a default one and add it to the app model.
-        var defaultConfig = new AksNodePoolConfig("workload", "Standard_D4s_v5", 1, 10, AksNodePoolMode.User);
+        var defaultConfig = new AksNodePoolConfig("workload", "Standard_D2s_v5", 1, 3, AksNodePoolMode.User);
         environment.NodePools.Add(defaultConfig);
 
         var defaultPool = new AksNodePoolResource("workload", defaultConfig, environment);

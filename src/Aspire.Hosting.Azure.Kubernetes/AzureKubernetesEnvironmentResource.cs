@@ -92,7 +92,7 @@ public class AzureKubernetesEnvironmentResource(
     /// </summary>
     internal List<AksNodePoolConfig> NodePools { get; } =
     [
-        new AksNodePoolConfig("system", "Standard_D4s_v5", 1, 3, AksNodePoolMode.System)
+        new AksNodePoolConfig("system", "Standard_D2s_v5", 1, 3, AksNodePoolMode.System)
     ];
 
     /// <summary>

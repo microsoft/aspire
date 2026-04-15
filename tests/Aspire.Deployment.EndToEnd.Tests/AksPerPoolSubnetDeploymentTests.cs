@@ -122,7 +122,7 @@ public sealed class AksPerPoolSubnetDeploymentTests(ITestOutputHelper output)
                 var aks = builder.AddAzureKubernetesEnvironment("aks")
                     .WithSubnet(defaultSubnet);
 
-                var auxPool = aks.AddNodePool("aux", "Standard_D4s_v5", 1, 3)
+                var auxPool = aks.AddNodePool("aux", "Standard_D2s_v5", 1, 3)
                     .WithSubnet(auxSubnet);
 
                 var apiService = builder.AddProject<Projects.{projectName}_ApiService>("apiservice")

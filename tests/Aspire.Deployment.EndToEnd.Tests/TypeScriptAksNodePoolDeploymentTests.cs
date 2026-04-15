@@ -126,7 +126,7 @@ public sealed class TypeScriptAksNodePoolDeploymentTests(ITestOutputHelper outpu
                     """
 // Add Azure Kubernetes Environment with a custom node pool
 const aks = await builder.addAzureKubernetesEnvironment("aks");
-await aks.addNodePool("compute", "Standard_D4s_v5", 1, 3);
+await aks.addNodePool("compute", "Standard_D2s_v5", 1, 3);
 
 await builder.build().run();
 """);

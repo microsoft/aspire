@@ -60,7 +60,7 @@ public class AzureKubernetesEnvironmentExtensionsTests
         Assert.Single(aks.Resource.NodePools);
         var defaultPool = aks.Resource.NodePools[0];
         Assert.Equal("system", defaultPool.Name);
-        Assert.Equal("Standard_D4s_v5", defaultPool.VmSize);
+        Assert.Equal("Standard_D2s_v5", defaultPool.VmSize);
         Assert.Equal(1, defaultPool.MinCount);
         Assert.Equal(3, defaultPool.MaxCount);
         Assert.Equal(AksNodePoolMode.System, defaultPool.Mode);
@@ -240,7 +240,7 @@ public class AzureKubernetesEnvironmentExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
-        var pool1 = aks.AddNodePool("cpu", "Standard_D4s_v5", 1, 10);
+        var pool1 = aks.AddNodePool("cpu", "Standard_D2s_v5", 1, 10);
         var pool2 = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
 
         // Default system pool + 2 user pools
