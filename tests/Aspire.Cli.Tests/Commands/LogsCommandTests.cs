@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
@@ -731,6 +732,104 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(logsOutput.Logs, l => l.ResourceName == "aspire-dashboard");
     }
 
+    [Fact]
+    public async Task LogsCommand_HiddenResourceAfterInitialSnapshot_IsExcludedInFollowMode()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var snapshotsCallCount = 0;
+
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "redis",
+                    DisplayName = "redis",
+                    ResourceType = "Container",
+                    State = "Running"
+                }
+            ],
+            LogLines =
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z Ready to accept connections",
+                    IsError = false
+                },
+                new ResourceLogLine
+                {
+                    ResourceName = "late-hidden",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:01Z Hidden resource log",
+                    IsError = false
+                }
+            ],
+            GetResourceSnapshotsHandler = _ =>
+            {
+                snapshotsCallCount++;
+                return Task.FromResult(snapshotsCallCount == 1
+                    ? new List<ResourceSnapshot>
+                    {
+                        new()
+                        {
+                            Name = "redis",
+                            DisplayName = "redis",
+                            ResourceType = "Container",
+                            State = "Running"
+                        }
+                    }
+                    : new List<ResourceSnapshot>
+                    {
+                        new()
+                        {
+                            Name = "redis",
+                            DisplayName = "redis",
+                            ResourceType = "Container",
+                            State = "Running"
+                        },
+                        new()
+                        {
+                            Name = "late-hidden",
+                            DisplayName = "late-hidden",
+                            ResourceType = "Executable",
+                            State = "Hidden"
+                        }
+                    });
+            },
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => WatchWithLateHidden(cancellationToken)
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Contains(outputWriter.Logs, l => l.Contains("[redis] Ready to accept connections", StringComparison.Ordinal));
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("late-hidden", StringComparison.Ordinal));
+    }
+
     private ServiceProvider CreateLogsTestServicesWithHidden(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
@@ -874,5 +973,23 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         });
 
         return services.BuildServiceProvider();
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> WatchWithLateHidden([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return new ResourceSnapshot
+        {
+            Name = "late-hidden",
+            DisplayName = "late-hidden",
+            ResourceType = "Executable",
+            State = "Hidden"
+        };
+
+        // Keep the enumerable alive until cancelled so the watcher stays running.
+        var tcs = new TaskCompletionSource();
+        await using (cancellationToken.Register(() => tcs.TrySetResult()))
+        {
+            await tcs.Task.ConfigureAwait(false);
+        }
     }
 }

@@ -51,6 +51,12 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public Func<CancellationToken, Task<List<ResourceSnapshot>>>? GetResourceSnapshotsHandler { get; set; }
 
+    /// <summary>
+    /// Gets or sets the function to call when WatchResourceSnapshotsAsync is invoked.
+    /// If null, yields the ResourceSnapshots list.
+    /// </summary>
+    public Func<bool, CancellationToken, IAsyncEnumerable<ResourceSnapshot>>? WatchResourceSnapshotsHandler { get; set; }
+
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(DashboardUrlsState);
@@ -71,6 +77,15 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (WatchResourceSnapshotsHandler is not null)
+        {
+            await foreach (var snapshot in WatchResourceSnapshotsHandler(includeHidden, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return snapshot;
+            }
+            yield break;
+        }
+
         foreach (var snapshot in ResourceSnapshots)
         {
             if (!includeHidden && IsHiddenResource(snapshot))

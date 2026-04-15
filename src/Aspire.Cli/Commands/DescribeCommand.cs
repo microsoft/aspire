@@ -143,28 +143,28 @@ internal sealed class DescribeCommand : BaseCommand
 
         var connection = result.Connection!;
 
-        // Get dashboard URL and resource snapshots in parallel before
-        // dispatching to the snapshot or watch path.
+        // Get dashboard URL while the watcher loads initial snapshots.
         // When a specific resource is requested, always include hidden resources
         // so the user can describe any resource by name.
+        var effectiveIncludeHidden = includeHidden || resourceName is not null;
         var dashboardUrlsTask = connection.GetDashboardUrlsAsync(cancellationToken);
-        var allSnapshotsTask = connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken);
+        using var resourceWatcher = new ResourceSnapshotWatcher(connection, effectiveIncludeHidden);
+        await resourceWatcher.WaitForInitialLoadAsync(cancellationToken).ConfigureAwait(false);
 
         var dashboardBaseUrl = TelemetryCommandHelpers.ExtractDashboardBaseUrl((await dashboardUrlsTask.ConfigureAwait(false))?.BaseUrlWithLoginToken);
-        var allSnapshots = await allSnapshotsTask.ConfigureAwait(false);
-        var (effectiveIncludeHidden, snapshots, _) = ResourceSnapshotMapper.FilterHiddenResources(allSnapshots, includeHidden, resourceName);
 
         // Pre-resolve colors for all resource names so that assignment is
         // deterministic regardless of which resources are displayed.
-        _resourceColorMap.ResolveAll(snapshots.Select(s => ResourceSnapshotMapper.GetResourceName(s, snapshots)));
+        var allSnapshots = resourceWatcher.GetAllResources();
+        _resourceColorMap.ResolveAll(allSnapshots.Select(s => ResourceSnapshotMapper.GetResourceName(s, allSnapshots)));
 
         if (follow)
         {
-            return await ExecuteWatchAsync(connection, snapshots, dashboardBaseUrl, resourceName, format, effectiveIncludeHidden, cancellationToken);
+            return await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken);
         }
         else
         {
-            return ExecuteSnapshot(snapshots, dashboardBaseUrl, resourceName, format);
+            return ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format);
         }
     }
 
@@ -200,28 +200,23 @@ internal sealed class DescribeCommand : BaseCommand
         return ExitCodeConstants.Success;
     }
 
-    private async Task<int> ExecuteWatchAsync(IAppHostAuxiliaryBackchannel connection, IReadOnlyList<ResourceSnapshot> initialSnapshots, string? dashboardBaseUrl, string? resourceName, OutputFormat format, bool includeHidden, CancellationToken cancellationToken)
+    private async Task<int> ExecuteWatchAsync(IAppHostAuxiliaryBackchannel connection, ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, CancellationToken cancellationToken)
     {
-        // Maintain a dictionary of the current state per resource for relationship resolution
-        // and display name deduplication. Keyed by snapshot.Name so each resource has exactly
-        // one entry representing its latest state.
-        var allResources = new Dictionary<string, ResourceSnapshot>(StringComparers.ResourceName);
-        foreach (var snapshot in initialSnapshots)
-        {
-            allResources[snapshot.Name] = snapshot;
-        }
-
         // Cache the last displayed content per resource to avoid duplicate output.
         // Values are either a string (JSON mode) or a ResourceDisplayState (non-JSON mode).
         var lastDisplayedContent = new Dictionary<string, object>(StringComparers.ResourceName);
 
-        // Stream resource snapshots
-        await foreach (var snapshot in connection.WatchResourceSnapshotsAsync(includeHidden, cancellationToken).ConfigureAwait(false))
+        // Stream resource snapshots. The watcher keeps its dictionary up to date in the
+        // background, so we use it for relationship resolution and display name deduplication.
+        await foreach (var snapshot in connection.WatchResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false))
         {
-            // Update the dictionary with the latest state for this resource
-            allResources[snapshot.Name] = snapshot;
+            // Skip hidden resources when not included
+            if (!resourceWatcher.IncludeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
+            {
+                continue;
+            }
 
-            var currentSnapshots = allResources.Values.ToList();
+            var currentSnapshots = resourceWatcher.GetAllResources().ToList();
 
             // Filter by resource name if specified
             if (resourceName is not null)
