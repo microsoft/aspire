@@ -256,6 +256,11 @@ sealed partial class TestSummaryGenerator
             return;
         }
 
+        // Look for CLI E2E recordings in a sibling "recordings" directory.
+        // The trx file is typically at testresults/SomeTest.trx and recordings
+        // are at testresults/recordings/{MethodName}.cast.
+        var recordingsDir = FindRecordingsDirectory(trxFilePath);
+
         var failedTests = testRun.Results.UnitTestResults.Where(r => r.Outcome == "Failed");
         if (failedTests.Any())
         {
@@ -293,11 +298,61 @@ sealed partial class TestSummaryGenerator
                 }
 
                 reportBuilder.AppendLine("```");
+
+                AppendRecordingSection(reportBuilder, recordingsDir, test.TestName);
+
                 reportBuilder.AppendLine();
                 reportBuilder.AppendLine("</div>");
             }
         }
         reportBuilder.AppendLine();
+    }
+
+    private static void AppendRecordingSection(StringBuilder reportBuilder, string? recordingsDir, string? testName)
+    {
+        if (recordingsDir is null || testName is null)
+        {
+            return;
+        }
+
+        var recordingText = CastFileReader.ReadRecordingText(recordingsDir, testName);
+        if (recordingText is null)
+        {
+            return;
+        }
+
+        reportBuilder.AppendLine();
+        reportBuilder.AppendLine("""
+            <details><summary>🎬 <b>Terminal Recording</b></summary>
+
+        """);
+        reportBuilder.AppendLine();
+        reportBuilder.AppendLine("```");
+        reportBuilder.AppendLine(recordingText);
+        reportBuilder.AppendLine("```");
+        reportBuilder.AppendLine();
+        reportBuilder.AppendLine("</details>");
+    }
+
+    /// <summary>
+    /// Searches for a "recordings" directory relative to the trx file path,
+    /// walking up the directory tree to handle nested test result layouts.
+    /// </summary>
+    private static string? FindRecordingsDirectory(string trxFilePath)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(trxFilePath));
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir, "recordings");
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        return null;
     }
 
     private static string GenerateDurationStatistics(string basePath)
