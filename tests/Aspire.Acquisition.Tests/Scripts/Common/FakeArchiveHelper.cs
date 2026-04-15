@@ -66,6 +66,61 @@ public static class FakeArchiveHelper
         return path;
     }
 
+    /// <summary>
+    /// Creates a fake archive that includes an .aspire-update.json file alongside the binary.
+    /// Used to test that install scripts remove the opt-out file after extraction.
+    /// </summary>
+    public static async Task<FakeArchive> CreateFakeArchiveWithUpdateJsonAsync(string outputDir, string platform = "linux-x64")
+    {
+        Directory.CreateDirectory(outputDir);
+
+        var isWindows = platform.StartsWith("win", StringComparison.OrdinalIgnoreCase);
+        var extension = isWindows ? "zip" : "tar.gz";
+        var archivePath = Path.Combine(outputDir, $"aspire-cli-{platform}.{extension}");
+        var checksumPath = archivePath + ".sha512";
+
+        var contentDir = Path.Combine(outputDir, $"archive-content-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(contentDir);
+
+        try
+        {
+            var binaryName = isWindows ? "aspire.exe" : "aspire";
+            var binaryPath = Path.Combine(contentDir, binaryName);
+            await File.WriteAllTextAsync(binaryPath, "#!/bin/bash\necho \"aspire mock v1.0\"\n");
+
+            if (!OperatingSystem.IsWindows())
+            {
+                FileHelper.MakeExecutable(binaryPath);
+            }
+
+            // Add the .aspire-update.json opt-out file
+            await File.WriteAllTextAsync(
+                Path.Combine(contentDir, ".aspire-update.json"),
+                """{"selfUpdateDisabled": true}""");
+
+            if (isWindows)
+            {
+                ZipFile.CreateFromDirectory(contentDir, archivePath);
+            }
+            else
+            {
+                await CreateTarGzAsync(contentDir, archivePath);
+            }
+
+            var hashHex = await ComputeSha512Async(archivePath);
+            await File.WriteAllTextAsync(checksumPath, hashHex);
+
+            return new FakeArchive(archivePath, checksumPath, hashHex);
+        }
+        finally
+        {
+            if (Directory.Exists(contentDir))
+            {
+                Directory.Delete(contentDir, recursive: true);
+            }
+        }
+    }
+
     public static async Task<FakeArchive> CreateFakeArchiveWithBadChecksumAsync(string outputDir, string platform = "linux-x64")
     {
         var archive = await CreateFakeArchiveAsync(outputDir, platform);

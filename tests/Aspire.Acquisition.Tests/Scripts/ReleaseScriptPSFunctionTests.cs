@@ -242,6 +242,29 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
             "Extracted binary should exist at destination");
     }
 
+    [Fact]
+    public async Task ExpandAspireCliArchive_RemovesAspireUpdateJson()
+    {
+        using var env = new TestEnvironment();
+
+        var archive = await FakeArchiveHelper.CreateFakeArchiveWithUpdateJsonAsync(env.TempDirectory, "linux-x64");
+        var destPath = Path.Combine(env.TempDirectory, "install-dest-update-json");
+
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"Expand-AspireCliArchive -ArchiveFile '{archive.ArchivePath}' -DestinationPath '{destPath}' -OS 'linux'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.True(File.Exists(Path.Combine(destPath, "aspire")),
+            "Extracted binary should exist at destination");
+        Assert.False(File.Exists(Path.Combine(destPath, ".aspire-update.json")),
+            ".aspire-update.json should be removed after install-script extraction");
+    }
+
     #endregion
 
     #region Get-OperatingSystem
