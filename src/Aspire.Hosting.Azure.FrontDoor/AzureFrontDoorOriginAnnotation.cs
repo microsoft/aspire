@@ -8,10 +8,10 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an origin to be added to an Azure Front Door resource.
 /// </summary>
-internal sealed class AzureFrontDoorOriginAnnotation(EndpointReference endpoint) : IResourceAnnotation
+internal sealed class AzureFrontDoorOriginAnnotation(IResourceWithEndpoints resource) : IResourceAnnotation
 {
     /// <summary>
-    /// Gets the endpoint reference for this origin.
+    /// Gets the resource for this origin.
     /// </summary>
-    public EndpointReference Endpoint { get; } = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
+    public IResourceWithEndpoints Resource { get; } = resource ?? throw new ArgumentNullException(nameof(resource));
 }

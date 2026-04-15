@@ -1,10 +1,10 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-param origin_0_host string
+param api_host string
 
 resource frontdoor 'Microsoft.Cdn/profiles@2025-06-01' = {
-  name: take('frontdoor${uniqueString(resourceGroup().id)}', 24)
+  name: take('frontdoor-${uniqueString(resourceGroup().id)}', 90)
   location: 'Global'
   sku: {
     name: 'Standard_AzureFrontDoor'
@@ -14,8 +14,8 @@ resource frontdoor 'Microsoft.Cdn/profiles@2025-06-01' = {
   }
 }
 
-resource frontDoorEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
-  name: take('frontdoorendpoint${uniqueString(resourceGroup().id)}', 24)
+resource apiEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
+  name: take('api-${uniqueString(resourceGroup().id)}', 46)
   location: 'Global'
   properties: {
     enabledState: 'Enabled'
@@ -23,8 +23,8 @@ resource frontDoorEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
   parent: frontdoor
 }
 
-resource originGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
-  name: take('origingroup${uniqueString(resourceGroup().id)}', 24)
+resource apiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
+  name: take('api-og-${uniqueString(resourceGroup().id)}', 90)
   properties: {
     healthProbeSettings: {
       probePath: '/'
@@ -42,23 +42,23 @@ resource originGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
   parent: frontdoor
 }
 
-resource origin0 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
-  name: take('origin-0-${uniqueString(resourceGroup().id)}', 90)
+resource apiOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2025-06-01' = {
+  name: take('api-origin-${uniqueString(resourceGroup().id)}', 90)
   properties: {
     enabledState: 'Enabled'
     enforceCertificateNameCheck: true
-    hostName: origin_0_host
+    hostName: api_host
     httpPort: 80
     httpsPort: 443
-    originHostHeader: origin_0_host
+    originHostHeader: api_host
     priority: 1
     weight: 1000
   }
-  parent: originGroup
+  parent: apiOriginGroup
 }
 
-resource route 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
-  name: take('route${uniqueString(resourceGroup().id)}', 24)
+resource apiRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
+  name: take('api-route-${uniqueString(resourceGroup().id)}', 90)
   properties: {
     cacheConfiguration: {
       queryStringCachingBehavior: 'IgnoreQueryString'
@@ -79,7 +79,7 @@ resource route 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
     httpsRedirect: 'Enabled'
     linkToDefaultDomain: 'Enabled'
     originGroup: {
-      id: originGroup.id
+      id: apiOriginGroup.id
     }
     originPath: '/'
     patternsToMatch: [
@@ -90,7 +90,10 @@ resource route 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01' = {
       'Https'
     ]
   }
-  parent: frontDoorEndpoint
+  parent: apiEndpoint
+  dependsOn: [
+    apiOrigin
+  ]
 }
 
-output endpointUrl string = 'https://${frontDoorEndpoint.properties.hostName}'
+output api_endpointUrl string = 'https://${apiEndpoint.properties.hostName}'

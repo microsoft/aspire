@@ -17,10 +17,14 @@ public class AzureFrontDoorResource(string name, Action<AzureResourceInfrastruct
     : AzureProvisioningResource(name, configureInfrastructure)
 {
     /// <summary>
-    /// Gets the "endpointUrl" output reference from the bicep template for the Azure Front Door resource.
+    /// Gets the endpoint URL output reference for a specific origin by its resource name.
     /// </summary>
+    /// <param name="originResourceName">The name of the origin resource (as specified in the Aspire application model).</param>
+    /// <returns>A <see cref="BicepOutputReference"/> for the Front Door endpoint URL serving that origin.</returns>
     /// <remarks>
-    /// This is the URL of the Front Door endpoint (e.g., <c>https://&lt;endpoint-name&gt;.azurefd.net</c>).
+    /// The output name follows the pattern <c>{originResourceName}_endpointUrl</c>.
+    /// For example, if the origin resource is named "api", the output is <c>api_endpointUrl</c>.
     /// </remarks>
-    public BicepOutputReference EndpointUrl => new("endpointUrl", this);
+    public BicepOutputReference GetEndpointUrl(string originResourceName)
+        => new($"{originResourceName}_endpointUrl", this);
 }

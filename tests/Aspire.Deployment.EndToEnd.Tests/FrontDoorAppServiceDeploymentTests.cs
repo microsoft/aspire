@@ -133,7 +133,7 @@ builder.AddAzureAppServiceEnvironment("infra");
 
 // Add Azure Front Door in front of the web frontend
 builder.AddAzureFrontDoor("frontdoor")
-    .WithOrigin(webfrontend.GetEndpoint("http"));
+    .WithOrigin(webfrontend);
 
 builder.Build().Run();
 """;

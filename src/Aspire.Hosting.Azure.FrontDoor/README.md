@@ -24,7 +24,7 @@ Then, in the _AppHost.cs_ file of `AppHost`, add an Azure Front Door resource an
 var api = builder.AddProject<Projects.Api>("api");
 
 var frontDoor = builder.AddAzureFrontDoor("frontdoor")
-    .WithOrigin(api.GetEndpoint("https"));
+    .WithOrigin(api);
 
 ```
 
