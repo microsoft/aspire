@@ -278,7 +278,7 @@ internal sealed class DescribeCommand : BaseCommand
         table.AddBoldColumn(DescribeCommandStrings.HeaderType);
         table.AddBoldColumn(DescribeCommandStrings.HeaderState);
         table.AddBoldColumn(DescribeCommandStrings.HeaderHealth);
-        table.AddBoldColumn(DescribeCommandStrings.HeaderEndpoints);
+        table.AddBoldColumn(DescribeCommandStrings.HeaderURLs);
 
         foreach (var (snapshot, displayName) in orderedItems)
         {

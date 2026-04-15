@@ -7,6 +7,7 @@ using Aspire.Cli.Npm;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 

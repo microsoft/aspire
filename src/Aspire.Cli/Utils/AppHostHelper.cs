@@ -5,6 +5,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting.Backchannel;
+using Semver;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Resources;
@@ -36,7 +37,7 @@ internal static class AppHostHelper
         }
 
         var minimumVersion = SemVersion.Parse("9.2.0");
-        if (aspireVersion.IsOlderThan(minimumVersion))
+        if (aspireVersion.ComparePrecedenceTo(minimumVersion) < 0)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.AspireSDKVersionNotSupported, appHostInformation.AspireHostingVersion));
             return (false, false, appHostInformation.AspireHostingVersion);
