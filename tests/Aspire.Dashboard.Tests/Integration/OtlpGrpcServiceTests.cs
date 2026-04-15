@@ -199,8 +199,14 @@ public class OtlpGrpcServiceTests
         var tcs = new TaskCompletionSource<DashboardOptions>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var monitorRegistration = app.DashboardOptionsMonitor.OnChange((o, n) =>
         {
-            logger.LogInformation("Options changed.");
-            tcs.TrySetResult(o);
+            // FileSystemWatcher can fire multiple events during a single file write (truncate, write, close).
+            // The first event may trigger a config reload that reads stale content. Only complete when
+            // the value has actually changed to avoid capturing old options with TrySetResult.
+            if (o.Otlp.PrimaryApiKey != apiKey)
+            {
+                logger.LogInformation("Options changed.");
+                tcs.TrySetResult(o);
+            }
         });
 
         configJson = new JsonObject
