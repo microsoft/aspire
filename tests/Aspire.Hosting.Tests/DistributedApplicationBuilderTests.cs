@@ -134,6 +134,17 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
+    public void PipelineOutputServiceFallsBackToCurrentDirectoryWhenAppHostDirectoryIsInvalid()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder(["--publisher", "manifest"]);
+        appBuilder.Configuration["AppHost:Directory"] = "\0";
+        using var app = appBuilder.Build();
+
+        var outputService = app.Services.GetRequiredService<IPipelineOutputService>();
+        Assert.Equal(Path.Combine(Environment.CurrentDirectory, "aspire-output"), outputService.GetOutputDirectory());
+    }
+
+    [Fact]
     public void ResourceServiceConfig_Secured()
     {
         var appBuilder = DistributedApplication.CreateBuilder();

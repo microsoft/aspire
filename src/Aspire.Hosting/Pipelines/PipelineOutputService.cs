@@ -56,7 +56,7 @@ internal sealed class PipelineOutputService : IPipelineOutputService
             {
                 baseDirectory = Path.GetFullPath(appHostDirectory);
             }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            catch (Exception ex) when (ex is ArgumentException or PathTooLongException)
             {
                 baseDirectory = Environment.CurrentDirectory;
             }
