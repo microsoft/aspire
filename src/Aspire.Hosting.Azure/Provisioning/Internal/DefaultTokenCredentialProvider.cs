@@ -95,7 +95,7 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
                 ExcludeManagedIdentityCredential = true,
                 ExcludeWorkloadIdentityCredential = true,
                 ExcludeAzurePowerShellCredential = true,
-                CredentialProcessTimeout = TimeSpan.FromSeconds(15),
+                CredentialProcessTimeout = processTimeout,
                 AdditionallyAllowedTenants = { "*" }
             })
         };
