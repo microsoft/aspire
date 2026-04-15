@@ -190,7 +190,7 @@ public class AzureKubernetesEnvironmentResource(
         }
 
         // AKS cluster resource
-        sb.Append("resource ").Append(id).AppendLine(" 'Microsoft.ContainerService/managedClusters@2024-06-02-preview' = {");
+        sb.Append("resource ").Append(id).AppendLine(" 'Microsoft.ContainerService/managedClusters@2026-01-01' = {");
         sb.Append("  name: '").Append(Name).AppendLine("'");
         sb.AppendLine("  location: location");
         sb.AppendLine("  tags: {");

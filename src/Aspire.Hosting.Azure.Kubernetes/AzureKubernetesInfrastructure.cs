@@ -60,7 +60,7 @@ internal sealed class AzureKubernetesInfrastructure(
             // Ensure a default user node pool exists for workload scheduling.
             // The system pool should only run system pods; application workloads
             // need a user pool.
-            var defaultUserPool = EnsureDefaultUserNodePool(environment);
+            var defaultUserPool = EnsureDefaultUserNodePool(environment, @event.Model);
 
             foreach (var r in @event.Model.GetComputeResources())
             {
@@ -148,33 +148,55 @@ internal sealed class AzureKubernetesInfrastructure(
 
     /// <summary>
     /// Ensures the AKS environment has at least one user node pool. If none exists,
-    /// creates a default "workload" user pool.
+    /// creates a default "workload" user pool and adds it to the app model.
     /// </summary>
-    private static AksNodePoolResource? EnsureDefaultUserNodePool(AzureKubernetesEnvironmentResource environment)
+    private static AksNodePoolResource? EnsureDefaultUserNodePool(
+        AzureKubernetesEnvironmentResource environment,
+        DistributedApplicationModel appModel)
     {
         var hasUserPool = environment.NodePools.Any(p => p.Mode is AksNodePoolMode.User);
 
         if (hasUserPool)
         {
-            // Return the first user pool as the default for unaffinitized workloads.
-            // Look for an existing AksNodePoolResource child that matches.
+            // Return the first user pool. Search the app model for the existing
+            // AksNodePoolResource so we use the same object identity as AddNodePool created.
             var firstUserConfig = environment.NodePools.First(p => p.Mode is AksNodePoolMode.User);
-            return FindNodePoolResource(environment, firstUserConfig.Name);
+            return FindNodePoolResource(appModel, environment, firstUserConfig.Name);
         }
 
-        // No user pool configured — create a default one.
+        // No user pool configured — create a default one and add it to the app model.
         var defaultConfig = new AksNodePoolConfig("workload", "Standard_D4s_v5", 1, 10, AksNodePoolMode.User);
         environment.NodePools.Add(defaultConfig);
 
         var defaultPool = new AksNodePoolResource("workload", defaultConfig, environment);
+        appModel.Resources.Add(defaultPool);
         return defaultPool;
     }
 
-    private static AksNodePoolResource? FindNodePoolResource(AzureKubernetesEnvironmentResource environment, string poolName)
+    /// <summary>
+    /// Finds an existing AksNodePoolResource in the app model by name,
+    /// or creates one if not found (for pools added via config but not via AddNodePool).
+    /// </summary>
+    private static AksNodePoolResource FindNodePoolResource(
+        DistributedApplicationModel appModel,
+        AzureKubernetesEnvironmentResource environment,
+        string poolName)
     {
-        return new AksNodePoolResource(poolName,
-            environment.NodePools.First(p => p.Name == poolName),
-            environment);
+        // Search the app model for an existing pool resource with matching name and parent
+        var existing = appModel.Resources
+            .OfType<AksNodePoolResource>()
+            .FirstOrDefault(p => p.Name == poolName && p.AksParent == environment);
+
+        if (existing is not null)
+        {
+            return existing;
+        }
+
+        // Pool was added via NodePools config but not via AddNodePool — create the resource
+        var config = environment.NodePools.First(p => p.Name == poolName);
+        var pool = new AksNodePoolResource(poolName, config, environment);
+        appModel.Resources.Add(pool);
+        return pool;
     }
 
     /// <summary>
