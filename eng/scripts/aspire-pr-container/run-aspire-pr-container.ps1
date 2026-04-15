@@ -15,6 +15,8 @@ Usage:
 Environment:
   ASPIRE_PR_IMAGE          Docker image name to build/run (default: aspire-pr-runner)
   ASPIRE_PR_WORKSPACE      Host directory to mount as /workspace (default: current directory)
+  ASPIRE_PR_STATE_VOLUME   Docker named volume mounted at /workspace/.aspire
+                           (default: deterministic name derived from the workspace path)
   ASPIRE_DOCKER_SOCKET     Host Docker socket path to mount into /var/run/docker.sock
                             (default: /var/run/docker.sock)
   ASPIRE_CONTAINER_USER    Container user for docker run
@@ -90,6 +92,90 @@ function Get-CurrentUidGid {
     return $null
 }
 
+function Ensure-GitHubToken {
+    if ($env:GH_TOKEN) {
+        return
+    }
+
+    if ($env:GITHUB_TOKEN) {
+        $env:GH_TOKEN = $env:GITHUB_TOKEN
+        return
+    }
+
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if ($null -eq $gh) {
+        Write-Error "GitHub CLI 'gh' is required when GH_TOKEN/GITHUB_TOKEN is not set. Run 'gh auth login' or set GH_TOKEN."
+        exit 1
+    }
+
+    $token = (& $gh.Source auth token 2>$null).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($token)) {
+        Write-Error "Failed to get a GitHub token from 'gh auth token'. Run 'gh auth login' or set GH_TOKEN/GITHUB_TOKEN."
+        exit 1
+    }
+
+    $env:GH_TOKEN = $token
+}
+
+function Get-StateVolumeName {
+    param([string]$Workspace)
+
+    if ($env:ASPIRE_PR_STATE_VOLUME) {
+        return $env:ASPIRE_PR_STATE_VOLUME
+    }
+
+    try {
+        $resolvedWorkspace = (Resolve-Path -LiteralPath $Workspace).Path
+    }
+    catch {
+        $resolvedWorkspace = [System.IO.Path]::GetFullPath($Workspace)
+    }
+
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($resolvedWorkspace))
+    }
+    finally {
+        $sha256.Dispose()
+    }
+
+    $hash = -join ($hashBytes[0..5] | ForEach-Object { $_.ToString('x2') })
+    return "aspire-pr-state-$hash"
+}
+
+function Initialize-StateVolume {
+    param(
+        [string]$ImageName,
+        [string]$StateVolume,
+        [string]$ContainerUser
+    )
+
+    & docker volume create $StateVolume | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+
+    $initArgs = @(
+        'run'
+        '--rm'
+        '-u'
+        '0:0'
+        '-e'
+        "TARGET_USER=$ContainerUser"
+        '-v'
+        "${StateVolume}:/state"
+        $ImageName
+        'bash'
+        '-lc'
+        'set -euo pipefail; mkdir -p /state; if [ -n "${TARGET_USER:-}" ] && [ "${TARGET_USER}" != "0:0" ] && [ "${TARGET_USER}" != "0" ]; then chown -R "${TARGET_USER}" /state; fi'
+    )
+
+    & docker @initArgs
+    if ($LASTEXITCODE -ne 0) {
+        exit $LASTEXITCODE
+    }
+}
+
 if (-not $RemainingArgs -or $RemainingArgs.Count -lt 1) {
     $RemainingArgs = @('bash')
 }
@@ -102,6 +188,7 @@ if ($RemainingArgs[0] -in @('-h', '--help')) {
 $scriptDir = Split-Path -Parent $PSCommandPath
 $imageName = if ($env:ASPIRE_PR_IMAGE) { $env:ASPIRE_PR_IMAGE } else { 'aspire-pr-runner' }
 $workspace = if ($env:ASPIRE_PR_WORKSPACE) { $env:ASPIRE_PR_WORKSPACE } else { (Get-Location).Path }
+$stateVolume = Get-StateVolumeName $workspace
 $dockerSocketPath = if ($env:ASPIRE_DOCKER_SOCKET) { $env:ASPIRE_DOCKER_SOCKET } else { '/var/run/docker.sock' }
 $isWindows = $env:OS -eq 'Windows_NT'
 
@@ -176,12 +263,7 @@ if (-not $env:ASPIRE_PR_RECORDING_ACTIVE -and (Test-Truthy $env:ASPIRE_PR_RECORD
     exit $LASTEXITCODE
 }
 
-if (-not $env:GH_TOKEN -and -not $env:GITHUB_TOKEN) {
-    $env:GH_TOKEN = (& gh auth token).Trim()
-}
-elseif (-not $env:GH_TOKEN -and $env:GITHUB_TOKEN) {
-    $env:GH_TOKEN = $env:GITHUB_TOKEN
-}
+Ensure-GitHubToken
 
 $ttyArgs = @()
 if (Test-InteractiveConsole) {
@@ -197,18 +279,17 @@ $runArgs = @(
     'ASPIRE_REPO'
     '-e'
     'HOME=/workspace'
+    '-v'
+    "${workspace}:/workspace"
+    '-v'
+    "${stateVolume}:/workspace/.aspire"
+    '-w'
+    '/workspace'
 )
 
 if (-not [string]::IsNullOrWhiteSpace($containerUser)) {
     $runArgs += @('-u', $containerUser)
 }
-
-$runArgs += @(
-    '-v'
-    "${workspace}:/workspace"
-    '-w'
-    '/workspace'
-)
 
 if ($ttyArgs.Count -gt 0) {
     $runArgs += $ttyArgs
@@ -228,6 +309,8 @@ if (-not [string]::IsNullOrWhiteSpace($dockerSocketPath)) {
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
+
+Initialize-StateVolume -ImageName $imageName -StateVolume $stateVolume -ContainerUser $containerUser
 
 $runArgs += $imageName
 $runArgs += $RemainingArgs

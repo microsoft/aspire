@@ -57,7 +57,7 @@ iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scrip
 
 ### 3. Choose Execution Mode and Install the CLI
 
-Before installing the CLI, decide whether the testing should run **locally** or in the repo-local **container runner**. Bias toward the container runner when Docker is available because it keeps the CLI install isolated and reproducible.
+Before installing the CLI, decide whether the testing should run **locally** or in the repo-local **container runner**. Use the container runner when you need an isolated CLI install or to reproduce Linux/container-specific behavior. Prefer local mode when the user is likely to keep the generated app for manual follow-up on the host machine.
 
 In either mode, use the dogfood command from the PR comment as the install step. Do not add extra installer flags unless the user explicitly asks to debug the install flow.
 
@@ -88,9 +88,9 @@ hivePath="$homeDir/.aspire/hives/pr-$prNumber/packages"
 cliVersion="$("$cliPath" --version)"
 ```
 
-#### Container mode (preferred)
+#### Container mode
 
-Run from the repository root so the repo-local scripts are available. Use a fresh host temp directory as the mounted workspace. The runner only opens the isolated container; the PR install still happens by running the dogfood command inside it:
+Run from the repository root so the repo-local scripts are available. Use a fresh host temp directory as the mounted workspace. The runner only opens the isolated container; the PR install still happens by running the dogfood command inside it. Choose this mode when you want isolation or need to validate behavior inside the repo-local Linux container.
 
 ```bash
 testDir="$(mktemp -d -t aspire-pr-test-XXXXXX)"
@@ -124,7 +124,7 @@ For follow-up commands in the same mounted workspace, run:
 runner bash -lc '/workspace/.aspire/bin/aspire --version'
 ```
 
-Because the container `HOME` is `/workspace`, the standard dogfood install lands under `/workspace/.aspire`, so follow-up commands can keep using `/workspace/.aspire/bin/aspire` and `/workspace/.aspire/hives/pr-<PR_NUMBER>/packages`.
+Because the container `HOME` is `/workspace`, the standard dogfood install still lands under `/workspace/.aspire`. The repo-local runner now backs `/workspace/.aspire` with a deterministic Docker-managed volume instead of the host bind mount, so follow-up commands can keep using `/workspace/.aspire/bin/aspire` and `/workspace/.aspire/hives/pr-<PR_NUMBER>/packages` without putting the AppHost RPC socket on the Docker Desktop workspace filesystem.
 
 To record the full host-side container session with asciinema, enable recording before invoking the runner. Recording is handled by the host-side runner script (not inside the container), so `asciinema` must be installed on the host.
 
@@ -272,7 +272,7 @@ Call the `ask_user` tool with a form that includes:
 - **additionalScenarios**: optional string for extra scenarios
 - **scenariosToSkip**: optional string listing scenarios to skip
 
-Default `executionTarget` to **Run in the repo container runner**. If the user declines the form, proceed with the container default when Docker is available; otherwise fall back to local.
+Default `executionTarget` based on the goal: choose **Run locally in a temp directory** when the user is likely to continue working with the generated app on the host, and choose **Run in the repo container runner** when isolation or Linux/container reproduction is the priority. If the user declines the form, use the same heuristic.
 
 **Handle user responses:**
 - **Proceed**: Continue to step 8 using the selected execution target

@@ -11,13 +11,9 @@ RUN apt-get update \
         docker.io \
         gh \
         git \
+        libicu74 \
         unzip \
     && rm -rf /var/lib/apt/lists/*
 
-COPY entrypoint.sh /usr/local/bin/aspire-pr-entrypoint.sh
-RUN chmod +x /usr/local/bin/aspire-pr-entrypoint.sh
-
 WORKDIR /workspace
-
-ENTRYPOINT ["/usr/local/bin/aspire-pr-entrypoint.sh"]
 CMD ["bash"]
