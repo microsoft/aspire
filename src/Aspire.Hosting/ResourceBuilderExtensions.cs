@@ -909,7 +909,7 @@ public static class ResourceBuilderExtensions
     /// Resource authors can opt out individual endpoints by setting <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> to <c>true</c>
     /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.ExcludeReferenceEndpoint = true)</c>) to exclude them from this method's behavior.
     /// Endpoints that have been excluded (such as management or health check endpoints) can still be referenced explicitly using
-    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference, string)"/>
+    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference)"/>
     /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
     /// </para>
     /// </remarks>
@@ -941,7 +941,7 @@ public static class ResourceBuilderExtensions
     /// Resource authors can opt out individual endpoints by setting <see cref="EndpointAnnotation.ExcludeReferenceEndpoint"/> to <c>true</c>
     /// (for example, using <c>.WithEndpoint("endpointName", e =&gt; e.ExcludeReferenceEndpoint = true)</c>) to exclude them from this method's behavior.
     /// Endpoints that have been excluded (such as management or health check endpoints) can still be referenced explicitly using
-    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference, string)"/>
+    /// <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, EndpointReference)"/>
     /// with <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string)"/>.
     /// </para>
     /// </remarks>
@@ -1094,17 +1094,15 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource where the service discovery information will be injected.</param>
     /// <param name="endpointReference">The endpoint from which to extract the url.</param>
-    /// <param name="name">Optional service name to use for service discovery. When specified, the endpoint will be registered
-    /// under this name instead of the source resource's name, enabling differentiation of multiple logical services from a single resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     [AspireExport("withReferenceEndpoint", Description = "Adds a reference to an endpoint")]
-    public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, EndpointReference endpointReference, string? name = null)
+    public static IResourceBuilder<TDestination> WithReference<TDestination>(this IResourceBuilder<TDestination> builder, EndpointReference endpointReference)
         where TDestination : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(endpointReference);
 
-        ApplyEndpoints(builder, endpointReference.Resource, endpointReference.EndpointName, name);
+        ApplyEndpoints(builder, endpointReference.Resource, endpointReference.EndpointName);
         return builder;
     }
 
@@ -1114,15 +1112,15 @@ public static class ResourceBuilderExtensions
         // When adding an endpoint we get to see whether there is an EndpointReferenceAnnotation
         // on the resource, if there is then it means we have already been here before and we can just
         // skip this and note the endpoint that we want to apply to the environment in the future
-        // in a single pass. There is one EndpointReferenceAnnotation per (endpoint source, service name) pair.
+        // in a single pass. There is one EndpointReferenceAnnotation per endpoint source.
         var endpointReferenceAnnotation = builder.Resource.Annotations
             .OfType<EndpointReferenceAnnotation>()
-            .Where(sra => sra.Resource == resourceWithEndpoints && sra.ServiceName == name)
+            .Where(sra => sra.Resource == resourceWithEndpoints)
             .SingleOrDefault();
 
         if (endpointReferenceAnnotation == null)
         {
-            endpointReferenceAnnotation = new EndpointReferenceAnnotation(resourceWithEndpoints) { ServiceName = name };
+            endpointReferenceAnnotation = new EndpointReferenceAnnotation(resourceWithEndpoints);
             if (builder.Resource.IsContainer())
             {
                 endpointReferenceAnnotation.ContextNetworkID = KnownNetworkIdentifiers.DefaultAspireContainerNetwork;
