@@ -11,7 +11,7 @@ RUN apt-get update \
         docker.io \
         gh \
         git \
-        libicu74 \
+        libicu-dev \
         unzip \
     && rm -rf /var/lib/apt/lists/*
 
