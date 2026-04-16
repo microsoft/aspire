@@ -25,10 +25,10 @@ resource apiEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
 resource apiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
   name: take('api-og-${uniqueString(resourceGroup().id)}', 90)
   properties: {
-    loadBalancingSettings: {
-      sampleSize: 4
-      successfulSamplesRequired: 3
-      additionalLatencyInMilliseconds: 50
+    healthProbeSettings: {
+      probePath: '/'
+      probeProtocol: 'Https'
+      probeIntervalInSeconds: 100
     }
   }
   parent: frontdoor
@@ -71,10 +71,10 @@ resource webEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2025-06-01' = {
 resource webOriginGroup 'Microsoft.Cdn/profiles/originGroups@2025-06-01' = {
   name: take('web-og-${uniqueString(resourceGroup().id)}', 90)
   properties: {
-    loadBalancingSettings: {
-      sampleSize: 4
-      successfulSamplesRequired: 3
-      additionalLatencyInMilliseconds: 50
+    healthProbeSettings: {
+      probePath: '/'
+      probeProtocol: 'Https'
+      probeIntervalInSeconds: 100
     }
   }
   parent: frontdoor

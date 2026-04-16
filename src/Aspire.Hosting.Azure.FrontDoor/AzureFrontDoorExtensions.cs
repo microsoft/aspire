@@ -102,12 +102,13 @@ public static class AzureFrontDoorExtensions
                 {
                     Parent = profile,
                     Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-og-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90),
-                    LoadBalancingSettings = new LoadBalancingSettings()
+                    HealthProbeSettings = new HealthProbeSettings
                     {
-                        SampleSize = 4,
-                        SuccessfulSamplesRequired = 3,
-                        AdditionalLatencyInMilliseconds = 50
-                    }
+                        ProbeProtocol = HealthProbeProtocol.Https,
+                        ProbePath = "/",
+                        ProbeIntervalInSeconds = 100
+                    },
+                    LoadBalancingSettings = new LoadBalancingSettings()
                 };
                 infrastructure.Add(originGroup);
 
