@@ -649,13 +649,14 @@ public class Program
 
         var settings = new AnsiConsoleSettings()
         {
-            Ansi = isPlayground ? AnsiSupport.Yes : AnsiSupport.Detect,
-            Interactive = isPlayground ? InteractionSupport.Yes : InteractionSupport.Detect,
-            ColorSystem = isPlayground ? ColorSystemSupport.Standard : ColorSystemSupport.Detect,
+            Ansi = isPlayground ? AnsiSupport.Yes : AnsiSupport.No,
+            Interactive = isPlayground ? InteractionSupport.Yes : hostEnvironment.SupportsInteractiveOutput ? InteractionSupport.Detect : InteractionSupport.No,
+            ColorSystem = isPlayground ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
             Out = output,
         };
 
-        // Use SupportsAnsi from hostEnvironment which already checks ASPIRE_ANSI_PASS_THRU
+        // Use SupportsAnsi from hostEnvironment so callers can explicitly suppress ANSI output,
+        // including the --non-interactive path used by automation and agents.
         if (hostEnvironment.SupportsAnsi)
         {
             settings.Ansi = AnsiSupport.Yes;
@@ -676,6 +677,11 @@ public class Program
         }
 
         var ansiConsole = AnsiConsole.Create(settings);
+        if (!hostEnvironment.SupportsAnsi)
+        {
+            // Disable OSC 8 hyperlinks alongside colors to keep plain-text output free of terminal control sequences.
+            ansiConsole.Profile.Capabilities.Links = false;
+        }
         return ansiConsole;
     }
 

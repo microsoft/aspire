@@ -166,6 +166,19 @@ public class CliHostEnvironmentTests
     }
 
     [Fact]
+    public void SupportsAnsi_ReturnsFalse_WhenNonInteractiveTrue()
+    {
+        // Arrange
+        var configuration = new ConfigurationBuilder().Build();
+
+        // Act
+        var env = new CliHostEnvironment(configuration, nonInteractive: true);
+
+        // Assert
+        Assert.False(env.SupportsAnsi);
+    }
+
+    [Fact]
     public void SupportsInteractiveInput_ReturnsTrue_WhenPlaygroundModeSet()
     {
         // Arrange
@@ -334,9 +347,9 @@ public class CliHostEnvironmentTests
     }
 
     [Fact]
-    public void SupportsAnsi_ReturnsTrue_WhenAnsiPassThruSet_WithNonInteractive()
+    public void SupportsAnsi_ReturnsFalse_WhenAnsiPassThruSet_WithNonInteractive()
     {
-        // Arrange - ASPIRE_ANSI_PASS_THRU explicitly enables ANSI even with --non-interactive
+        // Arrange - --non-interactive should take precedence over ANSI pass-through for plain-text automation output
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -348,7 +361,7 @@ public class CliHostEnvironmentTests
         var env = new CliHostEnvironment(configuration, nonInteractive: true);
 
         // Assert
-        Assert.True(env.SupportsAnsi);
+        Assert.False(env.SupportsAnsi);
     }
 
     [Theory]

@@ -75,6 +75,7 @@ internal sealed class LogsCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
 
     private readonly IInteractionService _interactionService;
+    private readonly ICliHostEnvironment _hostEnvironment;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<LogsCommand> _logger;
 
@@ -114,12 +115,14 @@ internal sealed class LogsCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry,
+        ICliHostEnvironment hostEnvironment,
         ResourceColorMap resourceColorMap,
         ILogger<LogsCommand> logger)
         : base("logs", LogsCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _resourceColorMap = resourceColorMap;
         _interactionService = interactionService;
+        _hostEnvironment = hostEnvironment;
         _logger = logger;
         _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
 
@@ -349,6 +352,7 @@ internal sealed class LogsCommand : BaseCommand
     {
         var displayName = entry.ResourcePrefix ?? string.Empty;
         var content = entry.Content ?? entry.RawContent ?? string.Empty;
+        var displayContent = _hostEnvironment.SupportsAnsi ? content : AnsiParser.StripControlSequences(content);
         var timestampPrefix = timestamps && entry.Timestamp.HasValue ? FormatTimestamp(entry.Timestamp.Value) + " " : string.Empty;
 
         if (format == OutputFormat.Json)
@@ -369,7 +373,7 @@ internal sealed class LogsCommand : BaseCommand
         {
             // Colorized output: assign a consistent color to each resource
             var color = _resourceColorMap.GetColor(displayName);
-            var escapedContent = content.EscapeMarkup();
+            var escapedContent = displayContent.EscapeMarkup();
             _interactionService.DisplayMarkupLine($"{timestampPrefix.EscapeMarkup()}[{color}][[{displayName.EscapeMarkup()}]][/] {escapedContent}");
         }
     }

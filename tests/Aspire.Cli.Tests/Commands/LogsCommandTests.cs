@@ -570,6 +570,72 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LogsCommand_TextOutput_StripsAnsiControlSequences_WhenAnsiDisabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(
+            workspace,
+            outputWriter,
+            disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z \u001b[38;5;252mReady\u001b[0m to accept connections",
+                    IsError = false
+                }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var logLine = Assert.Single(outputWriter.Logs, l => l.StartsWith("[", StringComparison.Ordinal));
+        Assert.Equal("[redis] Ready to accept connections", logLine);
+        Assert.DoesNotContain("\u001b", logLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LogsCommand_JsonOutput_PreservesAnsiControlSequences()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var provider = CreateLogsTestServices(
+            workspace,
+            outputWriter,
+            logLines:
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z \u001b[38;5;252mReady\u001b[0m to accept connections",
+                    IsError = false
+                }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.First(l => l.Contains("\"logs\"", StringComparison.Ordinal));
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+
+        Assert.NotNull(logsOutput);
+        var log = Assert.Single(logsOutput.Logs);
+        Assert.Equal("\u001b[38;5;252mReady\u001b[0m to accept connections", log.Content);
+    }
+
+    [Fact]
     public async Task LogsCommand_HiddenResources_AreExcludedByDefault()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -895,7 +961,8 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
         Action<Dictionary<string, string?>>? configureOptions = null,
-        bool disableAnsi = false)
+        bool disableAnsi = false,
+        IEnumerable<ResourceLogLine>? logLines = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -932,7 +999,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
                     State = "Running"
                 }
             ],
-            LogLines =
+            LogLines = logLines is not null ? [.. logLines] :
             [
                 // Log lines are intentionally out of timestamp order to verify sorting
                 new ResourceLogLine
