@@ -1,4 +1,4 @@
-﻿[
+[
   {
     CapabilityId: Aspire.Hosting/asHttp2Service,
     MethodName: asHttp2Service,

@@ -1,4 +1,3 @@
-#pragma warning disable CS0618
 #pragma warning disable ASPIRECERTIFICATES001
 
 // Licensed to the .NET Foundation under one or more agreements.
