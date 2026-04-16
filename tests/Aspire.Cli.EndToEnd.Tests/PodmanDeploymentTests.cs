@@ -12,40 +12,37 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// <summary>
 /// End-to-end tests for Aspire CLI deployment to Docker Compose using Podman as the container runtime.
 /// Validates that setting ASPIRE_CONTAINER_RUNTIME=podman flows through to compose operations.
-/// Requires Podman and docker-compose v2 installed on the host.
+/// Runs Podman inside a privileged Docker helper container so the test does not depend on host Podman state.
 /// </summary>
 public sealed class PodmanDeploymentTests(ITestOutputHelper output)
 {
     private const string ProjectName = "AspirePodmanDeployTest";
 
     [Fact]
-    [ActiveIssue("https://github.com/mitchdenny/hex1b/pull/270")]
-    [OuterloopTest("Requires Podman and docker-compose v2 installed on the host")]
+    [OuterloopTest("Requires Docker to run a privileged Podman helper container")]
     public async Task CreateAndDeployToDockerComposeWithPodman()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
+        var strategy = CliInstallStrategy.Detect();
         var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
+        using var terminal = CliE2ETestHelpers.CreatePodmanDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        // PrepareEnvironment
-        await auto.PrepareEnvironmentAsync(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (isCI)
+        if (strategy.Mode == CliInstallMode.PullRequest)
         {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireCliEnvironmentAsync(counter);
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
-        // Step 0: Verify Podman is available, skip if not
+        // Step 0: Verify Podman is available inside the helper container.
         await auto.TypeAsync("podman --version || echo 'PODMAN_NOT_FOUND'");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
@@ -67,13 +64,7 @@ public sealed class PodmanDeploymentTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
         await auto.EnterAsync();
 
-        if (isCI)
-        {
-            await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync();
-        }
-
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+        await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromSeconds(180));
 
         // Step 5: Modify AppHost's main file to add Docker Compose environment
         {
@@ -119,8 +110,8 @@ builder.Build().Run();
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 10: Verify the application is accessible
-        await auto.TypeAsync("curl -s -o /dev/null -w '%{http_code}' http://localhost:$(podman ps --format '{{.Ports}}' --filter 'name=webfrontend' | grep -oE '0\\.0\\.0\\.0:[0-9]+->8080' | head -1 | cut -d: -f2 | cut -d'-' -f1) 2>/dev/null || echo 'request-failed'");
+        // Step 10: Verify the application is accessible inside the helper container's network namespace.
+        await auto.TypeAsync("curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:$(podman ps --format '{{.Ports}}' --filter 'name=webfrontend' | grep -oE '[0-9]+->8080' | head -1 | cut -d- -f1) 2>/dev/null || echo 'request-failed'");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 

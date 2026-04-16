@@ -39,11 +39,11 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
     public async Task LegacySettingsMigration_AdjustsRelativeAppHostPath()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
-            repoRoot, installMode, output,
+            repoRoot, strategy, output,
             variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
             mountDockerSocket: true,
             workspace: workspace);
@@ -54,7 +54,7 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 1: Create a valid TypeScript AppHost using aspire init.
         // This produces apphost.ts, .modules/, aspire.config.json, etc.

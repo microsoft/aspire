@@ -60,6 +60,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
             // Stop the AppHost using aspire stop
             await auto.TypeAsync("aspire stop");
             await auto.EnterAsync();
+            await auto.WaitUntilTextAsync(StopCommandStrings.AppHostStoppedSuccessfully, timeout: TimeSpan.FromMinutes(1));
             await auto.WaitForSuccessPromptAsync(counter);
 
             await auto.ClearScreenAsync(counter);

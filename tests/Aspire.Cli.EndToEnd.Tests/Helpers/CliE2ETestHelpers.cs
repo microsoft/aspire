@@ -17,6 +17,8 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class CliE2ETestHelpers
 {
+    internal const string CliArchiveWorkflowRunIdEnvironmentVariableName = "ASPIRE_CLI_WORKFLOW_RUN_ID";
+
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
     /// When running locally, some commands are replaced with echo stubs.
@@ -64,9 +66,26 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
+    /// Gets the workflow run ID that produced the CLI archive for the current test run, if one was provided.
+    /// </summary>
+    /// <returns>The workflow run ID, or <see langword="null"/> when the current environment should resolve the PR run dynamically.</returns>
+    internal static string? GetCliArchiveWorkflowRunId()
+    {
+        var runId = Environment.GetEnvironmentVariable(CliArchiveWorkflowRunIdEnvironmentVariableName);
+
+        if (string.IsNullOrEmpty(runId))
+        {
+            return null;
+        }
+
+        Assert.True(long.TryParse(runId, out _), $"{CliArchiveWorkflowRunIdEnvironmentVariableName} must be a valid integer, got: {runId}");
+        return runId;
+    }
+
+    /// <summary>
     /// Gets the path for storing asciinema recordings that will be uploaded as CI artifacts.
     /// In CI, this returns a path under $GITHUB_WORKSPACE/testresults/recordings/.
-    /// Locally, this returns a path under the system temp directory.
+    /// Locally, this returns a path under the test output <c>TestResults/recordings/</c> directory.
     /// </summary>
     /// <param name="testName">The name of the test (used as the recording filename).</param>
     /// <returns>The full path to the .cast recording file.</returns>
@@ -85,7 +104,14 @@ internal static class CliE2ETestHelpers
     /// <returns>A configured <see cref="Hex1bTerminal"/> instance. Caller is responsible for disposal.</returns>
     internal static Hex1bTerminal CreateTestTerminal(int width = 160, int height = 48, [CallerMemberName] string testName = "")
     {
-        return Hex1bTestHelpers.CreateTestTerminal("aspire-cli-e2e", width, height, testName);
+        var recordingPath = GetTestResultsRecordingPath(testName);
+        RegisterCaptureFile("recording.cast", recordingPath);
+        return Hex1bTerminal.CreateBuilder()
+            .WithHeadless()
+            .WithDimensions(width, height)
+            .WithAsciinemaRecording(recordingPath)
+            .WithPtyProcess("/bin/bash", ["--norc"])
+            .Build();
     }
 
     /// <summary>
@@ -131,8 +157,11 @@ internal static class CliE2ETestHelpers
     }
 
     private const string PolyglotBaseImageName = "aspire-e2e-polyglot-base";
+    private const string PodmanBaseImageName = "aspire-e2e-podman-base";
     private static readonly object s_polyglotBaseImageLock = new();
+    private static readonly object s_podmanBaseImageLock = new();
     private static bool s_polyglotBaseImageBuilt;
+    private static bool s_podmanBaseImageBuilt;
 
     /// <summary>
     /// Detects the install mode for Docker-based tests based on the current environment.
@@ -181,7 +210,11 @@ internal static class CliE2ETestHelpers
     /// Creates a Hex1b terminal that runs inside a Docker container built from the shared E2E Dockerfile.
     /// The Dockerfile builds the CLI from source (local dev) or accepts pre-built artifacts (CI).
     /// </summary>
-    /// <param name="repoRoot">The repo root directory, used as the Docker build context.</param>
+    /// <param name="repoRoot">
+    /// The repo root directory, used as the Docker build context and to locate the shared test Dockerfiles.
+    /// This is required for every Docker-based CLI E2E mode, not just localhive, because the terminal always runs
+    /// inside a purpose-built test container even when the CLI itself is later installed from PR artifacts or scripts.
+    /// </param>
     /// <param name="installMode">The detected install mode, controlling Docker build args and volumes.</param>
     /// <param name="output">Test output helper for logging configuration details.</param>
     /// <param name="variant">Which Dockerfile variant to use (DotNet or Polyglot).</param>
@@ -204,6 +237,7 @@ internal static class CliE2ETestHelpers
         [CallerMemberName] string testName = "")
     {
         var recordingPath = GetTestResultsRecordingPath(testName);
+        RegisterCaptureFile("recording.cast", recordingPath);
         var dockerfileName = variant switch
         {
             DockerfileVariant.DotNet => "Dockerfile.e2e",
@@ -296,6 +330,11 @@ internal static class CliE2ETestHelpers
     /// Creates a Hex1b terminal that runs inside a Docker container, configured using the
     /// given <see cref="CliInstallStrategy"/> for CLI installation.
     /// </summary>
+    /// <remarks>
+    /// The install strategy decides how the CLI gets installed inside the container after startup. The container
+    /// itself is still built from the repository Docker context, so <paramref name="repoRoot"/> is not specific to
+    /// localhive scenarios.
+    /// </remarks>
     internal static Hex1bTerminal CreateDockerTestTerminal(
         string repoRoot,
         CliInstallStrategy strategy,
@@ -309,6 +348,7 @@ internal static class CliE2ETestHelpers
         [CallerMemberName] string testName = "")
     {
         var recordingPath = GetTestResultsRecordingPath(testName);
+        RegisterCaptureFile("recording.cast", recordingPath);
         var dockerfileName = variant switch
         {
             DockerfileVariant.DotNet => "Dockerfile.e2e",
@@ -367,6 +407,67 @@ internal static class CliE2ETestHelpers
         return builder.Build();
     }
 
+    /// <summary>
+    /// Creates a Hex1b terminal backed by a privileged Docker container that runs Podman internally.
+    /// </summary>
+    /// <remarks>
+    /// This is used for Podman deployment tests so the nested Podman runtime stays isolated from the host machine
+    /// while still supporting the privileges required by Podman-in-container scenarios.
+    /// </remarks>
+    internal static Hex1bTerminal CreatePodmanDockerTestTerminal(
+        string repoRoot,
+        CliInstallStrategy strategy,
+        ITestOutputHelper output,
+        TemporaryWorkspace? workspace = null,
+        IEnumerable<string>? additionalVolumes = null,
+        int width = 160,
+        int height = 48,
+        [CallerMemberName] string testName = "")
+    {
+        var recordingPath = GetTestResultsRecordingPath(testName);
+        RegisterCaptureFile("recording.cast", recordingPath);
+
+        EnsurePodmanBaseImage(repoRoot, output);
+
+        var containerName = GenerateDockerContainerName();
+        var options = new DockerContainerOptions
+        {
+            Image = PodmanBaseImageName,
+            WorkingDirectory = "/workspace",
+        };
+
+        if (workspace is not null)
+        {
+            options.Volumes.Add($"{workspace.WorkspaceRoot.FullName}:/workspace/{workspace.WorkspaceRoot.Name}");
+        }
+
+        if (additionalVolumes is not null)
+        {
+            foreach (var volume in additionalVolumes)
+            {
+                options.Volumes.Add(volume);
+            }
+        }
+
+        strategy.ConfigureContainer(options);
+
+        output.WriteLine("Creating Podman Docker test terminal:");
+        output.WriteLine($"  Test name:      {testName}");
+        output.WriteLine($"  Strategy:       {strategy}");
+        output.WriteLine($"  Image:          {PodmanBaseImageName}");
+        output.WriteLine($"  Container name: {containerName}");
+        output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");
+        output.WriteLine($"  Dimensions:     {width}x{height}");
+        output.WriteLine($"  Recording:      {recordingPath}");
+
+        return Hex1bTerminal.CreateBuilder()
+            .WithHeadless()
+            .WithDimensions(width, height)
+            .WithAsciinemaRecording(recordingPath)
+            .WithPtyProcess("docker", BuildPrivilegedDockerRunArgs(options, containerName))
+            .Build();
+    }
+
     private static void EnsurePolyglotBaseImage(string repoRoot, ITestOutputHelper output)
     {
         lock (s_polyglotBaseImageLock)
@@ -416,6 +517,114 @@ internal static class CliE2ETestHelpers
 
             s_polyglotBaseImageBuilt = true;
         }
+    }
+
+    private static void EnsurePodmanBaseImage(string repoRoot, ITestOutputHelper output)
+    {
+        lock (s_podmanBaseImageLock)
+        {
+            if (s_podmanBaseImageBuilt)
+            {
+                return;
+            }
+
+            var dockerfilePath = Path.Combine(repoRoot, "tests", "Shared", "Docker", "Dockerfile.e2e-podman");
+
+            output.WriteLine($"Building shared Podman Docker base image from {dockerfilePath}");
+
+            var startInfo = new ProcessStartInfo("docker")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+
+            startInfo.ArgumentList.Add("build");
+            startInfo.ArgumentList.Add("--quiet");
+            startInfo.ArgumentList.Add("-f");
+            startInfo.ArgumentList.Add(dockerfilePath);
+            startInfo.ArgumentList.Add("-t");
+            startInfo.ArgumentList.Add(PodmanBaseImageName);
+            startInfo.ArgumentList.Add(repoRoot);
+
+            using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start docker build process.");
+            var standardOutput = process.StandardOutput.ReadToEnd();
+            var standardError = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to build shared Podman Docker base image.{Environment.NewLine}" +
+                    $"{standardOutput}{Environment.NewLine}{standardError}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(standardOutput))
+            {
+                output.WriteLine(standardOutput.Trim());
+            }
+
+            s_podmanBaseImageBuilt = true;
+        }
+    }
+
+    private static string[] BuildPrivilegedDockerRunArgs(DockerContainerOptions options, string containerName)
+    {
+        var arguments = new List<string>
+        {
+            "run",
+            "-it",
+            "--privileged"
+        };
+
+        if (options.AutoRemove)
+        {
+            arguments.Add("--rm");
+        }
+
+        arguments.Add("--name");
+        arguments.Add(containerName);
+
+        foreach (var (key, value) in options.Environment)
+        {
+            arguments.Add("-e");
+            arguments.Add($"{key}={value}");
+        }
+
+        foreach (var volume in options.Volumes)
+        {
+            arguments.Add("-v");
+            arguments.Add(volume);
+        }
+
+        if (options.MountDockerSocket)
+        {
+            arguments.Add("-v");
+            arguments.Add("/var/run/docker.sock:/var/run/docker.sock");
+        }
+
+        if (options.WorkingDirectory is not null)
+        {
+            arguments.Add("-w");
+            arguments.Add(options.WorkingDirectory);
+        }
+
+        if (options.Network is not null)
+        {
+            arguments.Add("--network");
+            arguments.Add(options.Network);
+        }
+
+        arguments.Add(options.Image);
+        arguments.Add(options.Shell);
+        arguments.AddRange(options.ShellArgs);
+
+        return [.. arguments];
+    }
+
+    private static string GenerateDockerContainerName()
+    {
+        return $"hex1b-test-{Guid.NewGuid():N}".Substring(0, 32);
     }
 
     /// <summary>
@@ -597,17 +806,23 @@ internal static class CliE2ETestHelpers
     /// <param name="SdkVersion">The Aspire SDK version extracted from the package filenames.</param>
     internal sealed record LocalChannelInfo(string PackagesPath, string SdkVersion);
 
+    private static void RegisterCaptureFile(string fileName, string path)
+    {
+        if (TestContext.Current is null)
+        {
+            return;
+        }
+
+        TestContext.Current.KeyValueStorage[$"CaptureFile:{Path.GetFileName(fileName)}"] = path;
+    }
+
     /// <summary>
     /// Copies a directory to testresults/workspaces/{testName}/{label} for CI artifact upload.
     /// Renames dot-prefixed directories to underscore-prefixed (upload-artifact skips hidden files).
     /// </summary>
-    internal static void CaptureDirectory(string sourcePath, string testName, string? label)
+    internal static string CaptureDirectory(string sourcePath, string testName, string? label)
     {
-        var destDir = Path.Combine(
-            AppContext.BaseDirectory,
-            "TestResults",
-            "workspaces",
-            testName);
+        var destDir = GetCaptureRootDirectory(testName);
 
         if (label is not null)
         {
@@ -619,6 +834,35 @@ internal static class CliE2ETestHelpers
             "_capture.log"));
 
         CopyDirectory(sourcePath, destDir, line => logWriter.WriteLine(line));
+        return destDir;
+    }
+
+    /// <summary>
+    /// Copies a file to testresults/workspaces/{testName}/ for CI artifact upload.
+    /// Hidden files are renamed to underscore-prefixed names for compatibility with artifact upload defaults.
+    /// </summary>
+    internal static string CaptureFile(string sourcePath, string testName, string fileName)
+    {
+        var destDir = Directory.CreateDirectory(GetCaptureRootDirectory(testName)).FullName;
+        var captureFileName = Path.GetFileName(fileName);
+
+        if (captureFileName.StartsWith(".", StringComparison.Ordinal))
+        {
+            captureFileName = "_" + captureFileName[1..];
+        }
+
+        var destFile = Path.Combine(destDir, captureFileName);
+        File.Copy(sourcePath, destFile, overwrite: true);
+        return destFile;
+    }
+
+    private static string GetCaptureRootDirectory(string testName)
+    {
+        return Path.Combine(
+            AppContext.BaseDirectory,
+            "TestResults",
+            "workspaces",
+            testName);
     }
 
     private static void CopyDirectory(string sourceDir, string destDir, Action<string>? log)

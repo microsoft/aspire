@@ -318,6 +318,7 @@ jobs:
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
+          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
           GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
@@ -361,6 +362,7 @@ jobs:
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
+          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
           GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
@@ -410,6 +412,7 @@ jobs:
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
+          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
           GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
@@ -460,6 +463,7 @@ jobs:
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
+          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
           GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)

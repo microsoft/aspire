@@ -200,6 +200,11 @@ internal sealed class CliInstallStrategy
 
                 config.Environment["GITHUB_PR_NUMBER"] = Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER") ?? "";
                 config.Environment["GITHUB_PR_HEAD_SHA"] = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA") ?? "";
+                var workflowRunId = CliE2ETestHelpers.GetCliArchiveWorkflowRunId();
+                if (!string.IsNullOrEmpty(workflowRunId))
+                {
+                    config.Environment[CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName] = workflowRunId;
+                }
                 break;
 
             case CliInstallMode.InstallScript:
