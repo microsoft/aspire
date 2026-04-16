@@ -139,6 +139,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p cast_files
+          mkdir -p trx_files
 
           for zipfile in recordings/*.zip; do
             if [ -f "$zipfile" ]; then
@@ -149,9 +150,72 @@ jobs:
 
           # Find and copy all .cast files
           find recordings -name "*.cast" -exec cp {} cast_files/ \; 2>/dev/null || true
+          # Find and copy all .trx files (test results)
+          find recordings -name "*.trx" -exec cp {} trx_files/ \; 2>/dev/null || true
 
           echo "Found recordings:"
           ls -la cast_files/ || echo "No .cast files found"
+          echo "Found TRX files:"
+          ls -la trx_files/ || echo "No .trx files found"
+
+      - name: Parse test results from TRX files
+        if: steps.run-info.outputs.skip != 'true'
+        id: test-results
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            // Parse TRX (XML) files to extract test method outcomes
+            // TRX format: <UnitTestResult testName="MethodName" outcome="Passed|Failed|..."/>
+            const trxDir = 'trx_files';
+            const outcomes = {}; // Map of test method name -> outcome
+
+            if (fs.existsSync(trxDir)) {
+              const trxFiles = fs.readdirSync(trxDir).filter(f => f.endsWith('.trx'));
+              console.log(`Found ${trxFiles.length} TRX file(s)`);
+
+              for (const trxFile of trxFiles) {
+                const content = fs.readFileSync(path.join(trxDir, trxFile), 'utf8');
+
+                // Extract all UnitTestResult entries with testName and outcome
+                // The testName in TRX is the display name (method name for simple tests)
+                const resultRegex = /<UnitTestResult[^>]*\btestName="([^"]*)"[^>]*\boutcome="([^"]*)"/g;
+                const resultRegexAlt = /<UnitTestResult[^>]*\boutcome="([^"]*)"[^>]*\btestName="([^"]*)"/g;
+
+                let match;
+                while ((match = resultRegex.exec(content)) !== null) {
+                  const testName = match[1];
+                  const outcome = match[2];
+                  // Store by the simple method name (last part after dot)
+                  const methodName = testName.includes('.') ? testName.split('.').pop() : testName;
+                  outcomes[methodName] = outcome;
+                  // Also store the full name for exact matching
+                  outcomes[testName] = outcome;
+                  console.log(`  ${testName}: ${outcome}`);
+                }
+
+                // Try alternate attribute order
+                while ((match = resultRegexAlt.exec(content)) !== null) {
+                  const outcome = match[1];
+                  const testName = match[2];
+                  const methodName = testName.includes('.') ? testName.split('.').pop() : testName;
+                  if (!outcomes[methodName]) {
+                    outcomes[methodName] = outcome;
+                  }
+                  if (!outcomes[testName]) {
+                    outcomes[testName] = outcome;
+                  }
+                }
+              }
+            }
+
+            console.log(`Total test outcomes parsed: ${Object.keys(outcomes).length}`);
+
+            // Write outcomes to a JSON file for the bash step to consume
+            fs.writeFileSync('test_outcomes.json', JSON.stringify(outcomes));
+            core.setOutput('has_outcomes', Object.keys(outcomes).length > 0 ? 'true' : 'false');
 
       - name: Upload recordings and post comment
         if: steps.run-info.outputs.skip != 'true'
@@ -173,6 +237,15 @@ jobs:
             # Install asciinema
             pip install asciinema
 
+            # Load test outcomes from TRX parsing step (JSON: {"methodName": "Passed|Failed", ...})
+            HAS_OUTCOMES="${{ steps.test-results.outputs.has_outcomes }}"
+            if [ "$HAS_OUTCOMES" = "true" ] && [ -f "test_outcomes.json" ]; then
+              echo "Loaded test outcomes from TRX files"
+            else
+              echo "No test outcomes available, will show recordings without pass/fail status"
+              echo '{}' > test_outcomes.json
+            fi
+
             # Unique marker to identify CLI E2E recording comments
             COMMENT_MARKER="<!-- cli-e2e-recordings -->"
 
@@ -183,7 +256,10 @@ jobs:
             UPLOAD_COUNT=0
             FAIL_COUNT=0
             TOTAL_COUNT=0
+            TEST_FAIL_COUNT=0
 
+            # Arrays to track failed test recordings separately
+            FAILED_TESTS_BODY=""
             TABLE_BODY=""
 
             for castfile in "$RECORDINGS_DIR"/*.cast; do
@@ -191,6 +267,18 @@ jobs:
                 filename=$(basename "$castfile" .cast)
                 echo "Uploading $castfile..."
                 TOTAL_COUNT=$((TOTAL_COUNT + 1))
+
+                # Look up test outcome from TRX data
+                # Try the filename as method name (jq query with null fallback)
+                TEST_OUTCOME=$(jq -r --arg name "$filename" '.[$name] // "Unknown"' test_outcomes.json)
+                if [ "$TEST_OUTCOME" = "Passed" ]; then
+                  STATUS_EMOJI="✅"
+                elif [ "$TEST_OUTCOME" = "Failed" ]; then
+                  STATUS_EMOJI="❌"
+                  TEST_FAIL_COUNT=$((TEST_FAIL_COUNT + 1))
+                else
+                  STATUS_EMOJI="❔"
+                fi
 
                 # Upload to asciinema with retry logic for transient failures
                 ASCIINEMA_URL=""
@@ -209,37 +297,60 @@ jobs:
 
                 if [ -n "$ASCIINEMA_URL" ]; then
                   TABLE_BODY="${TABLE_BODY}
-          | ${filename} | [▶️ View Recording](${ASCIINEMA_URL}) |"
+          | ${STATUS_EMOJI} | ${filename} | [▶️ View Recording](${ASCIINEMA_URL}) |"
                   echo "Uploaded: $ASCIINEMA_URL"
                   UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
+
+                  # Track failed tests for the prominent section
+                  if [ "$TEST_OUTCOME" = "Failed" ]; then
+                    FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
+          - ❌ **${filename}** — [▶️ View Recording](${ASCIINEMA_URL})"
+                  fi
                 else
                   TABLE_BODY="${TABLE_BODY}
-          | ${filename} | ❌ Upload failed |"
+          | ${STATUS_EMOJI} | ${filename} | ⚠️ Upload failed |"
                   echo "Failed to upload $castfile after $MAX_UPLOAD_RETRIES attempts"
                   FAIL_COUNT=$((FAIL_COUNT + 1))
+
+                  if [ "$TEST_OUTCOME" = "Failed" ]; then
+                    FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
+          - ❌ **${filename}** — ⚠️ Recording upload failed"
+                  fi
                 fi
               fi
             done
 
-            echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT failures"
+            echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT upload failures, $TEST_FAIL_COUNT test failures"
 
             # Build comment with summary outside collapsible and table inside
-            if [ "$FAIL_COUNT" -gt 0 ]; then
+            if [ "$TEST_FAIL_COUNT" -gt 0 ]; then
+              SUMMARY_EMOJI="❌"
+              SUMMARY_TEXT="${TEST_FAIL_COUNT} test(s) failed, ${UPLOAD_COUNT} recordings uploaded"
+            elif [ "$FAIL_COUNT" -gt 0 ]; then
               SUMMARY_EMOJI="⚠️"
-              SUMMARY_TEXT="${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} failed"
+              SUMMARY_TEXT="${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} upload(s) failed"
             else
               SUMMARY_EMOJI="🎬"
               SUMMARY_TEXT="${UPLOAD_COUNT} recordings uploaded"
             fi
 
+            # Build the failed tests section (shown outside the collapsible)
+            FAILED_SECTION=""
+            if [ -n "$FAILED_TESTS_BODY" ]; then
+              FAILED_SECTION="
+          ### Failed Tests
+          ${FAILED_TESTS_BODY}
+          "
+            fi
+
             COMMENT_BODY="${COMMENT_MARKER}
           ${SUMMARY_EMOJI} **CLI E2E Test Recordings** — ${SUMMARY_TEXT} (commit \`${SHORT_SHA}\`)
-
+          ${FAILED_SECTION}
           <details>
-          <summary>View recordings</summary>
+          <summary>View all recordings</summary>
 
-          | Test | Recording |
-          |------|-----------|${TABLE_BODY}
+          | Status | Test | Recording |
+          |--------|------|-----------|${TABLE_BODY}
 
           ---
           <sub>📹 Recordings uploaded automatically from [CI run #${RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID})</sub>

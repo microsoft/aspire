@@ -596,8 +596,10 @@ jobs:
         run: |
           mkdir -p cli-e2e-recordings
           find testresults -name "*.cast" -exec cp {} cli-e2e-recordings/ \; 2>/dev/null || true
+          # Also copy TRX files so the recording comment workflow can determine pass/fail
+          find testresults -name "*.trx" -exec cp {} cli-e2e-recordings/ \; 2>/dev/null || true
           if [ -n "$(ls -A cli-e2e-recordings 2>/dev/null)" ]; then
-            echo "Found recordings:"
+            echo "Found recordings and test results:"
             ls -la cli-e2e-recordings/
           fi
 
@@ -606,7 +608,9 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: cli-e2e-recordings-${{ inputs.testShortName }}
-          path: cli-e2e-recordings/*.cast
+          path: |
+            cli-e2e-recordings/*.cast
+            cli-e2e-recordings/*.trx
           if-no-files-found: ignore
 
       - name: Generate test results summary
