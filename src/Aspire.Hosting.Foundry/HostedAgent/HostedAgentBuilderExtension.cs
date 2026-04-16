@@ -119,15 +119,20 @@ public static class HostedAgentResourceBuilderExtensions
                     {
                         return;
                     }
-                    ctx.Urls.Add(new()
+                    http.DisplayText = "Responses Endpoint";
+                    http.Url = new UriBuilder(http.Url)
                     {
-                        DisplayText = "Responses endpoint",
-                        Url = new UriBuilder(http.Url)
-                        {
-                            Path = "/responses"
-                        }.ToString(),
-                        Endpoint = http.Endpoint,
-                    });
+                        Path = "/responses"
+                    }.ToString();
+                    // ctx.Urls.Add(new()
+                    // {
+                    //     DisplayText = "Responses endpoint",
+                    //     Url = new UriBuilder(http.Url)
+                    //     {
+                    //         Path = "/responses"
+                    //     }.ToString(),
+                    //     Endpoint = http.Endpoint,
+                    // });
                     ctx.Urls.Add(new()
                     {
                         DisplayText = "Liveness probe",
