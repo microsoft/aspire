@@ -1,0 +1,26 @@
+{
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "sdk": {
+    "version": "13.3.0-dev"
+  },
+  "channel": "pr-15723",
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:50085;http://localhost:29504",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:44284",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:13501"
+      }
+    }
+  },
+  "packages": {
+    "Aspire.Hosting.Redis": "",
+    "@spike/aspire-kafka": {
+      "source": "npm",
+      "path": "./kafka-integration/host.ts"
+    }
+  }
+}

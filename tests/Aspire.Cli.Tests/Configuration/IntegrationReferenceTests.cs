@@ -8,25 +8,23 @@ namespace Aspire.Cli.Tests.Configuration;
 public class IntegrationReferenceTests
 {
     [Fact]
-    public void PackageReference_HasVersionAndNoProjectPath()
+    public void PackageReference_HasVersionAndNoPath()
     {
         var reference = IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0");
 
-        Assert.True(reference.IsPackageReference);
-        Assert.False(reference.IsProjectReference);
+        Assert.Equal(IntegrationSource.Nuget, reference.Source);
         Assert.Equal("13.2.0", reference.Version);
-        Assert.Null(reference.ProjectPath);
+        Assert.Null(reference.Path);
     }
 
     [Fact]
-    public void ProjectReference_HasProjectPathAndNoVersion()
+    public void ProjectReference_HasPathAndNoVersion()
     {
         var reference = IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj");
 
-        Assert.True(reference.IsProjectReference);
-        Assert.False(reference.IsPackageReference);
+        Assert.Equal(IntegrationSource.Project, reference.Source);
         Assert.Null(reference.Version);
-        Assert.Equal("/path/to/MyIntegration.csproj", reference.ProjectPath);
+        Assert.Equal("/path/to/MyIntegration.csproj", reference.Path);
     }
 
     [Fact]
@@ -47,13 +45,13 @@ public class IntegrationReferenceTests
         // Base Aspire.Hosting + Redis (packages) + MyIntegration (project ref) = 3
         Assert.Equal(3, refs.Count);
 
-        var packageRefs = refs.Where(r => r.IsPackageReference).ToList();
-        var projectRefs = refs.Where(r => r.IsProjectReference).ToList();
+        var packageRefs = refs.Where(r => r.Source == IntegrationSource.Nuget).ToList();
+        var projectRefs = refs.Where(r => r.Source == IntegrationSource.Project).ToList();
 
         Assert.Equal(2, packageRefs.Count);
         Assert.Single(projectRefs);
         Assert.Equal("MyIntegration", projectRefs[0].Name);
-        Assert.EndsWith(".csproj", projectRefs[0].ProjectPath!);
+        Assert.EndsWith(".csproj", projectRefs[0].Path!);
     }
 
     [Fact]
@@ -69,10 +67,10 @@ public class IntegrationReferenceTests
         };
 
         var refs = config.GetIntegrationReferences("13.2.0", "/home/user/app").ToList();
-        var projectRef = refs.Single(r => r.IsProjectReference);
+        var projectRef = refs.Single(r => r.Source == IntegrationSource.Project);
 
         // Path should be resolved to absolute
-        Assert.True(Path.IsPathRooted(projectRef.ProjectPath!));
+        Assert.True(Path.IsPathRooted(projectRef.Path!));
     }
 
     [Fact]
@@ -91,7 +89,7 @@ public class IntegrationReferenceTests
         var redis = refs.Single(r => r.Name == "Aspire.Hosting.Redis");
 
         Assert.Equal("13.2.0", redis.Version);
-        Assert.True(redis.IsPackageReference);
+        Assert.Equal(IntegrationSource.Nuget, redis.Source);
     }
 
     [Fact]

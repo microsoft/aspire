@@ -276,4 +276,22 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             }
         };
     }
+
+    /// <inheritdoc />
+    public IntegrationHostSpec? GetIntegrationHostSpec()
+    {
+        return new IntegrationHostSpec
+        {
+            Execute = new CommandSpec
+            {
+                Command = "npx",
+                Args = ["--no-install", "tsx", "{entryPoint}"]
+            },
+            InstallDependencies = new CommandSpec
+            {
+                Command = "npm",
+                Args = ["install"]
+            }
+        };
+    }
 }

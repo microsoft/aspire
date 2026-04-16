@@ -168,6 +168,10 @@ public sealed class JsonRpcAuthenticationTests
             services.AddSingleton<Language.LanguageSupportResolver>();
             services.AddScoped<Language.LanguageService>();
 
+            // CodeGenerationService depends on ExternalCapabilityRegistry + IntegrationHostLauncher
+            services.AddSingleton<Ats.ExternalCapabilityRegistry>();
+            services.AddSingleton<Language.IntegrationHostLauncher>();
+
             services.AddScoped<JsonRpcAuthenticationState>();
             services.AddScoped<HandleRegistry>();
             services.AddScoped<CancellationTokenRegistry>();

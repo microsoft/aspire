@@ -40,6 +40,10 @@ public static class RemoteHostServer
         // Hosted services
         services.AddHostedService<OrphanDetector>();
         services.AddHostedService<JsonRpcServer>();
+        // Integration host launcher is registered as a hosted service so its StopAsync
+        // runs during graceful shutdown, killing any integration host processes it spawned.
+        services.AddSingleton<IntegrationHostLauncher>();
+        services.AddHostedService(sp => sp.GetRequiredService<IntegrationHostLauncher>());
 
         // Singletons
         services.AddSingleton<AssemblyLoader>();
@@ -47,12 +51,13 @@ public static class RemoteHostServer
         services.AddSingleton(sp => sp.GetRequiredService<AtsContextFactory>().GetContext());
         services.AddSingleton<CodeGeneratorResolver>();
         services.AddSingleton<LanguageSupportResolver>();
+        services.AddSingleton<ExternalCapabilityRegistry>();
 
         // Scoped services
         services.AddScoped<CodeGenerationService>();
         services.AddScoped<LanguageService>();
         services.AddScoped<JsonRpcAuthenticationState>();
-        services.AddScoped<HandleRegistry>();
+        services.AddSingleton<HandleRegistry>();
         services.AddScoped<CancellationTokenRegistry>();
         services.AddScoped<JsonRpcCallbackInvoker>();
         services.AddScoped<ICallbackInvoker>(sp => sp.GetRequiredService<JsonRpcCallbackInvoker>());

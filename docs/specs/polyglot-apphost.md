@@ -1,6 +1,7 @@
 # Polyglot AppHost Support
 
 > **Note:** This feature is experimental and may change in future releases.
+> **Related:** [Polyglot Integrations](./polyglot-integrations.md) — the sibling spec covering the *integration* side of polyglot support (how integrations authored in any language — not just .NET — can project into any consumer's SDK via out-of-process integration hosts). **This** spec covers the *AppHost* side: how a guest AppHost written in TypeScript, Python, etc. talks to the .NET AppHost server, how ATS projects the built-in .NET integrations into each guest language, and how codegen produces the per-language SDK a guest AppHost imports.
 
 This document describes how the Aspire CLI supports non-.NET app hosts using the **Aspire Type System (ATS)**.
 
@@ -1210,7 +1211,7 @@ classDiagram
 
 **How it works:**
 
-1. `GuestAppHostProject` detects language from `settings.json` or file patterns
+1. `GuestAppHostProject` detects language from `aspire.config.json` or file patterns
 2. Asks the server for `RuntimeSpec` via `getRuntimeSpec` RPC
 3. `GuestRuntime` interprets the spec to execute commands
 
@@ -1226,30 +1227,47 @@ classDiagram
 
 ## Configuration
 
-### .aspire/settings.json
+### aspire.config.json
 
-Configuration for polyglot app hosts:
+The unified config file for polyglot AppHosts. Replaces the legacy split across `.aspire/settings.json` and `apphost.run.json` — launch profiles, language selection, SDK version, and package references all live in one file.
 
 ```json
 {
-  "appHostPath": "apphost.ts",
-  "language": "typescript",
+  "appHost": {
+    "path": "apphost.ts",
+    "language": "typescript/nodejs"
+  },
+  "sdk": {
+    "version": "13.3.0"
+  },
   "channel": "stable",
+  "profiles": {
+    "https": {
+      "applicationUrl": "https://localhost:17193;http://localhost:15069",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  },
   "packages": {
     "Aspire.Hosting.Redis": "9.0.0",
-    "Aspire.Hosting.PostgreSQL": "9.0.0"
+    "Aspire.Hosting.PostgreSQL": ""
   }
 }
 ```
 
 | Field | Description |
 |-------|-------------|
-| `appHostPath` | Path to the apphost file (relative to settings.json) |
-| `language` | Language identifier (e.g., `typescript`, `python`). Auto-detected on first run and persisted. |
-| `channel` | NuGet channel for package resolution (`stable`, `preview`, etc.) |
-| `packages` | Package references added via `aspire add` |
+| `appHost.path` | Path to the apphost file (relative to `aspire.config.json`). |
+| `appHost.language` | Language identifier — `typescript/nodejs`, `python`, etc. Auto-detected on first run and persisted. |
+| `sdk.version` | Aspire SDK version. Used as the default for package versions and codegen. |
+| `channel` | NuGet channel for package resolution (`stable`, `preview`, ...). |
+| `profiles` | Launch profiles (ports, environment variables). Replaces the legacy `apphost.run.json`. |
+| `packages` | Package references added via `aspire add`. Per-entry shape is string-or-object — see below. |
 
-**Language persistence:** On first `aspire run`, if `language` is not set, the CLI detects it from file patterns and saves it to `settings.json`. Subsequent runs use the persisted value.
+**Language persistence:** On first `aspire run`, if `appHost.language` is not set, the CLI detects it from file patterns and saves it to `aspire.config.json`. Subsequent runs use the persisted value.
+
+**Package entry shape.** Each value in `packages` is either a **string** (short form, always NuGet — empty means the SDK version, non-empty is an explicit version) or an **object** (long form, carries a required `source` discriminator — `nuget`, `project`, or `npm` — with per-source fields). See the [Integration Declaration](./polyglot-integrations.md#integration-declaration) section of the sibling spec for the full schema and examples.
 
 ### apphost.run.json
 
@@ -1287,8 +1305,15 @@ public interface ILanguageSupport
     Dictionary<string, string> Scaffold(ScaffoldRequest request);
     DetectionResult Detect(string directoryPath);
     RuntimeSpec GetRuntimeSpec();
+
+    // Non-null iff this language can host cross-language integrations.
+    // Defaults to null — a language that only supports its own AppHost side
+    // (scaffold/detect/runtime) doesn't need to override this.
+    IntegrationHostSpec? GetIntegrationHostSpec() => null;
 }
 ```
+
+> **Note:** `GetIntegrationHostSpec()` is the seam that lets a language host *cross-language* integrations — an npm integration consumed by a Python AppHost, for example. It is **separate** from the guest-AppHost-side concerns this spec covers. If you're only adding support for *running* a guest AppHost in a new language, leave the default `null` — everything in this section is what you need. If you want AppHosts in your language to be able to host integrations authored in other languages too, see [Polyglot Integrations](./polyglot-integrations.md) for the protocol and `IntegrationHostSpec` shape.
 
 Example implementation:
 
@@ -1351,7 +1376,7 @@ The generator receives an `AtsContext` containing all scanned capabilities, type
 
 ### Step 2: Register in CLI
 
-> **Note:** This step is temporary while we determine the language discovery story. In the future, languages may be discovered automatically from NuGet packages or configuration files.
+> **Note:** This step exists because the CLI-side language registry (`DefaultLanguageDiscovery` / `LanguageInfo`) is currently **independent** of the server-side registry (`ILanguageSupport` discovered via reflection over loaded assemblies). The two drift by construction — adding a language means editing both places. Consolidating them into a single source of truth is tracked as tech debt in [Polyglot Integrations — CLI ergonomics that still assume .NET](./polyglot-integrations.md#current-limitations); once that lands, this step goes away and languages are discovered purely server-side.
 
 Add the language to `DefaultLanguageDiscovery` in `Aspire.Cli`:
 

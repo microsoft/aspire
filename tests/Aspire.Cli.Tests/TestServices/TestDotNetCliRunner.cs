@@ -39,7 +39,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : Task.FromResult(0); // If not overridden, just return success.
     }
 
-    public Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken, bool noIncremental = false)
     {
         return BuildAsyncCallback != null
             ? Task.FromResult(BuildAsyncCallback(projectFilePath, noRestore, options, cancellationToken))

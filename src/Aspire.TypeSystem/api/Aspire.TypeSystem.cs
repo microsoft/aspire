@@ -376,8 +376,16 @@ namespace Aspire.TypeSystem
         string Language { get; }
 
         DetectionResult Detect(string directoryPath);
+        IntegrationHostSpec? GetIntegrationHostSpec() { throw null; }
         RuntimeSpec GetRuntimeSpec();
         System.Collections.Generic.Dictionary<string, string> Scaffold(ScaffoldRequest request);
+    }
+
+    public sealed partial class IntegrationHostSpec
+    {
+        public required CommandSpec Execute { get { throw null; } init { } }
+
+        public CommandSpec? InstallDependencies { get { throw null; } init { } }
     }
 
     public sealed partial class RuntimeSpec

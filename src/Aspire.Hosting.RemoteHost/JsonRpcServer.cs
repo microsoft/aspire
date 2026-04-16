@@ -198,6 +198,16 @@ internal sealed class JsonRpcServer : BackgroundService
             var handler = new HeaderDelimitedMessageHandler(clientStream, clientStream, formatter);
             using var jsonRpc = new JsonRpc(handler, clientService);
 
+            // Allow concurrent message dispatch so cross-connection calls don't deadlock.
+            // Without this, the default NonConcurrentSynchronizationContext serializes all
+            // message processing per-connection, which deadlocks when one connection's
+            // handler awaits a call on another connection's JsonRpc instance.
+            jsonRpc.SynchronizationContext = null;
+
+            // Enable wire-level tracing for debugging
+            jsonRpc.TraceSource.Switch.Level = System.Diagnostics.SourceLevels.Verbose;
+            jsonRpc.TraceSource.Listeners.Add(new JsonRpcTraceListener(_logger, clientId));
+
             // Add the shared CodeGenerationService as an additional target for generateCode method
             jsonRpc.AddLocalRpcTarget(codeGenerationService);
 
@@ -298,5 +308,36 @@ internal sealed class JsonRpcServer : BackgroundService
         }
 
         base.Dispose();
+    }
+}
+
+/// <summary>
+/// Forwards StreamJsonRpc trace output to ILogger for wire-level debugging.
+/// </summary>
+file sealed class JsonRpcTraceListener : System.Diagnostics.TraceListener
+{
+    private readonly ILogger _logger;
+    private readonly string _clientId;
+
+    public JsonRpcTraceListener(ILogger logger, string clientId)
+    {
+        _logger = logger;
+        _clientId = clientId;
+    }
+
+    public override void Write(string? message) => _logger.LogDebug("[JsonRpc:{ClientId}] {Message}", _clientId, message);
+    public override void WriteLine(string? message) => _logger.LogDebug("[JsonRpc:{ClientId}] {Message}", _clientId, message);
+
+    public override void TraceEvent(System.Diagnostics.TraceEventCache? eventCache, string source, System.Diagnostics.TraceEventType eventType, int id, string? message)
+    {
+        _logger.LogDebug("[JsonRpc:{ClientId}:{EventType}] {Message}", _clientId, eventType, message);
+    }
+
+    public override void TraceEvent(System.Diagnostics.TraceEventCache? eventCache, string source, System.Diagnostics.TraceEventType eventType, int id, string? format, params object?[]? args)
+    {
+        if (format is not null && args is not null)
+        {
+            _logger.LogDebug("[JsonRpc:{ClientId}:{EventType}] {Message}", _clientId, eventType, string.Format(System.Globalization.CultureInfo.InvariantCulture, format, args));
+        }
     }
 }

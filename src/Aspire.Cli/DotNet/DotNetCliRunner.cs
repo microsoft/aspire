@@ -34,7 +34,7 @@ internal interface IDotNetCliRunner
     Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> NewProjectAsync(string templateName, string name, string outputPath, string[] extraArgs, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> RestoreAsync(FileInfo projectFilePath, ProcessInvocationOptions options, CancellationToken cancellationToken);
-    Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken, bool noIncremental = false);
     Task<int> AddPackageAsync(FileInfo projectFilePath, string packageName, string packageVersion, string? nugetSource, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
@@ -725,12 +725,13 @@ internal sealed class DotNetCliRunner(
             cancellationToken: cancellationToken);
     }
 
-    public async Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public async Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken, bool noIncremental = false)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
         var noRestoreSwitch = noRestore ? "--no-restore" : string.Empty;
-        string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
+        var noIncrementalSwitch = noIncremental ? "--no-incremental" : string.Empty;
+        string[] cliArgs = ["build", noRestoreSwitch, noIncrementalSwitch, projectFilePath.FullName];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
 
         // Always inject DOTNET_CLI_USE_MSBUILD_SERVER for apphost builds

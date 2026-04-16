@@ -280,7 +280,9 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         config.AddOrUpdatePackage("Aspire.Hosting.Redis", "13.2.0");
 
         Assert.NotNull(config.Packages);
-        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"]);
+        var entry = config.Packages["Aspire.Hosting.Redis"];
+        Assert.Equal(IntegrationSource.Nuget, entry.Source);
+        Assert.Equal("13.2.0", entry.Version);
     }
 
     [Fact]
@@ -288,12 +290,12 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string> { ["Aspire.Hosting.Redis"] = "13.1.0" }
+            Packages = new Dictionary<string, PackageEntry> { ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.1.0") }
         };
 
         config.AddOrUpdatePackage("Aspire.Hosting.Redis", "13.2.0");
 
-        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"]);
+        Assert.Equal("13.2.0", config.Packages["Aspire.Hosting.Redis"].Version);
     }
 
     [Fact]
@@ -301,10 +303,10 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string>
+            Packages = new Dictionary<string, PackageEntry>
             {
-                ["Aspire.Hosting.Redis"] = "13.2.0",
-                ["Aspire.Hosting.PostgreSQL"] = "13.2.0"
+                ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.2.0"),
+                ["Aspire.Hosting.PostgreSQL"] = PackageEntry.Nuget("13.2.0")
             }
         };
 
@@ -341,9 +343,9 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     {
         var config = new AspireConfigFile
         {
-            Packages = new Dictionary<string, string>
+            Packages = new Dictionary<string, PackageEntry>
             {
-                ["Aspire.Hosting.Redis"] = "13.2.0"
+                ["Aspire.Hosting.Redis"] = PackageEntry.Nuget("13.2.0")
             }
         };
 

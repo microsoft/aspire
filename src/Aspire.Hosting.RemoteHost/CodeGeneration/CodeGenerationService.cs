@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TypeSystem;
+using Aspire.Hosting.RemoteHost.Ats;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
 
@@ -14,17 +15,23 @@ internal sealed class CodeGenerationService
 {
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
+    private readonly ExternalCapabilityRegistry _externalCapabilityRegistry;
+    private readonly Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher _integrationHostLauncher;
     private readonly CodeGeneratorResolver _resolver;
     private readonly ILogger<CodeGenerationService> _logger;
 
     public CodeGenerationService(
         JsonRpcAuthenticationState authenticationState,
         AtsContextFactory atsContextFactory,
+        ExternalCapabilityRegistry externalCapabilityRegistry,
+        Aspire.Hosting.RemoteHost.Language.IntegrationHostLauncher integrationHostLauncher,
         CodeGeneratorResolver resolver,
         ILogger<CodeGenerationService> logger)
     {
         _authenticationState = authenticationState;
         _atsContextFactory = atsContextFactory;
+        _externalCapabilityRegistry = externalCapabilityRegistry;
+        _integrationHostLauncher = integrationHostLauncher;
         _resolver = resolver;
         _logger = logger;
     }
@@ -39,19 +46,19 @@ internal sealed class CodeGenerationService
     /// </param>
     /// <returns>The capabilities information.</returns>
     [JsonRpcMethod("getCapabilities")]
-    public CapabilitiesResponse GetCapabilities(string[]? assemblyNames = null)
+    public async Task<CapabilitiesResponse> GetCapabilitiesAsync(string[]? assemblyNames = null)
     {
         _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> getCapabilities()");
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
+        // Make sure server-spawned integration hosts have registered + their getCapabilities
+        // has been merged into the AtsContext before we report anything.
+        await _integrationHostLauncher.ReadyAsync().ConfigureAwait(false);
+
         try
         {
-            var context = _atsContextFactory.GetContext();
-            if (assemblyNames is { Length: > 0 })
-            {
-                context = AtsContextFilter.FilterByExportingAssemblies(context, assemblyNames);
-            }
+            var context = GetCodeGenerationContext(assemblyNames);
 
             var response = new CapabilitiesResponse
             {
@@ -162,11 +169,15 @@ internal sealed class CodeGenerationService
     /// <param name="assemblyName">The exporting assembly to scope the generated SDK to, or null to use the full ATS context.</param>
     /// <returns>A dictionary of file paths to file contents.</returns>
     [JsonRpcMethod("generateCode")]
-    public Dictionary<string, string> GenerateCode(string language, string? assemblyName = null)
+    public async Task<Dictionary<string, string>> GenerateCodeAsync(string language, string? assemblyName = null)
     {
         _authenticationState.ThrowIfNotAuthenticated();
         _logger.LogDebug(">> generateCode({Language})", language);
         var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        // Wait for server-spawned integration hosts to be ready so their capabilities are
+        // present in the AtsContext before we run codegen.
+        await _integrationHostLauncher.ReadyAsync().ConfigureAwait(false);
 
         try
         {
@@ -176,11 +187,7 @@ internal sealed class CodeGenerationService
                 throw new ArgumentException($"No code generator found for language: {language}");
             }
 
-            var context = _atsContextFactory.GetContext();
-            if (!string.IsNullOrWhiteSpace(assemblyName))
-            {
-                context = AtsContextFilter.FilterByExportingAssembliesWithReferences(context, [assemblyName]);
-            }
+            var context = GetCodeGenerationContext(string.IsNullOrWhiteSpace(assemblyName) ? null : [assemblyName], includeReferencedTypes: true);
 
             var files = generator.GenerateDistributedApplication(context);
 
@@ -192,6 +199,20 @@ internal sealed class CodeGenerationService
             _logger.LogError(ex, "<< generateCode({Language}) failed", language);
             throw;
         }
+    }
+
+    private AtsContext GetCodeGenerationContext(string[]? assemblyNames, bool includeReferencedTypes = false)
+    {
+        var context = _atsContextFactory.GetContext();
+
+        if (assemblyNames is { Length: > 0 })
+        {
+            return includeReferencedTypes
+                ? AtsContextFilter.FilterByExportingAssembliesWithReferences(context, assemblyNames)
+                : AtsContextFilter.FilterByExportingAssemblies(context, assemblyNames);
+        }
+
+        return _externalCapabilityRegistry.AugmentContext(context);
     }
 }
 

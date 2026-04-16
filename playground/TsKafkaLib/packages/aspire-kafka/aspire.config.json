@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "language": "typescript/nodejs"
+  },
+  "sdk": {
+    "version": "13.3.0-dev"
+  },
+  "channel": "pr-15723",
+  "packages": {
+    "Aspire.Hosting": ""
+  }
+}

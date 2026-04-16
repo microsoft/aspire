@@ -488,7 +488,7 @@ public class DotNetTemplateFactoryTests
         public Task<int> RestoreAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<int> BuildAsync(FileInfo projectFile, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        public Task<int> BuildAsync(FileInfo projectFile, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken, bool noIncremental = false)
             => throw new NotImplementedException();
 
         public Task<int> AddPackageAsync(FileInfo projectFile, string packageName, string version, string? packageSourceUrl, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)

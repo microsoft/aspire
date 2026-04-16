@@ -147,8 +147,8 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         var refs = config.GetIntegrationReferences("13.1.0", "/tmp").ToList();
 
         // Assert - should include base package (Aspire.Hosting) plus explicit packages
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0" && !r.IsProjectReference);
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0" && !r.IsProjectReference);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Version == "13.1.0" && r.Source != IntegrationSource.Project);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Version == "13.1.0" && r.Source != IntegrationSource.Project);
         Assert.Equal(2, refs.Count);
     }
 
@@ -233,13 +233,13 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         var refs = config.GetIntegrationReferences("13.1.0", "/home/user/app").ToList();
 
         // Assert
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.IsPackageReference);
-        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.IsPackageReference);
-        var projectRef = Assert.Single(refs, r => r.IsProjectReference);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting" && r.Source == IntegrationSource.Nuget);
+        Assert.Contains(refs, r => r.Name == "Aspire.Hosting.Redis" && r.Source == IntegrationSource.Nuget);
+        var projectRef = Assert.Single(refs, r => r.Source == IntegrationSource.Project);
         Assert.Equal("Aspire.Hosting.MyCustom", projectRef.Name);
         Assert.Null(projectRef.Version);
-        Assert.NotNull(projectRef.ProjectPath);
-        Assert.EndsWith(".csproj", projectRef.ProjectPath);
+        Assert.NotNull(projectRef.Path);
+        Assert.EndsWith(".csproj", projectRef.Path);
     }
 
     [Fact]

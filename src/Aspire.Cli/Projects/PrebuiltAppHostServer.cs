@@ -103,8 +103,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         CancellationToken cancellationToken = default)
     {
         var integrationList = integrations.ToList();
-        var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
-        var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
+        var packageRefs = integrationList.Where(r => r.Source == IntegrationSource.Nuget).ToList();
+        var projectRefs = integrationList.Where(r => r.Source == IntegrationSource.Project).ToList();
+        var npmIntegrations = integrationList.Where(r => r.Source == IntegrationSource.Npm).ToList();
 
         try
         {
@@ -138,7 +139,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             var projectRefAssemblyNames = _integrationLibsPath is not null
                 ? await ReadProjectRefAssemblyNamesAsync(_integrationLibsPath, cancellationToken)
                 : [];
-            await GenerateAppSettingsAsync(packageRefs, projectRefAssemblyNames, cancellationToken);
+            await GenerateAppSettingsAsync(packageRefs, projectRefAssemblyNames, npmIntegrations, cancellationToken);
 
             return new AppHostServerPrepareResult(
                 Success: true,
@@ -313,7 +314,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             doc.Root!.Add(new XElement("ItemGroup",
                 projectRefs.Select(p => new XElement("ProjectReference",
-                    new XAttribute("Include", p.ProjectPath!)))));
+                    new XAttribute("Include", p.Path!)))));
 
             // Add a target that writes the resolved project reference assembly names to a file.
             // This lets us discover the actual assembly names after build (which may differ from
@@ -486,7 +487,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
+                _logger.LogInformation("AppHostServer: {Line}", e.Data);
                 outputCollector.AppendOutput(e.Data);
             }
         };
@@ -494,7 +495,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             if (e.Data is not null)
             {
-                _logger.LogTrace("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
+                _logger.LogWarning("AppHostServer: {Line}", e.Data);
                 outputCollector.AppendError(e.Data);
             }
         };
@@ -527,6 +528,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private async Task GenerateAppSettingsAsync(
         List<IntegrationReference> packageRefs,
         List<string> projectRefAssemblyNames,
+        List<IntegrationReference> npmIntegrations,
         CancellationToken cancellationToken)
     {
         var atsAssemblies = new List<string> { "Aspire.Hosting" };
@@ -553,21 +555,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             }
         }
 
-        var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(a => $"\"{a}\""));
-        var appSettingsJson = $$"""
-            {
-              "Logging": {
-                "LogLevel": {
-                  "Default": "Information",
-                  "Microsoft.AspNetCore": "Warning",
-                  "Aspire.Hosting.Dcp": "Warning"
-                }
-              },
-              "AtsAssemblies": [
-                {{assembliesJson}}
-              ]
-            }
-            """;
+        var appSettingsJson = AppHostServerAppSettingsWriter.Generate(atsAssemblies, npmIntegrations);
 
         await File.WriteAllTextAsync(
             Path.Combine(_workingDirectory, "appsettings.json"),

@@ -195,7 +195,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
             // Stamp package versions for integrations that have them
             var packageVersions = integrations
-                .Where(i => i.IsPackageReference)
+                .Where(i => i.Source == IntegrationSource.Nuget)
                 .Select(i => new PackageInfo { Name = i.Name, Version = i.Version! })
                 .ToList();
             if (packageVersions.Count > 0)

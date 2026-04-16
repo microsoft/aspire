@@ -32,6 +32,8 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(DoctorCheckSummary))]
 [JsonSerializable(typeof(AspireJsonConfiguration))]
 [JsonSerializable(typeof(AspireConfigFile))]
+[JsonSerializable(typeof(PackageEntry))]
+[JsonSerializable(typeof(Dictionary<string, PackageEntry>))]
 [JsonSerializable(typeof(List<DevCertInfo>))]
 [JsonSerializable(typeof(ConfigInfo))]
 [JsonSerializable(typeof(FeatureInfo))]

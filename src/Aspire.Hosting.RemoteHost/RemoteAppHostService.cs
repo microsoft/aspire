@@ -13,6 +13,7 @@ internal sealed class RemoteAppHostService
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly JsonRpcCallbackInvoker _callbackInvoker;
     private readonly CancellationTokenRegistry _cancellationTokenRegistry;
+    private readonly ExternalCapabilityRegistry _externalCapabilityRegistry;
     private readonly ILogger<RemoteAppHostService> _logger;
     private JsonRpc? _clientRpc;
 
@@ -24,12 +25,14 @@ internal sealed class RemoteAppHostService
         JsonRpcCallbackInvoker callbackInvoker,
         CancellationTokenRegistry cancellationTokenRegistry,
         CapabilityDispatcher capabilityDispatcher,
+        ExternalCapabilityRegistry externalCapabilityRegistry,
         ILogger<RemoteAppHostService> logger)
     {
         _authenticationState = authenticationState;
         _callbackInvoker = callbackInvoker;
         _cancellationTokenRegistry = cancellationTokenRegistry;
         _capabilityDispatcher = capabilityDispatcher;
+        _externalCapabilityRegistry = externalCapabilityRegistry;
         _logger = logger;
     }
 
@@ -99,7 +102,7 @@ internal sealed class RemoteAppHostService
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            var result = await _capabilityDispatcher.InvokeAsync(capabilityId, args).ConfigureAwait(false);
+            var result = await _capabilityDispatcher.InvokeAsync(capabilityId, args, _callbackInvoker).ConfigureAwait(false);
             _logger.LogDebug("   invokeCapability({CapabilityId}) result: {Result}", capabilityId, result?.ToJsonString() ?? "null");
             return result;
         }
@@ -135,6 +138,59 @@ internal sealed class RemoteAppHostService
         {
             _logger.LogDebug("<< invokeCapability({CapabilityId}) completed in {ElapsedMs}ms", capabilityId, sw.ElapsedMilliseconds);
         }
+    }
+
+    #endregion
+
+    #region Integration Host Protocol
+
+    /// <summary>
+    /// Registers this connection as an integration host.
+    /// The engine will later call getCapabilities on it to discover capabilities.
+    /// </summary>
+    [JsonRpcMethod("registerAsIntegrationHost")]
+    public bool RegisterAsIntegrationHost()
+    {
+        _authenticationState.ThrowIfNotAuthenticated();
+
+        if (_clientRpc is null)
+        {
+            return false;
+        }
+
+        _externalCapabilityRegistry.AddIntegrationHost(_clientRpc);
+        return true;
+    }
+
+    // initializeIntegrationHosts RPC removed: the AppHost server now reads its IntegrationHosts
+    // list from appsettings.json (written by the CLI's csproj generation step) and the
+    // IntegrationHostLauncher's StartAsync spawns + initializes them as part of server boot,
+    // before any guest connects. Symmetric with how .NET integrations are loaded — the server
+    // gets its full integration set from its own startup config, not from a runtime RPC.
+
+    /// <summary>
+    /// Invokes a guest-owned callback on behalf of an integration host.
+    /// The integration host receives a callback id string as an argument to <c>handleExternalCapability</c>
+    /// and calls this method to trigger the callback, which is routed back to the originating guest
+    /// via the owning scope's <see cref="JsonRpcCallbackInvoker"/>.
+    /// </summary>
+    /// <param name="callbackId">The callback id, as originally sent by the guest.</param>
+    /// <param name="args">Positional argument payload shaped as <c>{ p0, p1, ... }</c>.</param>
+    /// <returns>The result returned by the guest's callback, or <c>null</c> for void callbacks.</returns>
+    [JsonRpcMethod("invokeGuestCallback")]
+    public async Task<JsonNode?> InvokeGuestCallbackAsync(string callbackId, JsonObject? args)
+    {
+        _authenticationState.ThrowIfNotAuthenticated();
+        _logger.LogDebug(">> invokeGuestCallback({CallbackId})", callbackId);
+
+        var owner = _externalCapabilityRegistry.ResolveCallbackOwner(callbackId)
+            ?? throw new InvalidOperationException(
+                $"No owning guest connection is currently registered for callback '{callbackId}'. " +
+                "The callback id must be in scope of an in-flight external capability invocation.");
+
+        var result = await owner.InvokeAsync<JsonNode?>(callbackId, args, CancellationToken.None).ConfigureAwait(false);
+        _logger.LogDebug("<< invokeGuestCallback({CallbackId})", callbackId);
+        return result;
     }
 
     #endregion

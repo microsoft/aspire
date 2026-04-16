@@ -677,3 +677,141 @@ class AspireDictImpl<K, V> implements AspireDict<K, V> {
 }
 
 export const AspireDict = AspireDictImpl;
+
+// ============================================================================
+// AspireExport: TypeScript equivalent of [AspireExport] in C#.
+//
+// An integration author wraps a plain typed function with AspireExport to
+// attach capability metadata, then rolls those wrapped functions up into
+// defineIntegration. An integration host runtime (not authored by integration
+// authors — framework code) enumerates the wrapped functions and serves them
+// over the existing integration host protocol (getCapabilities +
+// handleExternalCapability).
+//
+// The wrapped function is returned unchanged (non-enumerable symbol property
+// carries the metadata), so the function stays directly callable as a normal
+// import from the consumer side — at the price of a minor type inference loss
+// on the returned overload.
+// ============================================================================
+
+/**
+ * Projection schema for a capability parameter. The shape mirrors the C#
+ * AtsParameterInfo used by the .NET ATS scanner, and the types below mirror
+ * the rest of the AtsCapabilityInfo graph. Consumers of every language read
+ * this shape at codegen time; the cross-language delivery path feeds it over
+ * the wire via getCapabilities.
+ */
+export interface AspireCapabilityProjection {
+    id: string;
+    method: string;
+    description: string;
+    capabilityKind?: 'Method' | 'PropertyGetter' | 'PropertySetter' | 'InstanceMethod';
+    parameters?: readonly AspireCapabilityParameter[];
+    returnType: AspireTypeRef;
+    targetTypeId?: string;
+    targetType?: AspireTypeRef;
+    targetParameterName?: string;
+    returnsBuilder?: boolean;
+    owningTypeName?: string;
+    expandedTargetTypes?: readonly AspireTypeRef[];
+}
+
+export interface AspireCapabilityParameter {
+    name: string;
+    type?: AspireTypeRef;
+    isOptional?: boolean;
+    isNullable?: boolean;
+    isCallback?: boolean;
+    callbackParameters?: readonly AspireCallbackParameter[];
+    callbackReturnType?: AspireTypeRef;
+}
+
+export interface AspireCallbackParameter {
+    name: string;
+    type: AspireTypeRef;
+}
+
+export interface AspireTypeRef {
+    typeId: string;
+    category: 'Primitive' | 'Enum' | 'Handle' | 'Dto' | 'Callback' | 'Array' | 'List' | 'Dict' | 'Union' | 'Unknown';
+    isInterface?: boolean;
+    isReadOnly?: boolean;
+    elementType?: AspireTypeRef;
+    keyType?: AspireTypeRef;
+    valueType?: AspireTypeRef;
+    unionTypes?: readonly AspireTypeRef[];
+}
+
+/**
+ * The symbol key under which AspireExport attaches its metadata. The key is
+ * `Symbol.for`-scoped so separate module copies can still find the metadata
+ * on the same function object.
+ */
+export const kAspireExport = Symbol.for('@aspire/AspireExport');
+
+export interface AspireExportMetadata {
+    id: string;
+    method: string;
+    description: string;
+    projection?: Omit<AspireCapabilityProjection, 'id' | 'method' | 'description'>;
+}
+
+export type AspireExportedFunction<TArgs, TResult> =
+    ((args: TArgs) => Promise<TResult>) & {
+        readonly [kAspireExport]: AspireExportMetadata;
+    };
+
+/**
+ * Mark a function as an Aspire-exported capability.
+ *
+ * The function is the real implementation — a normal typed TypeScript function
+ * taking the wrapped parameter bag ({ builder, ...flatArgs }) and returning a
+ * Promise of a generated handle type. It stays directly callable; AspireExport
+ * only attaches metadata via a non-enumerable symbol property.
+ *
+ * The TypeScript equivalent of marking a .NET extension method with `[AspireExport]`.
+ */
+export function AspireExport<TArgs, TResult>(
+    metadata: AspireExportMetadata,
+    impl: (args: TArgs) => Promise<TResult>
+): AspireExportedFunction<TArgs, TResult> {
+    Object.defineProperty(impl, kAspireExport, {
+        value: metadata,
+        enumerable: false,
+        writable: false,
+        configurable: false,
+    });
+    return impl as AspireExportedFunction<TArgs, TResult>;
+}
+
+/**
+ * Read the AspireExport metadata attached to a wrapped function, or undefined
+ * if the value is not an AspireExport-wrapped function. Used by the integration
+ * host runtime to enumerate a package's capabilities at getCapabilities time.
+ */
+export function getAspireExport(fn: unknown): AspireExportMetadata | undefined {
+    if (typeof fn !== 'function') {
+        return undefined;
+    }
+    const meta = (fn as unknown as { [kAspireExport]?: AspireExportMetadata })[kAspireExport];
+    return meta;
+}
+
+/**
+ * Package-level rollup of the AspireExport-wrapped functions an integration
+ * contributes. The integration host runtime enumerates the capabilities array
+ * and reports each one's metadata over the `getCapabilities` RPC.
+ */
+export interface AspireIntegrationDefinition {
+    name: string;
+    capabilities: readonly AspireExportedFunction<any, any>[];
+}
+
+/**
+ * Roll up one or more AspireExport-wrapped functions into an integration the
+ * host runtime can load. Authoring-time equivalent of a `[assembly: AspireExport]`
+ * scan root in C#.
+ */
+export function defineIntegration<T extends AspireIntegrationDefinition>(integration: T): T {
+    return integration;
+}
