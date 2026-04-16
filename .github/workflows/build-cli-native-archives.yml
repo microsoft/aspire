@@ -10,6 +10,13 @@ on:
         required: false
         type: string
         default: Debug
+      cliChannel:
+        description: >
+          Distribution channel to embed in the CLI binary (e.g., 'stable', 'daily', 'pr').
+          When empty, defaults to 'stable' via Common.projitems.
+        required: false
+        type: string
+        default: ''
       targets:
         description: >
           JSON array of target objects to build. Each object must have 'os', 'runner', and 'rids' keys.
@@ -128,6 +135,7 @@ jobs:
           /p:SkipManagedBuild=true
           /p:TargetRids=${{ matrix.targets.rids }}
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
+          ${{ inputs.cliChannel != '' && format('/p:CliChannel={0}', inputs.cliChannel) || '' }}
           ${{ inputs.versionOverrideArg }}
 
       - name: Build CLI packages (Unix)
@@ -144,6 +152,7 @@ jobs:
           /p:SkipManagedBuild=true
           /p:TargetRids=${{ matrix.targets.rids }}
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
+          ${{ inputs.cliChannel != '' && format('/p:CliChannel={0}', inputs.cliChannel) || '' }}
           ${{ inputs.versionOverrideArg }}
 
       - name: Upload CLI archives

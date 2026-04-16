@@ -95,9 +95,9 @@ internal sealed class AddCommand : BaseCommand
 
             var source = parseResult.GetValue(s_sourceOption);
 
-            // For non-.NET projects, read the channel from the configuration service,
-            // which supports both the global config (aspire config set) and legacy settings.
-            // Falls back to the embedded channel baked into the binary.
+            // For non-.NET projects, read the channel from local project config first,
+            // then global config, then the embedded channel baked into the binary.
+            // This matches the resolution order in PrebuiltAppHostServer.ResolveChannelNameAsync.
             string? configuredChannel = null;
             if (project.LanguageId != KnownLanguageId.CSharp)
             {
@@ -107,8 +107,16 @@ internal sealed class AddCommand : BaseCommand
                 {
                     try
                     {
-                        configuredChannel = await _configurationService.GetConfigurationAsync("channel", cancellationToken)
-                            ?? PackagingService.GetEmbeddedChannel();
+                        // Check aspire.config.json first, then fall back to legacy .aspire/settings.json
+                        configuredChannel = AspireConfigFile.Load(appHostDirectory)?.GetChannel()
+                            ?? AspireJsonConfiguration.Load(appHostDirectory)?.Channel;
+
+                        // Fall back to global config, then embedded channel
+                        if (string.IsNullOrEmpty(configuredChannel))
+                        {
+                            configuredChannel = await _configurationService.GetConfigurationAsync("channel", cancellationToken)
+                                ?? PackagingService.GetEmbeddedChannel();
+                        }
                     }
                     catch (JsonException ex)
                     {

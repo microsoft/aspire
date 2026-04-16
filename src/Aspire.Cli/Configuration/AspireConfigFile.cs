@@ -136,9 +136,19 @@ internal sealed class AspireConfigFile
     /// for correct round-tripping.
     /// </remarks>
     public string? GetChannel()
-        => ExtensionData?.TryGetValue("channel", out var element) == true
-            ? element.GetString()
-            : null;
+    {
+        if (ExtensionData?.TryGetValue("channel", out var element) != true)
+        {
+            return null;
+        }
+
+        if (element.ValueKind != JsonValueKind.String)
+        {
+            return null;
+        }
+
+        return element.GetString();
+    }
 
     /// <summary>
     /// Sets the channel in <see cref="ExtensionData"/>.

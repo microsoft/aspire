@@ -472,10 +472,10 @@ internal sealed class UpdateCommand : BaseCommand
                 throw;
             }
         }
-        catch (UnauthorizedAccessException)
+        catch (UnauthorizedAccessException ex)
         {
             throw new UnauthorizedAccessException(
-                string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.NoWritePermissionToInstallDirectory, installDir));
+                string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.NoWritePermissionToInstallDirectory, installDir), ex);
         }
         finally
         {
@@ -495,12 +495,27 @@ internal sealed class UpdateCommand : BaseCommand
 
         var pathSeparator = Path.PathSeparator;
         var paths = pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries);
-        
-        return paths.Any(p => 
-            string.Equals(Path.GetFullPath(p.Trim()), Path.GetFullPath(directory), 
-                RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-                    ? StringComparison.OrdinalIgnoreCase 
-                    : StringComparison.Ordinal));
+        var comparison = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var fullDirectory = Path.GetFullPath(directory);
+
+        foreach (var p in paths)
+        {
+            try
+            {
+                if (string.Equals(Path.GetFullPath(p.Trim()), fullDirectory, comparison))
+                {
+                    return true;
+                }
+            }
+            catch (ArgumentException)
+            {
+                // Malformed PATH entries with invalid characters — skip them
+            }
+        }
+
+        return false;
     }
 
     private void SetExecutablePermission(string filePath)
@@ -529,7 +544,6 @@ internal sealed class UpdateCommand : BaseCommand
                 FileName = exePath,
                 Arguments = "--version",
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
                 UseShellExecute = false
             };
 

@@ -964,10 +964,9 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
 
         Assert.NotNull(result);
-        // JsonElement.GetString() throws for non-string types, so verify the behavior
         Assert.NotNull(result.ExtensionData);
         Assert.True(result.ExtensionData.ContainsKey("channel"));
-        // GetChannel uses GetString() which throws InvalidOperationException for non-string
-        Assert.Throws<InvalidOperationException>(result.GetChannel);
+        // Non-string channel values are gracefully ignored rather than throwing
+        Assert.Null(result.GetChannel());
     }
 }
