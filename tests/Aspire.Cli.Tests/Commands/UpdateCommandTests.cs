@@ -1418,3 +1418,311 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
             t => t.Contains("dotnet tool update -g Aspire.Cli"));
     }
 }
+
+public class UpdateCommandScriptInstallTests(ITestOutputHelper outputHelper)
+{
+    [Fact]
+    public async Task UpdateCommand_SelfFlag_WhenScriptInstall_ProceedsToSelfUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var downloadAttempted = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InstallationDetectorFactory = _ => new TestInstallationDetector
+            {
+                InstallationInfo = new InstallationInfo(
+                    IsDotNetTool: false,
+                    SelfUpdateDisabled: false,
+                    UpdateInstructions: null)
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+
+            options.CliDownloaderFactory = _ =>
+            {
+                var tmpDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "tmp"));
+                return new TestCliDownloader(tmpDir)
+                {
+                    DownloadLatestCliAsyncCallback = (channel, ct) =>
+                    {
+                        downloadAttempted = true;
+                        throw new InvalidOperationException("Simulated download for test verification");
+                    }
+                };
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+        var interactionService = provider.GetRequiredService<IInteractionService>() as TestInteractionService;
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel stable");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.True(downloadAttempted, "CLI download should have been attempted for script install");
+        // Should NOT show disabled or dotnet tool messages
+        Assert.DoesNotContain(interactionService!.DisplayedMessages,
+            m => m.Message.Contains("Self-update is disabled"));
+        Assert.DoesNotContain(interactionService.DisplayedMessages,
+            m => m.Message.Contains("installed as a .NET tool"));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_PostProjectUpdate_WhenScriptInstall_PromptsForCliUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        TestInteractionService? interactionService = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InstallationDetectorFactory = _ => new TestInstallationDetector
+            {
+                InstallationInfo = new InstallationInfo(
+                    IsDotNetTool: false,
+                    SelfUpdateDisabled: false,
+                    UpdateInstructions: null)
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            interactionService = new TestInteractionService()
+            {
+                ConfirmCallback = (prompt, defaultValue) =>
+                {
+                    return false; // User declines
+                }
+            };
+            options.InteractionServiceFactory = _ => interactionService;
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                {
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (cancellationToken) =>
+                {
+                    var stableChannel = PackageChannel.CreateExplicitChannel(
+                        "stable",
+                        PackageChannelQuality.Stable,
+                        new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
+                        null!,
+                        configureGlobalPackagesFolder: false,
+                        cliDownloadBaseUrl: "https://aka.ms/dotnet/aspire/cli");
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
+                }
+            };
+
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier()
+            {
+                IsUpdateAvailableCallback = () => true
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Single(interactionService!.BooleanPromptCalls);
+        Assert.Contains(UpdateCommandStrings.UpdateCliAfterProjectUpdatePrompt, interactionService.BooleanPromptCalls[0].PromptText);
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_NoProjectFound_WhenScriptInstall_PromptsForSelfUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        TestInteractionService? interactionService = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InstallationDetectorFactory = _ => new TestInstallationDetector
+            {
+                InstallationInfo = new InstallationInfo(
+                    IsDotNetTool: false,
+                    SelfUpdateDisabled: false,
+                    UpdateInstructions: null)
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    throw new ProjectLocatorException(ErrorStrings.NoProjectFileFound, ProjectLocatorFailureReason.NoProjectFileFound);
+                }
+            };
+
+            interactionService = new TestInteractionService()
+            {
+                ConfirmCallback = (prompt, defaultValue) =>
+                {
+                    return false; // User declines
+                }
+            };
+            options.InteractionServiceFactory = _ => interactionService;
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Single(interactionService!.BooleanPromptCalls);
+        Assert.Contains(UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt, interactionService.BooleanPromptCalls[0].PromptText);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_DoesNotSaveChannelToGlobalConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configKeysSet = new List<string>();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InstallationDetectorFactory = _ => new TestInstallationDetector
+            {
+                InstallationInfo = new InstallationInfo(
+                    IsDotNetTool: false,
+                    SelfUpdateDisabled: false,
+                    UpdateInstructions: null)
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+
+            options.ConfigurationServiceFactory = _ => new Aspire.Cli.Tests.TestServices.TestConfigurationService
+            {
+                OnSetConfiguration = (key, value, isGlobal) =>
+                {
+                    configKeysSet.Add(key);
+                }
+            };
+
+            options.CliDownloaderFactory = _ =>
+            {
+                var tmpDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "tmp"));
+                return new TestCliDownloader(tmpDir)
+                {
+                    DownloadLatestCliAsyncCallback = (channel, ct) =>
+                    {
+                        // Simulate a failure to avoid needing real extraction
+                        throw new InvalidOperationException("Simulated download failure");
+                    }
+                };
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel stable");
+
+        // The command will fail due to simulated download failure, but we're
+        // testing that channel is NOT saved to config before/during the attempt
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.DoesNotContain("channel", configKeysSet);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfFlag_WhenSelfUpdateDisabled_WithNoInstructions_ShowsOnlyDisabledMessage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InstallationDetectorFactory = _ => new TestInstallationDetector
+            {
+                InstallationInfo = new InstallationInfo(
+                    IsDotNetTool: false,
+                    SelfUpdateDisabled: true,
+                    UpdateInstructions: null)
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+        });
+
+        var provider = services.BuildServiceProvider();
+        var interactionService = provider.GetRequiredService<IInteractionService>() as TestInteractionService;
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains(interactionService!.DisplayedMessages,
+            m => m.Message.Contains("Self-update is disabled"));
+        // No instructions should be displayed when UpdateInstructions is null
+        Assert.Empty(interactionService.DisplayedPlainTexts);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfFlag_NoChannelSpecified_PromptsForChannelSelection()
+    {
+        // When no --channel is specified and no embedded channel is available (dev builds),
+        // the user should be prompted to select a channel. This also validates the behavior
+        // when embedded channel is "pr" (excluded from auto-selection).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        TestInteractionService? interactionService = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InstallationDetectorFactory = _ => new TestInstallationDetector
+            {
+                InstallationInfo = new InstallationInfo(
+                    IsDotNetTool: false,
+                    SelfUpdateDisabled: false,
+                    UpdateInstructions: null)
+            };
+
+            interactionService = new TestInteractionService();
+            interactionService.SetupSelectionResponse("stable");
+            options.InteractionServiceFactory = _ => interactionService;
+
+            options.CliDownloaderFactory = _ =>
+            {
+                var tmpDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "tmp"));
+                return new TestCliDownloader(tmpDir)
+                {
+                    DownloadLatestCliAsyncCallback = (channel, ct) =>
+                    {
+                        throw new InvalidOperationException("Simulated download for test verification");
+                    }
+                };
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // No --channel specified
+        var result = command.Parse("update --self");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        // In dev builds (no embedded channel), the user should be prompted to select a channel
+        Assert.Contains(interactionService!.DisplayedMessages,
+            m => m.Message.Contains("Updating to channel"));
+    }
+}

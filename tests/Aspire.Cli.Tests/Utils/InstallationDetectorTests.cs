@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.InteropServices;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -587,6 +588,51 @@ public class InstallationDetectorTests
         }
         finally
         {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetInstallationInfo_UnreadableConfigFile_FailsClosed()
+    {
+        Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
+            "File permission tests require Unix-style chmod");
+
+        // When .aspire-update.json exists but is unreadable (e.g., permissions issue),
+        // the detector should fail closed — treating it as if self-update is disabled.
+        var tempDir = Directory.CreateTempSubdirectory("aspire-install-test");
+        try
+        {
+            var binDir = Path.Combine(tempDir.FullName, "bin");
+            Directory.CreateDirectory(binDir);
+            var aspireExePath = Path.Combine(binDir, "aspire");
+            File.WriteAllText(aspireExePath, "fake");
+
+            var configFilePath = Path.Combine(binDir, ".aspire-update.json");
+            File.WriteAllText(configFilePath, """{ "selfUpdateDisabled": true }""");
+
+            // Make the file unreadable (guarded by Assert.SkipUnless above)
+#pragma warning disable CA1416 // Platform compatibility — guarded by runtime check above
+            File.SetUnixFileMode(configFilePath, UnixFileMode.None);
+#pragma warning restore CA1416
+
+            var detector = new InstallationDetector(_logger, processPath: aspireExePath);
+            var info = detector.GetInstallationInfo();
+
+            // Should fail closed: treat as self-update disabled
+            Assert.True(info.SelfUpdateDisabled);
+        }
+        finally
+        {
+            // Restore permissions for cleanup
+            var configFilePath = Path.Combine(tempDir.FullName, "bin", ".aspire-update.json");
+            if (File.Exists(configFilePath))
+            {
+#pragma warning disable CA1416 // Platform compatibility — guarded by runtime check above
+                File.SetUnixFileMode(configFilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+#pragma warning restore CA1416
+            }
+
             tempDir.Delete(recursive: true);
         }
     }

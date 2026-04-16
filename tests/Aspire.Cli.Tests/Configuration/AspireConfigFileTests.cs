@@ -969,4 +969,33 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         // Non-string channel values are gracefully ignored rather than throwing
         Assert.Null(result.GetChannel());
     }
+
+    [Fact]
+    public void SetChannel_ThenSave_PreservesChannelInExtensionData()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a config with channel set via SetChannel (extension data, not first-class property)
+        var config = new AspireConfigFile
+        {
+            AppHost = new AspireConfigAppHost { Path = "MyApp.csproj" }
+        };
+        config.SetChannel("daily");
+
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        // Reload the raw JSON and verify "channel" is present and correct
+        var filePath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var rawJson = File.ReadAllText(filePath);
+
+        Assert.Contains("\"channel\"", rawJson);
+        Assert.Contains("\"daily\"", rawJson);
+
+        // Reload through the config API and verify round-trip
+        var reloaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(reloaded);
+        Assert.Equal("daily", reloaded.GetChannel());
+        Assert.Equal("MyApp.csproj", reloaded.AppHost?.Path);
+    }
 }
