@@ -1350,7 +1350,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             .Where(integration => ShouldCheckForGeneratedSdkWarning(integration, codeGenerationPackageName))
             .OrderBy(integration => integration.Name, StringComparer.OrdinalIgnoreCase))
         {
-            var capabilities = await rpcClient.GetCapabilitiesForAssembliesAsync([integration.Name], cancellationToken);
+            var capabilities = await rpcClient.GetCapabilitiesForAssembliesAsync(new[] { integration.Name }, cancellationToken);
             if (HasGeneratedSdkSurface(capabilities))
             {
                 continue;
