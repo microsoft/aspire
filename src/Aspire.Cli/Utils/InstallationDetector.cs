@@ -102,7 +102,7 @@ internal sealed class InstallationDetector : IInstallationDetector
         }
 
         // Check if installed via WinGet (process under WinGet packages directory)
-        if (resolvedPath is not null && IsWinGetInstall(resolvedPath))
+        if (!string.IsNullOrEmpty(resolvedPath) && IsWinGetInstall(resolvedPath))
         {
             _logger.LogDebug("CLI appears to be installed via WinGet (process path is under a WinGet packages directory).");
             return new InstallationInfo(IsDotNetTool: false, SelfUpdateDisabled: true, UpdateInstructions: PackageManagerUpdateInstructions);
@@ -130,7 +130,7 @@ internal sealed class InstallationDetector : IInstallationDetector
     {
         if (string.IsNullOrEmpty(processPath))
         {
-            return processPath;
+            return null;
         }
 
         try
