@@ -81,7 +81,7 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DetachFormatJsonProducesValidCombinedOutputWhenRestartingExistingInstance()
+    public async Task DetachFormatJsonProducesValidJsonWhenRestartingExistingInstance()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect();
@@ -113,15 +113,15 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
 
         await auto.ClearScreenAsync(counter);
 
-        // Capture combined stdout/stderr so the file becomes invalid JSON if any
-        // human-readable restart/status messages leak into machine-readable mode.
-        await auto.TypeAsync("aspire start --format json > combined-output.json 2>&1");
+        // Capture stdout so the file remains a single JSON document even when the restart path
+        // emits human-readable progress messages to stderr.
+        await auto.TypeAsync("aspire start --format json > output.json");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
-        await auto.TypeAsync("python3 -c \"import json; data = json.load(open('combined-output.json')); assert 'appHostPath' in data; assert 'appHostPid' in data; print('JSON_VALID')\"");
+        await auto.TypeAsync("python3 -c \"import json; data = json.load(open('output.json')); assert 'appHostPath' in data; assert 'appHostPid' in data; print('JSON_VALID')\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("JSON_VALID", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
