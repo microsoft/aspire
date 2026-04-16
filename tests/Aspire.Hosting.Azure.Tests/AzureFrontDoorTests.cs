@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE002
+#pragma warning disable ASPIREPROBES001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
@@ -61,7 +62,7 @@ public class AzureFrontDoorTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        builder.AddAzureAppServiceEnvironment("env");
+        builder.AddAzureContainerAppEnvironment("env");
 
         var api = builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpsEndpoint()
@@ -84,7 +85,7 @@ public class AzureFrontDoorTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        builder.AddAzureAppServiceEnvironment("env");
+        builder.AddAzureContainerAppEnvironment("env");
 
         var api = builder.AddProject<Project>("api", launchProfileName: null)
             .WithHttpsEndpoint()
@@ -111,7 +112,7 @@ public class AzureFrontDoorTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        builder.AddAzureAppServiceEnvironment("env");
+        builder.AddAzureContainerAppEnvironment("env");
 
         var api = builder.AddProject<Project>("api", launchProfileName: null);
 
@@ -125,7 +126,7 @@ public class AzureFrontDoorTests
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => GetManifestWithBicep(frontDoor.Resource));
 
         Assert.Equal(
-            "Resource 'api' does not have any endpoints. Azure Front Door requires a resource to expose at least one endpoint before it can be added as an origin.",
+            "Resource 'api' does not have any HTTP or HTTPS endpoints. Azure Front Door requires a resource to expose at least one HTTP or HTTPS endpoint before it can be added as an origin.",
             exception.Message);
     }
 
@@ -156,6 +157,79 @@ public class AzureFrontDoorTests
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
 
         Assert.Throws<ArgumentNullException>(() => frontDoor.WithOrigin((IResourceBuilder<IResourceWithEndpoints>)null!));
+    }
+
+    [Fact]
+    public async Task HealthProbePathUsesResourceProbeAnnotation()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithHttpProbe(ProbeType.Liveness, "/health");
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        Assert.Contains("probePath: '/health'", bicep);
+    }
+
+    [Fact]
+    public async Task HealthProbePathDefaultsToSlashWhenNoProbeAnnotation()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        Assert.Contains("probePath: '/'", bicep);
+    }
+
+    [Fact]
+    public async Task WithOriginSkipsNonHttpEndpoints()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        // Add a resource with a non-HTTP endpoint and an HTTP endpoint
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithEndpoint(scheme: "tcp", name: "grpc")
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var (_, bicep) = await GetManifestWithBicep(frontDoor.Resource);
+
+        // Should generate valid bicep (picked the HTTPS endpoint, not the TCP one)
+        Assert.Contains("hostName: api_host", bicep);
     }
 
     private sealed class Project : IProjectMetadata

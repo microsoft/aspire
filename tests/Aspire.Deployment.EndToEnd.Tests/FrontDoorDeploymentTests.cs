@@ -12,24 +12,24 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// <summary>
 /// End-to-end tests for deploying Aspire applications with Azure Front Door and Azure Container Apps.
 /// </summary>
-public sealed class FrontDoorAppServiceDeploymentTests(ITestOutputHelper output)
+public sealed class FrontDoorDeploymentTests(ITestOutputHelper output)
 {
     // Timeout set to 40 minutes to allow for Azure Front Door and ACA provisioning.
     // Full deployments can take up to 30 minutes if Azure infrastructure is backed up.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
-    public async Task DeployReactTemplateToAzureAppServiceWithFrontDoor()
+    public async Task DeployReactTemplateWithFrontDoor()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cts.Token, TestContext.Current.CancellationToken);
         var cancellationToken = linkedCts.Token;
 
-        await DeployReactTemplateToAzureAppServiceWithFrontDoorCore(cancellationToken);
+        await DeployReactTemplateWithFrontDoorCore(cancellationToken);
     }
 
-    private async Task DeployReactTemplateToAzureAppServiceWithFrontDoorCore(CancellationToken cancellationToken)
+    private async Task DeployReactTemplateWithFrontDoorCore(CancellationToken cancellationToken)
     {
         // Validate prerequisites
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
@@ -56,7 +56,7 @@ public sealed class FrontDoorAppServiceDeploymentTests(ITestOutputHelper output)
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("frontdoor");
         var projectName = "FrontDoorApp";
 
-        output.WriteLine($"Test: {nameof(DeployReactTemplateToAzureAppServiceWithFrontDoor)}");
+        output.WriteLine($"Test: {nameof(DeployReactTemplateWithFrontDoor)}");
         output.WriteLine($"Project Name: {projectName}");
         output.WriteLine($"Resource Group: {resourceGroupName}");
         output.WriteLine($"Subscription: {subscriptionId[..8]}...");
@@ -210,7 +210,7 @@ builder.Build().Run();
             output.WriteLine($"Deployment completed in {duration}");
 
             DeploymentReporter.ReportDeploymentSuccess(
-                nameof(DeployReactTemplateToAzureAppServiceWithFrontDoor),
+                nameof(DeployReactTemplateWithFrontDoor),
                 resourceGroupName,
                 deploymentUrls,
                 duration);
@@ -223,7 +223,7 @@ builder.Build().Run();
             output.WriteLine($"❌ Test failed after {duration}: {ex.Message}");
 
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(DeployReactTemplateToAzureAppServiceWithFrontDoor),
+                nameof(DeployReactTemplateWithFrontDoor),
                 resourceGroupName,
                 ex.Message,
                 ex.StackTrace);

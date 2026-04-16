@@ -4,6 +4,7 @@
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIRECOMPUTE002 // IComputeEnvironmentResource.GetHostAddressExpression is experimental
+#pragma warning disable ASPIREPROBES001 // EndpointProbeAnnotation is experimental
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -83,6 +84,9 @@ public static class AzureFrontDoorExtensions
 
                 var endpointReference = GetOriginEndpoint(originResource);
 
+                // Use health probe path from the resource's probe annotations if available
+                var probePath = GetProbePath(originResource);
+
                 // Resolve the hostname via the origin resource's compute environment
                 var computeEnv = GetEffectiveComputeEnvironment(originResource);
                 var hostExpression = computeEnv.GetHostAddressExpression(endpointReference);
@@ -105,10 +109,14 @@ public static class AzureFrontDoorExtensions
                     HealthProbeSettings = new HealthProbeSettings
                     {
                         ProbeProtocol = HealthProbeProtocol.Https,
-                        ProbePath = "/",
-                        ProbeIntervalInSeconds = 100
+                        ProbePath = probePath
                     },
                     LoadBalancingSettings = new LoadBalancingSettings()
+                    {
+                        SampleSize = 4,
+                        SuccessfulSamplesRequired = 3,
+                        AdditionalLatencyInMilliseconds = 50
+                    }
                 };
                 infrastructure.Add(originGroup);
 
@@ -202,20 +210,34 @@ public static class AzureFrontDoorExtensions
 
     private static EndpointReference GetOriginEndpoint(IResourceWithEndpoints resource)
     {
-        var endpoints = resource.GetEndpoints().ToArray();
+        var httpEndpoints = resource.GetEndpoints()
+            .Where(e => e.EndpointAnnotation.UriScheme is "http" or "https")
+            .ToArray();
 
-        if (endpoints.FirstOrDefault(endpoint => endpoint.EndpointAnnotation.IsExternal) is { } externalEndpoint)
+        if (httpEndpoints.FirstOrDefault(e => e.EndpointAnnotation.IsExternal) is { } externalEndpoint)
         {
             return externalEndpoint;
         }
 
-        if (endpoints.FirstOrDefault() is { } endpoint)
+        if (httpEndpoints.FirstOrDefault() is { } endpoint)
         {
             return endpoint;
         }
 
         throw new InvalidOperationException(
-            $"Resource '{resource.Name}' does not have any endpoints. " +
-            "Azure Front Door requires a resource to expose at least one endpoint before it can be added as an origin.");
+            $"Resource '{resource.Name}' does not have any HTTP or HTTPS endpoints. " +
+            "Azure Front Door requires a resource to expose at least one HTTP or HTTPS endpoint before it can be added as an origin.");
+    }
+
+    private static string GetProbePath(IResourceWithEndpoints resource)
+    {
+        // Use the health probe path from EndpointProbeAnnotation if available (set by WithHttpHealthCheck).
+        // Prefer liveness probes, matching the pattern used by App Service.
+        var probeAnnotation = resource.Annotations
+            .OfType<EndpointProbeAnnotation>()
+            .OrderBy(p => p.Type == ProbeType.Liveness ? 0 : 1)
+            .FirstOrDefault();
+
+        return probeAnnotation?.Path ?? "/";
     }
 }
