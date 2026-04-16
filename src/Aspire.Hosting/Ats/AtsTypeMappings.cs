@@ -8,7 +8,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -54,7 +53,6 @@ using Microsoft.Extensions.Logging;
 
 // Service types
 [assembly: AspireExport(typeof(IServiceProvider))]
-[assembly: AspireExport(typeof(IServiceCollection))]
 [assembly: AspireExport(typeof(ResourceNotificationService))]
 [assembly: AspireExport(typeof(ResourceLoggerService))]
 

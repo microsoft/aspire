@@ -1177,7 +1177,6 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference", (h, c) -> new ContainerImageReference(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference", (h, c) -> new ContainerPortReference(h, c));
         AspireClient.registerHandleWrapper("System.ComponentModel/System.IServiceProvider", (h, c) -> new IServiceProvider(h, c));
-        AspireClient.registerHandleWrapper("Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection", (h, c) -> new IServiceCollection(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", (h, c) -> new ResourceNotificationService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", (h, c) -> new ResourceLoggerService(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", (h, c) -> new IConfiguration(h, c));
@@ -12512,13 +12511,6 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (IHostEnvironment) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.environment", reqArgs);
     }
 
-    /** Gets the Services property */
-    public IServiceCollection services() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (IServiceCollection) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.services", reqArgs);
-    }
-
     /** Gets the Eventing property */
     public IDistributedApplicationEventing eventing() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -12749,6 +12741,36 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
             reqArgs.put("callback", callbackId);
         }
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeAfterResourcesCreated", reqArgs);
+    }
+
+    /** Adds an eventing subscriber */
+    public void addEventingSubscriber(AspireAction1<EventingSubscriberRegistrationContext> subscribe) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var subscribeId = getClient().registerCallback(args -> {
+            var arg = (EventingSubscriberRegistrationContext) args[0];
+            subscribe.invoke(arg);
+            return null;
+        });
+        if (subscribeId != null) {
+            reqArgs.put("subscribe", subscribeId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/addEventingSubscriber", reqArgs);
+    }
+
+    /** Attempts to add an eventing subscriber */
+    public void tryAddEventingSubscriber(AspireAction1<EventingSubscriberRegistrationContext> subscribe) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var subscribeId = getClient().registerCallback(args -> {
+            var arg = (EventingSubscriberRegistrationContext) args[0];
+            subscribe.invoke(arg);
+            return null;
+        });
+        if (subscribeId != null) {
+            reqArgs.put("subscribe", subscribeId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/tryAddEventingSubscriber", reqArgs);
     }
 
     public TestRedisResource addTestRedis(String name) {
@@ -13505,52 +13527,6 @@ import java.util.function.*;
 public class IResourceWithWaitSupport extends ResourceBuilderBase {
     IResourceWithWaitSupport(Handle handle, AspireClient client) {
         super(handle, client);
-    }
-
-}
-
-// ===== IServiceCollection.java =====
-// IServiceCollection.java - GENERATED CODE - DO NOT EDIT
-
-package aspire;
-
-import java.util.*;
-import java.util.function.*;
-
-/** Wrapper for Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection. */
-public class IServiceCollection extends HandleWrapperBase {
-    IServiceCollection(Handle handle, AspireClient client) {
-        super(handle, client);
-    }
-
-    /** Adds an eventing subscriber */
-    public void addEventingSubscriber(AspireAction1<EventingSubscriberRegistrationContext> subscribe) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("services", AspireClient.serializeValue(getHandle()));
-        var subscribeId = getClient().registerCallback(args -> {
-            var arg = (EventingSubscriberRegistrationContext) args[0];
-            subscribe.invoke(arg);
-            return null;
-        });
-        if (subscribeId != null) {
-            reqArgs.put("subscribe", subscribeId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/addEventingSubscriber", reqArgs);
-    }
-
-    /** Attempts to add an eventing subscriber */
-    public void tryAddEventingSubscriber(AspireAction1<EventingSubscriberRegistrationContext> subscribe) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("services", AspireClient.serializeValue(getHandle()));
-        var subscribeId = getClient().registerCallback(args -> {
-            var arg = (EventingSubscriberRegistrationContext) args[0];
-            subscribe.invoke(arg);
-            return null;
-        });
-        if (subscribeId != null) {
-            reqArgs.put("subscribe", subscribeId);
-        }
-        getClient().invokeCapability("Aspire.Hosting/tryAddEventingSubscriber", reqArgs);
     }
 
 }
@@ -24009,7 +23985,6 @@ public final class WithVolumeOptions {
 .modules/IResourceWithEnvironment.java
 .modules/IResourceWithParent.java
 .modules/IResourceWithWaitSupport.java
-.modules/IServiceCollection.java
 .modules/IServiceProvider.java
 .modules/ITestVaultResource.java
 .modules/IUserSecretsManager.java

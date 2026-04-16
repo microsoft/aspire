@@ -100,8 +100,7 @@ void main() throws Exception {
         var builderExecutionContext = builder.executionContext();
         var executionContextServiceProvider = builderExecutionContext.serviceProvider();
         var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
-        var builderServices = builder.services();
-        builderServices.addEventingSubscriber((registrationContext) -> {
+        builder.addEventingSubscriber((registrationContext) -> {
             var subscriberExecutionContext = registrationContext.executionContext();
             var _subscriberIsRunMode = subscriberExecutionContext.isRunMode();
             var _subscriberCancellationToken = registrationContext.cancellationToken();
@@ -117,7 +116,7 @@ void main() throws Exception {
                 var _afterResourcesCreatedResources = afterResourcesCreatedModel.getResources();
             });
         });
-        builderServices.tryAddEventingSubscriber((_registrationContext) -> { });
+        builder.tryAddEventingSubscriber((_registrationContext) -> { });
         container.withArgs(new String[] { "--validation" });
         var executionConfigurationBuilder = container.createExecutionConfiguration();
         executionConfigurationBuilder.withArgumentsConfig();

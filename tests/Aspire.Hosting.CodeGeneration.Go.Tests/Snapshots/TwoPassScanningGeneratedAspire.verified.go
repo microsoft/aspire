@@ -11063,18 +11063,6 @@ func (s *IDistributedApplicationBuilder) Environment() (*IHostEnvironment, error
 	return result.(*IHostEnvironment), nil
 }
 
-// Services gets the Services property
-func (s *IDistributedApplicationBuilder) Services() (*IServiceCollection, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.services", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IServiceCollection), nil
-}
-
 // Eventing gets the Eventing property
 func (s *IDistributedApplicationBuilder) Eventing() (*IDistributedApplicationEventing, error) {
 	reqArgs := map[string]any{
@@ -11341,6 +11329,30 @@ func (s *IDistributedApplicationBuilder) SubscribeAfterResourcesCreated(callback
 		return nil, err
 	}
 	return result.(*DistributedApplicationEventSubscription), nil
+}
+
+// AddEventingSubscriber adds an eventing subscriber
+func (s *IDistributedApplicationBuilder) AddEventingSubscriber(subscribe func(...any) any) error {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if subscribe != nil {
+		reqArgs["subscribe"] = RegisterCallback(subscribe)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/addEventingSubscriber", reqArgs)
+	return err
+}
+
+// TryAddEventingSubscriber attempts to add an eventing subscriber
+func (s *IDistributedApplicationBuilder) TryAddEventingSubscriber(subscribe func(...any) any) error {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if subscribe != nil {
+		reqArgs["subscribe"] = RegisterCallback(subscribe)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/tryAddEventingSubscriber", reqArgs)
+	return err
 }
 
 // AddTestRedis adds a test Redis resource
@@ -12032,42 +12044,6 @@ func NewIResourceWithWaitSupport(handle *Handle, client *AspireClient) *IResourc
 	return &IResourceWithWaitSupport{
 		ResourceBuilderBase: NewResourceBuilderBase(handle, client),
 	}
-}
-
-// IServiceCollection wraps a handle for Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection.
-type IServiceCollection struct {
-	HandleWrapperBase
-}
-
-// NewIServiceCollection creates a new IServiceCollection.
-func NewIServiceCollection(handle *Handle, client *AspireClient) *IServiceCollection {
-	return &IServiceCollection{
-		HandleWrapperBase: NewHandleWrapperBase(handle, client),
-	}
-}
-
-// AddEventingSubscriber adds an eventing subscriber
-func (s *IServiceCollection) AddEventingSubscriber(subscribe func(...any) any) error {
-	reqArgs := map[string]any{
-		"services": SerializeValue(s.Handle()),
-	}
-	if subscribe != nil {
-		reqArgs["subscribe"] = RegisterCallback(subscribe)
-	}
-	_, err := s.Client().InvokeCapability("Aspire.Hosting/addEventingSubscriber", reqArgs)
-	return err
-}
-
-// TryAddEventingSubscriber attempts to add an eventing subscriber
-func (s *IServiceCollection) TryAddEventingSubscriber(subscribe func(...any) any) error {
-	reqArgs := map[string]any{
-		"services": SerializeValue(s.Handle()),
-	}
-	if subscribe != nil {
-		reqArgs["subscribe"] = RegisterCallback(subscribe)
-	}
-	_, err := s.Client().InvokeCapability("Aspire.Hosting/tryAddEventingSubscriber", reqArgs)
-	return err
 }
 
 // IServiceProvider wraps a handle for System.ComponentModel/System.IServiceProvider.
@@ -21321,9 +21297,6 @@ func init() {
 	})
 	RegisterHandleWrapper("System.ComponentModel/System.IServiceProvider", func(h *Handle, c *AspireClient) any {
 		return NewIServiceProvider(h, c)
-	})
-	RegisterHandleWrapper("Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection", func(h *Handle, c *AspireClient) any {
-		return NewIServiceCollection(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", func(h *Handle, c *AspireClient) any {
 		return NewResourceNotificationService(h, c)

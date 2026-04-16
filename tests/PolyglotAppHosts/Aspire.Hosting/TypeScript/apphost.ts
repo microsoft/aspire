@@ -361,9 +361,8 @@ const _configExists: boolean = await builderConfiguration.exists("MyConfig:Key")
 const builderExecutionContext = await builder.executionContext.get();
 const executionContextServiceProvider = await builderExecutionContext.serviceProvider.get();
 const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
-const builderServices = await builder.services.get();
 
-await builderServices.addEventingSubscriber(async (registrationContext) => {
+await builder.addEventingSubscriber(async (registrationContext) => {
     const subscriberExecutionContext = await registrationContext.executionContext.get();
     const _subscriberIsRunMode: boolean = await subscriberExecutionContext.isRunMode.get();
     const _subscriberCancellationToken = await registrationContext.cancellationToken.get();
@@ -382,7 +381,7 @@ await builderServices.addEventingSubscriber(async (registrationContext) => {
     });
 });
 
-await builderServices.tryAddEventingSubscriber(async (_registrationContext) => {
+await builder.tryAddEventingSubscriber(async (_registrationContext) => {
 });
 
 await container.withArgs(["--validation"]);

@@ -259,9 +259,6 @@ type IConfigurationHandle = Handle<'Microsoft.Extensions.Configuration.Abstracti
 /** Handle to IConfigurationSection */
 type IConfigurationSectionHandle = Handle<'Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection'>;
 
-/** Handle to IServiceCollection */
-type IServiceCollectionHandle = Handle<'Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection'>;
-
 /** Handle to IHostEnvironment */
 type IHostEnvironmentHandle = Handle<'Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment'>;
 
@@ -5223,9 +5220,6 @@ export interface DistributedApplicationBuilder {
     environment: {
         get: () => Promise<HostEnvironment>;
     };
-    services: {
-        get: () => Promise<ServiceCollection>;
-    };
     eventing: {
         get: () => Promise<DistributedApplicationEventing>;
     };
@@ -5264,6 +5258,8 @@ export interface DistributedApplicationBuilder {
     getConfiguration(): ConfigurationPromise;
     subscribeBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
+    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise;
     addTestVault(name: string): TestVaultResourcePromise;
 }
@@ -5295,6 +5291,8 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     getConfiguration(): ConfigurationPromise;
     subscribeBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
+    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise;
     addTestVault(name: string): TestVaultResourcePromise;
 }
@@ -5330,17 +5328,6 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
                 { context: this._handle }
             );
             return new HostEnvironmentImpl(handle, this._client);
-        },
-    };
-
-    /** Gets the Services property */
-    services = {
-        get: async (): Promise<ServiceCollection> => {
-            const handle = await this._client.invokeCapability<IServiceCollectionHandle>(
-                'Aspire.Hosting/IDistributedApplicationBuilder.services',
-                { context: this._handle }
-            );
-            return new ServiceCollectionImpl(handle, this._client);
         },
     };
 
@@ -5824,6 +5811,46 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         );
     }
 
+    /** Adds an eventing subscriber */
+    /** @internal */
+    async _addEventingSubscriberInternal(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): Promise<DistributedApplicationBuilder> {
+        const subscribeId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as EventingSubscriberRegistrationContextHandle;
+            const arg = new EventingSubscriberRegistrationContextImpl(argHandle, this._client);
+            await subscribe(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, subscribe: subscribeId };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/addEventingSubscriber',
+            rpcArgs
+        );
+        return this;
+    }
+
+    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._addEventingSubscriberInternal(subscribe), this._client);
+    }
+
+    /** Attempts to add an eventing subscriber */
+    /** @internal */
+    async _tryAddEventingSubscriberInternal(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): Promise<DistributedApplicationBuilder> {
+        const subscribeId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as EventingSubscriberRegistrationContextHandle;
+            const arg = new EventingSubscriberRegistrationContextImpl(argHandle, this._client);
+            await subscribe(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, subscribe: subscribeId };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/tryAddEventingSubscriber',
+            rpcArgs
+        );
+        return this;
+    }
+
+    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._tryAddEventingSubscriberInternal(subscribe), this._client);
+    }
+
     /** Adds a test Redis resource */
     /** @internal */
     async _addTestRedisInternal(name: string, port?: number): Promise<TestRedisResource> {
@@ -6001,6 +6028,16 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
     /** Subscribes to the AfterResourcesCreated event */
     subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
         return this._promise.then(obj => obj.subscribeAfterResourcesCreated(callback));
+    }
+
+    /** Adds an eventing subscriber */
+    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._promise.then(obj => obj.addEventingSubscriber(subscribe)), this._client);
+    }
+
+    /** Attempts to add an eventing subscriber */
+    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._promise.then(obj => obj.tryAddEventingSubscriber(subscribe)), this._client);
     }
 
     /** Adds a test Redis resource */
@@ -7077,103 +7114,6 @@ class ReportingTaskPromiseImpl implements ReportingTaskPromise {
     /** Completes the reporting task with Markdown-formatted completion text */
     completeTaskMarkdown(markdownString: string, options?: CompleteTaskMarkdownOptions): ReportingTaskPromise {
         return new ReportingTaskPromiseImpl(this._promise.then(obj => obj.completeTaskMarkdown(markdownString, options)), this._client);
-    }
-
-}
-
-// ============================================================================
-// ServiceCollection
-// ============================================================================
-
-export interface ServiceCollection {
-    toJSON(): MarshalledHandle;
-    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): ServiceCollectionPromise;
-    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): ServiceCollectionPromise;
-}
-
-export interface ServiceCollectionPromise extends PromiseLike<ServiceCollection> {
-    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): ServiceCollectionPromise;
-    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): ServiceCollectionPromise;
-}
-
-// ============================================================================
-// ServiceCollectionImpl
-// ============================================================================
-
-/**
- * Type class for ServiceCollection.
- */
-class ServiceCollectionImpl implements ServiceCollection {
-    constructor(private _handle: IServiceCollectionHandle, private _client: AspireClientRpc) {}
-
-    /** Serialize for JSON-RPC transport */
-    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
-
-    /** Adds an eventing subscriber */
-    /** @internal */
-    async _addEventingSubscriberInternal(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): Promise<ServiceCollection> {
-        const subscribeId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EventingSubscriberRegistrationContextHandle;
-            const arg = new EventingSubscriberRegistrationContextImpl(argHandle, this._client);
-            await subscribe(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { services: this._handle, subscribe: subscribeId };
-        await this._client.invokeCapability<void>(
-            'Aspire.Hosting/addEventingSubscriber',
-            rpcArgs
-        );
-        return this;
-    }
-
-    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): ServiceCollectionPromise {
-        return new ServiceCollectionPromiseImpl(this._addEventingSubscriberInternal(subscribe), this._client);
-    }
-
-    /** Attempts to add an eventing subscriber */
-    /** @internal */
-    async _tryAddEventingSubscriberInternal(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): Promise<ServiceCollection> {
-        const subscribeId = registerCallback(async (argData: unknown) => {
-            const argHandle = wrapIfHandle(argData) as EventingSubscriberRegistrationContextHandle;
-            const arg = new EventingSubscriberRegistrationContextImpl(argHandle, this._client);
-            await subscribe(arg);
-        });
-        const rpcArgs: Record<string, unknown> = { services: this._handle, subscribe: subscribeId };
-        await this._client.invokeCapability<void>(
-            'Aspire.Hosting/tryAddEventingSubscriber',
-            rpcArgs
-        );
-        return this;
-    }
-
-    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): ServiceCollectionPromise {
-        return new ServiceCollectionPromiseImpl(this._tryAddEventingSubscriberInternal(subscribe), this._client);
-    }
-
-}
-
-/**
- * Thenable wrapper for ServiceCollection that enables fluent chaining.
- */
-class ServiceCollectionPromiseImpl implements ServiceCollectionPromise {
-    constructor(private _promise: Promise<ServiceCollection>, private _client: AspireClientRpc, track = true) {
-        if (track) { _client.trackPromise(_promise); }
-    }
-
-    then<TResult1 = ServiceCollection, TResult2 = never>(
-        onfulfilled?: ((value: ServiceCollection) => TResult1 | PromiseLike<TResult1>) | null,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
-    ): PromiseLike<TResult1 | TResult2> {
-        return this._promise.then(onfulfilled, onrejected);
-    }
-
-    /** Adds an eventing subscriber */
-    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): ServiceCollectionPromise {
-        return new ServiceCollectionPromiseImpl(this._promise.then(obj => obj.addEventingSubscriber(subscribe)), this._client);
-    }
-
-    /** Attempts to add an eventing subscriber */
-    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): ServiceCollectionPromise {
-        return new ServiceCollectionPromiseImpl(this._promise.then(obj => obj.tryAddEventingSubscriber(subscribe)), this._client);
     }
 
 }
@@ -36222,7 +36162,6 @@ registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Exten
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory', (handle, client) => new LoggerFactoryImpl(handle as ILoggerFactoryHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep', (handle, client) => new ReportingStepImpl(handle as IReportingStepHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask', (handle, client) => new ReportingTaskImpl(handle as IReportingTaskHandle, client));
-registerHandleWrapper('Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection', (handle, client) => new ServiceCollectionImpl(handle as IServiceCollectionHandle, client));
 registerHandleWrapper('System.ComponentModel/System.IServiceProvider', (handle, client) => new ServiceProviderImpl(handle as IServiceProviderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IUserSecretsManager', (handle, client) => new UserSecretsManagerImpl(handle as IUserSecretsManagerHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ConnectionStringResource', (handle, client) => new ConnectionStringResourceImpl(handle as ConnectionStringResourceHandle, client));

@@ -1975,15 +1975,6 @@ class DistributedApplicationBuilder:
         return typing.cast(AbstractHostEnvironment, result)
 
     @_cached_property
-    def services(self) -> AbstractServiceCollection:
-        """Gets the Services property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/IDistributedApplicationBuilder.services',
-            {'context': self._handle}
-        )
-        return typing.cast(AbstractServiceCollection, result)
-
-    @_cached_property
     def eventing(self) -> AbstractDistributedApplicationEventing:
         """Gets the Eventing property"""
         result = self._client.invoke_capability(
@@ -2347,6 +2338,24 @@ class DistributedApplicationBuilder:
             rpc_args,
         )
         return typing.cast(DistributedApplicationEventSubscription, result)
+
+    def add_eventing_subscriber(self, subscribe: typing.Callable[[EventingSubscriberRegistrationContext], None]) -> None:
+        """Adds an eventing subscriber"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['subscribe'] = self._client.register_callback(subscribe)
+        self._client.invoke_capability(
+            'Aspire.Hosting/addEventingSubscriber',
+            rpc_args
+        )
+
+    def try_add_eventing_subscriber(self, subscribe: typing.Callable[[EventingSubscriberRegistrationContext], None]) -> None:
+        """Attempts to add an eventing subscriber"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['subscribe'] = self._client.register_callback(subscribe)
+        self._client.invoke_capability(
+            'Aspire.Hosting/tryAddEventingSubscriber',
+            rpc_args
+        )
 
     def add_test_redis(self, name: str, *, port: int | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
         """Adds a test Redis resource"""
@@ -2848,40 +2857,6 @@ class AbstractReportingTask:
 
 class AbstractValueWithReferences(abc.ABC):
     """Abstract base class for AbstractValueWithReferences."""
-
-class AbstractServiceCollection:
-    """Type class for AbstractServiceCollection."""
-
-    def __init__(self, handle: Handle, client: AspireClient) -> None:
-        self._handle = handle
-        self._client = client
-
-    def __repr__(self) -> str:
-        return f"AbstractServiceCollection(handle={self._handle.handle_id})"
-
-    @_uncached_property
-    def handle(self) -> Handle:
-        """The underlying object reference handle."""
-        return self._handle
-
-    def add_eventing_subscriber(self, subscribe: typing.Callable[[EventingSubscriberRegistrationContext], None]) -> None:
-        """Adds an eventing subscriber"""
-        rpc_args: dict[str, typing.Any] = {'services': self._handle}
-        rpc_args['subscribe'] = self._client.register_callback(subscribe)
-        self._client.invoke_capability(
-            'Aspire.Hosting/addEventingSubscriber',
-            rpc_args
-        )
-
-    def try_add_eventing_subscriber(self, subscribe: typing.Callable[[EventingSubscriberRegistrationContext], None]) -> None:
-        """Attempts to add an eventing subscriber"""
-        rpc_args: dict[str, typing.Any] = {'services': self._handle}
-        rpc_args['subscribe'] = self._client.register_callback(subscribe)
-        self._client.invoke_capability(
-            'Aspire.Hosting/tryAddEventingSubscriber',
-            rpc_args
-        )
-
 
 class AbstractServiceProvider:
     """Type class for AbstractServiceProvider."""
@@ -11316,7 +11291,6 @@ _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Ex
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory", AbstractLoggerFactory)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep", AbstractReportingStep)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask", AbstractReportingTask)
-_register_handle_wrapper("Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection", AbstractServiceCollection)
 _register_handle_wrapper("System.ComponentModel/System.IServiceProvider", AbstractServiceProvider)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", AbstractUserSecretsManager)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", AfterResourcesCreatedEvent)

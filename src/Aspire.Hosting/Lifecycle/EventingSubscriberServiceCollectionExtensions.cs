@@ -16,7 +16,7 @@ public static class EventingSubscriberServiceCollectionExtensions
     /// </summary>
     /// <typeparam name="T">A service that implements <see cref="IDistributedApplicationEventingSubscriber"/></typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the event subscriber to.</param>
-    [AspireExportIgnore(Reason = "Generic service registration is not ATS-compatible. Use the ATS-specific addEventingSubscriber export instead.")]
+    [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS, and generic service registration is not ATS-compatible. Use IDistributedApplicationBuilder.addEventingSubscriber instead.")]
     public static void AddEventingSubscriber<T>(this IServiceCollection services) where T : class, IDistributedApplicationEventingSubscriber
     {
         services.AddSingleton<IDistributedApplicationEventingSubscriber, T>();
@@ -27,7 +27,7 @@ public static class EventingSubscriberServiceCollectionExtensions
     /// </summary>
     /// <typeparam name="T">A service that implements <see cref="IDistributedApplicationEventingSubscriber"/></typeparam>
     /// <param name="services">The <see cref="IServiceCollection"/> to add the event subscriber to.</param>
-    [AspireExportIgnore(Reason = "Generic service registration is not ATS-compatible. Use the ATS-specific tryAddEventingSubscriber export instead.")]
+    [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS, and generic service registration is not ATS-compatible. Use IDistributedApplicationBuilder.tryAddEventingSubscriber instead.")]
     public static void TryAddEventingSubscriber<T>(this IServiceCollection services) where T : class, IDistributedApplicationEventingSubscriber
     {
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IDistributedApplicationEventingSubscriber, T>());

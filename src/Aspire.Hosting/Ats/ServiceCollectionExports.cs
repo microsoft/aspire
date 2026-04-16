@@ -9,10 +9,45 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.Ats;
 
 /// <summary>
-/// ATS exports for service collection and service-provider helpers.
+/// ATS exports for distributed-application builder and service-provider helpers.
 /// </summary>
 internal static class ServiceCollectionExports
 {
+    /// <summary>
+    /// Adds an ATS-friendly eventing subscriber callback to the distributed-application builder.
+    /// </summary>
+    /// <param name="builder">The distributed-application builder.</param>
+    /// <param name="subscribe">The callback that registers the event subscriptions.</param>
+    [AspireExport(Description = "Adds an eventing subscriber")]
+    public static void AddEventingSubscriber(this IDistributedApplicationBuilder builder, Func<EventingSubscriberRegistrationContext, Task> subscribe)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(subscribe);
+
+        builder.Services.AddSingleton<IDistributedApplicationEventingSubscriber>(new CallbackEventingSubscriber(subscribe));
+    }
+
+    /// <summary>
+    /// Attempts to add an ATS-friendly eventing subscriber callback to the distributed-application builder.
+    /// </summary>
+    /// <param name="builder">The distributed-application builder.</param>
+    /// <param name="subscribe">The callback that registers the event subscriptions.</param>
+    [AspireExport(Description = "Attempts to add an eventing subscriber")]
+    public static void TryAddEventingSubscriber(this IDistributedApplicationBuilder builder, Func<EventingSubscriberRegistrationContext, Task> subscribe)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(subscribe);
+
+        if (builder.Services.Any(descriptor => descriptor.ServiceType == typeof(IDistributedApplicationEventingSubscriber) &&
+                                               descriptor.ImplementationInstance is CallbackEventingSubscriber existing &&
+                                               existing.Matches(subscribe)))
+        {
+            return;
+        }
+
+        builder.Services.AddSingleton<IDistributedApplicationEventingSubscriber>(new CallbackEventingSubscriber(subscribe));
+    }
+
     /// <summary>
     /// Gets the Aspire store from the service provider.
     /// </summary>
@@ -24,41 +59,6 @@ internal static class ServiceCollectionExports
         ArgumentNullException.ThrowIfNull(serviceProvider);
 
         return serviceProvider.GetRequiredService<IAspireStore>();
-    }
-
-    /// <summary>
-    /// Adds an ATS-friendly eventing subscriber callback to the service collection.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="subscribe">The callback that registers the event subscriptions.</param>
-    [AspireExport(Description = "Adds an eventing subscriber")]
-    public static void AddEventingSubscriber(this IServiceCollection services, Func<EventingSubscriberRegistrationContext, Task> subscribe)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(subscribe);
-
-        services.AddSingleton<IDistributedApplicationEventingSubscriber>(new CallbackEventingSubscriber(subscribe));
-    }
-
-    /// <summary>
-    /// Attempts to add an ATS-friendly eventing subscriber callback to the service collection.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="subscribe">The callback that registers the event subscriptions.</param>
-    [AspireExport(Description = "Attempts to add an eventing subscriber")]
-    public static void TryAddEventingSubscriber(this IServiceCollection services, Func<EventingSubscriberRegistrationContext, Task> subscribe)
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(subscribe);
-
-        if (services.Any(descriptor => descriptor.ServiceType == typeof(IDistributedApplicationEventingSubscriber) &&
-                                       descriptor.ImplementationInstance is CallbackEventingSubscriber existing &&
-                                       existing.Matches(subscribe)))
-        {
-            return;
-        }
-
-        services.AddSingleton<IDistributedApplicationEventingSubscriber>(new CallbackEventingSubscriber(subscribe));
     }
 
     /// <summary>

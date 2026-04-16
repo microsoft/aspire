@@ -4,7 +4,6 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using Aspire.Hosting.Lifecycle;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
@@ -14,20 +13,22 @@ public class AtsServiceCollectionExportsTests
     [Fact]
     public void TryAddEventingSubscriber_AllowsDistinctCallbacks()
     {
-        var services = new ServiceCollection();
+        var builder = DistributedApplication.CreateBuilder([]);
         var method = typeof(DistributedApplication).Assembly
             .GetType("Aspire.Hosting.Ats.ServiceCollectionExports", throwOnError: true)!
             .GetMethod("TryAddEventingSubscriber", BindingFlags.Public | BindingFlags.Static)!;
+        var callbackSubscriberType = method.DeclaringType!.GetNestedType("CallbackEventingSubscriber", BindingFlags.NonPublic)!;
 
         var firstSubscriber = CreateCallback(method.GetParameters()[1].ParameterType);
         var secondSubscriber = CreateCallback(method.GetParameters()[1].ParameterType);
 
-        method.Invoke(null, [services, firstSubscriber]);
-        method.Invoke(null, [services, firstSubscriber]);
-        method.Invoke(null, [services, secondSubscriber]);
+        method.Invoke(null, [builder, firstSubscriber]);
+        method.Invoke(null, [builder, firstSubscriber]);
+        method.Invoke(null, [builder, secondSubscriber]);
 
-        var subscribers = services
-            .Where(descriptor => descriptor.ServiceType == typeof(IDistributedApplicationEventingSubscriber))
+        var subscribers = builder.Services
+            .Where(descriptor => descriptor.ServiceType == typeof(IDistributedApplicationEventingSubscriber) &&
+                                 descriptor.ImplementationInstance?.GetType() == callbackSubscriberType)
             .Select(descriptor => descriptor.ImplementationInstance)
             .ToList();
 

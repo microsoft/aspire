@@ -190,7 +190,6 @@ with create_builder() as builder:
     builder_execution_context = builder.execution_context
     execution_context_service_provider = builder_execution_context.service_provider
     _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
-    builder_services = builder.services
 
     def configure_eventing_subscriber(registration_context):
         _subscriber_execution_context = registration_context.execution_context
@@ -209,8 +208,8 @@ with create_builder() as builder:
         registration_context.on_before_start(on_eventing_before_start)
         registration_context.on_after_resources_created(on_eventing_after_resources_created)
 
-    builder_services.add_eventing_subscriber(configure_eventing_subscriber)
-    builder_services.try_add_eventing_subscriber(lambda _registration_context: None)
+    builder.add_eventing_subscriber(configure_eventing_subscriber)
+    builder.try_add_eventing_subscriber(lambda _registration_context: None)
 
     container.with_args(["--validation"])
 

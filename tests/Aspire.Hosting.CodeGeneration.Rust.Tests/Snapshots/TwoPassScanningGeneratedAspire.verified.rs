@@ -9753,15 +9753,6 @@ impl IDistributedApplicationBuilder {
         Ok(IHostEnvironment::new(handle, self.client.clone()))
     }
 
-    /// Gets the Services property
-    pub fn services(&self) -> Result<IServiceCollection, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/IDistributedApplicationBuilder.services", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IServiceCollection::new(handle, self.client.clone()))
-    }
-
     /// Gets the Eventing property
     pub fn eventing(&self) -> Result<IDistributedApplicationEventing, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9970,6 +9961,26 @@ impl IDistributedApplicationBuilder {
         let result = self.client.invoke_capability("Aspire.Hosting/subscribeAfterResourcesCreated", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
+    }
+
+    /// Adds an eventing subscriber
+    pub fn add_eventing_subscriber(&self, subscribe: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(subscribe);
+        args.insert("subscribe".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/addEventingSubscriber", args)?;
+        Ok(())
+    }
+
+    /// Attempts to add an eventing subscriber
+    pub fn try_add_eventing_subscriber(&self, subscribe: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(subscribe);
+        args.insert("subscribe".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/tryAddEventingSubscriber", args)?;
+        Ok(())
     }
 
     /// Adds a test Redis resource
@@ -10870,52 +10881,6 @@ impl IResourceWithWaitSupport {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
-    }
-}
-
-/// Wrapper for Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection
-pub struct IServiceCollection {
-    handle: Handle,
-    client: Arc<AspireClient>,
-}
-
-impl HasHandle for IServiceCollection {
-    fn handle(&self) -> &Handle {
-        &self.handle
-    }
-}
-
-impl IServiceCollection {
-    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
-        Self { handle, client }
-    }
-
-    pub fn handle(&self) -> &Handle {
-        &self.handle
-    }
-
-    pub fn client(&self) -> &Arc<AspireClient> {
-        &self.client
-    }
-
-    /// Adds an eventing subscriber
-    pub fn add_eventing_subscriber(&self, subscribe: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("services".to_string(), self.handle.to_json());
-        let callback_id = register_callback(subscribe);
-        args.insert("subscribe".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/addEventingSubscriber", args)?;
-        Ok(())
-    }
-
-    /// Attempts to add an eventing subscriber
-    pub fn try_add_eventing_subscriber(&self, subscribe: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("services".to_string(), self.handle.to_json());
-        let callback_id = register_callback(subscribe);
-        args.insert("subscribe".to_string(), Value::String(callback_id));
-        let result = self.client.invoke_capability("Aspire.Hosting/tryAddEventingSubscriber", args)?;
-        Ok(())
     }
 }
 
