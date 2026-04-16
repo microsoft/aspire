@@ -576,6 +576,11 @@ internal static partial class HelmDeploymentEngine
             context.Summary.Add(
                 "📊 Dashboard",
                 new MarkdownString($"`kubectl port-forward -n {@namespace} svc/{dashboardServiceName} 18888:18888` then open [http://localhost:18888](http://localhost:18888)"));
+
+            var dashboardDeploymentName = environment.Dashboard.Resource.Name.ToKubernetesResourceName();
+            context.Summary.Add(
+                "🔑 Dashboard login",
+                new MarkdownString($"`kubectl logs -n {@namespace} -l app={dashboardDeploymentName} --tail=50` to retrieve the login token"));
         }
 
         // Helm status and resource inspection
