@@ -598,6 +598,136 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExportCommand_HiddenResources_AreExcludedByDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
+
+        var provider = CreateExportTestServices(workspace,
+            resources: [],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/logs"] = BuildLogsJson(),
+                ["/api/telemetry/traces"] = BuildTracesJson(),
+            },
+            resourceSnapshots:
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
+                new ResourceSnapshot { Name = "hidden-svc", DisplayName = "hidden-svc", ResourceType = "Project", State = "Running", IsHidden = true },
+            ],
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Redis ready" },
+                new ResourceLogLine { ResourceName = "aspire-dashboard", LineNumber = 1, Content = "Dashboard started" },
+                new ResourceLogLine { ResourceName = "hidden-svc", LineNumber = 1, Content = "Hidden service log" },
+            ],
+            dashboardAvailable: false);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"export --output {outputPath}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(outputPath));
+
+        using var archive = ZipFile.OpenRead(outputPath);
+        var entryNames = archive.Entries.Select(e => e.FullName).OrderBy(n => n).ToList();
+
+        // Only redis should be present; hidden resources should be excluded
+        Assert.Collection(entryNames,
+            entry => Assert.Equal("consolelogs/redis.txt", entry),
+            entry => Assert.Equal("resources/redis.json", entry));
+    }
+
+    [Fact]
+    public async Task ExportCommand_IncludeHidden_ShowsHiddenResources()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
+
+        var provider = CreateExportTestServices(workspace,
+            resources: [],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/logs"] = BuildLogsJson(),
+                ["/api/telemetry/traces"] = BuildTracesJson(),
+            },
+            resourceSnapshots:
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
+            ],
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Redis ready" },
+                new ResourceLogLine { ResourceName = "aspire-dashboard", LineNumber = 1, Content = "Dashboard started" },
+            ],
+            dashboardAvailable: false);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"export --include-hidden --output {outputPath}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(outputPath));
+
+        using var archive = ZipFile.OpenRead(outputPath);
+        var entryNames = archive.Entries.Select(e => e.FullName).OrderBy(n => n).ToList();
+
+        // Both resources should be present
+        Assert.Collection(entryNames,
+            entry => Assert.Equal("consolelogs/aspire-dashboard.txt", entry),
+            entry => Assert.Equal("consolelogs/redis.txt", entry),
+            entry => Assert.Equal("resources/aspire-dashboard.json", entry),
+            entry => Assert.Equal("resources/redis.json", entry));
+    }
+
+    [Fact]
+    public async Task ExportCommand_SpecificHiddenResource_WorksWithoutFlag()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
+
+        var provider = CreateExportTestServices(workspace,
+            resources: [],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/logs"] = BuildLogsJson(),
+                ["/api/telemetry/traces"] = BuildTracesJson(),
+            },
+            resourceSnapshots:
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
+            ],
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Redis ready" },
+                new ResourceLogLine { ResourceName = "aspire-dashboard", LineNumber = 1, Content = "Dashboard started" },
+            ],
+            dashboardAvailable: false);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"export aspire-dashboard --output {outputPath}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(outputPath));
+
+        using var archive = ZipFile.OpenRead(outputPath);
+        var entryNames = archive.Entries.Select(e => e.FullName).OrderBy(n => n).ToList();
+
+        // Only the specified hidden resource should be present
+        Assert.Collection(entryNames,
+            entry => Assert.Equal("consolelogs/aspire-dashboard.txt", entry),
+            entry => Assert.Equal("resources/aspire-dashboard.json", entry));
+    }
+
+    [Fact]
     public async Task ExportCommand_ResourceFilter_NonExistentResource_ReturnsError()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Utils;
+using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ namespace Aspire.Hosting.Tests;
 public class ExecutableResourceFailureLoggingTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16189")]
     public async Task ExecutableExitsImmediately()
     {
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);

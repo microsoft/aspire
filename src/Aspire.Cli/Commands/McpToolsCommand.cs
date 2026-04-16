@@ -67,7 +67,7 @@ internal sealed class McpToolsCommand : BaseCommand
         }
 
         var connection = result.Connection!;
-        var snapshots = await connection.GetResourceSnapshotsAsync(cancellationToken);
+        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken);
         var resourcesWithTools = snapshots.Where(r => r.McpServer is not null).ToList();
 
         if (resourcesWithTools.Count == 0)

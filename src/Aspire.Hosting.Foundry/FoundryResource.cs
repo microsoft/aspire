@@ -135,7 +135,12 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["account"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.cognitiveservices.azure.com";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() =>
+    [
+        "privatelink.services.ai.azure.com",
+        "privatelink.openai.azure.com",
+        "privatelink.cognitiveservices.azure.com"
+    ];
 }
 
 /// <summary>

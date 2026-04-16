@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Xml.Linq;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 
@@ -22,7 +21,8 @@ internal static class CliE2EAutomatorHelpers
     internal static async Task PrepareDockerEnvironmentAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter,
-        TemporaryWorkspace? workspace = null)
+        TemporaryWorkspace? workspace = null,
+        bool enableDcpDiagnostics = false)
     {
         // Wait for container to be ready (root prompt)
         await auto.WaitUntilTextAsync("# ", timeout: TimeSpan.FromSeconds(60));
@@ -45,14 +45,26 @@ internal static class CliE2EAutomatorHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
+        if (enableDcpDiagnostics)
+        {
+            await auto.TypeAsync("export DCP_DIAGNOSTICS_LOG_LEVEL=debug DCP_DIAGNOSTICS_LOG_FOLDER=~/.aspire/dcp-logs DCP_PRESERVE_EXECUTABLE_LOGS=1");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+        }
+
         if (workspace is not null)
         {
-            await auto.TypeAsync($"cd /workspace/{workspace.WorkspaceRoot.Name}");
+            var containerWorkspace = $"/workspace/{workspace.WorkspaceRoot.Name}";
+            var dcpCopyCommand = enableDcpDiagnostics
+                ? $"; cp -r ~/.aspire/dcp-logs {containerWorkspace}/.aspire-dcp-logs 2>/dev/null"
+                : string.Empty;
+
+            await auto.TypeAsync($"cd {containerWorkspace}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Set up EXIT trap to copy .aspire diagnostics to workspace for CI capture
-            await auto.TypeAsync($"trap 'cp -r ~/.aspire/logs /workspace/{workspace.WorkspaceRoot.Name}/.aspire-logs 2>/dev/null; cp -r ~/.aspire/packages /workspace/{workspace.WorkspaceRoot.Name}/.aspire-packages 2>/dev/null' EXIT");
+            // Set up EXIT trap to copy .aspire diagnostics to workspace for CI capture.
+            await auto.TypeAsync($"trap 'cp -r ~/.aspire/logs {containerWorkspace}/.aspire-logs 2>/dev/null; cp -r ~/.aspire/packages {containerWorkspace}/.aspire-packages 2>/dev/null{dcpCopyCommand}' EXIT");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
         }
@@ -513,7 +525,7 @@ internal static class CliE2EAutomatorHelpers
     /// <summary>
     /// Copies interesting diagnostic directories from <c>~/.aspire</c> to the mounted workspace
     /// so they are captured by <see cref="CaptureWorkspaceOnFailureAttribute"/>. Call this before
-    /// exiting the container. Copies logs and NuGet restore output (libs directories).
+    /// exiting the container. Copies CLI logs, NuGet restore output, and any opt-in DCP logs.
     /// </summary>
     internal static async Task CaptureAspireDiagnosticsAsync(
         this Hex1bTerminalAutomator auto,
@@ -522,9 +534,9 @@ internal static class CliE2EAutomatorHelpers
     {
         var containerWorkspace = $"/workspace/{workspace.WorkspaceRoot.Name}";
 
-        // Copy CLI logs
         await auto.TypeAsync($"cp -r ~/.aspire/logs {containerWorkspace}/.aspire-logs 2>/dev/null; " +
                              $"cp -r ~/.aspire/packages {containerWorkspace}/.aspire-packages 2>/dev/null; " +
+                             $"cp -r ~/.aspire/dcp-logs {containerWorkspace}/.aspire-dcp-logs 2>/dev/null; " +
                              "echo done");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -541,7 +553,7 @@ internal static class CliE2EAutomatorHelpers
         timeout ??= TimeSpan.FromMinutes(2);
         await auto.TypeAsync("aspire destroy --yes");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: timeout.Value);
+        await auto.WaitForPipelineSuccessAsync(timeout: timeout.Value);
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
     }
 }

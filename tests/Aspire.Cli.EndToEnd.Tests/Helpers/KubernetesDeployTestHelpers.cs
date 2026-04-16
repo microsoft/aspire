@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Xunit;
 
@@ -329,7 +328,7 @@ internal static class KubernetesDeployTestHelpers
         }
 
         // Wait for pipeline completion
-        await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: TimeSpan.FromMinutes(10));
+        await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(10));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
     }
 

@@ -5,37 +5,6 @@
       "command": "aspire",
       "args": ["agent", "mcp"]
     },
-    /*
-    "aspire-local": {
-      "type": "stdio",
-      "command": "dotnet",
-      "args": [
-        "run",
-        "--project",
-        "${workspaceFolder}/src/Aspire.Cli/Aspire.Cli.csproj",
-        "--",
-        "agent",
-        "mcp"
-      ],
-    },
-    */
-    // After starting this MCP server: Debug ->
-    // Attach to Aspire MCP server -> Select the "aspire" process...
-    /*
-    "aspire-debug": {
-      "type": "stdio",
-      "command": "dotnet",
-      "args": [
-        "run",
-        "--project",
-        "${workspaceFolder}/src/Aspire.Cli/Aspire.Cli.csproj",
-        "--",
-        "agent",
-        "mcp",
-        "--cli-wait-for-debugger"
-      ],
-    },
-    */
     "hex1b": {
       "type": "stdio",
       "command": "dnx",

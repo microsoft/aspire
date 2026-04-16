@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Shared\AzureRoleAssignmentUtils.cs" />
+    <Compile Include="$(RepoRoot)src\Shared\ContainerRegistryInfrastructure.cs" />
     <Compile Remove="tools\**\*.cs" />
   </ItemGroup>
 

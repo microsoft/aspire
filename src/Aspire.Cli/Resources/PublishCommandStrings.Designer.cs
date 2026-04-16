@@ -115,7 +115,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The output path for the generated artifacts. Defaults to &apos;./aspire-output&apos; if not specified..
+        ///   Looks up a localized string similar to The output path for the generated artifacts. Defaults to the AppHost directory&apos;s &apos;aspire-output&apos; folder if not specified..
         /// </summary>
         public static string OutputPathArgumentDescription {
             get {

@@ -49,10 +49,25 @@ public class YarpClusterTests(ITestOutputHelper testOutputHelper)
         var httpsEndpoint = resource.GetEndpoint("https");
 
         var httpCluster = new YarpCluster(httpEndpoint);
-        Assert.Equal("http://_http.ServiceC", httpCluster.Targets[0]);
+        Assert.Equal("http://ServiceC", httpCluster.Targets[0]);
 
         var httpsCluster = new YarpCluster(httpsEndpoint);
-        Assert.Equal("https://_https.ServiceC", httpsCluster.Targets[0]);
+        Assert.Equal("https://ServiceC", httpsCluster.Targets[0]);
+    }
+
+    [Fact]
+    public void Create_YarpCluster_From_Named_Endpoint_Uses_DnsSd_Format()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddResource(new TestResource("ServiceC"))
+                              .WithEndpoint(name: "prometheus", scheme: "http")
+                              .WithEndpoint(name: "management", scheme: "https");
+
+        var prometheusCluster = new YarpCluster(resource.GetEndpoint("prometheus"));
+        Assert.Equal("http://_prometheus.ServiceC", prometheusCluster.Targets[0]);
+
+        var managementCluster = new YarpCluster(resource.GetEndpoint("management"));
+        Assert.Equal("https://_management.ServiceC", managementCluster.Targets[0]);
     }
 
     [Fact]

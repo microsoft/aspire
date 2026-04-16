@@ -4,6 +4,7 @@
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Backchannel;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -279,5 +280,233 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsReturnsZero()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var requestStopCalled = new TaskCompletionSource();
+        var getPipelineStepsCalled = new TaskCompletionSource();
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    {
+                        return (0, true, VersionHelper.GetDefaultTemplateVersion());
+                    },
+
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = requestStopCalled,
+                            GetPipelineStepsAsyncCalled = getPipelineStepsCalled
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await requestStopCalled.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+
+                return runner;
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        // Act - no step argument needed with --list-steps
+        var result = command.Parse("do --list-steps");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        // Assert
+        Assert.Equal(0, exitCode);
+        Assert.True(getPipelineStepsCalled.Task.IsCompleted, "GetPipelineStepsAsync should have been called");
+        Assert.True(requestStopCalled.Task.IsCompleted, "RequestStopAsync should have been called");
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsAndStepArgumentReturnsZero()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var requestStopCalled = new TaskCompletionSource();
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    {
+                        return (0, true, VersionHelper.GetDefaultTemplateVersion());
+                    },
+
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = requestStopCalled
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await requestStopCalled.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+
+                return runner;
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        // Act - step argument with --list-steps
+        var result = command.Parse("do deploy --list-steps");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        // Assert
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsDoesNotExecutePipeline()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var publishingActivitiesRequested = false;
+        var requestStopCalled = new TaskCompletionSource();
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    {
+                        return (0, true, VersionHelper.GetDefaultTemplateVersion());
+                    },
+
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = requestStopCalled,
+                            GetPublishingActivitiesAsyncCallback = (ct) =>
+                            {
+                                publishingActivitiesRequested = true;
+                                return AsyncEnumerable.Empty<PublishingActivity>();
+                            }
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await requestStopCalled.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+
+                return runner;
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-steps");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        // Assert - pipeline should NOT have been executed
+        Assert.Equal(0, exitCode);
+        Assert.False(publishingActivitiesRequested, "Publishing activities should not be requested when --list-steps is used");
+    }
+
+    [Fact]
+    public async Task DoCommandListStepsDisplaysCustomSteps()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var requestStopCalled = new TaskCompletionSource();
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    {
+                        return (0, true, VersionHelper.GetDefaultTemplateVersion());
+                    },
+
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = requestStopCalled,
+                            GetPipelineStepsAsyncCallback = (step, ct) => Task.FromResult(new GetPipelineStepsResponse
+                            {
+                                Steps = [
+                                    new() { Name = "parameter-prompt" },
+                                    new() { Name = "provision-redis-infra", DependsOn = ["parameter-prompt"], Tags = ["provision-infra"] },
+                                    new() { Name = "build-webapi", DependsOn = ["parameter-prompt"], Tags = ["build-compute"] },
+                                    new() { Name = "deploy-webapi", DependsOn = ["provision-redis-infra", "build-webapi"], Tags = ["deploy-compute"] }
+                                ]
+                            })
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await requestStopCalled.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+
+                return runner;
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-steps");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task DoCommandWithHelpShowsListStepsOption()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("do --help");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(0, exitCode);
     }
 }
