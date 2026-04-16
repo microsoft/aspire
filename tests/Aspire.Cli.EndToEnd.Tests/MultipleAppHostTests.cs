@@ -45,9 +45,7 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
 
         // First: launch the apphost with --detach (interactive, no JSON)
         // Just wait for the command to complete (WaitForSuccessPrompt waits for the shell prompt)
-        await auto.TypeAsync("aspire start");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireStartAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
@@ -72,9 +70,7 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop any running instances
-        await auto.TypeAsync("aspire stop --all 2>/dev/null || true");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.AspireStopAsync(counter);
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
 
