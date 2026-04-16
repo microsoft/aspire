@@ -68,15 +68,14 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
 
     public CliHostEnvironment(IConfiguration configuration, bool nonInteractive)
     {
-        // If --non-interactive is explicitly set, disable interactive input, interactive output,
-        // and ANSI styling so redirected/automation scenarios stay plain-text friendly.
-        // This takes precedence over all other settings including ASPIRE_PLAYGROUND and
-        // ASPIRE_ANSI_PASS_THRU.
+        // If --non-interactive is explicitly set, disable interactive input and output.
+        // ANSI support is still determined from the host configuration so explicit
+        // output settings such as NO_COLOR or ASPIRE_ANSI_PASS_THRU continue to apply.
         if (nonInteractive)
         {
             SupportsInteractiveInput = false;
             SupportsInteractiveOutput = false;
-            SupportsAnsi = false;
+            SupportsAnsi = DetectAnsiSupport(configuration);
         }
         // Check if ASPIRE_PLAYGROUND is set to force interactive mode
         else if (IsPlaygroundMode(configuration))
