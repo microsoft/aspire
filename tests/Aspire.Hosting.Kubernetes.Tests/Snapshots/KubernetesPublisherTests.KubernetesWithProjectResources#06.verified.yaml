@@ -1,36 +1,16 @@
 ﻿---
 apiVersion: "v1"
-kind: "Service"
+kind: "ConfigMap"
 metadata:
-  name: "project1-service"
+  name: "project1-config"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
     app.kubernetes.io/component: "project1"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
-spec:
-  type: "ClusterIP"
-  selector:
-    app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "project1"
-    app.kubernetes.io/instance: "{{ .Release.Name }}"
-  ports:
-    - name: "http"
-      protocol: "TCP"
-      port: {{ .Values.parameters.project1.port_http | int }}
-      targetPort: {{ .Values.parameters.project1.port_http | int }}
-    - name: "custom1"
-      protocol: "TCP"
-      port: 8000
-      targetPort: 8000
-    - name: "custom2"
-      protocol: "TCP"
-      port: 7001
-      targetPort: 8001
-    - name: "custom3"
-      protocol: "TCP"
-      port: 7002
-      targetPort: 7002
-    - name: "custom4"
-      protocol: "TCP"
-      port: 7003
-      targetPort: 7004
+data:
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.project1.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
+  ASPNETCORE_FORWARDEDHEADERS_ENABLED: "{{ .Values.config.project1.ASPNETCORE_FORWARDEDHEADERS_ENABLED }}"
+  HTTP_PORTS: "{{ .Values.parameters.project1.port_http }};8000;8001;7002;7004"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.project1.OTEL_EXPORTER_OTLP_ENDPOINT }}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.project1.OTEL_EXPORTER_OTLP_PROTOCOL }}"
+  OTEL_SERVICE_NAME: "{{ .Values.config.project1.OTEL_SERVICE_NAME }}"

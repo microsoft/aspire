@@ -1,11 +1,8 @@
-﻿parameters:
+parameters:
   myapp:
     enable_tls: "True"
 secrets: {}
 config:
-  env_dashboard:
-    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
-    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   myapp:
     TLS_SUFFIX: ""
     tls_suffix: ",ssl=true"

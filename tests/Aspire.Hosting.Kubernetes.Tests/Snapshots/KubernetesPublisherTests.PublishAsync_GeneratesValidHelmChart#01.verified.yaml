@@ -1,4 +1,4 @@
-﻿parameters:
+parameters:
   project1:
     project1_image: "project1:latest"
 secrets:
@@ -7,9 +7,6 @@ secrets:
     param3: ""
     ConnectionStrings__cs: ""
 config:
-  env_dashboard:
-    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
-    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   myapp:
     ASPNETCORE_ENVIRONMENT: "Development"
     param0: ""
