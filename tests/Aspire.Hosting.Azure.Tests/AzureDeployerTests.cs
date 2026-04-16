@@ -25,7 +25,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Aspire.TestUtilities;
-using Azure.Core;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -1868,17 +1867,17 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
     private sealed class FailingTokenCredentialProvider : ITokenCredentialProvider
     {
-        public TokenCredential TokenCredential => new FailingTokenCredential();
+        public global::Azure.Core.TokenCredential TokenCredential => new FailingTokenCredential();
     }
 
-    private sealed class FailingTokenCredential : TokenCredential
+    private sealed class FailingTokenCredential : global::Azure.Core.TokenCredential
     {
-        public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken = default)
+        public override global::Azure.Core.AccessToken GetToken(global::Azure.Core.TokenRequestContext requestContext, CancellationToken cancellationToken = default)
         {
             throw new global::Azure.Identity.CredentialUnavailableException("No credential available. Run 'az login' to authenticate.");
         }
 
-        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken = default)
+        public override ValueTask<global::Azure.Core.AccessToken> GetTokenAsync(global::Azure.Core.TokenRequestContext requestContext, CancellationToken cancellationToken = default)
         {
             throw new global::Azure.Identity.CredentialUnavailableException("No credential available. Run 'az login' to authenticate.");
         }
