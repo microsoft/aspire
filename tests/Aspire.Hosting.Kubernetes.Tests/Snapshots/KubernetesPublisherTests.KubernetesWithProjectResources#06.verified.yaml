@@ -1,4 +1,4 @@
----
+﻿---
 apiVersion: "v1"
 kind: "ConfigMap"
 metadata:
@@ -11,6 +11,7 @@ data:
   PROJECT1_HTTP: "http://project1-service:{{ .Values.parameters.project1.port_http }}"
   services__project1__http__0: "http://project1-service:{{ .Values.parameters.project1.port_http }}"
   PROJECT1_HTTPS: "https://project1-service:{{ .Values.parameters.project1.port_http }}"
+  services__project1__https__0: "https://project1-service:{{ .Values.parameters.project1.port_http }}"
   PROJECT1_CUSTOM1: "{{ .Values.config.api.PROJECT1_CUSTOM1 }}"
   services__project1__custom1__0: "{{ .Values.config.api.services__project1__custom1__0 }}"
   PROJECT1_CUSTOM2: "{{ .Values.config.api.PROJECT1_CUSTOM2 }}"
