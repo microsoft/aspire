@@ -5,7 +5,7 @@
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting azure front-door cdn cloud</PackageTags>
     <Description>Azure Front Door resource types for Aspire.</Description>
-    <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
+    <PackageIconFullPath>$(SharedDir)AzureFrontDoor_256x.png</PackageIconFullPath>
     <NoWarn>$(NoWarn);AZPROVISION001;ASPIREAZURE003</NoWarn>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>
