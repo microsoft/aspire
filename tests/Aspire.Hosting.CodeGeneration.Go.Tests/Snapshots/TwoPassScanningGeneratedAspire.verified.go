@@ -217,6 +217,62 @@ func (d *CreateBuilderOptions) ToMap() map[string]any {
 	}
 }
 
+// HttpsCertificateInfo represents HttpsCertificateInfo.
+type HttpsCertificateInfo struct {
+	Subject string `json:"Subject,omitempty"`
+	Issuer string `json:"Issuer,omitempty"`
+	Thumbprint string `json:"Thumbprint,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateInfo) ToMap() map[string]any {
+	return map[string]any{
+		"Subject": SerializeValue(d.Subject),
+		"Issuer": SerializeValue(d.Issuer),
+		"Thumbprint": SerializeValue(d.Thumbprint),
+	}
+}
+
+// CertificateTrustExecutionConfigurationExportData represents CertificateTrustExecutionConfigurationExportData.
+type CertificateTrustExecutionConfigurationExportData struct {
+	Scope CertificateTrustScope `json:"Scope,omitempty"`
+	CertificateSubjects []string `json:"CertificateSubjects,omitempty"`
+	CustomBundlePaths []string `json:"CustomBundlePaths,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CertificateTrustExecutionConfigurationExportData) ToMap() map[string]any {
+	return map[string]any{
+		"Scope": SerializeValue(d.Scope),
+		"CertificateSubjects": SerializeValue(d.CertificateSubjects),
+		"CustomBundlePaths": SerializeValue(d.CustomBundlePaths),
+	}
+}
+
+// HttpsCertificateExecutionConfigurationExportData represents HttpsCertificateExecutionConfigurationExportData.
+type HttpsCertificateExecutionConfigurationExportData struct {
+	Subject string `json:"Subject,omitempty"`
+	Thumbprint string `json:"Thumbprint,omitempty"`
+	KeyPathExpression string `json:"KeyPathExpression,omitempty"`
+	PfxPathExpression string `json:"PfxPathExpression,omitempty"`
+	IsKeyPathReferenced bool `json:"IsKeyPathReferenced,omitempty"`
+	IsPfxPathReferenced bool `json:"IsPfxPathReferenced,omitempty"`
+	Password string `json:"Password,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]any {
+	return map[string]any{
+		"Subject": SerializeValue(d.Subject),
+		"Thumbprint": SerializeValue(d.Thumbprint),
+		"KeyPathExpression": SerializeValue(d.KeyPathExpression),
+		"PfxPathExpression": SerializeValue(d.PfxPathExpression),
+		"IsKeyPathReferenced": SerializeValue(d.IsKeyPathReferenced),
+		"IsPfxPathReferenced": SerializeValue(d.IsPfxPathReferenced),
+		"Password": SerializeValue(d.Password),
+	}
+}
+
 // ResourceEventDto represents ResourceEventDto.
 type ResourceEventDto struct {
 	ResourceName string `json:"ResourceName,omitempty"`
@@ -254,6 +310,24 @@ func (d *ReferenceEnvironmentInjectionOptions) ToMap() map[string]any {
 		"ConnectionProperties": SerializeValue(d.ConnectionProperties),
 		"ServiceDiscovery": SerializeValue(d.ServiceDiscovery),
 		"Endpoints": SerializeValue(d.Endpoints),
+	}
+}
+
+// CertificateTrustExecutionConfigurationContext represents CertificateTrustExecutionConfigurationContext.
+type CertificateTrustExecutionConfigurationContext struct {
+	CertificateBundlePath *ReferenceExpression `json:"CertificateBundlePath,omitempty"`
+	CertificateDirectoriesPath *ReferenceExpression `json:"CertificateDirectoriesPath,omitempty"`
+	RootCertificatesPath string `json:"RootCertificatesPath,omitempty"`
+	IsContainer bool `json:"IsContainer,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CertificateTrustExecutionConfigurationContext) ToMap() map[string]any {
+	return map[string]any{
+		"CertificateBundlePath": SerializeValue(d.CertificateBundlePath),
+		"CertificateDirectoriesPath": SerializeValue(d.CertificateDirectoriesPath),
+		"RootCertificatesPath": SerializeValue(d.RootCertificatesPath),
+		"IsContainer": SerializeValue(d.IsContainer),
 	}
 }
 
@@ -306,6 +380,22 @@ func (d *HttpCommandExportOptions) ToMap() map[string]any {
 		"EndpointName": SerializeValue(d.EndpointName),
 		"MethodName": SerializeValue(d.MethodName),
 		"ResultMode": SerializeValue(d.ResultMode),
+	}
+}
+
+// HttpsCertificateExecutionConfigurationContext represents HttpsCertificateExecutionConfigurationContext.
+type HttpsCertificateExecutionConfigurationContext struct {
+	CertificatePath *ReferenceExpression `json:"CertificatePath,omitempty"`
+	KeyPath *ReferenceExpression `json:"KeyPath,omitempty"`
+	PfxPath *ReferenceExpression `json:"PfxPath,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateExecutionConfigurationContext) ToMap() map[string]any {
+	return map[string]any{
+		"CertificatePath": SerializeValue(d.CertificatePath),
+		"KeyPath": SerializeValue(d.KeyPath),
+		"PfxPath": SerializeValue(d.PfxPath),
 	}
 }
 
@@ -1655,6 +1745,18 @@ func (s *CSharpAppResource) OnResourceReady(callback func(...any) any) (*IResour
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *CSharpAppResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *CSharpAppResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -2623,6 +2725,18 @@ func (s *ConnectionStringResource) OnResourceReady(callback func(...any) any) (*
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ConnectionStringResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ConnectionStringResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -3517,6 +3631,18 @@ func (s *ContainerRegistryResource) OnResourceReady(callback func(...any) any) (
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ContainerRegistryResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
 }
 
 // WithOptionalString adds an optional string parameter
@@ -5179,6 +5305,18 @@ func (s *ContainerResource) OnResourceReady(callback func(...any) any) (*IResour
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ContainerResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
 }
 
 // WithOptionalString adds an optional string parameter
@@ -7219,6 +7357,18 @@ func (s *DotnetToolResource) OnResourceReady(callback func(...any) any) (*IResou
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *DotnetToolResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *DotnetToolResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -8204,6 +8354,72 @@ func (s *EnvironmentCallbackContext) ExecutionContext() (*DistributedApplication
 		return nil, err
 	}
 	return result.(*DistributedApplicationExecutionContext), nil
+}
+
+// EventingSubscriberRegistrationContext wraps a handle for Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext.
+type EventingSubscriberRegistrationContext struct {
+	HandleWrapperBase
+}
+
+// NewEventingSubscriberRegistrationContext creates a new EventingSubscriberRegistrationContext.
+func NewEventingSubscriberRegistrationContext(handle *Handle, client *AspireClient) *EventingSubscriberRegistrationContext {
+	return &EventingSubscriberRegistrationContext{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// OnBeforeStart subscribes an eventing subscriber to the BeforeStart event
+func (s *EventingSubscriberRegistrationContext) OnBeforeStart(callback func(...any) any) (*DistributedApplicationEventSubscription, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/eventingSubscriberOnBeforeStart", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationEventSubscription), nil
+}
+
+// OnAfterResourcesCreated subscribes an eventing subscriber to the AfterResourcesCreated event
+func (s *EventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback func(...any) any) (*DistributedApplicationEventSubscription, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationEventSubscription), nil
+}
+
+// ExecutionContext gets the ExecutionContext property
+func (s *EventingSubscriberRegistrationContext) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationExecutionContext), nil
+}
+
+// CancellationToken gets the CancellationToken property
+func (s *EventingSubscriberRegistrationContext) CancellationToken() (*CancellationToken, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*CancellationToken), nil
 }
 
 // ExecutableResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource.
@@ -9307,6 +9523,18 @@ func (s *ExecutableResource) OnResourceReady(callback func(...any) any) (*IResou
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ExecutableResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ExecutableResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -10150,6 +10378,18 @@ func (s *ExternalServiceResource) OnResourceReady(callback func(...any) any) (*I
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ExternalServiceResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ExternalServiceResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -10469,6 +10709,32 @@ func (s *ExternalServiceResource) WithMergeRouteMiddleware(path string, method s
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// IAspireStore wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore.
+type IAspireStore struct {
+	HandleWrapperBase
+}
+
+// NewIAspireStore creates a new IAspireStore.
+func NewIAspireStore(handle *Handle, client *AspireClient) *IAspireStore {
+	return &IAspireStore{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// GetFileNameWithContent gets a deterministic file path for the specified file contents
+func (s *IAspireStore) GetFileNameWithContent(filenameTemplate string, sourceFilename string) (*string, error) {
+	reqArgs := map[string]any{
+		"aspireStore": SerializeValue(s.Handle()),
+	}
+	reqArgs["filenameTemplate"] = SerializeValue(filenameTemplate)
+	reqArgs["sourceFilename"] = SerializeValue(sourceFilename)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getFileNameWithContent", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*string), nil
 }
 
 // IComputeResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource.
@@ -11077,6 +11343,30 @@ func (s *IDistributedApplicationBuilder) SubscribeAfterResourcesCreated(callback
 	return result.(*DistributedApplicationEventSubscription), nil
 }
 
+// AddEventingSubscriber adds an eventing subscriber
+func (s *IDistributedApplicationBuilder) AddEventingSubscriber(subscribe func(...any) any) error {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if subscribe != nil {
+		reqArgs["subscribe"] = RegisterCallback(subscribe)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/addEventingSubscriber", reqArgs)
+	return err
+}
+
+// TryAddEventingSubscriber attempts to add an eventing subscriber
+func (s *IDistributedApplicationBuilder) TryAddEventingSubscriber(subscribe func(...any) any) error {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if subscribe != nil {
+		reqArgs["subscribe"] = RegisterCallback(subscribe)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/tryAddEventingSubscriber", reqArgs)
+	return err
+}
+
 // AddTestRedis adds a test Redis resource
 func (s *IDistributedApplicationBuilder) AddTestRedis(name string, port *float64) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
@@ -11193,6 +11483,127 @@ func NewIDistributedApplicationResourceEvent(handle *Handle, client *AspireClien
 	return &IDistributedApplicationResourceEvent{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
+}
+
+// IExecutionConfigurationBuilder wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder.
+type IExecutionConfigurationBuilder struct {
+	HandleWrapperBase
+}
+
+// NewIExecutionConfigurationBuilder creates a new IExecutionConfigurationBuilder.
+func NewIExecutionConfigurationBuilder(handle *Handle, client *AspireClient) *IExecutionConfigurationBuilder {
+	return &IExecutionConfigurationBuilder{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Build builds the execution configuration
+func (s *IExecutionConfigurationBuilder) Build(executionContext *DistributedApplicationExecutionContext, resourceLogger *ILogger, cancellationToken *CancellationToken) (*IExecutionConfigurationResult, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["executionContext"] = SerializeValue(executionContext)
+	if resourceLogger != nil {
+		reqArgs["resourceLogger"] = SerializeValue(resourceLogger)
+	}
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/buildExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationResult), nil
+}
+
+// WithHttpsCertificateConfig adds an HTTPS certificate configuration gatherer
+func (s *IExecutionConfigurationBuilder) WithHttpsCertificateConfig(configContextFactory func(...any) any) (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if configContextFactory != nil {
+		reqArgs["configContextFactory"] = RegisterCallback(configContextFactory)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsCertificateConfigExport", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
+// WithArgumentsConfig adds an arguments configuration gatherer
+func (s *IExecutionConfigurationBuilder) WithArgumentsConfig() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgumentsConfig", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
+// WithEnvironmentVariablesConfig adds an environment variables configuration gatherer
+func (s *IExecutionConfigurationBuilder) WithEnvironmentVariablesConfig() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentVariablesConfig", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
+// WithCertificateTrustConfig adds a certificate trust configuration gatherer
+func (s *IExecutionConfigurationBuilder) WithCertificateTrustConfig(configContextFactory func(...any) any) (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if configContextFactory != nil {
+		reqArgs["configContextFactory"] = RegisterCallback(configContextFactory)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withCertificateTrustConfig", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
+// IExecutionConfigurationResult wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult.
+type IExecutionConfigurationResult struct {
+	HandleWrapperBase
+}
+
+// NewIExecutionConfigurationResult creates a new IExecutionConfigurationResult.
+func NewIExecutionConfigurationResult(handle *Handle, client *AspireClient) *IExecutionConfigurationResult {
+	return &IExecutionConfigurationResult{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// GetCertificateTrustData gets certificate trust execution-configuration data
+func (s *IExecutionConfigurationResult) GetCertificateTrustData() (*CertificateTrustExecutionConfigurationExportData, error) {
+	reqArgs := map[string]any{
+		"configuration": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getCertificateTrustData", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*CertificateTrustExecutionConfigurationExportData), nil
+}
+
+// GetHttpsCertificateData gets HTTPS certificate execution-configuration data
+func (s *IExecutionConfigurationResult) GetHttpsCertificateData() (*HttpsCertificateExecutionConfigurationExportData, error) {
+	reqArgs := map[string]any{
+		"configuration": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getHttpsCertificateData", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*HttpsCertificateExecutionConfigurationExportData), nil
 }
 
 // IExpressionValue wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue.
@@ -11717,6 +12128,18 @@ func (s *IServiceProvider) GetResourceNotificationService() (*ResourceNotificati
 		return nil, err
 	}
 	return result.(*ResourceNotificationService), nil
+}
+
+// GetAspireStore gets the Aspire store from the service provider
+func (s *IServiceProvider) GetAspireStore() (*IAspireStore, error) {
+	reqArgs := map[string]any{
+		"serviceProvider": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getAspireStore", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IAspireStore), nil
 }
 
 // GetUserSecretsManager gets the user secrets manager from the service provider
@@ -12266,6 +12689,18 @@ func (s *ParameterResource) OnResourceReady(callback func(...any) any) (*IResour
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ParameterResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
 }
 
 // WithOptionalString adds an optional string parameter
@@ -14291,6 +14726,18 @@ func (s *ProjectResource) OnResourceReady(callback func(...any) any) (*IResource
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ProjectResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
 }
 
 // WithOptionalString adds an optional string parameter
@@ -16574,6 +17021,18 @@ func (s *TestDatabaseResource) OnResourceReady(callback func(...any) any) (*IRes
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *TestDatabaseResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *TestDatabaseResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -18407,6 +18866,18 @@ func (s *TestRedisResource) OnResourceReady(callback func(...any) any) (*IResour
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *TestRedisResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
 }
 
 // AddTestChildDatabase adds a child database to a test Redis resource
@@ -20357,6 +20828,18 @@ func (s *TestVaultResource) OnResourceReady(callback func(...any) any) (*IResour
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *TestVaultResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *TestVaultResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -20773,6 +21256,15 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", func(h *Handle, c *AspireClient) any {
 		return NewEndpointReference(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", func(h *Handle, c *AspireClient) any {
+		return NewIAspireStore(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder", func(h *Handle, c *AspireClient) any {
+		return NewIExecutionConfigurationBuilder(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult", func(h *Handle, c *AspireClient) any {
+		return NewIExecutionConfigurationResult(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", func(h *Handle, c *AspireClient) any {
 		return NewIResource(h, c)
 	})
@@ -20889,6 +21381,9 @@ func init() {
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", func(h *Handle, c *AspireClient) any {
 		return NewIDistributedApplicationEventing(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", func(h *Handle, c *AspireClient) any {
+		return NewEventingSubscriberRegistrationContext(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", func(h *Handle, c *AspireClient) any {
 		return NewAfterResourcesCreatedEvent(h, c)

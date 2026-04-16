@@ -51,7 +51,7 @@ FROM ubuntu:24.04 AS runtime
 # Install base tools and Docker CLI.
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-      ca-certificates curl gpg docker.io git libicu74 && \
+      ca-certificates curl gpg docker.io git libicu-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Install gh CLI (needed by get-aspire-cli-pr.sh to download PR artifacts).

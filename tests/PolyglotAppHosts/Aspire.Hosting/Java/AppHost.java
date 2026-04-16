@@ -100,6 +100,48 @@ void main() throws Exception {
         var builderExecutionContext = builder.executionContext();
         var executionContextServiceProvider = builderExecutionContext.serviceProvider();
         var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
+        builder.addEventingSubscriber((registrationContext) -> {
+            var subscriberExecutionContext = registrationContext.executionContext();
+            var _subscriberIsRunMode = subscriberExecutionContext.isRunMode();
+            var _subscriberCancellationToken = registrationContext.cancellationToken();
+            registrationContext.onBeforeStart((beforeStartEvent) -> {
+                var subscriberServices = beforeStartEvent.services();
+                var aspireStore = subscriberServices.getAspireStore();
+                var _contentBackedFilename = aspireStore.getFileNameWithContent("validation-apphost.java", "AppHost.java");
+            });
+            registrationContext.onAfterResourcesCreated((afterResourcesCreatedEvent) -> {
+                var afterResourcesCreatedServices = afterResourcesCreatedEvent.services();
+                var afterResourcesCreatedModel = afterResourcesCreatedEvent.model();
+                var _afterResourcesCreatedEventing = afterResourcesCreatedServices.getEventing();
+                var _afterResourcesCreatedResources = afterResourcesCreatedModel.getResources();
+            });
+        });
+        builder.tryAddEventingSubscriber((_registrationContext) -> { });
+        container.withArgs(new String[] { "--validation" });
+        var executionConfigurationBuilder = container.createExecutionConfiguration();
+        executionConfigurationBuilder.withArgumentsConfig();
+        executionConfigurationBuilder.withEnvironmentVariablesConfig();
+        executionConfigurationBuilder.withCertificateTrustConfig((requestedTrustScope) -> {
+            var _requestedTrustScope = requestedTrustScope;
+            var trustContext = new CertificateTrustExecutionConfigurationContext();
+            trustContext.setCertificateBundlePath(ReferenceExpression.refExpr("/etc/ssl/certs/custom-bundle.pem"));
+            trustContext.setCertificateDirectoriesPath(ReferenceExpression.refExpr("/etc/ssl/certs/custom"));
+            trustContext.setRootCertificatesPath("/etc/ssl/certs");
+            trustContext.setIsContainer(true);
+            return trustContext;
+        });
+        executionConfigurationBuilder.withHttpsCertificateConfig((certificateInfo) -> {
+            var _certificateSubject = certificateInfo.getSubject();
+            var _certificateThumbprint = certificateInfo.getThumbprint();
+            var certificateContext = new HttpsCertificateExecutionConfigurationContext();
+            certificateContext.setCertificatePath(ReferenceExpression.refExpr("/certificates/tls.crt"));
+            certificateContext.setKeyPath(ReferenceExpression.refExpr("/certificates/tls.key"));
+            certificateContext.setPfxPath(ReferenceExpression.refExpr("/certificates/tls.pfx"));
+            return certificateContext;
+        });
+        var executionConfiguration = executionConfigurationBuilder.build(builderExecutionContext);
+        var _certificateTrustData = executionConfiguration.getCertificateTrustData();
+        var _httpsCertificateData = executionConfiguration.getHttpsCertificateData();
         var beforeStartSubscription = builder.subscribeBeforeStart((beforeStartEvent) -> { var beforeStartServices = beforeStartEvent.services(); var beforeStartModel = beforeStartEvent.model(); var _beforeStartResources = beforeStartModel.getResources(); var _beforeStartContainer = beforeStartModel.findResourceByName("mycontainer"); var _beforeStartEventing = beforeStartServices.getEventing(); var beforeStartLoggerFactory = beforeStartServices.getLoggerFactory(); var beforeStartLogger = beforeStartLoggerFactory.createLogger("ValidationAppHost.BeforeStart"); beforeStartLogger.logInformation("BeforeStart information"); beforeStartLogger.logWarning("BeforeStart warning"); beforeStartLogger.logError("BeforeStart error"); beforeStartLogger.logDebug("BeforeStart debug"); beforeStartLogger.log("critical", "BeforeStart critical"); var beforeStartResourceLoggerService = beforeStartServices.getResourceLoggerService(); beforeStartResourceLoggerService.completeLog(container); beforeStartResourceLoggerService.completeLogByName("mycontainer"); var beforeStartNotificationService = beforeStartServices.getResourceNotificationService(); beforeStartNotificationService.waitForResourceState("mycontainer", "Running"); var _matchedResourceState = beforeStartNotificationService.waitForResourceStates("mycontainer", new String[] { "Running", "FailedToStart" }); var _healthyResourceEvent = beforeStartNotificationService.waitForResourceHealthy("mycontainer"); beforeStartNotificationService.waitForDependencies(container); var _currentResourceState = beforeStartNotificationService.tryGetResourceState("mycontainer"); beforeStartNotificationService.publishResourceUpdate(container, new PublishResourceUpdateOptions().state("Validated").stateStyle("info")); var userSecretsManager = beforeStartServices.getUserSecretsManager(); var _userSecretsAvailable = userSecretsManager.isAvailable(); var _userSecretsFilePath = userSecretsManager.filePath(); var _secretSet = userSecretsManager.trySetSecret("Validation:Key", "value"); userSecretsManager.getOrSetSecret(container, "Validation:GeneratedKey", "generated-value"); var _generatedSecretValue = builderConfiguration.getConfigValue("Validation:GeneratedKey"); userSecretsManager.saveStateJson("{\"Validation\":\"Value\"}"); var _modelFromServices = beforeStartServices.getDistributedApplicationModel(); });
         var afterResourcesCreatedSubscription = builder.subscribeAfterResourcesCreated((afterResourcesCreatedEvent) -> { var afterResourcesCreatedServices = afterResourcesCreatedEvent.services(); var afterResourcesCreatedModel = afterResourcesCreatedEvent.model(); var _afterResources = afterResourcesCreatedModel.getResources(); var _afterResourcesContainer = afterResourcesCreatedModel.findResourceByName("mycontainer"); var afterResourcesCreatedLoggerFactory = afterResourcesCreatedServices.getLoggerFactory(); var afterResourcesCreatedLogger = afterResourcesCreatedLoggerFactory.createLogger("ValidationAppHost.AfterResourcesCreated"); afterResourcesCreatedLogger.logInformation("AfterResourcesCreated"); });
         var builderEventing = builder.eventing();

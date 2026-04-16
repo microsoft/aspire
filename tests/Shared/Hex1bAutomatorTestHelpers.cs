@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Hex1b.Input;
 
@@ -512,5 +513,40 @@ internal static class Hex1bAutomatorTestHelpers
             description: "aspire initialization complete");
 
         await auto.DeclineAgentInitPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Waits for the deploy/destroy pipeline to complete, failing immediately if the pipeline reports failure
+    /// instead of waiting for the full timeout to elapse.
+    /// </summary>
+    internal static async Task WaitForPipelineSuccessAsync(
+        this Hex1bTerminalAutomator auto,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(5);
+        var pipelineSucceeded = false;
+        string? terminalOutput = null;
+
+        await auto.WaitUntilAsync(s =>
+        {
+            if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineFailed))
+            {
+                terminalOutput = s.GetText();
+                return true;
+            }
+
+            if (s.ContainsText(ConsoleActivityLoggerStrings.PipelineSucceeded))
+            {
+                pipelineSucceeded = true;
+                return true;
+            }
+
+            return false;
+        }, timeout: effectiveTimeout, description: "pipeline succeeded or failed");
+
+        if (!pipelineSucceeded)
+        {
+            throw new InvalidOperationException($"Pipeline failed unexpectedly. Terminal output:{Environment.NewLine}{terminalOutput}");
+        }
     }
 }
