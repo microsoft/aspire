@@ -242,7 +242,11 @@ extends:
                   itemPattern: |
                     **/aspire-cli-*.zip
                     **/aspire-cli-*.tar.gz
-                  targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)'
+                  # Download to a separate directory from artifacts/packages so that
+                  # MicroBuild's -sign step doesn't process these already-signed archives.
+                  # Repacking tar.gz on Windows changes their SHA-256, breaking installer
+                  # validation (Homebrew cask audit, WinGet manifest) against published URLs.
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
