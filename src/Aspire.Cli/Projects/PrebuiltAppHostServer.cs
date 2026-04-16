@@ -340,11 +340,12 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var channelName = AspireConfigFile.Load(_appDirectoryPath)?.GetChannel()
             ?? AspireJsonConfiguration.Load(_appDirectoryPath)?.Channel;
 
-        // Fall back to global config, then embedded channel
+        // Fall back to global config, then embedded channel (validated against available channels)
         if (string.IsNullOrEmpty(channelName))
         {
+            var channels = await _packagingService.GetChannelsAsync(cancellationToken);
             channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken)
-                ?? PackagingService.GetEmbeddedChannel();
+                ?? PackagingService.GetEmbeddedChannelIfExists(channels);
         }
 
         if (!string.IsNullOrEmpty(channelName))

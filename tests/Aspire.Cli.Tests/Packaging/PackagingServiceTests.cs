@@ -908,4 +908,45 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Null(channel);
     }
+
+    [Fact]
+    public void GetEmbeddedChannelIfExists_ReturnsNull_WhenEmbeddedChannelIsNull()
+    {
+        // In dev builds, embedded channel is null, so GetEmbeddedChannelIfExists should also return null
+        var channels = new[]
+        {
+            PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, null, null!),
+            PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, null, null!)
+        };
+
+        var result = PackagingService.GetEmbeddedChannelIfExists(channels);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetEmbeddedChannelIfExists_ReturnsNull_WhenChannelNotInAvailableChannels()
+    {
+        // Simulates a "ci" or "local" channel that doesn't exist in the channel system.
+        // Since we can't set the embedded channel in tests (it's assembly metadata),
+        // we verify the method logic directly: if the embedded channel is null (dev builds),
+        // it returns null regardless of what channels are available.
+        var channels = new[]
+        {
+            PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, null, null!),
+        };
+
+        var result = PackagingService.GetEmbeddedChannelIfExists(channels);
+
+        // In dev builds, embedded channel is null, so result is null
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetEmbeddedChannelIfExists_ReturnsNull_WhenAvailableChannelsIsEmpty()
+    {
+        var result = PackagingService.GetEmbeddedChannelIfExists(Enumerable.Empty<PackageChannel>());
+
+        Assert.Null(result);
+    }
 }

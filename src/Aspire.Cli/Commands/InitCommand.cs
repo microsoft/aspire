@@ -740,7 +740,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
         if (string.IsNullOrEmpty(channelName))
         {
             channelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken)
-                ?? PackagingService.GetEmbeddedChannel();
+                ?? PackagingService.GetEmbeddedChannelIfExists(allChannels);
         }
 
         IEnumerable<PackageChannel> channels;

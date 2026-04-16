@@ -651,7 +651,7 @@ internal class DotNetTemplateFactory(
         if (string.IsNullOrEmpty(channelName))
         {
             channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken)
-                ?? PackagingService.GetEmbeddedChannel();
+                ?? PackagingService.GetEmbeddedChannelIfExists(allChannels);
         }
         
         IEnumerable<PackageChannel> channels;

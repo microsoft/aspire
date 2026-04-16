@@ -30,6 +30,24 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         return string.IsNullOrEmpty(value) ? null : value;
     }
 
+    /// <summary>
+    /// Returns the embedded channel only if it matches one of the available channels.
+    /// Non-distributable channels like <c>ci</c> are filtered out, preventing crashes
+    /// when the embedded channel doesn't exist in the channel system.
+    /// </summary>
+    internal static string? GetEmbeddedChannelIfExists(IEnumerable<PackageChannel> availableChannels)
+    {
+        var embeddedChannel = GetEmbeddedChannel();
+        if (string.IsNullOrEmpty(embeddedChannel))
+        {
+            return null;
+        }
+
+        return availableChannels.Any(c => string.Equals(c.Name, embeddedChannel, StringComparison.OrdinalIgnoreCase))
+            ? embeddedChannel
+            : null;
+    }
+
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
     {
         var defaultChannel = PackageChannel.CreateImplicitChannel(nuGetPackageCache);

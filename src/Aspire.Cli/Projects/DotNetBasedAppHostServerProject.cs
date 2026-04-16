@@ -330,7 +330,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         if (string.IsNullOrEmpty(configuredChannelName))
         {
             configuredChannelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken)
-                ?? PackagingService.GetEmbeddedChannel();
+                ?? PackagingService.GetEmbeddedChannelIfExists(channels);
         }
 
         // Resolve channel sources and add them via RestoreAdditionalProjectSources

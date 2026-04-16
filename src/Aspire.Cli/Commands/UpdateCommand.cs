@@ -306,16 +306,21 @@ internal sealed class UpdateCommand : BaseCommand
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 
-        // If channel is not specified via argument, use the embedded channel baked into the binary at build time.
-        // This allows stable-channel binaries to self-update from the stable channel automatically,
-        // and daily-channel binaries to update from daily, without user interaction.
+        // If channel is not specified via argument, use the embedded channel baked into the binary at build time,
+        // but only if it's a recognized channel that supports CLI downloads. Non-distributable channels
+        // like "ci" or "local" (when no matching hive exists) are ignored so the user gets prompted instead.
         if (string.IsNullOrEmpty(channel))
         {
-            var embeddedChannel = PackagingService.GetEmbeddedChannel();
-            if (!string.IsNullOrEmpty(embeddedChannel) &&
-                !string.Equals(embeddedChannel, "pr", StringComparison.OrdinalIgnoreCase))
+            var channels = await _packagingService.GetChannelsAsync(cancellationToken);
+            var embeddedChannel = PackagingService.GetEmbeddedChannelIfExists(channels);
+            if (!string.IsNullOrEmpty(embeddedChannel))
             {
-                channel = embeddedChannel;
+                // Only auto-select if the channel actually supports CLI downloads
+                var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, embeddedChannel, StringComparison.OrdinalIgnoreCase));
+                if (matchingChannel is not null && !string.IsNullOrEmpty(matchingChannel.CliDownloadBaseUrl))
+                {
+                    channel = embeddedChannel;
+                }
             }
         }
 

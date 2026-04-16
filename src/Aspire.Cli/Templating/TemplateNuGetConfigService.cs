@@ -61,10 +61,12 @@ internal sealed class TemplateNuGetConfigService(
     /// <param name="cancellationToken">A cancellation token.</param>
     public async Task PromptToCreateOrUpdateNuGetConfigAsync(string? channelName, string outputPath, CancellationToken cancellationToken)
     {
+        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+
         if (string.IsNullOrWhiteSpace(channelName))
         {
             channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken)
-                ?? PackagingService.GetEmbeddedChannel();
+                ?? PackagingService.GetEmbeddedChannelIfExists(channels);
         }
 
         if (string.IsNullOrWhiteSpace(channelName))
@@ -72,7 +74,6 @@ internal sealed class TemplateNuGetConfigService(
             return;
         }
 
-        var channels = await packagingService.GetChannelsAsync(cancellationToken);
         var matchingChannel = channels.FirstOrDefault(c =>
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 

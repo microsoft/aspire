@@ -133,6 +133,14 @@ internal sealed class AddCommand : BaseCommand
                     // Get channels and find the implicit channel, similar to how templates are handled
                     var allChannels = await _packagingService.GetChannelsAsync(cancellationToken);
 
+                    // Validate configured channel against available channels.
+                    // An embedded channel like "ci" won't match any available channel and should be ignored.
+                    if (!string.IsNullOrEmpty(configuredChannel) &&
+                        !allChannels.Any(c => string.Equals(c.Name, configuredChannel, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        configuredChannel = null;
+                    }
+
                     // If a channel is configured in settings.json, use that specific channel
                     if (!string.IsNullOrEmpty(configuredChannel))
                     {
