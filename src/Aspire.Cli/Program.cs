@@ -642,6 +642,7 @@ public class Program
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var isPlayground = CliHostEnvironment.IsPlaygroundMode(configuration);
+        var usePlaygroundFormatting = isPlayground && hostEnvironment.SupportsAnsi && hostEnvironment.SupportsInteractiveOutput;
 
         // Create custom output that handles width detection better in CI environments
         // and encapsulates ASPIRE_CONSOLE_WIDTH environment variable handling
@@ -649,9 +650,9 @@ public class Program
 
         var settings = new AnsiConsoleSettings()
         {
-            Ansi = isPlayground ? AnsiSupport.Yes : AnsiSupport.No,
-            Interactive = isPlayground ? InteractionSupport.Yes : hostEnvironment.SupportsInteractiveOutput ? InteractionSupport.Detect : InteractionSupport.No,
-            ColorSystem = isPlayground ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Ansi = usePlaygroundFormatting ? AnsiSupport.Yes : AnsiSupport.No,
+            Interactive = usePlaygroundFormatting ? InteractionSupport.Yes : hostEnvironment.SupportsInteractiveOutput ? InteractionSupport.Detect : InteractionSupport.No,
+            ColorSystem = usePlaygroundFormatting ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
             Out = output,
         };
 
@@ -664,7 +665,7 @@ public class Program
             settings.ColorSystem = ColorSystemSupport.EightBit;
         }
 
-        if (isPlayground)
+        if (usePlaygroundFormatting)
         {
             // Enrichers interfere with interactive playground experience so
             // this suppresses the default enrichers so that the CLI experience
