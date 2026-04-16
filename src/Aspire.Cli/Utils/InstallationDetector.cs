@@ -36,7 +36,7 @@ internal sealed class AspireUpdateConfig
 }
 
 /// <summary>
-/// Detects CLI installation method by checking for <c>.aspire-update.json</c> and dotnet tool indicators.
+/// Detects CLI installation method by checking for <c>.aspire-update.json</c>, WinGet path heuristics, and dotnet tool indicators.
 /// </summary>
 internal sealed class InstallationDetector : IInstallationDetector
 {
@@ -45,6 +45,11 @@ internal sealed class InstallationDetector : IInstallationDetector
     private InstallationInfo? _cachedInfo;
 
     internal const string UpdateConfigFileName = ".aspire-update.json";
+
+    /// <summary>
+    /// Generic update message shown to WinGet users (rustup-style, does not name a specific package manager).
+    /// </summary>
+    internal const string PackageManagerUpdateInstructions = "If you installed the Aspire CLI through a package manager, use that package manager to update.";
 
     public InstallationDetector(ILogger<InstallationDetector> logger)
         : this(logger, Environment.ProcessPath)
@@ -80,8 +85,11 @@ internal sealed class InstallationDetector : IInstallationDetector
             return new InstallationInfo(IsDotNetTool: true, SelfUpdateDisabled: false, UpdateInstructions: null);
         }
 
+        // Resolve symlinks once (critical for Homebrew on macOS where the binary is symlinked)
+        var resolvedPath = ResolveSymlinks(_processPath);
+
         // Check for .aspire-update.json next to the resolved process path
-        var config = TryLoadUpdateConfig(_processPath);
+        var config = TryLoadUpdateConfig(resolvedPath);
         if (config is not null)
         {
             if (config.SelfUpdateDisabled)
@@ -91,6 +99,13 @@ internal sealed class InstallationDetector : IInstallationDetector
             }
 
             _logger.LogDebug("{FileName} found but selfUpdateDisabled is false.", UpdateConfigFileName);
+        }
+
+        // Check if installed via WinGet (process under WinGet packages directory)
+        if (resolvedPath is not null && IsWinGetInstall(resolvedPath))
+        {
+            _logger.LogDebug("CLI appears to be installed via WinGet (process path is under a WinGet packages directory).");
+            return new InstallationInfo(IsDotNetTool: false, SelfUpdateDisabled: true, UpdateInstructions: PackageManagerUpdateInstructions);
         }
 
         // Default: script install or direct binary, self-update is available
@@ -108,33 +123,98 @@ internal sealed class InstallationDetector : IInstallationDetector
         return string.Equals(fileName, "dotnet", StringComparison.OrdinalIgnoreCase);
     }
 
-    private AspireUpdateConfig? TryLoadUpdateConfig(string? processPath)
+    /// <summary>
+    /// Resolves symlinks for the given path. Returns the resolved path, or the original if not a symlink.
+    /// </summary>
+    private string? ResolveSymlinks(string? processPath)
     {
         if (string.IsNullOrEmpty(processPath))
+        {
+            return processPath;
+        }
+
+        try
+        {
+            var linkTarget = File.ResolveLinkTarget(processPath, returnFinalTarget: true);
+            if (linkTarget is not null)
+            {
+                _logger.LogDebug("Resolved symlink {ProcessPath} -> {ResolvedPath}", processPath, linkTarget.FullName);
+                return linkTarget.FullName;
+            }
+        }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(ex, "Failed to resolve symlink for {ProcessPath}, using original path.", processPath);
+        }
+
+        return processPath;
+    }
+
+    /// <summary>
+    /// Checks whether the resolved process path is under a known WinGet packages directory.
+    /// WinGet installs portable packages to well-known directories:
+    /// - User scope: %LOCALAPPDATA%\Microsoft\WinGet\Packages\
+    /// - Machine scope: %PROGRAMFILES%\WinGet\Packages\
+    /// Note: custom install paths (via --location or PortablePackageUserRoot) are not detected.
+    /// </summary>
+    internal static bool IsWinGetInstall(string resolvedPath)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        var normalizedPath = Path.GetFullPath(resolvedPath);
+
+        // Check user-scope WinGet packages directory
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (!string.IsNullOrEmpty(localAppData))
+        {
+            var userPackagesDir = Path.GetFullPath(Path.Combine(localAppData, "Microsoft", "WinGet", "Packages"));
+            if (IsUnderDirectory(normalizedPath, userPackagesDir))
+            {
+                return true;
+            }
+        }
+
+        // Check machine-scope WinGet packages directory
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (!string.IsNullOrEmpty(programFiles))
+        {
+            var machinePackagesDir = Path.GetFullPath(Path.Combine(programFiles, "WinGet", "Packages"));
+            if (IsUnderDirectory(normalizedPath, machinePackagesDir))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether <paramref name="filePath"/> is under <paramref name="directoryPath"/> using a boundary-safe comparison.
+    /// </summary>
+    private static bool IsUnderDirectory(string filePath, string directoryPath)
+    {
+        // Ensure the directory path ends with a separator for boundary-safe comparison
+        // (prevents "C:\...\Packages2\foo" from matching "C:\...\Packages")
+        if (!directoryPath.EndsWith(Path.DirectorySeparatorChar))
+        {
+            directoryPath += Path.DirectorySeparatorChar;
+        }
+
+        return filePath.StartsWith(directoryPath, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private AspireUpdateConfig? TryLoadUpdateConfig(string? resolvedPath)
+    {
+        if (string.IsNullOrEmpty(resolvedPath))
         {
             return null;
         }
 
         try
         {
-            // Resolve symlinks (critical for Homebrew on macOS where the binary is symlinked).
-            // File.ResolveLinkTarget returns null for non-symlinks (not an error).
-            // On Linux, Environment.ProcessPath reads /proc/self/exe (already resolved).
-            var resolvedPath = processPath;
-            try
-            {
-                var linkTarget = File.ResolveLinkTarget(processPath, returnFinalTarget: true);
-                if (linkTarget is not null)
-                {
-                    resolvedPath = linkTarget.FullName;
-                    _logger.LogDebug("Resolved symlink {ProcessPath} -> {ResolvedPath}", processPath, resolvedPath);
-                }
-            }
-            catch (IOException ex)
-            {
-                _logger.LogDebug(ex, "Failed to resolve symlink for {ProcessPath}, using original path.", processPath);
-            }
-
             var directory = Path.GetDirectoryName(resolvedPath);
             if (string.IsNullOrEmpty(directory))
             {

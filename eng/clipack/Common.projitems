@@ -6,12 +6,6 @@
     <ArchiveFormat Condition="$(CliRuntime.StartsWith('win-'))">zip</ArchiveFormat>
     <ArchiveFormat Condition="!$(CliRuntime.StartsWith('win-'))">tar.gz</ArchiveFormat>
 
-    <!-- Update instructions for package-manager installations.
-         Windows archives get WinGet instructions, macOS archives get Homebrew instructions.
-         Linux archives don't include the file since there's no standard package manager. -->
-    <CliUpdateInstructions Condition="$(CliRuntime.StartsWith('win-'))">winget upgrade Microsoft.Aspire</CliUpdateInstructions>
-    <CliUpdateInstructions Condition="$(CliRuntime.StartsWith('osx-'))">brew upgrade --cask aspire</CliUpdateInstructions>
-
     <!-- Distribution channel embedded in the CLI binary.
          Defaults to 'stable' for archive builds; overridden to 'daily' or 'pr' by CI pipelines. -->
     <CliChannel Condition="'$(CliChannel)' == ''">stable</CliChannel>
@@ -48,21 +42,12 @@
   </Target>
 
   <!--
-    Write .aspire-update.json next to the CLI binary when CliUpdateInstructions is set.
-    This disables self-update for package-manager installations (WinGet, Homebrew) while
-    leaving install-script users unaffected (install scripts delete this file after extraction).
+    .aspire-update.json is NOT shipped in archives. Package managers handle it themselves:
+    - Homebrew cask: postflight in aspire.rb.template writes the file with brew-specific text
+    - WinGet: runtime path detection in InstallationDetector.cs identifies WinGet installs
+    - Install scripts: self-update is allowed (no file needed)
+    - Direct download: self-update is allowed (no file needed)
   -->
-  <Target Name="_WriteAspireUpdateJson"
-          AfterTargets="PrepareOutputPathForPublishToDisk"
-          Condition="'$(CliUpdateInstructions)' != ''">
-    <PropertyGroup>
-      <_AspireUpdateJsonContent>{"selfUpdateDisabled":true,"updateInstructions":"$(CliUpdateInstructions)"}</_AspireUpdateJsonContent>
-    </PropertyGroup>
-    <WriteLinesToFile File="$(OutputPath)\.aspire-update.json"
-                     Lines="$(_AspireUpdateJsonContent)"
-                     Overwrite="true" />
-    <Message Importance="high" Text="Wrote .aspire-update.json with instructions: $(CliUpdateInstructions)" />
-  </Target>
 
   <Target Name="_PublishProject">
     <!--

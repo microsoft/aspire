@@ -137,7 +137,6 @@
       <_ArtifactsDirArg>$(ArtifactsDir.TrimEnd('\').TrimEnd('/'))</_ArtifactsDirArg>
 
       <_CreateLayoutArgs>--output "$(_BundleOutputDirArg)" --artifacts "$(_ArtifactsDirArg)" --rid $(TargetRid) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
-      <_CreateLayoutArgs Condition="'$(UpdateInstructions)' != ''">$(_CreateLayoutArgs) --update-instructions "$(UpdateInstructions)"</_CreateLayoutArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="Creating bundle layout..." />

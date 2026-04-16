@@ -467,4 +467,127 @@ public class InstallationDetectorTests
             targetDir.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public void IsWinGetInstall_NonWindowsPlatform_ReturnsFalse()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "This test verifies non-Windows behavior.");
+
+        var result = InstallationDetector.IsWinGetInstall("/some/path/Microsoft/WinGet/Packages/foo/aspire");
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsWinGetInstall_PathUnderUserWinGetPackages_ReturnsTrue()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        Assert.SkipWhen(string.IsNullOrEmpty(localAppData), "LOCALAPPDATA not available.");
+
+        var wingetPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
+
+        var result = InstallationDetector.IsWinGetInstall(wingetPath);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsWinGetInstall_PathUnderMachineWinGetPackages_ReturnsTrue()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
+
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        Assert.SkipWhen(string.IsNullOrEmpty(programFiles), "PROGRAMFILES not available.");
+
+        var wingetPath = Path.Combine(programFiles, "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
+
+        var result = InstallationDetector.IsWinGetInstall(wingetPath);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsWinGetInstall_PathNotUnderWinGetPackages_ReturnsFalse()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        Assert.SkipWhen(string.IsNullOrEmpty(localAppData), "LOCALAPPDATA not available.");
+
+        // Path that looks similar but is NOT under WinGet\Packages
+        var otherPath = Path.Combine(localAppData, "SomeOtherApp", "aspire.exe");
+
+        var result = InstallationDetector.IsWinGetInstall(otherPath);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsWinGetInstall_BoundarySafety_SimilarPrefixReturnsFalse()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        Assert.SkipWhen(string.IsNullOrEmpty(localAppData), "LOCALAPPDATA not available.");
+
+        // "Packages2" should NOT match "Packages" — boundary safety check
+        var similarPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages2", "aspire.exe");
+
+        var result = InstallationDetector.IsWinGetInstall(similarPath);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void GetInstallationInfo_WinGetPath_ReturnsSelfUpdateDisabledWithGenericMessage()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        Assert.SkipWhen(string.IsNullOrEmpty(localAppData), "LOCALAPPDATA not available.");
+
+        // Use a path that looks like a WinGet install (no config file needed)
+        var wingetProcessPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
+        var detector = new InstallationDetector(_logger, wingetProcessPath);
+
+        var info = detector.GetInstallationInfo();
+
+        Assert.False(info.IsDotNetTool);
+        Assert.True(info.SelfUpdateDisabled);
+        Assert.Equal(InstallationDetector.PackageManagerUpdateInstructions, info.UpdateInstructions);
+    }
+
+    [Fact]
+    public void GetInstallationInfo_ConfigFileTakesPriorityOverWinGetPath()
+    {
+        // If .aspire-update.json exists, it should take priority over WinGet path detection
+        var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
+        try
+        {
+            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            File.WriteAllText(processPath, "");
+
+            var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
+            File.WriteAllText(configPath, """
+                {
+                    "selfUpdateDisabled": true,
+                    "updateInstructions": "brew upgrade --cask aspire"
+                }
+                """);
+
+            var detector = new InstallationDetector(_logger, processPath);
+
+            var info = detector.GetInstallationInfo();
+
+            // Config file instructions take priority
+            Assert.True(info.SelfUpdateDisabled);
+            Assert.Equal("brew upgrade --cask aspire", info.UpdateInstructions);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
 }
