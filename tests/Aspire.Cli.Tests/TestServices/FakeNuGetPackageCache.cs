@@ -8,14 +8,21 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class FakeNuGetPackageCache : INuGetPackageCache
 {
+    public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetTemplatePackagesAsyncCallback { get; set; }
+    public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetIntegrationPackagesAsyncCallback { get; set; }
+    public Func<DirectoryInfo, bool, FileInfo?, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetCliPackagesAsyncCallback { get; set; }
+
     public Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        => Task.FromResult<IEnumerable<NuGetPackage>>([]);
+        => GetTemplatePackagesAsyncCallback?.Invoke(workingDirectory, prerelease, nugetConfigFile, cancellationToken)
+           ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
     public Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        => Task.FromResult<IEnumerable<NuGetPackage>>([]);
+        => GetIntegrationPackagesAsyncCallback?.Invoke(workingDirectory, prerelease, nugetConfigFile, cancellationToken)
+           ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
     public Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        => Task.FromResult<IEnumerable<NuGetPackage>>([]);
+        => GetCliPackagesAsyncCallback?.Invoke(workingDirectory, prerelease, nugetConfigFile, cancellationToken)
+           ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
     public Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
         => Task.FromResult<IEnumerable<NuGetPackage>>([]);

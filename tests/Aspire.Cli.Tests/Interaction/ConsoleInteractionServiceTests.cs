@@ -32,7 +32,7 @@ public class ConsoleInteractionServiceTests
 
         // Act & Assert
         await Assert.ThrowsAsync<EmptyChoicesException>(() =>
-            interactionService.PromptForSelectionAsync("Select an item:", choices, x => x, CancellationToken.None));
+            interactionService.PromptForSelectionAsync("Select an item:", choices, x => x, cancellationToken: CancellationToken.None));
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class ConsoleInteractionServiceTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            interactionService.PromptForStringAsync("Enter value:", null, null, false, false, CancellationToken.None));
+            interactionService.PromptForStringAsync("Enter value:", null, false, false, binding: null, cancellationToken: CancellationToken.None));
         Assert.Contains(InteractionServiceStrings.InteractiveInputNotSupported, exception.Message);
     }
 
@@ -279,7 +279,7 @@ public class ConsoleInteractionServiceTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            interactionService.PromptForSelectionAsync("Select an item:", choices, x => x, CancellationToken.None));
+            interactionService.PromptForSelectionAsync("Select an item:", choices, x => x, cancellationToken: CancellationToken.None));
         Assert.Contains(InteractionServiceStrings.InteractiveInputNotSupported, exception.Message);
     }
 
@@ -308,7 +308,7 @@ public class ConsoleInteractionServiceTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            interactionService.ConfirmAsync("Confirm?", true, CancellationToken.None));
+            interactionService.ConfirmAsync("Confirm?", cancellationToken: CancellationToken.None));
         Assert.Contains(InteractionServiceStrings.InteractiveInputNotSupported, exception.Message);
     }
 
@@ -871,7 +871,7 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, executionContext);
 
         // Act
-        await interactionService.ConfirmAsync("Proceed?", defaultValue, CancellationToken.None);
+        await interactionService.ConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
 
         // Assert - the output should contain the [Y/n] or [y/N] suffix
         var outputString = output.ToString();
@@ -890,10 +890,207 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console, executionContext);
 
         // Act
-        var result = await interactionService.ConfirmAsync("Proceed?", defaultValue, CancellationToken.None);
+        var result = await interactionService.ConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
 
         // Assert - pressing Enter should accept the default value
         Assert.Equal(defaultValue, result);
+    }
+
+    [Fact]
+    public async Task PromptForStringAsync_CliProvidedValue_RunsValidator()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext);
+
+        var option = new System.CommandLine.Option<string?>("--value");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--value bad-value");
+        var binding = PromptBinding.Create(parseResult, option);
+        Func<string, ValidationResult> validator = v =>
+            v == "bad-value" ? ValidationResult.Error("Invalid!") : ValidationResult.Success();
+
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
+            interactionService.PromptForStringAsync("Enter value:", validator: validator, binding: binding, cancellationToken: CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PromptForStringAsync_CliProvidedEmptyValue_ThrowsWhenRequired()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext, TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var binding = PromptBinding.CreateDefault<string?>("");
+
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
+            interactionService.PromptForStringAsync("Enter name:", required: true, binding: binding, cancellationToken: CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PromptForStringAsync_NonInteractive_DefaultValuePassesValidation_ReturnsDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext, TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var binding = PromptBinding.CreateDefault<string?>("good-value");
+        Func<string, ValidationResult> validator = v =>
+            v == "good-value" ? ValidationResult.Success() : ValidationResult.Error("Invalid!");
+
+        var result = await interactionService.PromptForStringAsync("Enter value:", validator: validator, binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal("good-value", result);
+    }
+
+    [Fact]
+    public async Task PromptForStringAsync_WhenUserAcceptsEscapedDisplayDefault_ReturnsRawDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "\n");
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext);
+        const string rawDefault = "./[27;5;13~";
+
+        var result = await interactionService.PromptForStringAsync(
+            "Enter value:",
+            binding: PromptBinding.CreateDefault<string?>(rawDefault),
+            cancellationToken: CancellationToken.None);
+
+        Assert.Equal(rawDefault, result);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_NonInteractive_WithoutExplicitDefault_Throws()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext, TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var option = new System.CommandLine.Option<bool>("--confirm");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        await Assert.ThrowsAsync<NonInteractiveException>(() =>
+            interactionService.ConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_NonInteractive_WithExplicitDefault_ReturnsDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext, TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var binding = PromptBinding.CreateDefault(true);
+
+        var result = await interactionService.ConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void MatchChoices_WithDuplicateValues_ReturnsDeduplicated()
+    {
+        var choices = new[] { "alpha", "beta", "gamma" };
+
+        var result = ConsoleInteractionService.MatchChoices("alpha,alpha,beta", choices, c => c);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.Count);
+        Assert.Equal("alpha", result[0]);
+        Assert.Equal("beta", result[1]);
+    }
+
+    [Fact]
+    public void MatchChoices_All_ReturnsAllChoices()
+    {
+        var choices = new[] { "alpha", "beta", "gamma" };
+
+        var result = ConsoleInteractionService.MatchChoices("all", choices, c => c);
+
+        Assert.NotNull(result);
+        Assert.Equal(3, result.Count);
+    }
+
+    [Fact]
+    public void MatchChoices_None_ReturnsEmpty()
+    {
+        var choices = new[] { "alpha", "beta" };
+
+        var result = ConsoleInteractionService.MatchChoices("none", choices, c => c);
+
+        Assert.NotNull(result);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void MatchChoices_InvalidValue_ReturnsNull()
+    {
+        var choices = new[] { "alpha", "beta" };
+
+        var result = ConsoleInteractionService.MatchChoices("alpha,nonexistent", choices, c => c);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void MatchChoice_MatchesByToString()
+    {
+        var choices = new[] { new TestItem("id1", "Display One"), new TestItem("id2", "Display Two") };
+
+        var result = ConsoleInteractionService.MatchChoice("id1", choices, c => c.Display);
+
+        Assert.NotNull(result);
+        Assert.Equal("id1", result.Id);
+    }
+
+    [Fact]
+    public void PromptBinding_CreateDefault_ResolvesAsNotProvided()
+    {
+        var binding = PromptBinding.CreateDefault("test");
+        var (wasProvided, value) = binding.Resolve();
+
+        Assert.False(wasProvided);
+        Assert.Null(value);
+        Assert.Equal("test", binding.DefaultValue);
+        Assert.True(binding.HasExplicitDefault);
+    }
+
+    [Fact]
+    public void PromptBinding_CreateWithoutDefault_HasNoExplicitDefault()
+    {
+        var option = new System.CommandLine.Option<bool>("--flag");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+
+        var binding = PromptBinding.Create(parseResult, option);
+
+        Assert.False(binding.HasExplicitDefault);
+    }
+
+    [Fact]
+    public void PromptBinding_CreateWithDefault_HasExplicitDefault()
+    {
+        var option = new System.CommandLine.Option<bool>("--flag");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+
+        var binding = PromptBinding.Create(parseResult, option, true);
+
+        Assert.True(binding.HasExplicitDefault);
+        Assert.True(binding.DefaultValue);
+    }
+
+    private sealed record TestItem(string Id, string Display)
+    {
+        public override string ToString() => Id;
     }
 
     private static IAnsiConsole CreateInteractiveConsoleWithInput(StringBuilder output, string input)

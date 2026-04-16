@@ -105,6 +105,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string AgentInitOptionDescription {
+            get {
+                return ResourceManager.GetString("AgentInitOptionDescription", resourceCulture);
+            }
+        }
+
         internal static string PipelineLogLevelOptionDescription {
             get {
                 return ResourceManager.GetString("PipelineLogLevelOptionDescription", resourceCulture);

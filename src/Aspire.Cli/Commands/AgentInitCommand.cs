@@ -58,7 +58,26 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         _playwrightCliInstaller = playwrightCliInstaller;
         _gitRepository = gitRepository;
         _languageDiscovery = languageDiscovery;
+
+        Options.Add(s_workspaceRootOption);
+        Options.Add(s_skillLocationsOption);
+        Options.Add(s_skillsOption);
     }
+
+    private static readonly Option<string?> s_workspaceRootOption = new("--workspace-root")
+    {
+        Description = AgentCommandStrings.InitCommand_WorkspaceRootOptionDescription
+    };
+
+    private static readonly Option<string?> s_skillLocationsOption = new("--skill-locations")
+    {
+        Description = AgentCommandStrings.InitCommand_SkillLocationsOptionDescription
+    };
+
+    private static readonly Option<string?> s_skillsOption = new("--skills")
+    {
+        Description = AgentCommandStrings.InitCommand_SkillsOptionDescription
+    };
 
     protected override bool UpdateNotificationsEnabled => false;
 
@@ -76,10 +95,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
     /// </summary>
     internal async Task<int> PromptAndChainAsync(
-        ICliHostEnvironment hostEnvironment,
         IInteractionService interactionService,
         int previousResultExitCode,
         DirectoryInfo workspaceRoot,
+        PromptBinding<bool> agentInitBinding,
         CancellationToken cancellationToken)
     {
         if (previousResultExitCode != ExitCodeConstants.Success)
@@ -87,19 +106,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             return previousResultExitCode;
         }
 
-        if (!hostEnvironment.SupportsInteractiveInput)
-        {
-            return ExitCodeConstants.Success;
-        }
-
         var runAgentInit = await interactionService.ConfirmAsync(
             SharedCommandStrings.PromptRunAgentInit,
-            defaultValue: true,
+            binding: agentInitBinding,
             cancellationToken: cancellationToken);
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, cancellationToken);
         }
 
         return ExitCodeConstants.Success;
@@ -107,11 +121,11 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var workspaceRoot = await PromptForWorkspaceRootAsync(cancellationToken);
-        return await ExecuteAgentInitAsync(workspaceRoot, cancellationToken);
+        var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
+        return await ExecuteAgentInitAsync(workspaceRoot, parseResult, cancellationToken);
     }
 
-    private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(CancellationToken cancellationToken)
+    private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Try to discover the git repository root to use as the default workspace root
         var gitRoot = await _gitRepository.GetRootAsync(cancellationToken);
@@ -120,7 +134,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         // Prompt the user for the workspace root
         var workspaceRootPath = await _interactionService.PromptForFilePathAsync(
             McpCommandStrings.InitCommand_WorkspaceRootPrompt,
-            defaultValue: defaultWorkspaceRoot.FullName,
+            binding: PromptBinding.Create(parseResult, s_workspaceRootOption, defaultWorkspaceRoot.FullName),
             validator: path =>
             {
                 if (string.IsNullOrWhiteSpace(path))
@@ -141,7 +155,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return new DirectoryInfo(workspaceRootPath);
     }
 
-    private async Task<int> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, CancellationToken cancellationToken)
+    private async Task<int> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
         {
@@ -180,13 +194,19 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         }
 
         // --- Phase 1: Skill location selection ---
+        var defaultLocationIds = string.Join(",", SkillLocation.All.Where(l => l.IsDefault).Select(l => l.Id));
+        var skillLocationsBinding = parseResult is not null
+            ? PromptBinding.Create(parseResult, s_skillLocationsOption, defaultLocationIds)
+            : PromptBinding.CreateDefault<string?>(defaultLocationIds);
+
         var selectedLocations = await _interactionService.PromptForSelectionsAsync(
             AgentCommandStrings.InitCommand_SelectSkillLocations,
             SkillLocation.All,
-            loc => $"{loc.Name} — {loc.Description}",
+            loc => $"{loc.DisplayName} — {loc.Description}",
             preSelected: SkillLocation.All.Where(l => l.IsDefault),
             optional: true,
-            cancellationToken);
+            binding: skillLocationsBinding,
+            cancellationToken: cancellationToken);
 
         // --- Phase 2: Skill and MCP server selection (only if locations were selected) ---
         IReadOnlyList<SkillDefinition> selectedSkills = [];
@@ -219,6 +239,11 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             preSelectedItems.AddRange(availableSkills.Where(s => s.IsDefault));
             // MCP is intentionally NOT pre-selected
 
+            var defaultSkillNames = string.Join(",", availableSkills.Where(s => s.IsDefault).Select(s => s.Name));
+            var skillsBinding = parseResult is not null
+                ? PromptBinding.Create(parseResult, s_skillsOption, defaultSkillNames)
+                : PromptBinding.CreateDefault<string?>(defaultSkillNames);
+
             var selectedItems = await _interactionService.PromptForSelectionsAsync(
                 AgentCommandStrings.InitCommand_SelectSkills,
                 skillChoices,
@@ -230,7 +255,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 },
                 preSelected: preSelectedItems,
                 optional: true,
-                cancellationToken);
+                binding: skillsBinding,
+                cancellationToken: cancellationToken);
 
             selectedSkills = selectedItems.OfType<SkillDefinition>().ToList();
 

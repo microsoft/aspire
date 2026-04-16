@@ -196,7 +196,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Interactive input is not supported in this environment. Use the --non-interactive flag or ensure the CLI is running in an interactive terminal..
+        ///   Looks up a localized string similar to This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution..
         /// </summary>
         public static string InteractiveInputNotSupported {
             get {
@@ -210,6 +210,33 @@ namespace Aspire.Cli.Resources {
         public static string MoreInfoNewCliVersion {
             get {
                 return ResourceManager.GetString("MoreInfoNewCliVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Available values: {0}.
+        /// </summary>
+        public static string NonInteractiveAvailableValues {
+            get {
+                return ResourceManager.GetString("NonInteractiveAvailableValues", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The value &apos;{0}&apos; is not valid for {1}..
+        /// </summary>
+        public static string NonInteractiveInvalidValue {
+            get {
+                return ResourceManager.GetString("NonInteractiveInvalidValue", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The {0} option must be specified when running in non-interactive mode..
+        /// </summary>
+        public static string NonInteractiveOptionRequired {
+            get {
+                return ResourceManager.GetString("NonInteractiveOptionRequired", resourceCulture);
             }
         }
 
