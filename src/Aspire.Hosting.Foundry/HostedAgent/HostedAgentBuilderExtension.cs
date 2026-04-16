@@ -124,15 +124,6 @@ public static class HostedAgentResourceBuilderExtensions
                     {
                         Path = "/responses"
                     }.ToString();
-                    // ctx.Urls.Add(new()
-                    // {
-                    //     DisplayText = "Responses endpoint",
-                    //     Url = new UriBuilder(http.Url)
-                    //     {
-                    //         Path = "/responses"
-                    //     }.ToString(),
-                    //     Endpoint = http.Endpoint,
-                    // });
                     ctx.Urls.Add(new()
                     {
                         DisplayText = "Liveness probe",
@@ -300,7 +291,7 @@ public static class HostedAgentResourceBuilderExtensions
             {
                 builder.ApplicationBuilder.CreateResourceBuilder((ExecutableResource)(object)resource).PublishAsDockerFile();
             }
-            else if (resource is not ProjectResource)
+            else if (resource is not ProjectResource and not ContainerResource)
             {
                 throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
             }
