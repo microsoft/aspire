@@ -272,8 +272,8 @@ public static class HostedAgentResourceBuilderExtensions
             }
             return builder;
         }
-        // Get the corresponding ContainerResource. Usually this is swapped in at publish time for ExecutableResources.
-        ContainerResource target;
+        // Get the corresponding ContainerResource for ExecutableResources. Usually this is swapped in at publish time for ExecutableResources.
+        IResource target;
         if (resource is ContainerResource containerResource)
         {
             target = containerResource;
@@ -285,29 +285,27 @@ public static class HostedAgentResourceBuilderExtensions
         else
         {
             // Ensure we have a container resource to deploy.
-            // Both ExecutableResource and ProjectResource need PublishAsDockerFile()
+            // ExecutableResource needs PublishAsDockerFile()
             // to convert them into container resources at this stage.
             if (resource is ExecutableResource)
             {
                 builder.ApplicationBuilder.CreateResourceBuilder((ExecutableResource)(object)resource).PublishAsDockerFile();
+
+                if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out crb))
+                {
+                    target = crb.Resource;
+                }
+                else
+                {
+                    throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be converted to a container resource.");
+                }
             }
-            else if (resource is ProjectResource)
-            {
-                builder.ApplicationBuilder.CreateResourceBuilder((ProjectResource)(object)resource).PublishAsDockerFile();
-            }
-            else if (resource is not ProjectResource and not ContainerResource)
+            else if (resource is not ProjectResource)
             {
                 throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
             }
 
-            if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out crb))
-            {
-                target = crb.Resource;
-            }
-            else
-            {
-                throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be converted to a container resource.");
-            }
+            target = resource;
         }
         // Create a separate agent resource to host the deployment
         var agent = new AzureHostedAgentResource(agentName, target, configure);
