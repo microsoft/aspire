@@ -279,6 +279,33 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WaitCommand_CanonicalResourceName_WithoutSnapshots_PassesThroughUnchanged()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            WaitForResourceResult = new WaitForResourceResponse { Success = true, State = "Running", HealthStatus = "Healthy" }
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("wait apiservice-tzykkput --status healthy --timeout 5");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal("apiservice-tzykkput", backchannel.LastWaitResourceName);
+    }
+
+    [Fact]
     public async Task WaitCommand_AmbiguousDisplayName_ReturnsFailureWithoutWaiting()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -290,7 +317,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
                 new ResourceSnapshot { Name = "cache-abc12345", DisplayName = "cache", ResourceType = "Container", State = "Running" },
                 new ResourceSnapshot { Name = "cache-def67890", DisplayName = "cache", ResourceType = "Container", State = "Running" }
             ],
-            WaitForResourceResult = new WaitForResourceResponse { Success = true, State = "Running" }
+            WaitForResourceResult = new WaitForResourceResponse { Success = false, ResourceNotFound = true, ErrorMessage = "Resource 'cache' was not found." }
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
@@ -307,7 +334,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.WaitResourceFailed, exitCode);
-        Assert.Null(backchannel.LastWaitResourceName);
+        Assert.Equal("cache", backchannel.LastWaitResourceName);
     }
 
     [Fact]

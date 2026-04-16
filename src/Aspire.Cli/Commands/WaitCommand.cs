@@ -102,12 +102,8 @@ internal sealed class WaitCommand : BaseCommand
 
         var connection = result.Connection!;
 
-        var resolvedResourceName = await ResolveResourceNameAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
-        if (resolvedResourceName is null)
-        {
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceNotFound, resourceName));
-            return ExitCodeConstants.WaitResourceFailed;
-        }
+        var resolvedResourceName = await ResolveResourceNameAsync(connection, resourceName, cancellationToken).ConfigureAwait(false)
+            ?? resourceName;
 
         return await WaitForResourceAsync(connection, resourceName, resolvedResourceName, status, timeoutSeconds, cancellationToken);
     }
