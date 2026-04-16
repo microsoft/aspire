@@ -228,11 +228,11 @@ public sealed class CrossEnvironmentDeploymentTests(ITestOutputHelper output)
                 "success=0 && " +
                 "for i in $(seq 1 12); do " +
                 "BODY=$(curl -s \"https://$webapp_url/weather\" --max-time 30 2>/dev/null); " +
-                "if echo \"$BODY\" | grep -q 'class=\"table\"'; then " +
+                // Check for table with actual data rows (td elements) to confirm weather API data loaded.
+                // Note: Blazor SSR streaming responses contain both the initial "Loading..." marker and the
+                // final table in the same response body, so checking for "Loading..." is unreliable.
+                "if echo \"$BODY\" | grep -q 'class=\"table\"' && echo \"$BODY\" | grep -q '<td>'; then " +
                 "echo \"  ✅ Weather page contains table data (attempt $i)\"; " +
-                // Also verify it's not stuck on Loading
-                "if echo \"$BODY\" | grep -q 'Loading...'; then " +
-                "echo \"  ⚠️ Page still loading, retrying...\"; sleep 10; continue; fi; " +
                 "success=1; break; fi; " +
                 "echo \"  Attempt $i: Weather table not found, retrying in 10s...\"; sleep 10; " +
                 "done && " +
