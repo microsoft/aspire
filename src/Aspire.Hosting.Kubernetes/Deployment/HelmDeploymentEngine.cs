@@ -580,7 +580,7 @@ internal static partial class HelmDeploymentEngine
             var dashboardDeploymentName = environment.Dashboard.Resource.Name.ToKubernetesResourceName();
             context.Summary.Add(
                 "🔑 Dashboard login",
-                new MarkdownString($"`kubectl logs -n {@namespace} -l app={dashboardDeploymentName} --tail=50` to retrieve the login token"));
+                new MarkdownString($"`kubectl logs -n {@namespace} -l app.kubernetes.io/component={dashboardDeploymentName} --tail=50` to retrieve the login token"));
         }
 
         // Helm status and resource inspection
