@@ -8,6 +8,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -27,6 +28,9 @@ using Microsoft.Extensions.Logging;
 // Reference types (from Aspire.Hosting.ApplicationModel namespace)
 [assembly: AspireExport(typeof(EndpointReference))]
 [assembly: AspireExport(typeof(ReferenceExpression))]
+[assembly: AspireExport(typeof(IAspireStore), ExposeProperties = true)]
+[assembly: AspireExport(typeof(IExecutionConfigurationBuilder))]
+[assembly: AspireExport(typeof(IExecutionConfigurationResult))]
 
 // Note: EnvironmentCallbackContext has [AspireExport(ExposeProperties = true)] on the type itself
 
@@ -50,6 +54,7 @@ using Microsoft.Extensions.Logging;
 
 // Service types
 [assembly: AspireExport(typeof(IServiceProvider))]
+[assembly: AspireExport(typeof(IServiceCollection))]
 [assembly: AspireExport(typeof(ResourceNotificationService))]
 [assembly: AspireExport(typeof(ResourceLoggerService))]
 

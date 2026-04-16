@@ -1,4 +1,4 @@
-#   -------------------------------------------------------------
+﻿#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1704,6 +1704,17 @@ class AddContainerOptions(typing.TypedDict, total=False):
     Image: str
     Tag: str
 
+class CertificateTrustExecutionConfigurationContext(typing.TypedDict, total=False):
+    CertificateBundlePath: ReferenceExpression
+    CertificateDirectoriesPath: ReferenceExpression
+    RootCertificatesPath: str
+    IsContainer: bool
+
+class CertificateTrustExecutionConfigurationExportData(typing.TypedDict, total=False):
+    Scope: CertificateTrustScope
+    CertificateSubjects: typing.Iterable[str]
+    CustomBundlePaths: typing.Iterable[str]
+
 class CommandOptions(typing.TypedDict, total=False):
     Description: str
     Parameter: typing.Any
@@ -1757,6 +1768,25 @@ class HttpCommandExportOptions(typing.TypedDict, total=False):
     MethodName: str
     ResultMode: HttpCommandResultMode
 
+class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
+    CertificatePath: ReferenceExpression
+    KeyPath: ReferenceExpression
+    PfxPath: ReferenceExpression
+
+class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=False):
+    Subject: str
+    Thumbprint: str
+    KeyPathExpression: str
+    PfxPathExpression: str
+    IsKeyPathReferenced: bool
+    IsPfxPathReferenced: bool
+    Password: str
+
+class HttpsCertificateInfo(typing.TypedDict, total=False):
+    Subject: str
+    Issuer: str
+    Thumbprint: str
+
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
     ConnectionString: bool
     ConnectionProperties: bool
@@ -1797,6 +1827,33 @@ class TestNestedDto(typing.TypedDict, total=False):
 # ============================================================================
 # Type Classes
 # ============================================================================
+
+class AbstractAspireStore:
+    """Type class for AbstractAspireStore."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractAspireStore(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def get_file_name_with_content(self, filename_template: str, source_filename: str) -> str:
+        """Gets a deterministic file path for the specified file contents"""
+        rpc_args: dict[str, typing.Any] = {'aspireStore': self._handle}
+        rpc_args['filenameTemplate'] = filename_template
+        rpc_args['sourceFilename'] = source_filename
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getFileNameWithContent',
+            rpc_args,
+        )
+        return result
+
 
 class AbstractConfiguration:
     """Type class for AbstractConfiguration."""
@@ -1916,6 +1973,15 @@ class DistributedApplicationBuilder:
             {'context': self._handle}
         )
         return typing.cast(AbstractHostEnvironment, result)
+
+    @_cached_property
+    def services(self) -> AbstractServiceCollection:
+        """Gets the Services property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/IDistributedApplicationBuilder.services',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractServiceCollection, result)
 
     @_cached_property
     def eventing(self) -> AbstractDistributedApplicationEventing:
@@ -2377,6 +2443,108 @@ class AbstractDistributedApplicationPipeline:
 class AbstractDistributedApplicationResourceEvent(abc.ABC):
     """Abstract base class for AbstractDistributedApplicationResourceEvent."""
 
+class AbstractExecutionConfigurationBuilder:
+    """Type class for AbstractExecutionConfigurationBuilder."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractExecutionConfigurationBuilder(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def build(self, execution_context: DistributedApplicationExecutionContext, *, resource_logger: AbstractLogger | None = None, timeout: int | None = None) -> AbstractExecutionConfigurationResult:
+        """Builds the execution configuration"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['executionContext'] = execution_context
+        if resource_logger is not None:
+            rpc_args['resourceLogger'] = resource_logger
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/buildExecutionConfiguration',
+            rpc_args,
+        )
+        return typing.cast(AbstractExecutionConfigurationResult, result)
+
+    def with_https_certificate_config(self, config_context_factory: typing.Callable[[HttpsCertificateInfo], HttpsCertificateExecutionConfigurationContext]) -> AbstractExecutionConfigurationBuilder:
+        """Adds an HTTPS certificate configuration gatherer"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['configContextFactory'] = self._client.register_callback(config_context_factory)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHttpsCertificateConfigExport',
+            rpc_args,
+        )
+        return typing.cast(AbstractExecutionConfigurationBuilder, result)
+
+    def with_arguments_config(self) -> AbstractExecutionConfigurationBuilder:
+        """Adds an arguments configuration gatherer"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withArgumentsConfig',
+            rpc_args,
+        )
+        return typing.cast(AbstractExecutionConfigurationBuilder, result)
+
+    def with_env_vars_config(self) -> AbstractExecutionConfigurationBuilder:
+        """Adds an environment variables configuration gatherer"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withEnvironmentVariablesConfig',
+            rpc_args,
+        )
+        return typing.cast(AbstractExecutionConfigurationBuilder, result)
+
+    def with_certificate_trust_config(self, config_context_factory: typing.Callable[[CertificateTrustScope], CertificateTrustExecutionConfigurationContext]) -> AbstractExecutionConfigurationBuilder:
+        """Adds a certificate trust configuration gatherer"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['configContextFactory'] = self._client.register_callback(config_context_factory)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCertificateTrustConfig',
+            rpc_args,
+        )
+        return typing.cast(AbstractExecutionConfigurationBuilder, result)
+
+
+class AbstractExecutionConfigurationResult:
+    """Type class for AbstractExecutionConfigurationResult."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractExecutionConfigurationResult(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def get_certificate_trust_data(self) -> CertificateTrustExecutionConfigurationExportData:
+        """Gets certificate trust execution-configuration data"""
+        rpc_args: dict[str, typing.Any] = {'configuration': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getCertificateTrustData',
+            rpc_args,
+        )
+        return typing.cast(CertificateTrustExecutionConfigurationExportData, result)
+
+    def get_https_certificate_data(self) -> HttpsCertificateExecutionConfigurationExportData:
+        """Gets HTTPS certificate execution-configuration data"""
+        rpc_args: dict[str, typing.Any] = {'configuration': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getHttpsCertificateData',
+            rpc_args,
+        )
+        return typing.cast(HttpsCertificateExecutionConfigurationExportData, result)
+
+
 class AbstractValueProvider(abc.ABC):
     """Abstract base class for AbstractValueProvider."""
 
@@ -2681,6 +2849,40 @@ class AbstractReportingTask:
 class AbstractValueWithReferences(abc.ABC):
     """Abstract base class for AbstractValueWithReferences."""
 
+class AbstractServiceCollection:
+    """Type class for AbstractServiceCollection."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractServiceCollection(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def add_eventing_subscriber(self, subscribe: typing.Callable[[EventingSubscriberRegistrationContext], None]) -> None:
+        """Adds an eventing subscriber"""
+        rpc_args: dict[str, typing.Any] = {'services': self._handle}
+        rpc_args['subscribe'] = self._client.register_callback(subscribe)
+        self._client.invoke_capability(
+            'Aspire.Hosting/addEventingSubscriber',
+            rpc_args
+        )
+
+    def try_add_eventing_subscriber(self, subscribe: typing.Callable[[EventingSubscriberRegistrationContext], None]) -> None:
+        """Attempts to add an eventing subscriber"""
+        rpc_args: dict[str, typing.Any] = {'services': self._handle}
+        rpc_args['subscribe'] = self._client.register_callback(subscribe)
+        self._client.invoke_capability(
+            'Aspire.Hosting/tryAddEventingSubscriber',
+            rpc_args
+        )
+
+
 class AbstractServiceProvider:
     """Type class for AbstractServiceProvider."""
 
@@ -2740,6 +2942,15 @@ class AbstractServiceProvider:
             rpc_args,
         )
         return typing.cast(ResourceNotificationService, result)
+
+    def get_aspire_store(self) -> AbstractAspireStore:
+        """Gets the Aspire store from the service provider"""
+        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getAspireStore',
+            rpc_args,
+        )
+        return typing.cast(AbstractAspireStore, result)
 
     def get_user_secrets_manager(self) -> AbstractUserSecretsManager:
         """Gets the user secrets manager from the service provider"""
@@ -4032,6 +4243,59 @@ class EnvironmentCallbackContext:
             {'context': self._handle}
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
+
+
+class EventingSubscriberRegistrationContext:
+    """Type class for EventingSubscriberRegistrationContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"EventingSubscriberRegistrationContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def execution_context(self) -> DistributedApplicationExecutionContext:
+        """Gets the ExecutionContext property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext',
+            {'context': self._handle}
+        )
+        return typing.cast(DistributedApplicationExecutionContext, result)
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
+
+    def on_before_start(self, callback: typing.Callable[[BeforeStartEvent], None]) -> DistributedApplicationEventSubscription:
+        """Subscribes an eventing subscriber to the BeforeStart event"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/eventingSubscriberOnBeforeStart',
+            rpc_args,
+        )
+        return typing.cast(DistributedApplicationEventSubscription, result)
+
+    def on_after_resources_created(self, callback: typing.Callable[[AfterResourcesCreatedEvent], None]) -> DistributedApplicationEventSubscription:
+        """Subscribes an eventing subscriber to the AfterResourcesCreated event"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['callback'] = self._client.register_callback(callback)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated',
+            rpc_args,
+        )
+        return typing.cast(DistributedApplicationEventSubscription, result)
 
 
 class ExecuteCommandContext:
@@ -5426,6 +5690,10 @@ class AbstractResource(abc.ABC):
         """Subscribes to the ResourceReady event"""
 
     @abc.abstractmethod
+    def create_execution_config(self) -> AbstractExecutionConfigurationBuilder:
+        """Creates an execution configuration builder"""
+
+    @abc.abstractmethod
     def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
         """Adds an optional string parameter"""
 
@@ -6080,6 +6348,15 @@ class _BaseResource(AbstractResource):
         )
         self._handle = self._wrap_builder(result)
         return self
+
+    def create_execution_config(self) -> AbstractExecutionConfigurationBuilder:
+        """Creates an execution configuration builder"""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpc_args,
+        )
+        return typing.cast(AbstractExecutionConfigurationBuilder, result)
 
     def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
         """Adds an optional string parameter"""
@@ -11028,14 +11305,18 @@ _register_handle_wrapper("Aspire.Hosting/List<any>", AspireList)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation>", AspireList)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", AbstractAspireStore)
 _register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", AbstractConfiguration)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", AbstractDistributedApplicationEventing)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline", AbstractDistributedApplicationPipeline)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder", AbstractExecutionConfigurationBuilder)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult", AbstractExecutionConfigurationResult)
 _register_handle_wrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", AbstractHostEnvironment)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger", AbstractLogger)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory", AbstractLoggerFactory)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep", AbstractReportingStep)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask", AbstractReportingTask)
+_register_handle_wrapper("Microsoft.Extensions.DependencyInjection.Abstractions/Microsoft.Extensions.DependencyInjection.IServiceCollection", AbstractServiceCollection)
 _register_handle_wrapper("System.ComponentModel/System.IServiceProvider", AbstractServiceProvider)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", AbstractUserSecretsManager)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", AfterResourcesCreatedEvent)
@@ -11056,6 +11337,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Endpoin
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", EndpointReferenceExpression)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", EndpointUpdateContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", EnvironmentCallbackContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", EventingSubscriberRegistrationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", PipelineConfigurationContext)
