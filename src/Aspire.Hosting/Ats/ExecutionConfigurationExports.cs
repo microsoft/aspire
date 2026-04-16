@@ -73,15 +73,20 @@ internal static class ExecutionConfigurationExports
     /// Gets certificate trust execution-configuration data when present.
     /// </summary>
     /// <param name="configuration">The execution configuration result.</param>
-    /// <returns>The certificate trust data, or <see langword="null"/> when not present.</returns>
+    /// <returns>The certificate trust data. When no additional data is present, an empty DTO is returned.</returns>
     [AspireExport(Description = "Gets certificate trust execution-configuration data")]
-    public static CertificateTrustExecutionConfigurationExportData? GetCertificateTrustData(this IExecutionConfigurationResult configuration)
+    public static CertificateTrustExecutionConfigurationExportData GetCertificateTrustData(this IExecutionConfigurationResult configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
         if (!configuration.TryGetAdditionalData<CertificateTrustExecutionConfigurationData>(out var additionalData))
         {
-            return null;
+            return new CertificateTrustExecutionConfigurationExportData
+            {
+                Scope = CertificateTrustScope.None,
+                CertificateSubjects = [],
+                CustomBundlePaths = []
+            };
         }
 
         return new CertificateTrustExecutionConfigurationExportData
@@ -96,15 +101,22 @@ internal static class ExecutionConfigurationExports
     /// Gets HTTPS certificate execution-configuration data when present.
     /// </summary>
     /// <param name="configuration">The execution configuration result.</param>
-    /// <returns>The HTTPS certificate data, or <see langword="null"/> when not present.</returns>
+    /// <returns>The HTTPS certificate data. When no additional data is present, an empty DTO is returned.</returns>
     [AspireExport(Description = "Gets HTTPS certificate execution-configuration data")]
-    public static HttpsCertificateExecutionConfigurationExportData? GetHttpsCertificateData(this IExecutionConfigurationResult configuration)
+    public static HttpsCertificateExecutionConfigurationExportData GetHttpsCertificateData(this IExecutionConfigurationResult configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
         if (!configuration.TryGetAdditionalData<HttpsCertificateExecutionConfigurationData>(out var additionalData))
         {
-            return null;
+            return new HttpsCertificateExecutionConfigurationExportData
+            {
+                Subject = string.Empty,
+                KeyPathExpression = string.Empty,
+                PfxPathExpression = string.Empty,
+                IsKeyPathReferenced = false,
+                IsPfxPathReferenced = false
+            };
         }
 
         return new HttpsCertificateExecutionConfigurationExportData
