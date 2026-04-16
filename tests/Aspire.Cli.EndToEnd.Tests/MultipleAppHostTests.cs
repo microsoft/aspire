@@ -52,7 +52,7 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
         await auto.ClearScreenAsync(counter);
 
         // Second: launch again with --detach --format json, redirecting stdout to a file.
-        // This tests that the JSON output is well-formed and not polluted by human-readable messages.
+        // This tests that stdout remains a single well-formed JSON document.
         // stderr is left visible in the terminal for debugging if the command fails.
         await auto.TypeAsync("aspire start --format json > output.json");
         await auto.EnterAsync();
@@ -60,9 +60,10 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
 
         await auto.ClearScreenAsync(counter);
 
-        // Validate the JSON output file is well-formed by using python to parse it
-        await auto.TypeAsync("python3 -c \"import json; data = json.load(open('output.json')); print('JSON_VALID'); print('appHostPath' in data); print('appHostPid' in data)\"");
+        // Validate the JSON output file is well-formed by using python to parse it.
+        await auto.TypeAsync("python3 -c \"import json; data = json.load(open('output.json')); assert 'appHostPath' in data; assert 'appHostPid' in data; print('JSON_VALID')\"");
         await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("JSON_VALID", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Also cat the file so we can see it in the recording
