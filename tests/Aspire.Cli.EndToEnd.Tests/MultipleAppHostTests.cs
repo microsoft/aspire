@@ -115,25 +115,15 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
 
         // Capture combined stdout/stderr so the file becomes invalid JSON if any
         // human-readable restart/status messages leak into machine-readable mode.
-        await auto.TypeAsync("aspire start --format json 2>&1 | tee combined-output.json");
+        await auto.TypeAsync("aspire start --format json > combined-output.json 2>&1");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
-        await auto.TypeAsync("python3 -c \"import json; json.load(open('combined-output.json')); print('JSON_VALID')\"");
+        await auto.TypeAsync("python3 -c \"import json; data = json.load(open('combined-output.json')); assert 'appHostPath' in data; assert 'appHostPid' in data; print('JSON_VALID')\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("JSON_VALID", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("grep -q 'Stopping previous instance' combined-output.json && echo 'FOUND_RESTART_MESSAGE' || echo 'NO_RESTART_MESSAGE'");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("NO_RESTART_MESSAGE", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("grep -q 'Running instance stopped successfully' combined-output.json && echo 'FOUND_STOPPED_MESSAGE' || echo 'NO_STOPPED_MESSAGE'");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("NO_STOPPED_MESSAGE", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire stop --all 2>/dev/null || true");
