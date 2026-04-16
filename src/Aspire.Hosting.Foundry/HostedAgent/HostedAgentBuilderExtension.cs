@@ -294,13 +294,17 @@ public static class HostedAgentResourceBuilderExtensions
         else
         {
             // Ensure we have a container resource to deploy.
-            // ProjectResource is automatically published as a container, so only
-            // ExecutableResource needs PublishAsDockerFile().
+            // Both ExecutableResource and ProjectResource need PublishAsDockerFile()
+            // to convert them into container resources at this stage.
             if (resource is ExecutableResource)
             {
                 builder.ApplicationBuilder.CreateResourceBuilder((ExecutableResource)(object)resource).PublishAsDockerFile();
             }
-            else if (resource is not ProjectResource)
+            else if (resource is ProjectResource)
+            {
+                builder.ApplicationBuilder.CreateResourceBuilder((ProjectResource)(object)resource).PublishAsDockerFile();
+            }
+            else
             {
                 throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
             }
