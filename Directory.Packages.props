@@ -210,6 +210,7 @@
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="$(MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion)" />
     <PackageVersion Include="Microsoft.Extensions.FileSystemGlobbing" Version="$(MicrosoftExtensionsFileSystemGlobbingPreviewVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsLoggingAbstractionsPreviewVersion)" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="$(MicrosoftExtensionsLoggingPreviewVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="$(MicrosoftExtensionsOptionsPreviewVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Primitives" Version="$(MicrosoftExtensionsPrimitivesPreviewVersion)" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsHttpPreviewVersion)" />

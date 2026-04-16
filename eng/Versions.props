@@ -90,6 +90,7 @@
     <MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>10.0.5</MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion>
     <MicrosoftExtensionsFileSystemGlobbingPreviewVersion>10.0.5</MicrosoftExtensionsFileSystemGlobbingPreviewVersion>
     <MicrosoftExtensionsLoggingAbstractionsPreviewVersion>10.0.5</MicrosoftExtensionsLoggingAbstractionsPreviewVersion>
+    <MicrosoftExtensionsLoggingPreviewVersion>10.0.5</MicrosoftExtensionsLoggingPreviewVersion>
     <MicrosoftExtensionsOptionsPreviewVersion>10.0.5</MicrosoftExtensionsOptionsPreviewVersion>
     <MicrosoftExtensionsPrimitivesPreviewVersion>10.0.5</MicrosoftExtensionsPrimitivesPreviewVersion>
     <MicrosoftExtensionsHttpPreviewVersion>10.0.5</MicrosoftExtensionsHttpPreviewVersion>
