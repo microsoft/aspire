@@ -16,7 +16,7 @@ on:
           When empty, defaults to 'stable' via Common.projitems.
         required: false
         type: string
-        default: ''
+        default: ci
       targets:
         description: >
           JSON array of target objects to build. Each object must have 'os', 'runner', and 'rids' keys.

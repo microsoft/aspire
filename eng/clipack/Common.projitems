@@ -7,8 +7,9 @@
     <ArchiveFormat Condition="!$(CliRuntime.StartsWith('win-'))">tar.gz</ArchiveFormat>
 
     <!-- Distribution channel embedded in the CLI binary.
-         Defaults to 'stable' for archive builds; overridden to 'daily' or 'pr' by CI pipelines. -->
-    <CliChannel Condition="'$(CliChannel)' == ''">stable</CliChannel>
+         Defaults to 'ci' for CI archive builds; overridden to 'stable' by release pipelines,
+         'daily' by daily builds, or 'local' by localhive. -->
+    <CliChannel Condition="'$(CliChannel)' == ''">ci</CliChannel>
 
     <!-- PublishNativeAot is explicitly set to false in the projects for cases where we don't want to AOT at all.
          For the rest, publish native AOT if running on the target platfrom -->

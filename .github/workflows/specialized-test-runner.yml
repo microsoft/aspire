@@ -128,8 +128,6 @@ jobs:
     needs: [generate_tests_matrix]
     if: ${{ github.repository_owner == 'microsoft' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
     uses: ./.github/workflows/build-cli-native-archives.yml
-    with:
-      cliChannel: ci
 
   run_tests:
     name: ${{ matrix.tests.project }}

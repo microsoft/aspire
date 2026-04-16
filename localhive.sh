@@ -301,10 +301,10 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
 
   if [[ $NATIVE_AOT -eq 1 ]]; then
     log "Building bundle (aspire-managed + DCP + native AOT CLI)..."
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=pr" "/p:TargetRid=$BUNDLE_RID"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=local" "/p:TargetRid=$BUNDLE_RID"
   else
     log "Building bundle (aspire-managed + DCP)..."
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=pr" "/p:TargetRid=$BUNDLE_RID"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=local" "/p:TargetRid=$BUNDLE_RID"
   fi
   if [[ $? -ne 0 ]]; then
     error "Bundle build failed."

@@ -309,7 +309,7 @@ if (-not $SkipBundle) {
   $skipNativeArg = if ($NativeAot) { '' } else { '/p:SkipNativeBuild=true' }
 
   Write-Log "Building bundle (aspire-managed + DCP$(if ($NativeAot) { ' + native AOT CLI' }))..."
-  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix", "/p:CliChannel=pr", "/p:TargetRid=$bundleRid")
+  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix", "/p:CliChannel=local", "/p:TargetRid=$bundleRid")
   if (-not $NativeAot) {
     $buildArgs += '/p:SkipNativeBuild=true'
   }
