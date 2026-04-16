@@ -139,9 +139,9 @@ public static class AzureKubernetesEnvironmentExtensions
     /// </summary>
     /// <param name="builder">The AKS environment resource builder.</param>
     /// <param name="name">The name of the node pool.</param>
-    /// <param name="vmSize">The VM size for nodes.</param>
-    /// <param name="minCount">The minimum node count for autoscaling.</param>
-    /// <param name="maxCount">The maximum node count for autoscaling.</param>
+    /// <param name="vmSize">The VM size for nodes. Defaults to <c>Standard_D2s_v5</c> if not specified.</param>
+    /// <param name="minCount">The minimum node count for autoscaling. Defaults to 1.</param>
+    /// <param name="maxCount">The maximum node count for autoscaling. Defaults to 3.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AksNodePoolResource}"/> for the new node pool.</returns>
     /// <remarks>
     /// The returned node pool resource can be passed to
@@ -150,19 +150,21 @@ public static class AzureKubernetesEnvironmentExtensions
     /// <example>
     /// <code>
     /// var aks = builder.AddAzureKubernetesEnvironment("aks");
-    /// var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
     ///
-    /// builder.AddProject&lt;MyApi&gt;()
-    ///     .WithNodePool(gpuPool);
+    /// // With defaults (Standard_D2s_v5, 1-3 nodes)
+    /// var pool = aks.AddNodePool("workload");
+    ///
+    /// // With explicit VM size and scaling
+    /// var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
     /// </code>
     /// </example>
     [AspireExport(Description = "Adds a node pool to the AKS cluster")]
     public static IResourceBuilder<AksNodePoolResource> AddNodePool(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         [ResourceName] string name,
-        string vmSize,
-        int minCount,
-        int maxCount)
+        string vmSize = "Standard_D2s_v5",
+        int minCount = 1,
+        int maxCount = 3)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
