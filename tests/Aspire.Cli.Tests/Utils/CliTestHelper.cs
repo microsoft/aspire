@@ -89,7 +89,9 @@ internal static class CliTestHelper
         // Register logging options for test
         var testLogsDirectory = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "logs");
         var testLogFilePath = FileLoggerProvider.GenerateLogFilePath(testLogsDirectory, TimeProvider.System);
-        services.AddSingleton(new FileLoggerProvider(testLogFilePath, new TestStartupErrorWriter()));
+        var fileLoggerProvider = new FileLoggerProvider(testLogFilePath, new TestStartupErrorWriter());
+        // Registered in a callback is important so it is disposed when the ServiceCollection is disposed.
+        services.AddSingleton(sp => fileLoggerProvider);
         services.AddSingleton(new Program.CliLoggingOptions(ConsoleLogLevel: null, DebugMode: false, LogsDirectory: testLogsDirectory, LogFilePath: testLogFilePath));
 
         services.AddMemoryCache();
