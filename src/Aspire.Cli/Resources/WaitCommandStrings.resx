@@ -141,6 +141,9 @@
   <data name="ResourceNotFound" xml:space="preserve">
     <value>Resource '{0}' was not found.</value>
   </data>
+  <data name="AmbiguousResourceName" xml:space="preserve">
+    <value>Resource '{0}' is ambiguous. Matching resources: {1}. Use the full resource name.</value>
+  </data>
   <data name="ResourceEnteredFailedState" xml:space="preserve">
     <value>Resource '{0}' entered a failed state: {1}.</value>
   </data>

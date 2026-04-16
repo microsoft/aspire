@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../WaitCommandStrings.resx">
     <body>
+      <trans-unit id="AmbiguousResourceName">
+        <source>Resource '{0}' is ambiguous. Matching resources: {1}. Use the full resource name.</source>
+        <target state="new">Resource '{0}' is ambiguous. Matching resources: {1}. Use the full resource name.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Wait for a resource to reach a target status</source>
         <target state="new">Wait for a resource to reach a target status</target>

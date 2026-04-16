@@ -93,6 +93,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string AmbiguousResourceName {
+            get {
+                return ResourceManager.GetString("AmbiguousResourceName", resourceCulture);
+            }
+        }
+
         public static string ResourceEnteredFailedState {
             get {
                 return ResourceManager.GetString("ResourceEnteredFailedState", resourceCulture);

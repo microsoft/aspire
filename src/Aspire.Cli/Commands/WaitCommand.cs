@@ -102,8 +102,14 @@ internal sealed class WaitCommand : BaseCommand
 
         var connection = result.Connection!;
 
-        var resolvedResourceName = await ResolveResourceNameAsync(connection, resourceName, cancellationToken).ConfigureAwait(false)
-            ?? resourceName;
+        var resourceResolution = await ResolveResourceNameAsync(connection, resourceName, cancellationToken).ConfigureAwait(false);
+        if (resourceResolution.IsAmbiguous)
+        {
+            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.AmbiguousResourceName, resourceName, resourceResolution.AmbiguousMatches));
+            return ExitCodeConstants.WaitResourceFailed;
+        }
+
+        var resolvedResourceName = resourceResolution.ResolvedResourceName ?? resourceName;
 
         return await WaitForResourceAsync(connection, resourceName, resolvedResourceName, status, timeoutSeconds, cancellationToken);
     }
@@ -169,15 +175,26 @@ internal sealed class WaitCommand : BaseCommand
         return exitCode;
     }
 
-    private static async Task<string?> ResolveResourceNameAsync(
+    private static async Task<ResourceResolutionResult> ResolveResourceNameAsync(
         IAppHostAuxiliaryBackchannel connection,
         string resourceName,
         CancellationToken cancellationToken)
     {
         var snapshots = await connection.GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
         var resolvedResources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
+        if (resolvedResources.Count == 1)
+        {
+            return new ResourceResolutionResult(resolvedResources[0].Name);
+        }
 
-        return resolvedResources.Count == 1 ? resolvedResources[0].Name : null;
+        var ambiguousMatches = snapshots
+            .Where(s => string.Equals(s.DisplayName, resourceName, StringComparison.OrdinalIgnoreCase))
+            .Select(s => s.Name)
+            .ToList();
+
+        return ambiguousMatches.Count > 1
+            ? new ResourceResolutionResult(null, string.Join(", ", ambiguousMatches))
+            : new ResourceResolutionResult(null);
     }
 
     private static bool IsValidStatus(string status)
@@ -194,5 +211,10 @@ internal sealed class WaitCommand : BaseCommand
             "down" => "down",
             _ => status
         };
+    }
+
+    private sealed record ResourceResolutionResult(string? ResolvedResourceName, string? AmbiguousMatches = null)
+    {
+        public bool IsAmbiguous => AmbiguousMatches is not null;
     }
 }

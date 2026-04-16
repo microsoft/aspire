@@ -316,8 +316,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
             [
                 new ResourceSnapshot { Name = "cache-abc12345", DisplayName = "cache", ResourceType = "Container", State = "Running" },
                 new ResourceSnapshot { Name = "cache-def67890", DisplayName = "cache", ResourceType = "Container", State = "Running" }
-            ],
-            WaitForResourceResult = new WaitForResourceResponse { Success = false, ResourceNotFound = true, ErrorMessage = "Resource 'cache' was not found." }
+            ]
         };
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
@@ -334,7 +333,40 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.WaitResourceFailed, exitCode);
-        Assert.Equal("cache", backchannel.LastWaitResourceName);
+        Assert.Null(backchannel.LastWaitResourceName);
+    }
+
+    [Fact]
+    public async Task WaitCommand_DisplayName_ResolvedResourceDisappearsBeforeWait_ReturnsFailure()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot { Name = "apiservice-tzykkput", DisplayName = "apiservice", ResourceType = "Project", State = "Running" }
+            ],
+            WaitForResourceResult = new WaitForResourceResponse { Success = false, ResourceNotFound = true, ErrorMessage = "Resource 'apiservice-tzykkput' was not found." }
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/test.sock", backchannel);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("wait apiservice --status healthy --timeout 5");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.WaitResourceFailed, exitCode);
+        Assert.Equal("apiservice-tzykkput", backchannel.LastWaitResourceName);
+        Assert.Equal("healthy", backchannel.LastWaitStatus);
+        Assert.Equal(5, backchannel.LastWaitTimeoutSeconds);
     }
 
     [Fact]
