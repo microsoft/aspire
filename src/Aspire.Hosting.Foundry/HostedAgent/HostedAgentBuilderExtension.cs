@@ -77,7 +77,7 @@ public static class HostedAgentResourceBuilderExtensions
     [AspireExportIgnore(Reason = "Subset of the full PublishAsHostedAgent overload which is exported.")]
     public static IResourceBuilder<T> PublishAsHostedAgent<T>(
         this IResourceBuilder<T> builder, Action<HostedAgentConfiguration> configure)
-        where T : IResourceWithEndpoints, IResourceWithEnvironment
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         return PublishAsHostedAgent(builder, project: null, configure: configure);
     }
@@ -92,7 +92,7 @@ public static class HostedAgentResourceBuilderExtensions
     [AspireExport("publishAsHostedAgentExecutable", MethodName = "publishAsHostedAgent", Description = "Publishes an executable resource as a hosted agent in Microsoft Foundry.")]
     public static IResourceBuilder<T> PublishAsHostedAgent<T>(
         this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
-        where T : IResourceWithEndpoints, IResourceWithEnvironment
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         /*
          * Much of the logic here is similar to ExecutableResourceBuilderExtensions.PublishAsDockerFile().
