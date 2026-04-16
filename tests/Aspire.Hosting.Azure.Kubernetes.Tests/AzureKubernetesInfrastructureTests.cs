@@ -132,9 +132,9 @@ public class AzureKubernetesInfrastructureTests
         var other = builder.AddContainer("other", "myother")
             .WithComputeEnvironment(envb);
 
-        // ParentComputeEnvironment should be set
-        Assert.Same(enva.Resource, enva.Resource.KubernetesEnvironment.ParentComputeEnvironment);
-        Assert.Same(envb.Resource, envb.Resource.KubernetesEnvironment.ParentComputeEnvironment);
+        // OwningComputeEnvironment should be set
+        Assert.Same(enva.Resource, enva.Resource.KubernetesEnvironment.OwningComputeEnvironment);
+        Assert.Same(envb.Resource, envb.Resource.KubernetesEnvironment.OwningComputeEnvironment);
 
         await using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);

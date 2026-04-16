@@ -120,6 +120,27 @@ internal static partial class HelmDeploymentEngine
         var model = factoryContext.PipelineContext.Model;
         var steps = new List<PipelineStep>();
 
+        // Step 0: Check prerequisites — verify Helm CLI is available
+        var checkPrereqStep = new PipelineStep
+        {
+            Name = $"check-helm-prereqs-{environment.Name}",
+            Description = $"Verifies Helm CLI is available for {environment.Name}.",
+            Action = ctx =>
+            {
+                var helmPath = PathLookupHelper.FindFullPathFromPath("helm");
+                if (helmPath is null)
+                {
+                    throw new InvalidOperationException(
+                        "Helm CLI not found. Install it from https://helm.sh/docs/intro/install/ " +
+                        "and ensure it is available on your PATH.");
+                }
+
+                ctx.Logger.LogDebug("Helm CLI found at: {HelmPath}", helmPath);
+                return Task.CompletedTask;
+            }
+        };
+        steps.Add(checkPrereqStep);
+
         // Step 1: Prepare - resolve values.yaml with actual image references and parameter values
         var prepareStep = new PipelineStep
         {
@@ -129,6 +150,7 @@ internal static partial class HelmDeploymentEngine
         };
         prepareStep.DependsOn(WellKnownPipelineSteps.Publish);
         prepareStep.DependsOn(WellKnownPipelineSteps.Build);
+        prepareStep.DependsOn($"check-helm-prereqs-{environment.Name}");
         steps.Add(prepareStep);
 
         // Step 2: Helm deploy - run helm upgrade --install

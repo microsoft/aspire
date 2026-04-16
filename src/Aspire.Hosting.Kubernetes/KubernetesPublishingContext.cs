@@ -76,7 +76,7 @@ internal sealed class KubernetesPublishingContext(
         foreach (var resource in resources)
         {
             // Check for deployment target matching this environment or its parent (e.g., AKS)
-            var targetEnv = (IComputeEnvironmentResource?)environment.ParentComputeEnvironment ?? environment;
+            var targetEnv = (IComputeEnvironmentResource?)environment.OwningComputeEnvironment ?? environment;
             if (resource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget is KubernetesResource serviceResource)
             {
                 // Materialize Dockerfile factory if present

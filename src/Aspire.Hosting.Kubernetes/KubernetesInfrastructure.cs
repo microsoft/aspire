@@ -58,7 +58,7 @@ internal sealed class KubernetesInfrastructure(
                 var resourceComputeEnvironment = r.GetComputeEnvironment();
                 if (resourceComputeEnvironment is not null &&
                     resourceComputeEnvironment != environment &&
-                    resourceComputeEnvironment != environment.ParentComputeEnvironment)
+                    resourceComputeEnvironment != environment.OwningComputeEnvironment)
                 {
                     continue;
                 }

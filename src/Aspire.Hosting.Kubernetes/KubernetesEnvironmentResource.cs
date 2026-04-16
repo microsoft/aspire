@@ -113,7 +113,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// <c>WithComputeEnvironment(aksEnv)</c> but the inner <c>KubernetesEnvironmentResource</c>
     /// needs to process the resource.
     /// </remarks>
-    public IComputeEnvironmentResource? ParentComputeEnvironment { get; set; }
+    public IComputeEnvironmentResource? OwningComputeEnvironment { get; set; }
 
     internal IPortAllocator PortAllocator { get; } = new PortAllocator();
 
@@ -209,7 +209,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var computeResource in resources)
             {
-                var targetEnv = (IComputeEnvironmentResource?)environment.ParentComputeEnvironment ?? environment;
+                var targetEnv = (IComputeEnvironmentResource?)environment.OwningComputeEnvironment ?? environment;
                 var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget;
                 if (deploymentTarget is not null &&
                     deploymentTarget.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var annotations))
@@ -246,7 +246,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var computeResource in resources)
             {
-                var targetEnv = (IComputeEnvironmentResource?)ParentComputeEnvironment ?? this;
+                var targetEnv = (IComputeEnvironmentResource?)OwningComputeEnvironment ?? this;
                 var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget;
                 if (deploymentTarget is null)
                 {

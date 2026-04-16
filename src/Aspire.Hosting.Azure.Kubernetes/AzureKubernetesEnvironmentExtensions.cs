@@ -79,7 +79,7 @@ public static class AzureKubernetesEnvironmentExtensions
         // Set the parent so KubernetesInfrastructure matches resources that use
         // WithComputeEnvironment(aksEnv) — the inner K8s env checks both itself
         // and its parent when filtering compute resources.
-        k8sEnvBuilder.Resource.ParentComputeEnvironment = resource;
+        k8sEnvBuilder.Resource.OwningComputeEnvironment = resource;
 
         if (builder.ExecutionContext.IsRunMode)
         {
