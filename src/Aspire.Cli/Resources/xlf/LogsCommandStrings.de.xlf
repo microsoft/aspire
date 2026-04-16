@@ -12,6 +12,11 @@
         <target state="needs-review-translation">Streamen Sie Protokolle in Echtzeit, während sie geschrieben werden.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Protokolle im JSON-Format (NDJSON) ausgeben.</target>

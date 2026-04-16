@@ -362,6 +362,58 @@ const builderExecutionContext = await builder.executionContext.get();
 const executionContextServiceProvider = await builderExecutionContext.serviceProvider.get();
 const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
 
+await builder.addEventingSubscriber(async (registrationContext) => {
+    const subscriberExecutionContext = await registrationContext.executionContext.get();
+    const _subscriberIsRunMode: boolean = await subscriberExecutionContext.isRunMode.get();
+    const _subscriberCancellationToken = await registrationContext.cancellationToken.get();
+
+    await registrationContext.onBeforeStart(async (beforeStartEvent) => {
+        const subscriberServices = await beforeStartEvent.services.get();
+        const aspireStore = await subscriberServices.getAspireStore();
+        const _contentBackedFilename = await aspireStore.getFileNameWithContent("validation-apphost.ts", "apphost.ts");
+    });
+
+    await registrationContext.onAfterResourcesCreated(async (afterResourcesCreatedEvent) => {
+        const afterResourcesCreatedServices = await afterResourcesCreatedEvent.services.get();
+        const afterResourcesCreatedModel = await afterResourcesCreatedEvent.model.get();
+        const _afterResourcesCreatedEventing = await afterResourcesCreatedServices.getEventing();
+        const _afterResourcesCreatedResources = await afterResourcesCreatedModel.getResources();
+    });
+});
+
+await builder.tryAddEventingSubscriber(async (_registrationContext) => {
+});
+
+await container.withArgs(["--validation"]);
+
+const executionConfigurationBuilder = await container.createExecutionConfiguration();
+await executionConfigurationBuilder.withArgumentsConfig();
+await executionConfigurationBuilder.withEnvironmentVariablesConfig();
+await executionConfigurationBuilder.withCertificateTrustConfig(async (requestedTrustScope) => {
+    const _requestedTrustScope = requestedTrustScope;
+
+    return {
+        certificateBundlePath: refExpr`/etc/ssl/certs/custom-bundle.pem`,
+        certificateDirectoriesPath: refExpr`/etc/ssl/certs/custom`,
+        rootCertificatesPath: "/etc/ssl/certs",
+        isContainer: true,
+    };
+});
+await executionConfigurationBuilder.withHttpsCertificateConfig(async (certificateInfo) => {
+    const _certificateSubject = certificateInfo.subject;
+    const _certificateThumbprint = certificateInfo.thumbprint;
+
+    return {
+        certificatePath: refExpr`/certificates/tls.crt`,
+        keyPath: refExpr`/certificates/tls.key`,
+        pfxPath: refExpr`/certificates/tls.pfx`,
+    };
+});
+
+const executionConfiguration = await executionConfigurationBuilder.build(builderExecutionContext);
+const _certificateTrustData = await executionConfiguration.getCertificateTrustData();
+const _httpsCertificateData = await executionConfiguration.getHttpsCertificateData();
+
 const beforeStartSubscription = await builder.subscribeBeforeStart(async (beforeStartEvent) => {
     const beforeStartServices = await beforeStartEvent.services.get();
     const beforeStartModel = await beforeStartEvent.model.get();
@@ -530,9 +582,6 @@ await container.withUrl("http://localhost:8080");
 
 // withUrlExpression
 await container.withUrlExpression(refExpr`http://${endpoint}`);
-
-// withHttpHealthCheck
-await container.withHttpHealthCheck();
 
 // withHttpHealthCheck
 await container.withHttpHealthCheck();

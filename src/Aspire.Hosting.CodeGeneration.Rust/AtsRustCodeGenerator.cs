@@ -185,6 +185,8 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             return;
         }
 
+        var dtoTypesById = dtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal);
+
         WriteLine("// ============================================================================");
         WriteLine("// DTOs");
         WriteLine("// ============================================================================");
@@ -200,7 +202,10 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
 
             var dtoName = _dtoNames[dto.TypeId];
             WriteLine($"/// {dto.Name}");
-            WriteLine("#[derive(Debug, Clone, Default, Serialize, Deserialize)]");
+            var derivesDefault = CanDeriveDefault(dto, dtoTypesById, []);
+            WriteLine(derivesDefault
+                ? "#[derive(Debug, Clone, Default, Serialize, Deserialize)]"
+                : "#[derive(Debug, Clone, Serialize, Deserialize)]");
             WriteLine($"pub struct {dtoName} {{");
             foreach (var property in dto.Properties)
             {
@@ -242,6 +247,60 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
         }
+    }
+
+    private static bool CanDeriveDefault(
+        AtsDtoTypeInfo dto,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById,
+        HashSet<string> visitedTypeIds)
+    {
+        if (!visitedTypeIds.Add(dto.TypeId))
+        {
+            return true;
+        }
+
+        try
+        {
+            return dto.Properties.All(property => CanDeriveDefault(property.Type, property.IsOptional, dtoTypesById, visitedTypeIds));
+        }
+        finally
+        {
+            visitedTypeIds.Remove(dto.TypeId);
+        }
+    }
+
+    private static bool CanDeriveDefault(
+        AtsTypeRef? typeRef,
+        bool isOptional,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById,
+        HashSet<string> visitedTypeIds)
+    {
+        if (isOptional || typeRef is null)
+        {
+            return true;
+        }
+
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId
+            || IsCancellationTokenTypeId(typeRef.TypeId))
+        {
+            return false;
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => true,
+            AtsTypeCategory.Enum => true,
+            AtsTypeCategory.Handle => true,
+            AtsTypeCategory.Dto => !dtoTypesById.TryGetValue(typeRef.TypeId, out var dto)
+                || CanDeriveDefault(dto, dtoTypesById, visitedTypeIds),
+            AtsTypeCategory.Callback => true,
+            AtsTypeCategory.Array => true,
+            AtsTypeCategory.List => true,
+            AtsTypeCategory.Dict => true,
+            AtsTypeCategory.Union => true,
+            AtsTypeCategory.Unknown => true,
+            _ => true
+        };
     }
 
     private void GenerateHandleTypes(

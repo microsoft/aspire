@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)/testing/CITestsProperties.props" />
   <!--
     This file contains the shared logic for generating specialized test runsheets (quarantined and outerloop tests).
 
@@ -123,15 +124,6 @@
       <_RelativeTestProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', '%24(pwd)/'))</_RelativeTestProjectPath>
       <_RelativeTestBinLog>$([System.String]::Copy('$(_TestBinLog)').Replace('$(RepoRoot)', '%24(pwd)/'))</_RelativeTestBinLog>
 
-      <_RequiresNugets>false</_RequiresNugets>
-      <_RequiresNugets Condition="'$(RequiresNugets)' == 'true'">true</_RequiresNugets>
-
-      <_RequiresTestSdk>false</_RequiresTestSdk>
-      <_RequiresTestSdk Condition="'$(RequiresTestSdk)' == 'true'">true</_RequiresTestSdk>
-
-      <_RequiresCliArchive>false</_RequiresCliArchive>
-      <_RequiresCliArchive Condition="'$(RequiresCliArchive)' == 'true'">true</_RequiresCliArchive>
-
       <_GithubActionsRunnerWindows>windows-latest</_GithubActionsRunnerWindows>
       <_GithubActionsRunnerWindows Condition="'$(GithubActionsRunnerWindows)' != ''">$(GithubActionsRunnerWindows)</_GithubActionsRunnerWindows>
 
@@ -154,10 +146,22 @@
 
       <!-- Replace \ with /, and then escape " with \", so we have a compliant JSON -->
       <_TestCommand>$([System.String]::Copy($(_TestCommand)).Replace("\", "/").Replace('&quot;', '\&quot;'))</_TestCommand>
+    </PropertyGroup>
 
-      <_TestRunsheetWindows>{ "label": "w: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerWindows)", "command": "./eng/build.ps1 $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk), "requiresCliArchive": $(_RequiresCliArchive), "testSessionTimeout": "$(TestSessionTimeout)", "testHangTimeout": "$(TestHangTimeout)" }</_TestRunsheetWindows>
-      <_TestRunsheetLinux>{ "label": "l: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerLinux)", "command": "./eng/build.sh $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk), "requiresCliArchive": $(_RequiresCliArchive), "testSessionTimeout": "$(TestSessionTimeout)", "testHangTimeout": "$(TestHangTimeout)" }</_TestRunsheetLinux>
-      <_TestRunsheetMacOS>{ "label": "m: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerMacOS)", "command": "./eng/build.sh $(_TestCommand)", "requiresNugets": $(_RequiresNugets), "requiresTestSdk": $(_RequiresTestSdk), "requiresCliArchive": $(_RequiresCliArchive), "testSessionTimeout": "$(TestSessionTimeout)", "testHangTimeout": "$(TestHangTimeout)" }</_TestRunsheetMacOS>
+    <!-- Resolve CI test properties dynamically from CITestsProperties.props -->
+    <ItemGroup>
+      <_ResolvedCITestsProperty Include="@(CITestsProperty)">
+        <Value Condition="'$(%(CITestsProperty.MSBuildProp))' == 'true'">true</Value>
+        <Value Condition="'$(%(CITestsProperty.MSBuildProp))' != 'true'">%(CITestsProperty.Default)</Value>
+      </_ResolvedCITestsProperty>
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_PropertiesJson>@(_ResolvedCITestsProperty -> '&quot;%(Identity)&quot;: %(Value)', ', ')</_PropertiesJson>
+
+      <_TestRunsheetWindows>{ "label": "w: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerWindows)", "command": "./eng/build.ps1 $(_TestCommand)", "properties": {$(_PropertiesJson)}, "testSessionTimeout": "$(TestSessionTimeout)", "testHangTimeout": "$(TestHangTimeout)" }</_TestRunsheetWindows>
+      <_TestRunsheetLinux>{ "label": "l: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerLinux)", "command": "./eng/build.sh $(_TestCommand)", "properties": {$(_PropertiesJson)}, "testSessionTimeout": "$(TestSessionTimeout)", "testHangTimeout": "$(TestHangTimeout)" }</_TestRunsheetLinux>
+      <_TestRunsheetMacOS>{ "label": "m: $(_TestRunsheet)", "project": "$(_TestRunsheet)", "os": "$(_GithubActionsRunnerMacOS)", "command": "./eng/build.sh $(_TestCommand)", "properties": {$(_PropertiesJson)}, "testSessionTimeout": "$(TestSessionTimeout)", "testHangTimeout": "$(TestHangTimeout)" }</_TestRunsheetMacOS>
     </PropertyGroup>
 
     <WriteLinesToFile

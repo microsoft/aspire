@@ -98,8 +98,7 @@ jobs:
       testHangTimeout: ${{ matrix.testHangTimeout }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   tests_no_nugets_overflow:
     name: ${{ matrix.shortname }}
@@ -117,8 +116,7 @@ jobs:
       testHangTimeout: ${{ matrix.testHangTimeout }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   # Split requires-nugets tests by OS so each group depends only on
   # the CLI archive build for its platform, avoiding cross-OS blocking.
@@ -138,8 +136,7 @@ jobs:
       testHangTimeout: ${{ matrix.testHangTimeout }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_nugets_windows:
     name: ${{ matrix.shortname }}
@@ -157,8 +154,7 @@ jobs:
       testHangTimeout: ${{ matrix.testHangTimeout }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_nugets_macos:
     name: ${{ matrix.shortname }}
@@ -176,8 +172,7 @@ jobs:
       testHangTimeout: ${{ matrix.testHangTimeout }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_cli_archive:
     name: ${{ matrix.shortname }}
@@ -195,9 +190,7 @@ jobs:
       testHangTimeout: ${{ matrix.testHangTimeout }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
-      requiresCliArchive: true
+      properties: ${{ toJson(matrix.properties) }}
 
   polyglot_validation:
     name: Polyglot SDK Validation
