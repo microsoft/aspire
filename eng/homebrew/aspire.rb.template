@@ -11,6 +11,10 @@ cask "aspire" do
   desc "CLI for building observable, production-ready distributed applications"
   homepage "https://aspire.dev/"
 
+  livecheck do
+    skip "ci.dot.net artifact storage has no version index; Aspire release automation manages cask updates"
+  end
+
   binary "aspire"
 
   zap trash: "~/.aspire"
