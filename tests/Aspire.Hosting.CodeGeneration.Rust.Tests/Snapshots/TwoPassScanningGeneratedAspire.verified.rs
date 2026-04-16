@@ -616,7 +616,7 @@ impl ReferenceEnvironmentInjectionOptions {
 }
 
 /// CertificateTrustExecutionConfigurationContext
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CertificateTrustExecutionConfigurationContext {
     #[serde(rename = "CertificateBundlePath")]
     pub certificate_bundle_path: ReferenceExpression,
@@ -712,7 +712,7 @@ impl HttpCommandExportOptions {
 }
 
 /// HttpsCertificateExecutionConfigurationContext
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpsCertificateExecutionConfigurationContext {
     #[serde(rename = "CertificatePath")]
     pub certificate_path: ReferenceExpression,
