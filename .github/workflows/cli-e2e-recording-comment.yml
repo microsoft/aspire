@@ -161,6 +161,7 @@ jobs:
       - name: Parse test results from TRX files
         if: steps.run-info.outputs.skip != 'true' && hashFiles('cast_files/*.cast') != ''
         id: test-results
+        continue-on-error: true
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
         with:
           script: |
@@ -171,37 +172,48 @@ jobs:
             // Each UnitTestResult element has testName and outcome attributes (in any order).
             const trxDir = 'trx_files';
             const outcomes = {}; // Map of test method name -> outcome
+            const errors = []; // Track per-file errors for summary
 
             if (fs.existsSync(trxDir)) {
               const trxFiles = fs.readdirSync(trxDir).filter(f => f.endsWith('.trx'));
               console.log(`Found ${trxFiles.length} TRX file(s)`);
 
               for (const trxFile of trxFiles) {
-                const content = fs.readFileSync(path.join(trxDir, trxFile), 'utf8');
+                try {
+                  const content = fs.readFileSync(path.join(trxDir, trxFile), 'utf8');
 
-                // Match each <UnitTestResult ...> opening tag, then extract attributes independently.
-                // This handles attributes in any order within the element.
-                const elementRegex = /<UnitTestResult\s[^>]*>/g;
-                let elementMatch;
-                while ((elementMatch = elementRegex.exec(content)) !== null) {
-                  const element = elementMatch[0];
-                  const nameMatch = element.match(/\btestName="([^"]*)"/);
-                  const outcomeMatch = element.match(/\boutcome="([^"]*)"/);
+                  // Match each <UnitTestResult ...> opening tag, then extract attributes independently.
+                  // This handles attributes in any order within the element.
+                  const elementRegex = /<UnitTestResult\s[^>]*>/g;
+                  let elementMatch;
+                  while ((elementMatch = elementRegex.exec(content)) !== null) {
+                    const element = elementMatch[0];
+                    const nameMatch = element.match(/\btestName="([^"]*)"/);
+                    const outcomeMatch = element.match(/\boutcome="([^"]*)"/);
 
-                  if (nameMatch && outcomeMatch) {
-                    const testName = nameMatch[1];
-                    const outcome = outcomeMatch[1];
+                    if (nameMatch && outcomeMatch) {
+                      const testName = nameMatch[1];
+                      const outcome = outcomeMatch[1];
 
-                    // .cast files are named after the test method name (via [CallerMemberName]).
-                    // Store by simple method name (last segment after dot) for matching.
-                    const methodName = testName.includes('.') ? testName.split('.').pop() : testName;
-                    outcomes[methodName] = outcome;
-                    // Also store the full display name for exact matching
-                    outcomes[testName] = outcome;
-                    console.log(`  ${testName}: ${outcome}`);
+                      // .cast files are named after the test method name (via [CallerMemberName]).
+                      // Store by simple method name (last segment after dot) for matching.
+                      const methodName = testName.includes('.') ? testName.split('.').pop() : testName;
+                      outcomes[methodName] = outcome;
+                      // Also store the full display name for exact matching
+                      outcomes[testName] = outcome;
+                      console.log(`  ${testName}: ${outcome}`);
+                    }
                   }
+                } catch (err) {
+                  const msg = `Warning: failed to parse ${trxFile}: ${err.message}`;
+                  console.log(msg);
+                  errors.push(msg);
                 }
               }
+            }
+
+            if (errors.length > 0) {
+              core.warning(`Failed to parse ${errors.length} TRX file(s):\n${errors.join('\n')}`);
             }
 
             console.log(`Total test outcomes parsed: ${Object.keys(outcomes).length}`);
