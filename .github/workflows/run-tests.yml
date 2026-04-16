@@ -596,9 +596,10 @@ jobs:
         run: |
           mkdir -p cli-e2e-recordings
           find testresults -name "*.cast" -exec cp {} cli-e2e-recordings/ \; 2>/dev/null || true
-          # Also copy TRX files so the recording comment workflow can determine pass/fail
-          find testresults -name "*.trx" -exec cp {} cli-e2e-recordings/ \; 2>/dev/null || true
-          if [ -n "$(ls -A cli-e2e-recordings 2>/dev/null)" ]; then
+          # Only copy TRX files when .cast recordings exist, so non-recording test jobs
+          # don't produce cli-e2e-recordings artifacts containing only TRX data.
+          if ls cli-e2e-recordings/*.cast 1>/dev/null 2>&1; then
+            find testresults -name "*.trx" -exec cp {} cli-e2e-recordings/ \; 2>/dev/null || true
             echo "Found recordings and test results:"
             ls -la cli-e2e-recordings/
           fi
