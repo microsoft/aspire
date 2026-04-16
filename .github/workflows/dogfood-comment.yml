@@ -1,14 +1,6 @@
 name: Add Dogfooding Comment
 
 on:
-  # Use pull_request_target to run in the context of the base branch
-  # This allows commenting on PRs from forks
-  pull_request_target:
-    types: [opened, reopened, synchronize]
-    branches:
-      - 'main'
-      - 'release/**'
-  # Allow manual triggering
   workflow_dispatch:
     inputs:
       pr_number:
@@ -28,8 +20,7 @@ jobs:
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
         with:
           script: |
-            // Get PR number from either the PR event or manual input
-            const prNumber = context.payload.number || context.payload.inputs.pr_number;
+            const prNumber = ${{ inputs.pr_number }};
             const bashScript = 'https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh';
             const psScript = 'https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1';
             

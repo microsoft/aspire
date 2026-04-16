@@ -68,9 +68,12 @@ jobs:
     name: Tests
     needs: [prepare_for_ci]
     if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    permissions:
+      actions: write
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
       extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}
+      prNumber: ${{ github.event.pull_request.number || 0 }}
 
   # This job is used for branch protection. It fails if any of the dependent jobs failed
   results:

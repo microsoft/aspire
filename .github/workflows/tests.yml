@@ -10,6 +10,10 @@ on:
       extensionVersionOverride:
         required: false
         type: string
+      prNumber:
+        required: false
+        type: number
+        default: 0
 
 jobs:
   setup_for_tests:
@@ -397,6 +401,23 @@ jobs:
             -- \
             --repo ${{ github.repository }} \
             --min-total 8
+
+      - name: Dispatch dogfood comment
+        if: >-
+          ${{ always() &&
+              inputs.prNumber > 0 &&
+              needs.build_packages.result == 'success' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run dogfood-comment.yml \
+            --repo ${{ github.repository }} \
+            --field pr_number=${{ inputs.prNumber }}
+          exit_code=$?
+          if [ $exit_code -ne 0 ]; then
+            echo "::warning::Failed to dispatch dogfood comment workflow"
+          fi
 
       - name: Fail if any dependency failed
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
