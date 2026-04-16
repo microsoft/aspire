@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
@@ -150,6 +151,66 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Name = WellKnownPipelineSteps.BuildPrereq,
             Description = "Prerequisite step that runs before any build operations.",
             Action = context => Task.CompletedTask
+        });
+
+        // Container runtime health check step. Checks if the Docker/Podman daemon is running.
+        // Build steps that need a container runtime depend on this step via DependsOnSteps.
+        // In interactive mode, prompts the user to start the runtime instead of failing immediately.
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.CheckContainerRuntime,
+            Description = "Checks whether the container runtime (Docker/Podman) is running.",
+            Action = async context =>
+            {
+                var runtimeResolver = context.Services.GetRequiredService<IContainerRuntimeResolver>();
+                var containerRuntime = await runtimeResolver.ResolveAsync(context.CancellationToken).ConfigureAwait(false);
+
+                if (await containerRuntime.CheckIfRunningAsync(context.CancellationToken).ConfigureAwait(false))
+                {
+                    return;
+                }
+
+                // In interactive mode, prompt the user to start the runtime and retry
+                var interactionService = context.Services.GetService<IInteractionService>();
+                if (interactionService?.IsAvailable == true)
+                {
+                    var result = await interactionService.PromptNotificationAsync(
+                        $"{containerRuntime.Name} is not running",
+                        $"Start {containerRuntime.Name} and confirm to continue.",
+                        new NotificationInteractionOptions
+                        {
+                            Intent = MessageIntent.Warning
+                        },
+                        cancellationToken: context.CancellationToken).ConfigureAwait(false);
+
+                    if (!result.Canceled && result.Data)
+                    {
+                        // Poll for the runtime to become available — Docker can take
+                        // a while to start, especially on slower machines.
+                        // Give it up to 5 minutes before giving up.
+                        var timeProvider = context.Services.GetRequiredService<TimeProvider>();
+                        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+                        waitCts.CancelAfter(TimeSpan.FromMinutes(5));
+
+                        try
+                        {
+                            while (!await containerRuntime.CheckIfRunningAsync(waitCts.Token).ConfigureAwait(false))
+                            {
+                                await Task.Delay(TimeSpan.FromSeconds(2), timeProvider, waitCts.Token).ConfigureAwait(false);
+                            }
+
+                            return;
+                        }
+                        catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
+                        {
+                            // Timed out waiting for the runtime to start — fall through to the error below
+                        }
+                    }
+                }
+
+                throw new DistributedApplicationException(
+                    $"{containerRuntime.Name} is not running. Start {containerRuntime.Name} and try again.");
+            }
         });
 
         // Add a default "Push" meta-step that all push steps should be required by
