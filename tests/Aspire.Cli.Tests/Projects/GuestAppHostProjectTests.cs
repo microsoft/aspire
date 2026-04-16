@@ -567,6 +567,7 @@ public class GuestAppHostProjectTests : IDisposable
 
         var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
         Assert.Equal("warning", displayedMessage.Emoji.Name);
+        Assert.Equal(typeof(string[]), rpcClient.LastAssemblyNamesRuntimeType);
         Assert.Equal(
             "The package 'CommunityToolkit.Aspire.Hosting.Ollama' does not expose any APIs for TypeScript (Node.js) AppHosts. Aspire can still run your app, but this package did not add anything to the generated SDK.",
             displayedMessage.Message);
@@ -632,6 +633,8 @@ public class GuestAppHostProjectTests : IDisposable
 
     private sealed class TestAppHostRpcClient(Dictionary<string, CapabilitiesInfo> capabilitiesByAssembly) : IAppHostRpcClient
     {
+        public Type? LastAssemblyNamesRuntimeType { get; private set; }
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
         public Task<RuntimeSpec> GetRuntimeSpecAsync(string languageId, CancellationToken cancellationToken)
@@ -651,6 +654,7 @@ public class GuestAppHostProjectTests : IDisposable
 
         public Task<CapabilitiesInfo> GetCapabilitiesForAssembliesAsync(IReadOnlyList<string> assemblyNames, CancellationToken cancellationToken)
         {
+            LastAssemblyNamesRuntimeType = assemblyNames.GetType();
             var assemblyName = Assert.Single(assemblyNames);
             return Task.FromResult(capabilitiesByAssembly.GetValueOrDefault(assemblyName) ?? new CapabilitiesInfo());
         }
