@@ -70,6 +70,7 @@ jobs:
     if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
     permissions:
       actions: write
+      contents: read
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
       extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}

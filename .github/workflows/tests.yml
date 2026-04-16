@@ -413,11 +413,8 @@ jobs:
         run: |
           gh workflow run dogfood-comment.yml \
             --repo ${{ github.repository }} \
-            --field pr_number=${{ inputs.prNumber }}
-          exit_code=$?
-          if [ $exit_code -ne 0 ]; then
-            echo "::warning::Failed to dispatch dogfood comment workflow"
-          fi
+            --field pr_number=${{ inputs.prNumber }} \
+            || echo "::warning::Failed to dispatch dogfood comment workflow"
 
       - name: Fail if any dependency failed
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
