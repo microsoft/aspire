@@ -39,8 +39,9 @@ internal sealed class RunningInstanceManager
     /// </summary>
     /// <param name="socketPath">The path to the auxiliary backchannel socket.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="displayMessages">Whether to emit human-readable progress and success messages while stopping the instance.</param>
     /// <returns>True if the instance was stopped successfully, false otherwise.</returns>
-    public async Task<bool> StopRunningInstanceAsync(string socketPath, CancellationToken cancellationToken)
+    public async Task<bool> StopRunningInstanceAsync(string socketPath, CancellationToken cancellationToken, bool displayMessages = true)
     {
         try
         {
@@ -57,8 +58,11 @@ internal sealed class RunningInstanceManager
             }
 
             // Display message that we're stopping the previous instance
-            var cliPidText = appHostInfo.CliProcessId.HasValue ? appHostInfo.CliProcessId.Value.ToString(CultureInfo.InvariantCulture) : "N/A";
-            _interactionService.DisplayMessage(KnownEmojis.StopSign, $"Stopping previous instance (AppHost PID: {appHostInfo.ProcessId.ToString(CultureInfo.InvariantCulture)}, CLI PID: {cliPidText})");
+            if (displayMessages)
+            {
+                var cliPidText = appHostInfo.CliProcessId.HasValue ? appHostInfo.CliProcessId.Value.ToString(CultureInfo.InvariantCulture) : "N/A";
+                _interactionService.DisplayMessage(KnownEmojis.StopSign, $"Stopping previous instance (AppHost PID: {appHostInfo.ProcessId.ToString(CultureInfo.InvariantCulture)}, CLI PID: {cliPidText})");
+            }
 
             // Call StopAppHostAsync on the auxiliary backchannel
             await backchannel.StopAppHostAsync(cancellationToken).ConfigureAwait(false);
@@ -68,7 +72,10 @@ internal sealed class RunningInstanceManager
 
             if (stopped)
             {
-                _interactionService.DisplaySuccess(RunCommandStrings.RunningInstanceStopped);
+                if (displayMessages)
+                {
+                    _interactionService.DisplaySuccess(RunCommandStrings.RunningInstanceStopped);
+                }
             }
             else
             {

@@ -83,8 +83,10 @@ internal sealed class AppHostLauncher(
         IEnumerable<string> additionalArgs,
         CancellationToken cancellationToken)
     {
+        var suppressHumanReadableOutput = format == OutputFormat.Json;
+
         // In JSON mode, avoid interactive prompts to keep stdout parseable.
-        var multipleAppHostBehavior = format == OutputFormat.Json
+        var multipleAppHostBehavior = suppressHumanReadableOutput
             ? MultipleAppHostProjectsFoundBehavior.Throw
             : MultipleAppHostProjectsFoundBehavior.Prompt;
 
@@ -105,7 +107,7 @@ internal sealed class AppHostLauncher(
         logger.LogDebug("Starting AppHost in background: {AppHostPath}", effectiveAppHostFile.FullName);
 
         // Check for running instance and stop it if found (same behavior as regular run)
-        await StopExistingInstancesAsync(effectiveAppHostFile, cancellationToken);
+        await StopExistingInstancesAsync(effectiveAppHostFile, suppressHumanReadableOutput, cancellationToken);
 
         // Build child process arguments
         var childLogFile = GenerateChildLogFilePath(executionContext.LogsDirectory.FullName, timeProvider);
@@ -122,7 +124,7 @@ internal sealed class AppHostLauncher(
         // If --wait-for-debugger is active, show a message so the user knows the AppHost
         // is paused. In detached mode we don't have the AppHost PID (stdout is suppressed),
         // so we show a generic message without a PID.
-        if (waitForDebugger)
+        if (waitForDebugger && !suppressHumanReadableOutput)
         {
             interactionService.DisplayMessage(
                 KnownEmojis.Bug,
@@ -131,7 +133,7 @@ internal sealed class AppHostLauncher(
 
         // Start the child process and wait for the backchannel
         var launchResult = await interactionService.ShowStatusAsync(
-            RunCommandStrings.StartingAppHostInBackground,
+            suppressHumanReadableOutput ? string.Empty : RunCommandStrings.StartingAppHostInBackground,
             () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, cancellationToken));
 
         // Handle failure cases
@@ -146,7 +148,7 @@ internal sealed class AppHostLauncher(
         return ExitCodeConstants.Success;
     }
 
-    private async Task StopExistingInstancesAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
+    private async Task StopExistingInstancesAsync(FileInfo effectiveAppHostFile, bool suppressHumanReadableOutput, CancellationToken cancellationToken)
     {
         var existingSockets = AppHostHelper.FindMatchingSockets(
             effectiveAppHostFile.FullName,
@@ -157,7 +159,7 @@ internal sealed class AppHostLauncher(
             logger.LogDebug("Found {Count} running instance(s) for this AppHost, stopping them first.", existingSockets.Length);
             var manager = new RunningInstanceManager(logger, interactionService, timeProvider);
             var stopTasks = existingSockets.Select(socket =>
-                manager.StopRunningInstanceAsync(socket, cancellationToken));
+                manager.StopRunningInstanceAsync(socket, cancellationToken, displayMessages: !suppressHumanReadableOutput));
             await Task.WhenAll(stopTasks).ConfigureAwait(false);
         }
     }
