@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
+using System.Xml.Linq;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -219,12 +221,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             yield break;
         }
 
-        var packageIds = GetScopedPackageIds(mapping.Source);
-        if (packageIds.Count == 0)
-        {
-            yield return new PackageMapping(packageId, mapping.Source);
-            yield break;
-        }
+        var packageIds = GetScopedPackageIds(mapping.Source, packageId);
 
         foreach (var scopedPackageId in packageIds)
         {
@@ -232,27 +229,98 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
     }
 
-    private static HashSet<string> GetScopedPackageIds(string source)
+    private static HashSet<string> GetScopedPackageIds(string source, string packageId)
     {
-        var packageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var packageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            packageId
+        };
 
         if (!Directory.Exists(source))
         {
             return packageIds;
         }
 
-        foreach (var packageFile in Directory.EnumerateFiles(source, "*.nupkg", SearchOption.TopDirectoryOnly))
+        var packageFiles = Directory.EnumerateFiles(source, "*.nupkg", SearchOption.TopDirectoryOnly)
+            .Select(GetPackageFileMetadata)
+            .OfType<PackageFileMetadata>()
+            .GroupBy(metadata => metadata.PackageId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.OrderByDescending(metadata => metadata.Version, SemVersion.PrecedenceComparer).First(),
+                StringComparer.OrdinalIgnoreCase);
+
+        var packagesToProcess = new Queue<string>();
+        packagesToProcess.Enqueue(packageId);
+
+        while (packagesToProcess.Count > 0)
         {
-            if (TryGetPackageIdFromPackageFileName(packageFile) is { Length: > 0 } packageId)
+            var currentPackageId = packagesToProcess.Dequeue();
+            if (!packageFiles.TryGetValue(currentPackageId, out var metadata))
             {
-                packageIds.Add(packageId);
+                continue;
+            }
+
+            foreach (var dependencyPackageId in GetDependencyPackageIds(metadata.PackageFilePath))
+            {
+                if (packageFiles.ContainsKey(dependencyPackageId) && packageIds.Add(dependencyPackageId))
+                {
+                    packagesToProcess.Enqueue(dependencyPackageId);
+                }
             }
         }
 
         return packageIds;
     }
 
-    private static string? TryGetPackageIdFromPackageFileName(string packageFile)
+    private static PackageFileMetadata? GetPackageFileMetadata(string packageFile)
+    {
+        var packageIdentity = TryGetPackageIdentityFromPackageFileName(packageFile);
+        if (packageIdentity is null)
+        {
+            return null;
+        }
+
+        return new PackageFileMetadata(packageIdentity.Value.PackageId, packageIdentity.Value.Version, packageFile);
+    }
+
+    private static IEnumerable<string> GetDependencyPackageIds(string packageFile)
+    {
+        try
+        {
+            using var archive = ZipFile.OpenRead(packageFile);
+            var nuspecEntry = archive.Entries.FirstOrDefault(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+            if (nuspecEntry is null)
+            {
+                return [];
+            }
+
+            using var stream = nuspecEntry.Open();
+            var document = XDocument.Load(stream);
+            return document
+                .Descendants()
+                .Where(element => element.Name.LocalName == "dependency")
+                .Select(element => element.Attribute("id")?.Value)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Cast<string>()
+                .ToArray();
+        }
+        catch (IOException)
+        {
+            return [];
+        }
+        catch (InvalidDataException)
+        {
+            return [];
+        }
+        catch (System.Xml.XmlException)
+        {
+            return [];
+        }
+    }
+
+    private static (string PackageId, SemVersion Version)? TryGetPackageIdentityFromPackageFileName(string packageFile)
     {
         var packageFileName = Path.GetFileNameWithoutExtension(packageFile);
         if (string.IsNullOrWhiteSpace(packageFileName))
@@ -264,9 +332,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         while (separatorIndex >= 0 && separatorIndex < packageFileName.Length - 1)
         {
             var versionCandidate = packageFileName[(separatorIndex + 1)..];
-            if (SemVersion.TryParse(versionCandidate, SemVersionStyles.Strict, out _))
+            if (SemVersion.TryParse(versionCandidate, SemVersionStyles.Strict, out var version))
             {
-                return packageFileName[..separatorIndex];
+                return (packageFileName[..separatorIndex], version);
             }
 
             separatorIndex = packageFileName.IndexOf('.', separatorIndex + 1);
@@ -274,6 +342,8 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         return null;
     }
+
+    private readonly record struct PackageFileMetadata(string PackageId, SemVersion Version, string PackageFilePath);
 
     private static bool IsScopedAspireMapping(PackageMapping mapping)
     {

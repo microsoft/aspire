@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -905,8 +906,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost"));
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         File.WriteAllText(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
-        CreatePackage(packagesDir.FullName, "Aspire.Hosting.Redis", cliVersion);
+        CreatePackage(packagesDir.FullName, "Aspire.Hosting.Redis", cliVersion, "Aspire.Hosting");
         CreatePackage(packagesDir.FullName, "Aspire.Hosting", cliVersion);
+        CreatePackage(packagesDir.FullName, "Aspire.Hosting.AppHost", cliVersion);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -964,13 +966,40 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(expectedSource, nuGetConfigContents, StringComparison.Ordinal);
         Assert.Contains("""<package pattern="Aspire.Hosting.Redis" />""", nuGetConfigContents, StringComparison.Ordinal);
         Assert.Contains("""<package pattern="Aspire.Hosting" />""", nuGetConfigContents, StringComparison.Ordinal);
+        Assert.DoesNotContain("""<package pattern="Aspire.Hosting.AppHost" />""", nuGetConfigContents, StringComparison.Ordinal);
         Assert.DoesNotContain("""<package pattern="Aspire*" />""", nuGetConfigContents, StringComparison.Ordinal);
     }
 
-    private static void CreatePackage(string directory, string packageId, string version)
+    private static void CreatePackage(string directory, string packageId, string version, params string[] dependencies)
     {
         var packagePath = Path.Combine(directory, $"{packageId}.{version}.nupkg");
-        File.WriteAllText(packagePath, string.Empty);
+        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
+        var nuspecEntry = archive.CreateEntry($"{packageId}.nuspec");
+        using var writer = new StreamWriter(nuspecEntry.Open());
+
+        writer.Write($$"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+              <metadata>
+                <id>{{packageId}}</id>
+                <version>{{version}}</version>
+                <dependencies>
+            """);
+
+        foreach (var dependency in dependencies)
+        {
+            writer.Write($$"""
+                    <group targetFramework="net10.0">
+                      <dependency id="{{dependency}}" version="[{{version}}]" />
+                    </group>
+                """);
+        }
+
+        writer.Write("""
+                </dependencies>
+              </metadata>
+            </package>
+            """);
     }
 }
 
