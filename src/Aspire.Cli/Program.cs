@@ -661,7 +661,6 @@ public class Program
         if (usePlaygroundFormatting)
         {
             settings.Interactive = InteractionSupport.Yes;
-            settings.ColorSystem = ColorSystemSupport.Standard;
 
             // Enrichers interfere with interactive playground experience so
             // this suppresses the default enrichers so that the CLI experience

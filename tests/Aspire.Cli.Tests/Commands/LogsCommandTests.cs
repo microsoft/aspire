@@ -609,6 +609,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var provider = CreateLogsTestServices(
             workspace,
             outputWriter,
+            disableAnsi: true,
             logLines:
             [
                 new ResourceLogLine
