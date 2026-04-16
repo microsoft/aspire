@@ -58,7 +58,7 @@ public class AzureFrontDoorTests
     }
 
     [Fact]
-    public async Task AddAzureFrontDoorWithAppServiceGeneratesBicep()
+    public async Task AddAzureFrontDoorWithSingleOriginGeneratesBicep()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -112,7 +112,7 @@ public class AzureFrontDoorTests
     }
 
     [Fact]
-    public async Task AddAzureFrontDoorThrowsWhenOriginHasNoEndpoints()
+    public async Task AddAzureFrontDoorThrowsWhenOriginHasNoExternalEndpoints()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -129,9 +129,7 @@ public class AzureFrontDoorTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => GetManifestWithBicep(frontDoor.Resource));
 
-        Assert.Equal(
-            "Resource 'api' does not have any HTTP or HTTPS endpoints. Azure Front Door requires a resource to expose at least one HTTP or HTTPS endpoint before it can be added as an origin.",
-            exception.Message);
+        Assert.Contains("does not have an external HTTP or HTTPS endpoint", exception.Message);
     }
 
     [Fact]
@@ -234,6 +232,23 @@ public class AzureFrontDoorTests
 
         // Should generate valid bicep (picked the HTTPS endpoint, not the TCP one)
         Assert.Contains("hostName: api_host", bicep);
+    }
+
+    [Fact]
+    public void WithOriginThrowsOnDuplicateOrigin()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var api = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor")
+            .WithOrigin(api);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => frontDoor.WithOrigin(api));
+
+        Assert.Contains("has already been added", exception.Message);
     }
 
     private sealed class Project : IProjectMetadata

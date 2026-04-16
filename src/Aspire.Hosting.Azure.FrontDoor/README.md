@@ -10,10 +10,16 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 
 ### Install the package
 
-In your AppHost project, install the Aspire Azure Front Door Hosting library with [NuGet](https://www.nuget.org):
+In your AppHost project, install the `Aspire.Hosting.Azure.FrontDoor` library via NuGet:
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.FrontDoor
+```
+
+Or using the Aspire CLI:
+
+```bash
+aspire add Aspire.Hosting.Azure.FrontDoor
 ```
 
 ## Usage example
@@ -21,11 +27,11 @@ dotnet add package Aspire.Hosting.Azure.FrontDoor
 Then, in the _AppHost.cs_ file of `AppHost`, add an Azure Front Door resource and configure origins using the following methods:
 
 ```csharp
-var api = builder.AddProject<Projects.Api>("api");
+var api = builder.AddProject<Projects.Api>("api")
+    .WithExternalHttpEndpoints();
 
 var frontDoor = builder.AddAzureFrontDoor("frontdoor")
     .WithOrigin(api);
-
 ```
 
 ## Additional documentation

@@ -20,6 +20,13 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureFrontDoorExtensions
 {
+    // Azure resource name length limits (from Azure portal).
+    private const int ProfileNameMaxLength = 90;
+    private const int EndpointNameMaxLength = 46;
+    private const int OriginGroupNameMaxLength = 90;
+    private const int OriginNameMaxLength = 90;
+    private const int RouteNameMaxLength = 90;
+
     /// <summary>
     /// Adds an Azure Front Door resource to the application model.
     /// </summary>
@@ -40,9 +47,11 @@ public static class AzureFrontDoorExtensions
     /// </para>
     /// <example>
     /// Add an Azure Front Door resource with origins:
-    /// <code>
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api");
-    /// var web = builder.AddProject&lt;Projects.Web&gt;("web");
+    /// <code lang="C#">
+    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    ///     .WithExternalHttpEndpoints();
+    /// var web = builder.AddProject&lt;Projects.Web&gt;("web")
+    ///     .WithExternalHttpEndpoints();
     /// var frontDoor = builder.AddAzureFrontDoor("frontdoor")
     ///     .WithOrigin(api)
     ///     .WithOrigin(web);
@@ -67,7 +76,7 @@ public static class AzureFrontDoorExtensions
             var profile = new CdnProfile(infrastructure.AspireResource.GetBicepIdentifier())
             {
                 SkuName = CdnSkuName.StandardAzureFrontDoor,
-                Name = BicepFunction.Take(BicepFunction.Interpolate($"{infrastructure.AspireResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90),
+                Name = BicepFunction.Take(BicepFunction.Interpolate($"{infrastructure.AspireResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), ProfileNameMaxLength),
                 Location = new AzureLocation("Global"),
                 Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
             };
@@ -76,17 +85,16 @@ public static class AzureFrontDoorExtensions
             // Create a separate endpoint → origin group → origin → route per WithOrigin call.
             // This gives each backend app its own Front Door hostname.
             var originAnnotations = azureResource.Annotations.OfType<AzureFrontDoorOriginAnnotation>().ToList();
-            for (var i = 0; i < originAnnotations.Count; i++)
+            foreach (var originAnnotation in originAnnotations)
             {
-                var originAnnotation = originAnnotations[i];
                 var originResource = originAnnotation.Resource;
                 var originBicepId = Infrastructure.NormalizeBicepIdentifier(originResource.Name);
                 var originName = originResource.Name.ToLowerInvariant();
 
                 var endpointReference = GetOriginEndpoint(originResource);
 
-                // Use health probe path from the resource's probe annotations if available
-                var probePath = GetProbePath(originResource);
+                // Use health probe settings from the resource's probe annotations if available
+                var (probePath, probeProtocol) = GetProbeSettings(originResource);
 
                 // Resolve the hostname via the origin resource's compute environment
                 var computeEnv = GetEffectiveComputeEnvironment(originResource);
@@ -97,7 +105,7 @@ public static class AzureFrontDoorExtensions
                 var endpoint = new FrontDoorEndpoint($"{originBicepId}Endpoint")
                 {
                     Parent = profile,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 46),
+                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), EndpointNameMaxLength),
                     Location = new AzureLocation("Global")
                 };
                 infrastructure.Add(endpoint);
@@ -106,10 +114,10 @@ public static class AzureFrontDoorExtensions
                 var originGroup = new FrontDoorOriginGroup($"{originBicepId}OriginGroup")
                 {
                     Parent = profile,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-og-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90),
+                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-og-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), OriginGroupNameMaxLength),
                     HealthProbeSettings = new HealthProbeSettings
                     {
-                        ProbeProtocol = HealthProbeProtocol.Https,
+                        ProbeProtocol = probeProtocol,
                         ProbePath = probePath
                     },
                     LoadBalancingSettings = new LoadBalancingSettings()
@@ -125,7 +133,7 @@ public static class AzureFrontDoorExtensions
                 var origin = new FrontDoorOrigin($"{originBicepId}Origin")
                 {
                     Parent = originGroup,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90),
+                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), OriginNameMaxLength),
                     HostName = hostParam,
                     OriginHostHeader = hostParam
                 };
@@ -135,7 +143,7 @@ public static class AzureFrontDoorExtensions
                 var route = new FrontDoorRoute($"{originBicepId}Route")
                 {
                     Parent = endpoint,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-route-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), 90),
+                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-route-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), RouteNameMaxLength),
                     OriginGroupId = originGroup.Id,
                     PatternsToMatch = ["/*"],
                     ForwardingProtocol = ForwardingProtocol.HttpsOnly,
@@ -174,7 +182,7 @@ public static class AzureFrontDoorExtensions
     /// <remarks>
     /// <example>
     /// Add multiple origins (each gets its own Front Door endpoint):
-    /// <code>
+    /// <code lang="C#">
     /// var frontDoor = builder.AddAzureFrontDoor("frontdoor")
     ///     .WithOrigin(api)
     ///     .WithOrigin(web);
@@ -188,6 +196,15 @@ public static class AzureFrontDoorExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(resource);
+
+        if (builder.Resource.Annotations
+            .OfType<AzureFrontDoorOriginAnnotation>()
+            .Any(a => a.Resource.Name == resource.Resource.Name))
+        {
+            throw new InvalidOperationException(
+                $"Origin resource '{resource.Resource.Name}' has already been added to Azure Front Door resource '{builder.Resource.Name}'. " +
+                "Each origin can only be added once.");
+        }
 
         return builder.WithAnnotation(new AzureFrontDoorOriginAnnotation(resource.Resource));
     }
@@ -211,34 +228,38 @@ public static class AzureFrontDoorExtensions
 
     private static EndpointReference GetOriginEndpoint(IResourceWithEndpoints resource)
     {
-        var httpEndpoints = resource.GetEndpoints()
+        var externalHttpEndpoint = resource.GetEndpoints()
             .Where(e => e.EndpointAnnotation.UriScheme is "http" or "https")
-            .ToArray();
+            .FirstOrDefault(e => e.EndpointAnnotation.IsExternal);
 
-        if (httpEndpoints.FirstOrDefault(e => e.EndpointAnnotation.IsExternal) is { } externalEndpoint)
+        if (externalHttpEndpoint is not null)
         {
-            return externalEndpoint;
-        }
-
-        if (httpEndpoints.FirstOrDefault() is { } endpoint)
-        {
-            return endpoint;
+            return externalHttpEndpoint;
         }
 
         throw new InvalidOperationException(
-            $"Resource '{resource.Name}' does not have any HTTP or HTTPS endpoints. " +
-            "Azure Front Door requires a resource to expose at least one HTTP or HTTPS endpoint before it can be added as an origin.");
+            $"Resource '{resource.Name}' does not have an external HTTP or HTTPS endpoint. " +
+            "Azure Front Door requires an origin to expose an external HTTP or HTTPS endpoint. " +
+            "Call .WithExternalHttpEndpoints() on the resource before adding it as an origin.");
     }
 
-    private static string GetProbePath(IResourceWithEndpoints resource)
+    private static (string Path, HealthProbeProtocol Protocol) GetProbeSettings(IResourceWithEndpoints resource)
     {
-        // Use the health probe path from EndpointProbeAnnotation if available (set by WithHttpHealthCheck).
+        // Use settings from EndpointProbeAnnotation if available (set by WithHttpProbe).
         // Prefer liveness probes, matching the pattern used by App Service.
         var probeAnnotation = resource.Annotations
             .OfType<EndpointProbeAnnotation>()
             .OrderBy(p => p.Type == ProbeType.Liveness ? 0 : 1)
             .FirstOrDefault();
 
-        return probeAnnotation?.Path ?? "/";
+        if (probeAnnotation is not null)
+        {
+            var protocol = probeAnnotation.EndpointReference.Scheme == "http"
+                ? HealthProbeProtocol.Http
+                : HealthProbeProtocol.Https;
+            return (probeAnnotation.Path, protocol);
+        }
+
+        return ("/", HealthProbeProtocol.Https);
     }
 }
