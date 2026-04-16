@@ -642,7 +642,9 @@ public class Program
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var isPlayground = CliHostEnvironment.IsPlaygroundMode(configuration);
-        var usePlaygroundFormatting = isPlayground && hostEnvironment.SupportsAnsi && hostEnvironment.SupportsInteractiveOutput;
+        var supportsAnsi = hostEnvironment.SupportsAnsi;
+        var supportsInteractiveOutput = hostEnvironment.SupportsInteractiveOutput;
+        var usePlaygroundFormatting = isPlayground && supportsAnsi && supportsInteractiveOutput;
 
         // Create custom output that handles width detection better in CI environments
         // and encapsulates ASPIRE_CONSOLE_WIDTH environment variable handling
@@ -650,23 +652,17 @@ public class Program
 
         var settings = new AnsiConsoleSettings()
         {
-            Ansi = usePlaygroundFormatting ? AnsiSupport.Yes : AnsiSupport.No,
-            Interactive = usePlaygroundFormatting ? InteractionSupport.Yes : hostEnvironment.SupportsInteractiveOutput ? InteractionSupport.Detect : InteractionSupport.No,
-            ColorSystem = usePlaygroundFormatting ? ColorSystemSupport.Standard : ColorSystemSupport.NoColors,
+            Ansi = supportsAnsi ? AnsiSupport.Yes : AnsiSupport.No,
+            Interactive = supportsInteractiveOutput ? InteractionSupport.Detect : InteractionSupport.No,
+            ColorSystem = supportsAnsi ? ColorSystemSupport.EightBit : ColorSystemSupport.NoColors,
             Out = output,
         };
 
-        // Use SupportsAnsi from hostEnvironment so callers can explicitly suppress ANSI output,
-        // including the --non-interactive path used by automation and agents.
-        if (hostEnvironment.SupportsAnsi)
-        {
-            settings.Ansi = AnsiSupport.Yes;
-            // Using EightBit color system for better color support of Aspire brand colors in terminals that support ANSI
-            settings.ColorSystem = ColorSystemSupport.EightBit;
-        }
-
         if (usePlaygroundFormatting)
         {
+            settings.Interactive = InteractionSupport.Yes;
+            settings.ColorSystem = ColorSystemSupport.Standard;
+
             // Enrichers interfere with interactive playground experience so
             // this suppresses the default enrichers so that the CLI experience
             // is more like what we would get in an interactive experience.
@@ -677,13 +673,7 @@ public class Program
             };
         }
 
-        var ansiConsole = AnsiConsole.Create(settings);
-        if (!hostEnvironment.SupportsAnsi)
-        {
-            // Disable OSC 8 hyperlinks alongside colors to keep plain-text output free of terminal control sequences.
-            ansiConsole.Profile.Capabilities.Links = false;
-        }
-        return ansiConsole;
+        return AnsiConsole.Create(settings);
     }
 
     public static async Task<int> Main(string[] args)
