@@ -905,9 +905,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         string? addUsedSource = null;
         var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost"));
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
-        File.WriteAllText(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+        File.WriteAllText(appHostFile.FullName, $$"""<Project Sdk="Aspire.AppHost.Sdk/{{cliVersion}}"></Project>""");
         CreatePackage(packagesDir.FullName, "Aspire.Hosting.Redis", cliVersion, "Aspire.Hosting");
         CreatePackage(packagesDir.FullName, "Aspire.Hosting", cliVersion);
+        CreatePackage(packagesDir.FullName, "Aspire.AppHost.Sdk", cliVersion);
         CreatePackage(packagesDir.FullName, "Aspire.Hosting.AppHost", cliVersion);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -966,6 +967,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(expectedSource, nuGetConfigContents, StringComparison.Ordinal);
         Assert.Contains("""<package pattern="Aspire.Hosting.Redis" />""", nuGetConfigContents, StringComparison.Ordinal);
         Assert.Contains("""<package pattern="Aspire.Hosting" />""", nuGetConfigContents, StringComparison.Ordinal);
+        Assert.Contains("""<package pattern="Aspire.AppHost.Sdk" />""", nuGetConfigContents, StringComparison.Ordinal);
         Assert.DoesNotContain("""<package pattern="Aspire.Hosting.AppHost" />""", nuGetConfigContents, StringComparison.Ordinal);
         Assert.DoesNotContain("""<package pattern="Aspire*" />""", nuGetConfigContents, StringComparison.Ordinal);
     }

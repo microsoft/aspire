@@ -198,7 +198,22 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public PackageChannel CreateScopedChannelForPackage(string packageId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(packageId);
+        return CreateScopedChannelForPackages([packageId]);
+    }
+
+    public PackageChannel CreateScopedChannelForPackages(IEnumerable<string> packageIds)
+    {
+        ArgumentNullException.ThrowIfNull(packageIds);
+
+        var requestedPackageIds = packageIds
+            .Where(packageId => !string.IsNullOrWhiteSpace(packageId))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (requestedPackageIds.Length == 0)
+        {
+            throw new ArgumentException("At least one package ID must be provided.", nameof(packageIds));
+        }
 
         var mappings = Mappings;
         if (!VersionHelper.IsPrChannel(Name) || Type is not PackageChannelType.Explicit || mappings is not { Length: > 0 })
@@ -207,13 +222,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
 
         var scopedMappings = mappings
-            .SelectMany(mapping => CreateScopedMappings(mapping, packageId))
+            .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds))
             .ToArray();
 
         return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion);
     }
 
-    private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, string packageId)
+    private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds)
     {
         if (!IsScopedAspireMapping(mapping))
         {
@@ -221,24 +236,21 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             yield break;
         }
 
-        var packageIds = GetScopedPackageIds(mapping.Source, packageId);
+        var scopedPackageIds = GetScopedPackageIds(mapping.Source, packageIds);
 
-        foreach (var scopedPackageId in packageIds)
+        foreach (var scopedPackageId in scopedPackageIds)
         {
             yield return new PackageMapping(scopedPackageId, mapping.Source);
         }
     }
 
-    private static HashSet<string> GetScopedPackageIds(string source, string packageId)
+    private static HashSet<string> GetScopedPackageIds(string source, IEnumerable<string> packageIds)
     {
-        var packageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            packageId
-        };
+        var resolvedPackageIds = new HashSet<string>(packageIds, StringComparer.OrdinalIgnoreCase);
 
         if (!Directory.Exists(source))
         {
-            return packageIds;
+            return resolvedPackageIds;
         }
 
         var packageFiles = Directory.EnumerateFiles(source, "*.nupkg", SearchOption.TopDirectoryOnly)
@@ -250,8 +262,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                 group => group.OrderByDescending(metadata => metadata.Version, SemVersion.PrecedenceComparer).First(),
                 StringComparer.OrdinalIgnoreCase);
 
-        var packagesToProcess = new Queue<string>();
-        packagesToProcess.Enqueue(packageId);
+        var packagesToProcess = new Queue<string>(resolvedPackageIds);
 
         while (packagesToProcess.Count > 0)
         {
@@ -263,14 +274,14 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
             foreach (var dependencyPackageId in GetDependencyPackageIds(metadata.PackageFilePath))
             {
-                if (packageFiles.ContainsKey(dependencyPackageId) && packageIds.Add(dependencyPackageId))
+                if (packageFiles.ContainsKey(dependencyPackageId) && resolvedPackageIds.Add(dependencyPackageId))
                 {
                     packagesToProcess.Enqueue(dependencyPackageId);
                 }
             }
         }
 
-        return packageIds;
+        return resolvedPackageIds;
     }
 
     private static PackageFileMetadata? GetPackageFileMetadata(string packageFile)
