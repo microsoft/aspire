@@ -140,7 +140,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// <param name="exceptionMessageTemplate">Exception message template (must include {ExitCode} placeholder).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="logArguments">Arguments to pass to the log templates.</param>
-    private async Task ExecuteContainerCommandAsync(
+    protected async Task ExecuteContainerCommandAsync(
         string arguments,
         string errorLogTemplate,
         string successLogTemplate,
@@ -148,7 +148,8 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         CancellationToken cancellationToken,
         params object[] logArguments)
     {
-        var spec = CreateProcessSpec(arguments);
+        var outputBuffer = new BuildOutputCapture();
+        var spec = CreateProcessSpec(arguments, outputBuffer);
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
         var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
@@ -163,7 +164,14 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             {
                 var errorArgs = logArguments.Concat(new object[] { processResult.ExitCode }).ToArray();
                 _logger.LogError(errorLogTemplate, errorArgs);
-                throw new DistributedApplicationException(string.Format(System.Globalization.CultureInfo.InvariantCulture, exceptionMessageTemplate, processResult.ExitCode));
+
+                var message = string.Format(System.Globalization.CultureInfo.InvariantCulture, exceptionMessageTemplate, processResult.ExitCode);
+                if (outputBuffer.TotalLineCount > 0)
+                {
+                    message = $"{message}{Environment.NewLine}{outputBuffer.GetFormattedOutput(outputDescription: "Command output")}";
+                }
+
+                throw new DistributedApplicationException(message);
             }
 
             _logger.LogInformation(successLogTemplate, logArguments);
@@ -179,6 +187,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="logArguments">Arguments to pass to the log templates.</param>
     /// <param name="environmentVariables">Optional environment variables to set for the process.</param>
+    /// <param name="outputBuffer">Optional buffer to retain stdout/stderr lines.</param>
     /// <returns>The exit code of the process.</returns>
     protected async Task<int> ExecuteContainerCommandWithExitCodeAsync(
         string arguments,
@@ -186,9 +195,10 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         string successLogTemplate,
         CancellationToken cancellationToken,
         object[] logArguments,
-        Dictionary<string, string>? environmentVariables = null)
+        Dictionary<string, string>? environmentVariables = null,
+        BuildOutputCapture? outputBuffer = null)
     {
-        var spec = CreateProcessSpec(arguments);
+        var spec = CreateProcessSpec(arguments, outputBuffer);
 
         // Add environment variables if provided
         if (environmentVariables is not null)
@@ -274,12 +284,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         return !string.IsNullOrEmpty(stage) ? $" --target \"{stage}\"" : string.Empty;
     }
 
-    /// <summary>
-    /// Creates a ProcessSpec for executing container runtime commands.
-    /// </summary>
-    /// <param name="arguments">The command arguments.</param>
-    /// <returns>A configured ProcessSpec instance.</returns>
-    private ProcessSpec CreateProcessSpec(string arguments)
+    private ProcessSpec CreateProcessSpec(string arguments, BuildOutputCapture? outputBuffer)
     {
         return new ProcessSpec(RuntimeExecutable)
         {
@@ -287,10 +292,12 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             OnOutputData = output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
+                outputBuffer?.Add(output);
             },
             OnErrorData = error =>
             {
                 _logger.LogDebug("{RuntimeName} (stderr): {Error}", RuntimeExecutable, error);
+                outputBuffer?.Add(error);
             },
             ThrowOnNonZeroReturnCode = false,
             InheritEnv = true

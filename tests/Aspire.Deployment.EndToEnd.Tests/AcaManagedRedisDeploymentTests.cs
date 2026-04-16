@@ -84,6 +84,9 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
             var waitingForRedisPrompt = new CellPatternSearcher()
                 .Find("Use Redis Cache");
 
+            var waitingForAgentInitPrompt = new CellPatternSearcher()
+                .Find("configure AI agent environments");
+
             // Pattern searchers for aspire add prompts
             var waitingForAddVersionSelectionPrompt = new CellPatternSearcher()
                 .Find("(based on NuGet.config)");
@@ -135,7 +138,22 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
                 .Enter() // Select "No" for localhost URLs (default)
                 .WaitUntil(s => waitingForRedisPrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
                 .Enter() // Select "Yes" for Redis Cache (first/default option)
-                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(5));
+                .WaitUntil(s =>
+                {
+                    if (waitingForAgentInitPrompt.Search(s).Count > 0)
+                    {
+                        return true;
+                    }
+                    var successSearcher = new CellPatternSearcher()
+                        .FindPattern(counter.Value.ToString())
+                        .RightText(" OK] $ ");
+                    return successSearcher.Search(s).Count > 0;
+                },
+                    TimeSpan.FromMinutes(5))
+                .Wait(TimeSpan.FromMilliseconds(500))
+                .Type("n") // Decline agent init prompt (or harmless if already at bash prompt)
+                .Enter()
+                .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(1));
 
             // Step 4: Navigate to project directory
             output.WriteLine("Step 4: Navigating to project directory...");

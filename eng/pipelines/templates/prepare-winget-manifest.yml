@@ -10,12 +10,11 @@ parameters:
   - name: archiveRoot
     type: string
     default: ''
-  - name: validateUrls
+  - name: skipUrlValidation
     type: boolean
-    default: true
-  - name: runInstallTest
-    type: boolean
-    default: true
+    default: false
+  # runInstallTest is derived from skipUrlValidation (they are logical inverses).
+  # Callers should only set skipUrlValidation; install tests run when URLs are valid.
 
 steps:
   - pwsh: |
@@ -101,8 +100,8 @@ steps:
         $args.ArchiveRoot = '${{ parameters.archiveRoot }}'
       }
 
-      if ('${{ parameters.validateUrls }}' -eq 'true') {
-        $args.ValidateUrls = $true
+      if ('${{ parameters.skipUrlValidation }}' -eq 'true') {
+        $args.SkipUrlValidation = $true
       }
 
       & "$(Build.SourcesDirectory)/eng/winget/generate-manifests.ps1" @args
@@ -226,7 +225,7 @@ steps:
         exit 1
       }
     displayName: 🟣Test WinGet manifest install/uninstall
-    condition: and(succeeded(), eq('${{ parameters.runInstallTest }}', 'true'))
+    condition: and(succeeded(), eq(${{ parameters.skipUrlValidation }}, false))
 
   - pwsh: |
       Copy-Item "$(Build.SourcesDirectory)/eng/winget/dogfood.ps1" "$(Build.StagingDirectory)/winget-manifests/dogfood.ps1"

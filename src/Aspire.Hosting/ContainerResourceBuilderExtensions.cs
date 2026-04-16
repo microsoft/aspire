@@ -966,8 +966,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDockerfile"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+    [AspireExport(Description = "Adds a container resource built from a programmatically generated Dockerfile")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null)
     {
@@ -1014,8 +1013,8 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDockerfile"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+    /// <remarks>This synchronous overload is not available in polyglot app hosts. Use the overload that accepts a <see cref="Func{T, TResult}"/>.</remarks>
+    [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Action<DockerfileBuilderCallbackContext> callback, string? stage = null)
     {
@@ -1525,8 +1524,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithDockerfile{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+    [AspireExport(Description = "Configures the resource to use a programmatically generated Dockerfile")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null) where T : ContainerResource
     {
@@ -1630,8 +1628,8 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithDockerfile{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+    /// <remarks>This synchronous overload is not available in polyglot app hosts. Use the overload that accepts a <see cref="Func{T, TResult}"/>.</remarks>
+    [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Action<DockerfileBuilderCallbackContext> callback, string? stage = null) where T : ContainerResource
     {

@@ -30,6 +30,7 @@ public static class TestDataBuilder
         bool requiresNugets = false,
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
+        bool enablePlaywrightInstall = false,
         string? extraTestArgs = null,
         string[]? supportedOSes = null,
         Dictionary<string, string>? runners = null)
@@ -42,9 +43,13 @@ public static class TestDataBuilder
             SplitTests = "false",
             TestSessionTimeout = testSessionTimeout,
             TestHangTimeout = testHangTimeout,
-            RequiresNugets = requiresNugets ? "true" : null,
-            RequiresTestSdk = requiresTestSdk ? "true" : null,
-            RequiresCliArchive = requiresCliArchive ? "true" : null,
+            Properties = new Dictionary<string, bool>
+            {
+                ["requiresNugets"] = requiresNugets,
+                ["requiresTestSdk"] = requiresTestSdk,
+                ["requiresCliArchive"] = requiresCliArchive,
+                ["enablePlaywrightInstall"] = enablePlaywrightInstall
+            },
             ExtraTestArgs = extraTestArgs,
             SupportedOSes = supportedOSes ?? ["windows", "linux", "macos"],
             Runners = runners
@@ -74,6 +79,8 @@ public static class TestDataBuilder
         string? uncollectedTestsHangTimeout = null,
         bool requiresNugets = false,
         bool requiresTestSdk = false,
+        bool requiresCliArchive = false,
+        bool enablePlaywrightInstall = false,
         string[]? supportedOSes = null,
         Dictionary<string, string>? runners = null)
     {
@@ -87,8 +94,13 @@ public static class TestDataBuilder
             TestHangTimeout = testHangTimeout,
             UncollectedTestsSessionTimeout = uncollectedTestsSessionTimeout,
             UncollectedTestsHangTimeout = uncollectedTestsHangTimeout,
-            RequiresNugets = requiresNugets ? "true" : null,
-            RequiresTestSdk = requiresTestSdk ? "true" : null,
+            Properties = new Dictionary<string, bool>
+            {
+                ["requiresNugets"] = requiresNugets,
+                ["requiresTestSdk"] = requiresTestSdk,
+                ["requiresCliArchive"] = requiresCliArchive,
+                ["enablePlaywrightInstall"] = enablePlaywrightInstall
+            },
             SupportedOSes = supportedOSes ?? ["windows", "linux", "macos"],
             Runners = runners
         };
@@ -187,6 +199,7 @@ public static class TestDataBuilder
         bool requiresNugets = false,
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
+        bool enablePlaywrightInstall = false,
         string[]? supportedOSes = null,
         Dictionary<string, string>? runners = null)
     {
@@ -203,9 +216,13 @@ public static class TestDataBuilder
             ExtraTestArgs = extraTestArgs ?? "",
             TestSessionTimeout = testSessionTimeout,
             TestHangTimeout = testHangTimeout,
-            RequiresNugets = requiresNugets,
-            RequiresTestSdk = requiresTestSdk,
-            RequiresCliArchive = requiresCliArchive,
+            Properties = new Dictionary<string, bool>
+            {
+                ["requiresNugets"] = requiresNugets,
+                ["requiresTestSdk"] = requiresTestSdk,
+                ["requiresCliArchive"] = requiresCliArchive,
+                ["enablePlaywrightInstall"] = enablePlaywrightInstall
+            },
             SupportedOSes = supportedOSes ?? ["windows", "linux", "macos"],
             Runners = runners
         };
@@ -237,14 +254,8 @@ public static class TestDataBuilder
         [JsonPropertyName("uncollectedTestsHangTimeout")]
         public string? UncollectedTestsHangTimeout { get; set; }
 
-        [JsonPropertyName("requiresNugets")]
-        public string? RequiresNugets { get; set; }
-
-        [JsonPropertyName("requiresTestSdk")]
-        public string? RequiresTestSdk { get; set; }
-
-        [JsonPropertyName("requiresCliArchive")]
-        public string? RequiresCliArchive { get; set; }
+        [JsonPropertyName("properties")]
+        public Dictionary<string, bool> Properties { get; set; } = new();
 
         [JsonPropertyName("extraTestArgs")]
         public string? ExtraTestArgs { get; set; }
@@ -310,14 +321,8 @@ public class CanonicalMatrixEntry
     [JsonPropertyName("testHangTimeout")]
     public string TestHangTimeout { get; set; } = "10m";
 
-    [JsonPropertyName("requiresNugets")]
-    public bool RequiresNugets { get; set; }
-
-    [JsonPropertyName("requiresTestSdk")]
-    public bool RequiresTestSdk { get; set; }
-
-    [JsonPropertyName("requiresCliArchive")]
-    public bool RequiresCliArchive { get; set; }
+    [JsonPropertyName("properties")]
+    public Dictionary<string, bool> Properties { get; set; } = new();
 
     [JsonPropertyName("splitTests")]
     public bool SplitTests { get; set; }

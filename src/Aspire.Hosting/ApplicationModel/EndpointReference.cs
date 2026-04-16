@@ -70,6 +70,15 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     public bool TlsEnabled => Exists && EndpointAnnotation.TlsEnabled;
 
     /// <summary>
+    /// Gets a value indicating whether the endpoint name is "http" or "https", ignoring case. This is a convention used to identify
+    /// endpoints that will be resolved based on the scheme of the endpoint in service discovery rather than by the specific endpoint name.
+    /// This is done to allow http endpoints that are dynamically updated to https to be mapped correctly despite the endpoint name no longer
+    /// matching the scheme.
+    /// </summary>
+    public bool IsHttpSchemeNamedEndpoint => string.Equals(EndpointName, "http", StringComparisons.EndpointAnnotationUriScheme) ||
+        string.Equals(EndpointName, "https", StringComparisons.EndpointAnnotationUriScheme);
+
+    /// <summary>
     /// Gets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints.
     /// </summary>
     /// <remarks>

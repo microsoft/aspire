@@ -425,12 +425,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         // Get current state for each resource directly using TryGetCurrentState
         foreach (var resource in appModel.Resources)
         {
-            // Skip the dashboard resource
-            if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
-            {
-                continue;
-            }
-
             foreach (var instanceName in resource.GetResolvedResourceNames())
             {
                 await AddResult(instanceName).ConfigureAwait(false);
@@ -465,12 +459,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            // Skip the dashboard resource
-            if (string.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
-            {
-                continue;
-            }
-
             var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
             {
@@ -605,6 +593,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             ResourceType = snapshot.ResourceType,
             State = snapshot.State?.Text,
             StateStyle = snapshot.State?.Style,
+            IsHidden = snapshot.IsHidden,
             HealthStatus = snapshot.HealthStatus?.ToString(),
             ExitCode = snapshot.ExitCode,
             CreatedAt = snapshot.CreationTimeStamp,
@@ -654,12 +643,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             foreach (var resource in appModel.Resources)
             {
-                // Skip the dashboard
-                if (string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
-                {
-                    continue;
-                }
-
                 resourcesToLog.AddRange(resource.GetResolvedResourceNames());
             }
         }

@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)/../testing/CITestsProperties.props" />
   <!--
     TestEnumerationRunsheetBuilder - Test Project Metadata Generation
 
@@ -54,22 +55,6 @@
       <!-- Remove leading slash/backslash if present -->
       <_RelativeProjectPath Condition="$(_RelativeProjectPath.StartsWith('/')) or $(_RelativeProjectPath.StartsWith('\\'))">$(_RelativeProjectPath.Substring(1))</_RelativeProjectPath>
 
-      <!-- Determine requiresNugets based on project properties -->
-      <_RequiresNugets>false</_RequiresNugets>
-      <_RequiresNugets Condition="'$(RequiresNugets)' == 'true'">true</_RequiresNugets>
-
-      <!-- Determine requiresTestSdk based on project properties -->
-      <_RequiresTestSdk>false</_RequiresTestSdk>
-      <_RequiresTestSdk Condition="'$(RequiresTestSdk)' == 'true'">true</_RequiresTestSdk>
-
-      <!-- Determine requiresCliArchive based on project properties -->
-      <_RequiresCliArchive>false</_RequiresCliArchive>
-      <_RequiresCliArchive Condition="'$(RequiresCliArchive)' == 'true'">true</_RequiresCliArchive>
-
-      <!-- Determine enablePlaywrightInstall based on project properties -->
-      <_EnablePlaywrightInstall>false</_EnablePlaywrightInstall>
-      <_EnablePlaywrightInstall Condition="'$(EnablePlaywrightInstall)' == 'true'">true</_EnablePlaywrightInstall>
-
       <!-- Build JSON array of supported OSes -->
       <_SupportedOSesJson />
       <_SupportedOSesJson Condition="'$(RunOnGithubActionsWindows)' == 'true'">$(_SupportedOSesJson)"windows",</_SupportedOSesJson>
@@ -96,6 +81,19 @@
       <_RunnersJsonParts Condition="'$(_RunnersJsonParts)' != ''">$(_RunnersJsonParts.TrimEnd(','))</_RunnersJsonParts>
       <_RunnersJsonLine Condition="'$(_RunnersJsonParts)' != ''">,
   "runners": {$(_RunnersJsonParts)}</_RunnersJsonLine>
+    </PropertyGroup>
+
+    <!-- Resolve CI test properties dynamically from CITestsProperties.props -->
+    <ItemGroup>
+      <_ResolvedCITestsProperty Include="@(CITestsProperty)">
+        <Value Condition="'$(%(CITestsProperty.MSBuildProp))' == 'true'">true</Value>
+        <Value Condition="'$(%(CITestsProperty.MSBuildProp))' != 'true'">%(CITestsProperty.Default)</Value>
+      </_ResolvedCITestsProperty>
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_PropertiesJsonInner>@(_ResolvedCITestsProperty -> '    &quot;%(Identity)&quot;: %(Value)', ',
+')</_PropertiesJsonInner>
 
       <!-- Build metadata JSON -->
       <_MetadataJson>{
@@ -103,10 +101,9 @@
   "shortName": "$(_ShortName)",
   "testClassNamesPrefix": "$(MSBuildProjectName)",
   "testProjectPath": "$(_RelativeProjectPath)",
-  "requiresNugets": "$(_RequiresNugets.ToLowerInvariant())",
-  "requiresTestSdk": "$(_RequiresTestSdk.ToLowerInvariant())",
-  "requiresCliArchive": "$(_RequiresCliArchive.ToLowerInvariant())",
-  "enablePlaywrightInstall": "$(_EnablePlaywrightInstall.ToLowerInvariant())",
+  "properties": {
+$(_PropertiesJsonInner)
+  },
   "splitTests": "$(SplitTestsOnCI)",
   "supportedOSes": [$(_SupportedOSesJson)],
   "testSessionTimeout": "$(_TestSessionTimeout)",
@@ -125,7 +122,7 @@
     <MakeDir Directories="$(_MetadataOutputDir)" />
     <WriteLinesToFile File="$(_MetadataFile)" Overwrite="true" Lines="$(_MetadataJson)" />
 
-    <Message Text="Wrote test metadata: $(_MetadataFile) (requiresNugets=$(_RequiresNugets), requiresTestSdk=$(_RequiresTestSdk), requiresCliArchive=$(_RequiresCliArchive), enablePlaywright=$(_EnablePlaywrightInstall), supportedOSes=$(_SupportedOSesJson), path=$(_RelativeProjectPath))" Importance="Low" />
+    <Message Text="Wrote test metadata: $(_MetadataFile) (properties=$(_PropertiesJsonInner), supportedOSes=$(_SupportedOSesJson), path=$(_RelativeProjectPath))" Importance="Low" />
   </Target>
 
 </Project>

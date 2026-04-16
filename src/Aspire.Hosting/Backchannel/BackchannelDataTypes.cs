@@ -689,6 +689,60 @@ internal class PublishingPromptInputAnswer
 }
 
 /// <summary>
+/// Represents metadata about a pipeline step for display purposes (e.g., --list-steps).
+/// </summary>
+internal sealed class PipelineStepInfo
+{
+    /// <summary>
+    /// Gets the unique name of the step.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the description of the step.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets the names of steps that this step depends on.
+    /// </summary>
+    public string[] DependsOn { get; init; } = [];
+
+    /// <summary>
+    /// Gets the tags that categorize this step.
+    /// </summary>
+    public string[] Tags { get; init; } = [];
+
+    /// <summary>
+    /// Gets the name of the resource this step is associated with, if any.
+    /// </summary>
+    public string? ResourceName { get; init; }
+}
+
+/// <summary>
+/// Request for getting pipeline step metadata.
+/// </summary>
+internal sealed class GetPipelineStepsRequest
+{
+    /// <summary>
+    /// Gets or sets the target step name to filter to (including transitive dependencies).
+    /// When null, all steps are returned.
+    /// </summary>
+    public string? Step { get; init; }
+}
+
+/// <summary>
+/// Response containing pipeline step metadata.
+/// </summary>
+internal sealed class GetPipelineStepsResponse
+{
+    /// <summary>
+    /// Gets the pipeline steps in topological (execution) order.
+    /// </summary>
+    public required PipelineStepInfo[] Steps { get; init; }
+}
+
+/// <summary>
 /// Represents the connection information for the Dashboard MCP server.
 /// </summary>
 internal sealed class DashboardMcpConnectionInfo
@@ -802,6 +856,11 @@ internal sealed class ResourceSnapshot
     /// This allows for extensibility without changing the schema.
     /// </summary>
     public Dictionary<string, string?> Properties { get; init; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether this resource is hidden.
+    /// </summary>
+    public bool IsHidden { get; init; }
 
     /// <summary>
     /// Gets the MCP server information if the resource exposes an MCP endpoint.

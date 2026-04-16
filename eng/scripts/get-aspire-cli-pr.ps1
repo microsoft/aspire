@@ -117,7 +117,10 @@ param(
     [switch]$SkipPath,
 
     [Parameter(HelpMessage = "Keep downloaded archive files after installation")]
-    [switch]$KeepArchive
+    [switch]$KeepArchive,
+
+    [Parameter(HelpMessage = "Show help information")]
+    [switch]$Help
 )
 
 # Global constants
@@ -855,7 +858,50 @@ function Get-PRHeadSHA {
 
     Write-Message "Getting HEAD SHA for PR #$PRNumber" -Level Verbose
 
-    $headSha = Invoke-GitHubAPICall -Endpoint "$Script:GHReposBase/pulls/$PRNumber" -JqFilter ".head.sha" -ErrorMessage "Failed to get HEAD SHA for PR #$PRNumber"
+    if ($Script:Repository -notmatch '^([^/]+)/([^/]+)$') {
+        throw "Invalid repository format '$Script:Repository'. Expected 'owner/name'."
+    }
+    $owner = $Matches[1]
+    $name = $Matches[2]
+
+    $graphqlQuery = 'query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { headRefOid } } }'
+    $ghCommand = @(
+        "gh", "api", "graphql",
+        "-f", "query=$graphqlQuery",
+        "-f", "owner=$owner",
+        "-f", "name=$name",
+        "-F", "number=$PRNumber",
+        "--jq", ".data.repository.pullRequest.headRefOid"
+    )
+
+    Write-Message "Calling GitHub API: $($ghCommand -join ' ')" -Level Verbose
+
+    $graphQlError = $null
+    try {
+        $headSha = & $ghCommand[0] $ghCommand[1..($ghCommand.Length-1)] 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            $graphQlError = "gh exited with code $LASTEXITCODE"
+        } elseif ([string]::IsNullOrWhiteSpace($headSha) -or $headSha -eq "null") {
+            $graphQlError = "GraphQL returned empty or null result"
+        } else {
+            # Normalize to a single trimmed string in case of unexpected multi-line output
+            $headSha = ($headSha | Select-Object -First 1).Trim()
+        }
+    }
+    catch {
+        $graphQlError = $_.Exception.Message
+    }
+
+    if ($graphQlError) {
+        Write-Message "GraphQL PR head lookup failed, falling back to REST API: $graphQlError" -Level Verbose
+        try {
+            $headSha = Invoke-GitHubAPICall -Endpoint "$Script:GHReposBase/pulls/$PRNumber" -JqFilter ".head.sha" -ErrorMessage "Failed to get HEAD SHA for PR #$PRNumber using REST fallback"
+        }
+        catch {
+            throw "Failed to get HEAD SHA for PR #$PRNumber with GraphQL query: $graphQlError`nREST fallback error: $($_.Exception.Message)"
+        }
+    }
+
     if ([string]::IsNullOrWhiteSpace($headSha) -or $headSha -eq "null") {
         Write-Message "This could mean:" -Level Info
         Write-Message "  - The PR number does not exist" -Level Info
@@ -1281,6 +1327,35 @@ function Start-DownloadAndInstall {
 # =============================================================================
 
 try {
+    # Show help if requested
+    if ($Help) {
+        Write-Message @"
+Aspire CLI PR Download Script
+
+DESCRIPTION:
+    Downloads and installs the Aspire CLI from a specific pull request's latest successful build.
+    Automatically detects the current platform and architecture.
+
+Usage:
+    get-aspire-cli-pr.ps1 <PRNumber> [OPTIONS]
+    iex "& { `$(irm <url>/get-aspire-cli-pr.ps1) } <PRNumber> [OPTIONS]"
+
+OPTIONS:
+    -PRNumber <int>         Pull request number (required, positional)
+    -WorkflowRunId <long>   Workflow run ID to download from (optional)
+    -InstallPath <string>   Directory prefix to install
+    -OS <string>            Override OS detection (win, linux, linux-musl, osx)
+    -Architecture <string>  Override architecture detection (x64, arm64)
+    -HiveOnly               Only install NuGet packages to the hive, skip CLI download
+    -SkipExtension          Skip VS Code extension download and installation
+    -UseInsiders            Install extension to VS Code Insiders instead of VS Code
+    -SkipPath               Do not add the install path to PATH environment variable
+    -KeepArchive            Keep downloaded archive files after installation
+    -Help                   Show this help information
+"@ -Level Info
+        if ($InvokedFromFile) { exit 0 } else { return 0 }
+    }
+
     # Validate PRNumber is provided when not showing help
     if ($PRNumber -le 0) {
         Write-Message "Error: PRNumber parameter is required" -Level Error

@@ -191,7 +191,8 @@ internal class AppHostRpcTarget(
 
         _ = cancellationToken;
         return Task.FromResult(new string[] {
-            "baseline.v2"
+            "baseline.v2",
+            "pipeline-steps.v1"
             });
     }
 #pragma warning restore CA1822
@@ -204,5 +205,52 @@ internal class AppHostRpcTarget(
     public async Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken = default)
     {
         await activityReporter.CompleteInteractionAsync(promptId, answers, updateResponse: true, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(GetPipelineStepsRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        logger.LogDebug("Resolving pipeline steps for list-steps request.");
+
+#pragma warning disable ASPIREPIPELINES001
+        var pipeline = serviceProvider.GetRequiredService<IDistributedApplicationPipeline>() as DistributedApplicationPipeline
+            ?? throw new InvalidOperationException("Pipeline is not a DistributedApplicationPipeline.");
+
+        var model = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
+
+        var pipelineContext = new PipelineContext(model, executionContext, serviceProvider, logger, cancellationToken);
+
+        var resolvedSteps = await pipeline.ResolveStepsAsync(pipelineContext).ConfigureAwait(false);
+
+        // If a target step is specified, filter to its transitive dependencies
+        if (!string.IsNullOrEmpty(request?.Step))
+        {
+            var stepsByName = resolvedSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+            if (stepsByName.TryGetValue(request.Step, out var targetStep))
+            {
+                resolvedSteps = DistributedApplicationPipeline.ComputeTransitiveDependencies(targetStep, stepsByName);
+            }
+            else
+            {
+                var availableSteps = string.Join(", ", resolvedSteps.Select(s => $"'{s.Name}'"));
+                throw new InvalidOperationException(
+                    $"Step '{request.Step}' not found in pipeline. Available steps: {availableSteps}");
+            }
+        }
+
+        var orderedSteps = DistributedApplicationPipeline.GetTopologicalOrder(resolvedSteps);
+#pragma warning restore ASPIREPIPELINES001
+
+        return new GetPipelineStepsResponse
+        {
+            Steps = orderedSteps.Select(step => new PipelineStepInfo
+            {
+                Name = step.Name,
+                Description = step.Description,
+                DependsOn = [.. step.DependsOnSteps],
+                Tags = [.. step.Tags],
+                ResourceName = step.Resource?.Name
+            }).ToArray()
+        };
     }
 }

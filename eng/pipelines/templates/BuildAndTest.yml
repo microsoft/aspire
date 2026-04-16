@@ -250,6 +250,36 @@ steps:
         PathtoPublish: '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
         ArtifactName: aspire-vscode-extension
 
+    # Publish Windows CLI archives as separate artifacts so the Prepare Installers
+    # stage can download them by name (matching the native_archives_<rid> pattern
+    # used by build_sign_native for macOS/Linux).
+    - ${{ if eq(parameters.isWindows, 'true') }}:
+      - ${{ each targetRid in parameters.targetRids }}:
+        - pwsh: |
+            $ErrorActionPreference = 'Stop'
+            $sourceDir = '${{ parameters.repoArtifactsPath }}/packages'
+            $pattern = 'aspire-cli-${{ targetRid }}-*'
+            $stagingDir = '$(Build.StagingDirectory)/native_archives_${{ replace(targetRid, '-', '_') }}'
+
+            New-Item -ItemType Directory -Force -Path $stagingDir | Out-Null
+
+            $files = Get-ChildItem -Path $sourceDir -Recurse -Filter $pattern
+            if ($files.Count -eq 0) {
+              Write-Error "No CLI archives matching '$pattern' found under '$sourceDir'"
+              exit 1
+            }
+
+            foreach ($f in $files) {
+              Copy-Item $f.FullName $stagingDir
+              Write-Host "Staged: $($f.Name)"
+            }
+          displayName: 🟣Stage CLI archives (${{ targetRid }})
+        - task: 1ES.PublishBuildArtifacts@1
+          displayName: 🟣Publish native_archives_${{ replace(targetRid, '-', '_') }}
+          inputs:
+            PathtoPublish: $(Build.StagingDirectory)/native_archives_${{ replace(targetRid, '-', '_') }}
+            ArtifactName: native_archives_${{ replace(targetRid, '-', '_') }}
+
     - script: ${{ parameters.dotnetScript }}
               build
               tests/workloads.proj

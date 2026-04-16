@@ -27,7 +27,7 @@ internal static class CommandsConfigurationExtensions
                 var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, context.ResourceName) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
             {
@@ -60,7 +60,7 @@ internal static class CommandsConfigurationExtensions
                 var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, context.ResourceName) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
             {
@@ -100,7 +100,7 @@ internal static class CommandsConfigurationExtensions
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRestarted, context.ResourceName) };
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRestarted, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
             {

@@ -212,7 +212,9 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
                 Environment.SetEnvironmentVariable("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "true");
                 Environment.SetEnvironmentVariable("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false");
 
-                var exitCode = await Program.Main(["sdk", "dump", "--format", "ci", "--output", outputPath, projectPath]).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                // ExtraLongTimeout because this spawns a real dotnet build of Aspire.Hosting.csproj
+                // in a child process, which can exceed the default timeout under concurrent test load.
+                var exitCode = await Program.Main(["sdk", "dump", "--format", "ci", "--output", outputPath, projectPath]).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
                 Assert.Equal(ExitCodeConstants.Success, exitCode);
 
                 var output = await File.ReadAllTextAsync(outputPath);

@@ -194,6 +194,6 @@ public class ResourceCommandService
         }
 
         logger.LogInformation("Command '{CommandName}' not available.", commandName);
-        return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resourceId}'." };
+        return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resource.GetResolvedDisplayResourceName(resourceId)}'." };
     }
 }

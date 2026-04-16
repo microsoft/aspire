@@ -217,6 +217,62 @@ func (d *CreateBuilderOptions) ToMap() map[string]any {
 	}
 }
 
+// HttpsCertificateInfo represents HttpsCertificateInfo.
+type HttpsCertificateInfo struct {
+	Subject string `json:"Subject,omitempty"`
+	Issuer string `json:"Issuer,omitempty"`
+	Thumbprint string `json:"Thumbprint,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateInfo) ToMap() map[string]any {
+	return map[string]any{
+		"Subject": SerializeValue(d.Subject),
+		"Issuer": SerializeValue(d.Issuer),
+		"Thumbprint": SerializeValue(d.Thumbprint),
+	}
+}
+
+// CertificateTrustExecutionConfigurationExportData represents CertificateTrustExecutionConfigurationExportData.
+type CertificateTrustExecutionConfigurationExportData struct {
+	Scope CertificateTrustScope `json:"Scope,omitempty"`
+	CertificateSubjects []string `json:"CertificateSubjects,omitempty"`
+	CustomBundlePaths []string `json:"CustomBundlePaths,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CertificateTrustExecutionConfigurationExportData) ToMap() map[string]any {
+	return map[string]any{
+		"Scope": SerializeValue(d.Scope),
+		"CertificateSubjects": SerializeValue(d.CertificateSubjects),
+		"CustomBundlePaths": SerializeValue(d.CustomBundlePaths),
+	}
+}
+
+// HttpsCertificateExecutionConfigurationExportData represents HttpsCertificateExecutionConfigurationExportData.
+type HttpsCertificateExecutionConfigurationExportData struct {
+	Subject string `json:"Subject,omitempty"`
+	Thumbprint string `json:"Thumbprint,omitempty"`
+	KeyPathExpression string `json:"KeyPathExpression,omitempty"`
+	PfxPathExpression string `json:"PfxPathExpression,omitempty"`
+	IsKeyPathReferenced bool `json:"IsKeyPathReferenced,omitempty"`
+	IsPfxPathReferenced bool `json:"IsPfxPathReferenced,omitempty"`
+	Password string `json:"Password,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]any {
+	return map[string]any{
+		"Subject": SerializeValue(d.Subject),
+		"Thumbprint": SerializeValue(d.Thumbprint),
+		"KeyPathExpression": SerializeValue(d.KeyPathExpression),
+		"PfxPathExpression": SerializeValue(d.PfxPathExpression),
+		"IsKeyPathReferenced": SerializeValue(d.IsKeyPathReferenced),
+		"IsPfxPathReferenced": SerializeValue(d.IsPfxPathReferenced),
+		"Password": SerializeValue(d.Password),
+	}
+}
+
 // ResourceEventDto represents ResourceEventDto.
 type ResourceEventDto struct {
 	ResourceName string `json:"ResourceName,omitempty"`
@@ -254,6 +310,24 @@ func (d *ReferenceEnvironmentInjectionOptions) ToMap() map[string]any {
 		"ConnectionProperties": SerializeValue(d.ConnectionProperties),
 		"ServiceDiscovery": SerializeValue(d.ServiceDiscovery),
 		"Endpoints": SerializeValue(d.Endpoints),
+	}
+}
+
+// CertificateTrustExecutionConfigurationContext represents CertificateTrustExecutionConfigurationContext.
+type CertificateTrustExecutionConfigurationContext struct {
+	CertificateBundlePath *ReferenceExpression `json:"CertificateBundlePath,omitempty"`
+	CertificateDirectoriesPath *ReferenceExpression `json:"CertificateDirectoriesPath,omitempty"`
+	RootCertificatesPath string `json:"RootCertificatesPath,omitempty"`
+	IsContainer bool `json:"IsContainer,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CertificateTrustExecutionConfigurationContext) ToMap() map[string]any {
+	return map[string]any{
+		"CertificateBundlePath": SerializeValue(d.CertificateBundlePath),
+		"CertificateDirectoriesPath": SerializeValue(d.CertificateDirectoriesPath),
+		"RootCertificatesPath": SerializeValue(d.RootCertificatesPath),
+		"IsContainer": SerializeValue(d.IsContainer),
 	}
 }
 
@@ -306,6 +380,22 @@ func (d *HttpCommandExportOptions) ToMap() map[string]any {
 		"EndpointName": SerializeValue(d.EndpointName),
 		"MethodName": SerializeValue(d.MethodName),
 		"ResultMode": SerializeValue(d.ResultMode),
+	}
+}
+
+// HttpsCertificateExecutionConfigurationContext represents HttpsCertificateExecutionConfigurationContext.
+type HttpsCertificateExecutionConfigurationContext struct {
+	CertificatePath *ReferenceExpression `json:"CertificatePath,omitempty"`
+	KeyPath *ReferenceExpression `json:"KeyPath,omitempty"`
+	PfxPath *ReferenceExpression `json:"PfxPath,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateExecutionConfigurationContext) ToMap() map[string]any {
+	return map[string]any{
+		"CertificatePath": SerializeValue(d.CertificatePath),
+		"KeyPath": SerializeValue(d.KeyPath),
+		"PfxPath": SerializeValue(d.PfxPath),
 	}
 }
 
@@ -1655,6 +1745,18 @@ func (s *CSharpAppResource) OnResourceReady(callback func(...any) any) (*IResour
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *CSharpAppResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *CSharpAppResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -2623,6 +2725,18 @@ func (s *ConnectionStringResource) OnResourceReady(callback func(...any) any) (*
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ConnectionStringResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ConnectionStringResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -3519,6 +3633,18 @@ func (s *ContainerRegistryResource) OnResourceReady(callback func(...any) any) (
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ContainerRegistryResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ContainerRegistryResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -4089,6 +4215,25 @@ func (s *ContainerResource) WithEndpointProxySupport(proxyEnabled bool) (*Contai
 	}
 	reqArgs["proxyEnabled"] = SerializeValue(proxyEnabled)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithDockerfileBuilder configures the resource to use a programmatically generated Dockerfile
+func (s *ContainerResource) WithDockerfileBuilder(contextPath string, callback func(...any) any, stage *string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["contextPath"] = SerializeValue(contextPath)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5162,6 +5307,18 @@ func (s *ContainerResource) OnResourceReady(callback func(...any) any) (*IResour
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ContainerResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ContainerResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -5691,6 +5848,337 @@ func NewDistributedApplicationResourceEventSubscription(handle *Handle, client *
 	return &DistributedApplicationResourceEventSubscription{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
+}
+
+// DockerfileBuilder wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder.
+type DockerfileBuilder struct {
+	HandleWrapperBase
+}
+
+// NewDockerfileBuilder creates a new DockerfileBuilder.
+func NewDockerfileBuilder(handle *Handle, client *AspireClient) *DockerfileBuilder {
+	return &DockerfileBuilder{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Arg adds a global ARG statement to the Dockerfile
+func (s *DockerfileBuilder) Arg(name string, defaultValue *string) (*DockerfileBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	if defaultValue != nil {
+		reqArgs["defaultValue"] = SerializeValue(defaultValue)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/dockerfileBuilderArg", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileBuilder), nil
+}
+
+// From adds a FROM statement to start a Dockerfile stage
+func (s *DockerfileBuilder) From(image string, stageName *string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["image"] = SerializeValue(image)
+	if stageName != nil {
+		reqArgs["stageName"] = SerializeValue(stageName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/dockerfileBuilderFrom", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// AddContainerFilesStages adds Dockerfile stages for published container files
+func (s *DockerfileBuilder) AddContainerFilesStages(resource *IResource, logger *ILogger) (*DockerfileBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["resource"] = SerializeValue(resource)
+	if logger != nil {
+		reqArgs["logger"] = SerializeValue(logger)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/dockerfileBuilderAddContainerFilesStages", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileBuilder), nil
+}
+
+// DockerfileBuilderCallbackContext wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext.
+type DockerfileBuilderCallbackContext struct {
+	HandleWrapperBase
+}
+
+// NewDockerfileBuilderCallbackContext creates a new DockerfileBuilderCallbackContext.
+func NewDockerfileBuilderCallbackContext(handle *Handle, client *AspireClient) *DockerfileBuilderCallbackContext {
+	return &DockerfileBuilderCallbackContext{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Resource gets the Resource property
+func (s *DockerfileBuilderCallbackContext) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// Builder gets the Builder property
+func (s *DockerfileBuilderCallbackContext) Builder() (*DockerfileBuilder, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileBuilder), nil
+}
+
+// Services gets the Services property
+func (s *DockerfileBuilderCallbackContext) Services() (*IServiceProvider, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IServiceProvider), nil
+}
+
+// CancellationToken gets the CancellationToken property
+func (s *DockerfileBuilderCallbackContext) CancellationToken() (*CancellationToken, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationToken", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*CancellationToken), nil
+}
+
+// DockerfileStage wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage.
+type DockerfileStage struct {
+	HandleWrapperBase
+}
+
+// NewDockerfileStage creates a new DockerfileStage.
+func NewDockerfileStage(handle *Handle, client *AspireClient) *DockerfileStage {
+	return &DockerfileStage{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Arg adds an ARG statement to a Dockerfile stage
+func (s *DockerfileStage) Arg(name string, defaultValue *string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	if defaultValue != nil {
+		reqArgs["defaultValue"] = SerializeValue(defaultValue)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/dockerfileStageArg", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// WorkDir adds a WORKDIR statement to a Dockerfile stage
+func (s *DockerfileStage) WorkDir(path string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["path"] = SerializeValue(path)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/workDir", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// Run adds a RUN statement to a Dockerfile stage
+func (s *DockerfileStage) Run(command string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["command"] = SerializeValue(command)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/dockerfileStageRun", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// Copy adds a COPY statement to a Dockerfile stage
+func (s *DockerfileStage) Copy(source string, destination string, chown *string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["source"] = SerializeValue(source)
+	reqArgs["destination"] = SerializeValue(destination)
+	if chown != nil {
+		reqArgs["chown"] = SerializeValue(chown)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/dockerfileStageCopy", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// CopyFrom adds a COPY --from statement to a Dockerfile stage
+func (s *DockerfileStage) CopyFrom(from string, source string, destination string, chown *string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["from"] = SerializeValue(from)
+	reqArgs["source"] = SerializeValue(source)
+	reqArgs["destination"] = SerializeValue(destination)
+	if chown != nil {
+		reqArgs["chown"] = SerializeValue(chown)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/dockerfileStageCopyFrom", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// Env adds an ENV statement to a Dockerfile stage
+func (s *DockerfileStage) Env(name string, value string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/env", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// Expose adds an EXPOSE statement to a Dockerfile stage
+func (s *DockerfileStage) Expose(port float64) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["port"] = SerializeValue(port)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/expose", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// Cmd adds a CMD statement to a Dockerfile stage
+func (s *DockerfileStage) Cmd(command []string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["command"] = SerializeValue(command)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/cmd", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// Entrypoint adds an ENTRYPOINT statement to a Dockerfile stage
+func (s *DockerfileStage) Entrypoint(command []string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["command"] = SerializeValue(command)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/entrypoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// RunWithMounts adds a RUN statement with mounts to a Dockerfile stage
+func (s *DockerfileStage) RunWithMounts(command string, mounts []string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["command"] = SerializeValue(command)
+	reqArgs["mounts"] = SerializeValue(mounts)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/runWithMounts", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// User adds a USER statement to a Dockerfile stage
+func (s *DockerfileStage) User(user string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["user"] = SerializeValue(user)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/user", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// EmptyLine adds an empty line to a Dockerfile stage
+func (s *DockerfileStage) EmptyLine() (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/emptyLine", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// Comment adds a comment to a Dockerfile stage
+func (s *DockerfileStage) Comment(comment string) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["comment"] = SerializeValue(comment)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/comment", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
+}
+
+// AddContainerFiles adds COPY --from statements for published container files
+func (s *DockerfileStage) AddContainerFiles(resource *IResource, rootDestinationPath string, logger *ILogger) (*DockerfileStage, error) {
+	reqArgs := map[string]any{
+		"stage": SerializeValue(s.Handle()),
+	}
+	reqArgs["resource"] = SerializeValue(resource)
+	reqArgs["rootDestinationPath"] = SerializeValue(rootDestinationPath)
+	if logger != nil {
+		reqArgs["logger"] = SerializeValue(logger)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/dockerfileStageAddContainerFiles", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DockerfileStage), nil
 }
 
 // DotnetToolResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource.
@@ -6869,6 +7357,18 @@ func (s *DotnetToolResource) OnResourceReady(callback func(...any) any) (*IResou
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *DotnetToolResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *DotnetToolResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -7333,6 +7833,18 @@ func (s *EndpointReference) TlsEnabled() (*bool, error) {
 		"context": SerializeValue(s.Handle()),
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*bool), nil
+}
+
+// IsHttpSchemeNamedEndpoint gets the IsHttpSchemeNamedEndpoint property
+func (s *EndpointReference) IsHttpSchemeNamedEndpoint() (*bool, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7842,6 +8354,72 @@ func (s *EnvironmentCallbackContext) ExecutionContext() (*DistributedApplication
 		return nil, err
 	}
 	return result.(*DistributedApplicationExecutionContext), nil
+}
+
+// EventingSubscriberRegistrationContext wraps a handle for Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext.
+type EventingSubscriberRegistrationContext struct {
+	HandleWrapperBase
+}
+
+// NewEventingSubscriberRegistrationContext creates a new EventingSubscriberRegistrationContext.
+func NewEventingSubscriberRegistrationContext(handle *Handle, client *AspireClient) *EventingSubscriberRegistrationContext {
+	return &EventingSubscriberRegistrationContext{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// OnBeforeStart subscribes an eventing subscriber to the BeforeStart event
+func (s *EventingSubscriberRegistrationContext) OnBeforeStart(callback func(...any) any) (*DistributedApplicationEventSubscription, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/eventingSubscriberOnBeforeStart", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationEventSubscription), nil
+}
+
+// OnAfterResourcesCreated subscribes an eventing subscriber to the AfterResourcesCreated event
+func (s *EventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback func(...any) any) (*DistributedApplicationEventSubscription, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationEventSubscription), nil
+}
+
+// ExecutionContext gets the ExecutionContext property
+func (s *EventingSubscriberRegistrationContext) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationExecutionContext), nil
+}
+
+// CancellationToken gets the CancellationToken property
+func (s *EventingSubscriberRegistrationContext) CancellationToken() (*CancellationToken, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*CancellationToken), nil
 }
 
 // ExecutableResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource.
@@ -8945,6 +9523,18 @@ func (s *ExecutableResource) OnResourceReady(callback func(...any) any) (*IResou
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ExecutableResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ExecutableResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -9788,6 +10378,18 @@ func (s *ExternalServiceResource) OnResourceReady(callback func(...any) any) (*I
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ExternalServiceResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ExternalServiceResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -10109,6 +10711,32 @@ func (s *ExternalServiceResource) WithMergeRouteMiddleware(path string, method s
 	return result.(*IResource), nil
 }
 
+// IAspireStore wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore.
+type IAspireStore struct {
+	HandleWrapperBase
+}
+
+// NewIAspireStore creates a new IAspireStore.
+func NewIAspireStore(handle *Handle, client *AspireClient) *IAspireStore {
+	return &IAspireStore{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// GetFileNameWithContent gets a deterministic file path for the specified file contents
+func (s *IAspireStore) GetFileNameWithContent(filenameTemplate string, sourceFilename string) (*string, error) {
+	reqArgs := map[string]any{
+		"aspireStore": SerializeValue(s.Handle()),
+	}
+	reqArgs["filenameTemplate"] = SerializeValue(filenameTemplate)
+	reqArgs["sourceFilename"] = SerializeValue(sourceFilename)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getFileNameWithContent", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*string), nil
+}
+
 // IComputeResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource.
 type IComputeResource struct {
 	HandleWrapperBase
@@ -10325,6 +10953,26 @@ func (s *IDistributedApplicationBuilder) AddDockerfile(name string, contextPath 
 		reqArgs["stage"] = SerializeValue(stage)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/addDockerfile", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// AddDockerfileBuilder adds a container resource built from a programmatically generated Dockerfile
+func (s *IDistributedApplicationBuilder) AddDockerfileBuilder(name string, contextPath string, callback func(...any) any, stage *string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["contextPath"] = SerializeValue(contextPath)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/addDockerfileBuilder", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -10695,6 +11343,30 @@ func (s *IDistributedApplicationBuilder) SubscribeAfterResourcesCreated(callback
 	return result.(*DistributedApplicationEventSubscription), nil
 }
 
+// AddEventingSubscriber adds an eventing subscriber
+func (s *IDistributedApplicationBuilder) AddEventingSubscriber(subscribe func(...any) any) error {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if subscribe != nil {
+		reqArgs["subscribe"] = RegisterCallback(subscribe)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/addEventingSubscriber", reqArgs)
+	return err
+}
+
+// TryAddEventingSubscriber attempts to add an eventing subscriber
+func (s *IDistributedApplicationBuilder) TryAddEventingSubscriber(subscribe func(...any) any) error {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if subscribe != nil {
+		reqArgs["subscribe"] = RegisterCallback(subscribe)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting/tryAddEventingSubscriber", reqArgs)
+	return err
+}
+
 // AddTestRedis adds a test Redis resource
 func (s *IDistributedApplicationBuilder) AddTestRedis(name string, port *float64) (*TestRedisResource, error) {
 	reqArgs := map[string]any{
@@ -10811,6 +11483,127 @@ func NewIDistributedApplicationResourceEvent(handle *Handle, client *AspireClien
 	return &IDistributedApplicationResourceEvent{
 		HandleWrapperBase: NewHandleWrapperBase(handle, client),
 	}
+}
+
+// IExecutionConfigurationBuilder wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder.
+type IExecutionConfigurationBuilder struct {
+	HandleWrapperBase
+}
+
+// NewIExecutionConfigurationBuilder creates a new IExecutionConfigurationBuilder.
+func NewIExecutionConfigurationBuilder(handle *Handle, client *AspireClient) *IExecutionConfigurationBuilder {
+	return &IExecutionConfigurationBuilder{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Build builds the execution configuration
+func (s *IExecutionConfigurationBuilder) Build(executionContext *DistributedApplicationExecutionContext, resourceLogger *ILogger, cancellationToken *CancellationToken) (*IExecutionConfigurationResult, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["executionContext"] = SerializeValue(executionContext)
+	if resourceLogger != nil {
+		reqArgs["resourceLogger"] = SerializeValue(resourceLogger)
+	}
+	if cancellationToken != nil {
+		reqArgs["cancellationToken"] = RegisterCancellation(cancellationToken, s.Client())
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/buildExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationResult), nil
+}
+
+// WithHttpsCertificateConfig adds an HTTPS certificate configuration gatherer
+func (s *IExecutionConfigurationBuilder) WithHttpsCertificateConfig(configContextFactory func(...any) any) (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if configContextFactory != nil {
+		reqArgs["configContextFactory"] = RegisterCallback(configContextFactory)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpsCertificateConfigExport", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
+// WithArgumentsConfig adds an arguments configuration gatherer
+func (s *IExecutionConfigurationBuilder) WithArgumentsConfig() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgumentsConfig", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
+// WithEnvironmentVariablesConfig adds an environment variables configuration gatherer
+func (s *IExecutionConfigurationBuilder) WithEnvironmentVariablesConfig() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentVariablesConfig", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
+// WithCertificateTrustConfig adds a certificate trust configuration gatherer
+func (s *IExecutionConfigurationBuilder) WithCertificateTrustConfig(configContextFactory func(...any) any) (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if configContextFactory != nil {
+		reqArgs["configContextFactory"] = RegisterCallback(configContextFactory)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withCertificateTrustConfig", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
+// IExecutionConfigurationResult wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult.
+type IExecutionConfigurationResult struct {
+	HandleWrapperBase
+}
+
+// NewIExecutionConfigurationResult creates a new IExecutionConfigurationResult.
+func NewIExecutionConfigurationResult(handle *Handle, client *AspireClient) *IExecutionConfigurationResult {
+	return &IExecutionConfigurationResult{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// GetCertificateTrustData gets certificate trust execution-configuration data
+func (s *IExecutionConfigurationResult) GetCertificateTrustData() (*CertificateTrustExecutionConfigurationExportData, error) {
+	reqArgs := map[string]any{
+		"configuration": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getCertificateTrustData", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*CertificateTrustExecutionConfigurationExportData), nil
+}
+
+// GetHttpsCertificateData gets HTTPS certificate execution-configuration data
+func (s *IExecutionConfigurationResult) GetHttpsCertificateData() (*HttpsCertificateExecutionConfigurationExportData, error) {
+	reqArgs := map[string]any{
+		"configuration": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getHttpsCertificateData", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*HttpsCertificateExecutionConfigurationExportData), nil
 }
 
 // IExpressionValue wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue.
@@ -11335,6 +12128,18 @@ func (s *IServiceProvider) GetResourceNotificationService() (*ResourceNotificati
 		return nil, err
 	}
 	return result.(*ResourceNotificationService), nil
+}
+
+// GetAspireStore gets the Aspire store from the service provider
+func (s *IServiceProvider) GetAspireStore() (*IAspireStore, error) {
+	reqArgs := map[string]any{
+		"serviceProvider": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/getAspireStore", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IAspireStore), nil
 }
 
 // GetUserSecretsManager gets the user secrets manager from the service provider
@@ -11884,6 +12689,18 @@ func (s *ParameterResource) OnResourceReady(callback func(...any) any) (*IResour
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ParameterResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
 }
 
 // WithOptionalString adds an optional string parameter
@@ -13911,6 +14728,18 @@ func (s *ProjectResource) OnResourceReady(callback func(...any) any) (*IResource
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ProjectResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *ProjectResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -15106,6 +15935,25 @@ func (s *TestDatabaseResource) WithEndpointProxySupport(proxyEnabled bool) (*Con
 	return result.(*ContainerResource), nil
 }
 
+// WithDockerfileBuilder configures the resource to use a programmatically generated Dockerfile
+func (s *TestDatabaseResource) WithDockerfileBuilder(contextPath string, callback func(...any) any, stage *string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["contextPath"] = SerializeValue(contextPath)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
 // WithDockerfileBaseImage sets the base image for a Dockerfile build
 func (s *TestDatabaseResource) WithDockerfileBaseImage(buildImage *string, runtimeImage *string) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -16173,6 +17021,18 @@ func (s *TestDatabaseResource) OnResourceReady(callback func(...any) any) (*IRes
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *TestDatabaseResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *TestDatabaseResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -16860,6 +17720,25 @@ func (s *TestRedisResource) WithEndpointProxySupport(proxyEnabled bool) (*Contai
 	}
 	reqArgs["proxyEnabled"] = SerializeValue(proxyEnabled)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithDockerfileBuilder configures the resource to use a programmatically generated Dockerfile
+func (s *TestRedisResource) WithDockerfileBuilder(contextPath string, callback func(...any) any, stage *string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["contextPath"] = SerializeValue(contextPath)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -17989,6 +18868,18 @@ func (s *TestRedisResource) OnResourceReady(callback func(...any) any) (*IResour
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *TestRedisResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // AddTestChildDatabase adds a child database to a test Redis resource
 func (s *TestRedisResource) AddTestChildDatabase(name string, databaseName *string) (*TestDatabaseResource, error) {
 	reqArgs := map[string]any{
@@ -18845,6 +19736,25 @@ func (s *TestVaultResource) WithEndpointProxySupport(proxyEnabled bool) (*Contai
 	}
 	reqArgs["proxyEnabled"] = SerializeValue(proxyEnabled)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ContainerResource), nil
+}
+
+// WithDockerfileBuilder configures the resource to use a programmatically generated Dockerfile
+func (s *TestVaultResource) WithDockerfileBuilder(contextPath string, callback func(...any) any, stage *string) (*ContainerResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["contextPath"] = SerializeValue(contextPath)
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	if stage != nil {
+		reqArgs["stage"] = SerializeValue(stage)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -19918,6 +20828,18 @@ func (s *TestVaultResource) OnResourceReady(callback func(...any) any) (*IResour
 	return result.(*IResource), nil
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *TestVaultResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *TestVaultResource) WithOptionalString(value *string, enabled *bool) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -20334,6 +21256,15 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", func(h *Handle, c *AspireClient) any {
 		return NewEndpointReference(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", func(h *Handle, c *AspireClient) any {
+		return NewIAspireStore(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder", func(h *Handle, c *AspireClient) any {
+		return NewIExecutionConfigurationBuilder(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult", func(h *Handle, c *AspireClient) any {
+		return NewIExecutionConfigurationResult(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", func(h *Handle, c *AspireClient) any {
 		return NewIResource(h, c)
 	})
@@ -20451,6 +21382,9 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", func(h *Handle, c *AspireClient) any {
 		return NewIDistributedApplicationEventing(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", func(h *Handle, c *AspireClient) any {
+		return NewEventingSubscriberRegistrationContext(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", func(h *Handle, c *AspireClient) any {
 		return NewAfterResourcesCreatedEvent(h, c)
 	})
@@ -20474,6 +21408,9 @@ func init() {
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", func(h *Handle, c *AspireClient) any {
 		return NewDistributedApplicationModel(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext", func(h *Handle, c *AspireClient) any {
+		return NewDockerfileBuilderCallbackContext(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", func(h *Handle, c *AspireClient) any {
 		return NewEndpointReferenceExpression(h, c)
@@ -20510,6 +21447,12 @@ func init() {
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewResourceUrlsCallbackContext(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder", func(h *Handle, c *AspireClient) any {
+		return NewDockerfileBuilder(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage", func(h *Handle, c *AspireClient) any {
+		return NewDockerfileStage(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ConnectionStringResource", func(h *Handle, c *AspireClient) any {
 		return NewConnectionStringResource(h, c)

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 
@@ -114,6 +113,46 @@ internal static class DeploymentE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Waits for <c>aspire add</c> to complete, handling the optional version selection prompt.
+    /// In CI with bundle install, the CLI may or may not show a version selection prompt.
+    /// This method waits for either the prompt or the success prompt, and dismisses the prompt if shown.
+    /// </summary>
+    internal static async Task WaitForAspireAddCompletionAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(180);
+
+        var versionPrompt = new CellPatternSearcher()
+            .Find("based on NuGet.config");
+        var successPrompt = new CellPatternSearcher()
+            .FindPattern(counter.Value.ToString())
+            .RightText(" OK] $ ");
+
+        var sawVersionPrompt = false;
+        await auto.WaitUntilAsync(s =>
+        {
+            if (versionPrompt.Search(s).Count > 0)
+            {
+                sawVersionPrompt = true;
+                return true;
+            }
+            return successPrompt.Search(s).Count > 0;
+        }, timeout: effectiveTimeout, description: $"version prompt or success prompt [{counter.Value} OK] $");
+
+        if (sawVersionPrompt)
+        {
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
+        }
+        else
+        {
+            counter.Increment();
+        }
+    }
+
+    /// <summary>
     /// Destroys the current deployment using <c>aspire destroy --yes</c> and waits for pipeline success.
     /// </summary>
     internal static async Task AspireDestroyAsync(
@@ -124,7 +163,7 @@ internal static class DeploymentE2EAutomatorHelpers
         timeout ??= TimeSpan.FromMinutes(5);
         await auto.TypeAsync("aspire destroy --yes");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(Aspire.Cli.Resources.ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: timeout.Value);
+        await auto.WaitForPipelineSuccessAsync(timeout: timeout.Value);
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 }
