@@ -14,4 +14,12 @@ internal sealed class TestCertificateService : ICertificateService
             EnvironmentVariables = new Dictionary<string, string>()
         });
     }
+
+    public Task<TrustCertificateResult> TrustCertificateAsync(CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new TrustCertificateResult
+        {
+            Success = true
+        });
+    }
 }

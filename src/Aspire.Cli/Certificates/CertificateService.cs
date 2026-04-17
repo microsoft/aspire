@@ -27,6 +27,33 @@ internal sealed class EnsureCertificatesTrustedResult
 internal interface ICertificateService
 {
     Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Trusts the HTTPS development certificate and pre-exports key material to the cache.
+    /// Returns a structured result with the trust outcome.
+    /// </summary>
+    Task<TrustCertificateResult> TrustCertificateAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// The result of an explicit trust operation (e.g., <c>aspire certs trust</c>).
+/// </summary>
+internal sealed class TrustCertificateResult
+{
+    /// <summary>
+    /// Gets whether the trust operation completed successfully.
+    /// </summary>
+    public required bool Success { get; init; }
+
+    /// <summary>
+    /// Gets whether the operation was cancelled by the user.
+    /// </summary>
+    public bool WasCancelled { get; init; }
+
+    /// <summary>
+    /// Gets the underlying result code from the certificate manager.
+    /// </summary>
+    public EnsureCertificateResult? ResultCode { get; init; }
 }
 
 internal sealed class CertificateService(
@@ -47,12 +74,39 @@ internal sealed class CertificateService(
 
         // Use the machine-readable check (available in .NET 10 SDK which is the minimum required)
         var trustResult = await CheckMachineReadableAsync();
-        await HandleMachineReadableTrustAsync(trustResult, environmentVariables);
+        await HandleMachineReadableTrustAsync(trustResult, environmentVariables, cancellationToken);
 
         return new EnsureCertificatesTrustedResult
         {
             EnvironmentVariables = environmentVariables
         };
+    }
+
+    public async Task<TrustCertificateResult> TrustCertificateAsync(CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
+
+        interactionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.TrustProgress);
+
+        var trustResultCode = await interactionService.ShowStatusAsync(
+            InteractionServiceStrings.TrustingCertificates,
+            () => Task.FromResult(certificateToolRunner.TrustHttpCertificate()),
+            emoji: KnownEmojis.LockedWithKey);
+
+        // Pre-export key material to avoid subsequent keychain prompts
+        await certificateToolRunner.PreExportKeyMaterialAsync(cancellationToken);
+
+        if (CertificateHelpers.IsSuccessfulTrustResult(trustResultCode))
+        {
+            return new TrustCertificateResult { Success = true, ResultCode = trustResultCode };
+        }
+
+        if (trustResultCode == EnsureCertificateResult.UserCancelledTrustStep)
+        {
+            return new TrustCertificateResult { Success = false, WasCancelled = true, ResultCode = trustResultCode };
+        }
+
+        return new TrustCertificateResult { Success = false, ResultCode = trustResultCode };
     }
 
     private async Task<CertificateTrustResult> CheckMachineReadableAsync()
@@ -67,11 +121,14 @@ internal sealed class CertificateService(
 
     private async Task HandleMachineReadableTrustAsync(
         CertificateTrustResult trustResult,
-        Dictionary<string, string> environmentVariables)
+        Dictionary<string, string> environmentVariables,
+        CancellationToken cancellationToken)
     {
-        // If fully trusted, nothing more to do
+        // If fully trusted, pre-export key material to ensure the cache is primed
+        // even if the certificate was trusted by a previous SDK or tool.
         if (trustResult.IsFullyTrusted)
         {
+            await certificateToolRunner.PreExportKeyMaterialAsync(cancellationToken);
             return;
         }
 
@@ -115,6 +172,9 @@ internal sealed class CertificateService(
 
             // Re-check trust status after trust operation
             trustResult = certificateToolRunner.CheckHttpCertificate();
+
+            // Pre-export key material to avoid subsequent keychain prompts
+            await certificateToolRunner.PreExportKeyMaterialAsync(cancellationToken);
         }
 
         // If partially trusted (either initially or after trust), configure SSL_CERT_DIR on Linux

@@ -402,6 +402,233 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         Assert.False(ensureCalled);
     }
 
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_WithFullyTrustedCert_CallsPreExport()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var preExportCalled = false;
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            CheckHttpCertificateCallback = () => new CertificateTrustResult
+            {
+                HasCertificates = true,
+                TrustLevel = CertificateManager.TrustLevel.Full,
+                Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+            }
+        };
+        toolRunner.PreExportKeyMaterialCallback = _ => { preExportCalled = true; return Task.CompletedTask; };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(serviceProvider.GetRequiredService<ICertificateToolRunner>(), interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(supportsInteractiveInput: true));
+            };
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // Pre-export should be called even when already fully trusted,
+        // to ensure the cache is primed for the app host.
+        Assert.True(preExportCalled);
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_WithNotTrustedCert_CallsPreExportAfterTrust()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var preExportCalled = false;
+        var trustCalled = false;
+
+        var callCount = 0;
+        var toolRunner = new TestCertificateToolRunner
+        {
+            CheckHttpCertificateCallback = () =>
+            {
+                callCount++;
+                if (callCount == 1)
+                {
+                    return new CertificateTrustResult
+                    {
+                        HasCertificates = true,
+                        TrustLevel = CertificateManager.TrustLevel.None,
+                        Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.None, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                    };
+                }
+                return new CertificateTrustResult
+                {
+                    HasCertificates = true,
+                    TrustLevel = CertificateManager.TrustLevel.Full,
+                    Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.Full, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+                };
+            },
+            TrustHttpCertificateCallback = () =>
+            {
+                trustCalled = true;
+                return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+            }
+        };
+        toolRunner.PreExportKeyMaterialCallback = _ => { preExportCalled = true; return Task.CompletedTask; };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(serviceProvider.GetRequiredService<ICertificateToolRunner>(), interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(supportsInteractiveInput: true));
+            };
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(trustCalled);
+        Assert.True(preExportCalled);
+    }
+
+    [Fact]
+    public async Task TrustCertificateAsync_Success_CallsPreExport()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var preExportCalled = false;
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () => EnsureCertificateResult.NewHttpsCertificateTrusted
+        };
+        toolRunner.PreExportKeyMaterialCallback = _ => { preExportCalled = true; return Task.CompletedTask; };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(serviceProvider.GetRequiredService<ICertificateToolRunner>(), interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(supportsInteractiveInput: true));
+            };
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.TrustCertificateAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.True(preExportCalled);
+    }
+
+    [Fact]
+    public async Task TrustCertificateAsync_UserCancelled_ReturnsWasCancelled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () => EnsureCertificateResult.UserCancelledTrustStep
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(serviceProvider.GetRequiredService<ICertificateToolRunner>(), interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(supportsInteractiveInput: true));
+            };
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.TrustCertificateAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.True(result.WasCancelled);
+    }
+
+    [Fact]
+    public async Task TrustCertificateAsync_Failure_ReturnsNotSuccess()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () => EnsureCertificateResult.FailedToTrustTheCertificate
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                return new CertificateService(serviceProvider.GetRequiredService<ICertificateToolRunner>(), interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(supportsInteractiveInput: true));
+            };
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.TrustCertificateAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(result.WasCancelled);
+        Assert.Equal(EnsureCertificateResult.FailedToTrustTheCertificate, result.ResultCode);
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_SkipsTrustAndPreExport()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var preExportCalled = false;
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            CheckHttpCertificateCallback = () => new CertificateTrustResult
+            {
+                HasCertificates = true,
+                TrustLevel = CertificateManager.TrustLevel.None,
+                Certificates = [new DevCertInfo { Version = 5, TrustLevel = CertificateManager.TrustLevel.None, IsHttpsDevelopmentCertificate = true, ValidityNotBefore = DateTimeOffset.Now.AddDays(-1), ValidityNotAfter = DateTimeOffset.Now.AddDays(365) }]
+            }
+        };
+        toolRunner.PreExportKeyMaterialCallback = _ => { preExportCalled = true; return Task.CompletedTask; };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CertificateServiceFactory = serviceProvider =>
+            {
+                var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
+                var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+                // Non-interactive, non-interactive trust NOT supported
+                return new CertificateService(serviceProvider.GetRequiredService<ICertificateToolRunner>(), interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => false);
+            };
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        // In non-interactive mode where trust isn't supported, pre-export should NOT be called
+        // because we can't trust (and therefore can't access the keychain).
+        Assert.False(preExportCalled);
+    }
+
     private sealed class TestCertificateToolRunner : ICertificateToolRunner
     {
         public Func<CertificateTrustResult>? CheckHttpCertificateCallback { get; set; }
@@ -440,6 +667,20 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
 
         public CertificateCleanResult CleanHttpCertificate()
             => new CertificateCleanResult { Success = true };
+
+        public bool PreExportCalled { get; private set; }
+
+        public Func<CancellationToken, Task>? PreExportKeyMaterialCallback { get; set; }
+
+        public Task PreExportKeyMaterialAsync(CancellationToken cancellationToken)
+        {
+            PreExportCalled = true;
+            if (PreExportKeyMaterialCallback is not null)
+            {
+                return PreExportKeyMaterialCallback(cancellationToken);
+            }
+            return Task.CompletedTask;
+        }
     }
 
 }

@@ -6,6 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 
@@ -31,6 +32,10 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
     // Well-known location on disk where dev-certs are stored.
     private static readonly string s_macOSUserHttpsCertificateLocation = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspnet", "dev-certs", "https");
+
+    // Well-known location where Aspire.Hosting caches dev-cert key material to avoid
+    // triggering macOS Keychain access prompts at app-host startup time.
+    private static readonly string s_aspireDevCertsCacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "dev-certs", "https");
 
     // Verify the certificate {0} for the SSL and X.509 Basic Policy.
     private const string MacOSVerifyCertificateCommandLine = "security";
@@ -97,6 +102,24 @@ internal sealed class MacOSCertificateManager : CertificateManager
         {
             // We can't guarantee that the temp file is in a directory with sensible permissions, but we're not exporting the private key
             ExportCertificate(publicCertificate, tmpFile, includePrivateKey: false, password: null, CertificateKeyExportFormat.Pfx);
+
+            // Load from the on-disk PFX to avoid triggering a macOS Keychain access prompt.
+            var onDiskPfxPath = GetCertificateFilePath(publicCertificate);
+            if (File.Exists(onDiskPfxPath))
+            {
+                try
+                {
+                    using var diskCert = X509CertificateLoader.LoadPkcs12FromFile(onDiskPfxPath, password: null);
+                    var aspireLookup = GetAspireCertificateHash(publicCertificate);
+                    ExportCertificate(diskCert, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
+                    ExportCertificate(diskCert, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pem"), includePrivateKey: true, null, CertificateKeyExportFormat.Pem);
+                }
+                catch
+                {
+                    // Best effort — the app host will fall back to accessing the keychain directly.
+                }
+            }
+
             if (Log.IsEnabled())
             {
                 Log.MacOSTrustCommandStart($"{MacOSTrustCertificateCommandLine} {s_macOSTrustCertificateCommandLineArguments}{tmpFile}");
@@ -111,7 +134,6 @@ internal sealed class MacOSCertificateManager : CertificateManager
                 }
             }
             Log.MacOSTrustCommandEnd();
-            return TrustLevel.Full;
         }
         finally
         {
@@ -124,6 +146,8 @@ internal sealed class MacOSCertificateManager : CertificateManager
                 // We don't care if we can't delete the temp file.
             }
         }
+
+        return TrustLevel.Full;
     }
 
     internal override CheckCertificateStateResult CheckCertificateState(X509Certificate2 candidate)
@@ -137,9 +161,11 @@ internal sealed class MacOSCertificateManager : CertificateManager
     {
         try
         {
-            // This path is in a well-known folder, so we trust the permissions.
-            var certificatePath = GetCertificateFilePath(candidate);
-            ExportCertificate(candidate, certificatePath, includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
+            ExportCertificate(candidate, GetCertificateFilePath(candidate), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
+
+            var aspireLookup = GetAspireCertificateHash(candidate);
+            ExportCertificate(candidate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
+            ExportCertificate(candidate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pem"), includePrivateKey: true, null, CertificateKeyExportFormat.Pem);
         }
         catch (Exception ex)
         {
@@ -310,17 +336,16 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
         try
         {
-            var certBytes = certificate.Export(X509ContentType.Pfx);
-
             if (Log.IsEnabled())
             {
                 Log.MacOSAddCertificateToUserProfileDirStart(s_macOSUserKeychain, GetDescription(certificate));
             }
 
-            // Ensure that the directory exists before writing to the file.
-            CreateDirectoryWithPermissions(s_macOSUserHttpsCertificateLocation);
+            ExportCertificate(certificate, GetCertificateFilePath(certificate), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
 
-            File.WriteAllBytes(GetCertificateFilePath(certificate), certBytes);
+            var aspireLookup = GetAspireCertificateHash(certificate);
+            ExportCertificate(certificate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
+            ExportCertificate(certificate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pem"), includePrivateKey: true, null, CertificateKeyExportFormat.Pem);
         }
         catch (Exception ex)
         {
@@ -372,6 +397,13 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
     private static string GetCertificateFilePath(X509Certificate2 certificate) =>
         Path.Combine(s_macOSUserHttpsCertificateLocation, $"aspnetcore-localhost-{certificate.Thumbprint}.pfx");
+
+    /// <summary>
+    /// Computes the Aspire hosting cache key for a certificate, matching the convention
+    /// used by <c>DeveloperCertificateService</c>: SHA256(thumbprint) as hex.
+    /// </summary>
+    private static string GetAspireCertificateHash(X509Certificate2 certificate) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
 
     protected override IList<X509Certificate2> GetCertificatesToRemove(StoreName storeName, StoreLocation storeLocation)
     {

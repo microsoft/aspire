@@ -3,6 +3,7 @@
 
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Certificates;
@@ -181,6 +182,131 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
         {
             return new CertificateCleanResult { Success = false, ErrorMessage = ex.Message };
         }
+    }
+
+    /// <summary>
+    /// Well-known location on disk where dev-cert key material is cached,
+    /// matching the convention used by <c>DeveloperCertificateService</c> in
+    /// <c>Aspire.Hosting</c>.
+    /// </summary>
+    private static readonly string s_cacheDirectory = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".aspire", "dev-certs", "https");
+
+    /// <summary>
+    /// On-disk location where the <see cref="MacOSCertificateManager"/> stores dev-cert PFX
+    /// files during certificate creation. These files contain the private key and can be read
+    /// without triggering a macOS Keychain access prompt.
+    /// </summary>
+    private static readonly string s_macOSCertificateLocation = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".aspnet", "dev-certs", "https");
+
+    /// <inheritdoc />
+    public Task PreExportKeyMaterialAsync(CancellationToken cancellationToken)
+    {
+        // The primary export path is in MacOSCertificateManager.SaveCertificateToAspireCache,
+        // which writes to the Aspire hosting cache during cert creation/correction using the
+        // in-memory certificate (no Keychain access prompt). This method is a fallback for
+        // certificates that were created before SaveCertificateToAspireCache existed.
+        if (!OperatingSystem.IsMacOS())
+        {
+            return Task.CompletedTask;
+        }
+
+        var availableCertificates = certificateManager.ListCertificates(
+            StoreName.My, StoreLocation.CurrentUser, isValid: true);
+
+        try
+        {
+            var now = DateTimeOffset.Now;
+
+            var certificate = availableCertificates
+                .Where(CertificateManager.IsHttpsDevelopmentCertificate)
+                .Where(c => c.NotBefore <= now && now <= c.NotAfter)
+                .Where(c => c.HasPrivateKey)
+                .OrderByDescending(CertificateManager.GetCertificateVersion)
+                .FirstOrDefault();
+
+            if (certificate is null)
+            {
+                return Task.CompletedTask;
+            }
+
+            var lookup = Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(certificate.Thumbprint)));
+
+            var keyPath = Path.Join(s_cacheDirectory, $"{lookup}.key");
+            var pfxPath = Path.Join(s_cacheDirectory, $"{lookup}.pfx");
+
+            // Skip if both cache entries already exist and are non-empty.
+            if (File.Exists(keyPath) && new FileInfo(keyPath).Length > 0
+                && File.Exists(pfxPath) && new FileInfo(pfxPath).Length > 0)
+            {
+                return Task.CompletedTask;
+            }
+
+            // Load the certificate from the on-disk PFX file that MacOSCertificateManager
+            // writes during certificate creation. Reading from disk avoids triggering a
+            // macOS Keychain access prompt.
+            var onDiskPfxPath = Path.Combine(s_macOSCertificateLocation,
+                $"aspnetcore-localhost-{certificate.Thumbprint}.pfx");
+
+            if (!File.Exists(onDiskPfxPath))
+            {
+                return Task.CompletedTask;
+            }
+
+            using var diskCert = X509CertificateLoader.LoadPkcs12FromFile(onDiskPfxPath, password: null);
+            using var privateKey = diskCert.GetRSAPrivateKey();
+            if (privateKey is null)
+            {
+                return Task.CompletedTask;
+            }
+
+            Directory.CreateDirectory(s_cacheDirectory,
+                UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
+
+            if (!File.Exists(keyPath) || new FileInfo(keyPath).Length == 0)
+            {
+                var keyBytes = privateKey.ExportEncryptedPkcs8PrivateKey(
+                    string.Empty,
+                    new PbeParameters(
+                        PbeEncryptionAlgorithm.Aes256Cbc,
+                        HashAlgorithmName.SHA256,
+                        iterationCount: 1));
+                var pemKey = PemEncoding.Write("ENCRYPTED PRIVATE KEY", keyBytes);
+
+                using var tempKey = RSA.Create();
+                tempKey.ImportFromEncryptedPem(pemKey, string.Empty);
+                Array.Clear(keyBytes, 0, keyBytes.Length);
+                Array.Clear(pemKey, 0, pemKey.Length);
+                keyBytes = tempKey.ExportPkcs8PrivateKey();
+                pemKey = PemEncoding.Write("PRIVATE KEY", keyBytes);
+
+                File.WriteAllText(keyPath, new string(pemKey));
+
+                Array.Clear(keyBytes, 0, keyBytes.Length);
+                Array.Clear(pemKey, 0, pemKey.Length);
+            }
+
+            if (!File.Exists(pfxPath) || new FileInfo(pfxPath).Length == 0)
+            {
+                var pfxBytes = diskCert.Export(X509ContentType.Pfx);
+                File.WriteAllBytes(pfxPath, pfxBytes);
+                Array.Clear(pfxBytes, 0, pfxBytes.Length);
+            }
+        }
+        catch
+        {
+            // Best effort — the app host will fall back to accessing the keychain directly.
+        }
+        finally
+        {
+            CertificateManager.DisposeCertificates(availableCertificates);
+        }
+
+        return Task.CompletedTask;
     }
 
     private static string[]? GetSanExtension(X509Certificate2 cert)

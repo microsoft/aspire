@@ -53,4 +53,16 @@ internal sealed class TestCertificateToolRunner : ICertificateToolRunner
             ? CleanHttpCertificateCallback()
             : new CertificateCleanResult { Success = true };
     }
+
+    public Func<CancellationToken, Task>? PreExportKeyMaterialCallback { get; set; }
+
+    public Task PreExportKeyMaterialAsync(CancellationToken cancellationToken)
+    {
+        if (PreExportKeyMaterialCallback is not null)
+        {
+            return PreExportKeyMaterialCallback(cancellationToken);
+        }
+
+        return Task.CompletedTask;
+    }
 }
