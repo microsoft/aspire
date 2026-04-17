@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Runtime.InteropServices;
 using Aspire.Cli.Utils;
+using Microsoft.DotNet.XUnitExtensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -11,11 +11,15 @@ namespace Aspire.Cli.Tests.Utils;
 public class InstallationDetectorTests
 {
     private readonly ILogger<InstallationDetector> _logger = NullLoggerFactory.Instance.CreateLogger<InstallationDetector>();
+    private static string AspireBinaryName => OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
+    private static string DotNetBinaryName => OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
 
-    [Fact]
-    public void GetInstallationInfo_NoProcessPath_ReturnsDefault()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public void GetInstallationInfo_NullOrEmptyProcessPath_ReturnsDefault(string? processPath)
     {
-        var detector = new InstallationDetector(_logger, processPath: null);
+        var detector = new InstallationDetector(_logger, processPath: processPath);
 
         var info = detector.GetInstallationInfo();
 
@@ -24,36 +28,11 @@ public class InstallationDetectorTests
         Assert.Equal(InstallationDetector.SelfUpdateInstructions, info.UpdateInstructions);
     }
 
-    [Fact]
-    public void GetInstallationInfo_EmptyProcessPath_ReturnsDefault()
+    [Theory]
+    [InlineData("/usr/local/share/dotnet/dotnet")]
+    [InlineData("some/path/dotnet.exe")]
+    public void GetInstallationInfo_DotNetProcessPath_ReturnsDotNetTool(string processPath)
     {
-        var detector = new InstallationDetector(_logger, processPath: "");
-
-        var info = detector.GetInstallationInfo();
-
-        Assert.False(info.IsDotNetTool);
-        Assert.False(info.SelfUpdateDisabled);
-        Assert.Equal(InstallationDetector.SelfUpdateInstructions, info.UpdateInstructions);
-    }
-
-    [Fact]
-    public void GetInstallationInfo_DotNetProcessPath_ReturnsDotNetTool()
-    {
-        var detector = new InstallationDetector(_logger, processPath: "/usr/local/share/dotnet/dotnet");
-
-        var info = detector.GetInstallationInfo();
-
-        Assert.True(info.IsDotNetTool);
-        Assert.False(info.SelfUpdateDisabled);
-        Assert.Equal(InstallationDetector.DotNetToolUpdateInstructions, info.UpdateInstructions);
-    }
-
-    [Fact]
-    public void GetInstallationInfo_DotNetExeProcessPath_ReturnsDotNetTool()
-    {
-        // Use platform-appropriate path separator since Path.GetFileNameWithoutExtension
-        // is platform-specific
-        var processPath = Path.Combine("some", "path", "dotnet.exe");
         var detector = new InstallationDetector(_logger, processPath: processPath);
 
         var info = detector.GetInstallationInfo();
@@ -70,7 +49,7 @@ public class InstallationDetectorTests
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
             File.WriteAllText(processPath, ""); // Create a fake binary
 
             var detector = new InstallationDetector(_logger, processPath);
@@ -93,7 +72,7 @@ public class InstallationDetectorTests
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
             File.WriteAllText(processPath, "");
 
             var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
@@ -118,21 +97,19 @@ public class InstallationDetectorTests
         }
     }
 
-    [Fact]
-    public void GetInstallationInfo_ConfigFileWithDisabledFalse_ReturnsDefault()
+    [Theory]
+    [InlineData("""{"selfUpdateDisabled": false}""")]
+    [InlineData("""{"updateInstructions": "some instructions"}""")]
+    public void GetInstallationInfo_ConfigDoesNotDisableSelfUpdate_ReturnsDefault(string configContent)
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
             File.WriteAllText(processPath, "");
 
             var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
-            File.WriteAllText(configPath, """
-                {
-                    "selfUpdateDisabled": false
-                }
-                """);
+            File.WriteAllText(configPath, configContent);
 
             var detector = new InstallationDetector(_logger, processPath);
 
@@ -148,17 +125,20 @@ public class InstallationDetectorTests
         }
     }
 
-    [Fact]
-    public void GetInstallationInfo_MalformedJson_FailsClosed()
+    [Theory]
+    [InlineData("not valid json {{{")]
+    [InlineData("")]
+    [InlineData("null")]
+    public void GetInstallationInfo_InvalidConfigContent_FailsClosed(string configContent)
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
             File.WriteAllText(processPath, "");
 
             var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
-            File.WriteAllText(configPath, "not valid json {{{");
+            File.WriteAllText(configPath, configContent);
 
             var detector = new InstallationDetector(_logger, processPath);
 
@@ -167,63 +147,6 @@ public class InstallationDetectorTests
             Assert.False(info.IsDotNetTool);
             Assert.True(info.SelfUpdateDisabled);
             Assert.Null(info.UpdateInstructions);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public void GetInstallationInfo_EmptyJsonFile_FailsClosed()
-    {
-        var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
-        try
-        {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
-            File.WriteAllText(processPath, "");
-
-            var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
-            File.WriteAllText(configPath, "");
-
-            var detector = new InstallationDetector(_logger, processPath);
-
-            var info = detector.GetInstallationInfo();
-
-            Assert.False(info.IsDotNetTool);
-            Assert.True(info.SelfUpdateDisabled);
-            Assert.Null(info.UpdateInstructions);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public void GetInstallationInfo_MissingSelfUpdateDisabledField_ReturnsDefault()
-    {
-        var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
-        try
-        {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
-            File.WriteAllText(processPath, "");
-
-            var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
-            File.WriteAllText(configPath, """
-                {
-                    "updateInstructions": "some instructions"
-                }
-                """);
-
-            var detector = new InstallationDetector(_logger, processPath);
-
-            var info = detector.GetInstallationInfo();
-
-            // selfUpdateDisabled defaults to false, so self-update is not disabled
-            Assert.False(info.IsDotNetTool);
-            Assert.False(info.SelfUpdateDisabled);
-            Assert.Equal(InstallationDetector.SelfUpdateInstructions, info.UpdateInstructions);
         }
         finally
         {
@@ -237,7 +160,7 @@ public class InstallationDetectorTests
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
             File.WriteAllText(processPath, "");
 
             var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
@@ -267,7 +190,7 @@ public class InstallationDetectorTests
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
             File.WriteAllText(processPath, "");
 
             var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
@@ -302,7 +225,7 @@ public class InstallationDetectorTests
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
             File.WriteAllText(processPath, "");
 
             var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
@@ -333,7 +256,7 @@ public class InstallationDetectorTests
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
             File.WriteAllText(processPath, "");
 
             var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
@@ -363,7 +286,7 @@ public class InstallationDetectorTests
         var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
         try
         {
-            var processPath = Path.Combine(tempDir.FullName, "dotnet");
+            var processPath = Path.Combine(tempDir.FullName, DotNetBinaryName);
             File.WriteAllText(processPath, "");
 
             var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
@@ -387,32 +310,6 @@ public class InstallationDetectorTests
     }
 
     [Fact]
-    public void GetInstallationInfo_NullJsonLiteral_FailsClosed()
-    {
-        var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
-        try
-        {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
-            File.WriteAllText(processPath, "");
-
-            var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
-            File.WriteAllText(configPath, "null");
-
-            var detector = new InstallationDetector(_logger, processPath);
-
-            var info = detector.GetInstallationInfo();
-
-            Assert.False(info.IsDotNetTool);
-            Assert.True(info.SelfUpdateDisabled);
-            Assert.Null(info.UpdateInstructions);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
     public void GetInstallationInfo_FollowsSymlink_ToFindConfigFile()
     {
         // This tests the symlink resolution path critical for Homebrew on macOS,
@@ -422,7 +319,7 @@ public class InstallationDetectorTests
         try
         {
             // Create a fake binary and config in the target directory
-            var targetBinaryPath = Path.Combine(targetDir.FullName, "aspire");
+            var targetBinaryPath = Path.Combine(targetDir.FullName, AspireBinaryName);
             File.WriteAllText(targetBinaryPath, "");
 
             var configPath = Path.Combine(targetDir.FullName, InstallationDetector.UpdateConfigFileName);
@@ -434,7 +331,7 @@ public class InstallationDetectorTests
                 """);
 
             // Create a symlink in a different directory pointing to the target binary
-            var symlinkPath = Path.Combine(linkDir.FullName, "aspire");
+            var symlinkPath = Path.Combine(linkDir.FullName, AspireBinaryName);
             try
             {
                 File.CreateSymbolicLink(symlinkPath, targetBinaryPath);
@@ -469,135 +366,19 @@ public class InstallationDetectorTests
         }
     }
 
+    [SkipOnPlatform(TestPlatforms.Windows, "This test verifies non-Windows behavior.")]
     [Fact]
     public void IsWinGetInstall_NonWindowsPlatform_ReturnsFalse()
     {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "This test verifies non-Windows behavior.");
-
         var result = InstallationDetector.IsWinGetInstall("/some/path/Microsoft/WinGet/Packages/foo/aspire");
 
         Assert.False(result);
     }
 
-    [Fact]
-    public void IsWinGetInstall_PathUnderUserWinGetPackages_ReturnsTrue()
-    {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
-
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        Assert.SkipWhen(string.IsNullOrEmpty(localAppData), "LOCALAPPDATA not available.");
-
-        var wingetPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
-
-        var result = InstallationDetector.IsWinGetInstall(wingetPath);
-
-        Assert.True(result);
-    }
-
-    [Fact]
-    public void IsWinGetInstall_PathUnderMachineWinGetPackages_ReturnsTrue()
-    {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
-
-        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        Assert.SkipWhen(string.IsNullOrEmpty(programFiles), "PROGRAMFILES not available.");
-
-        var wingetPath = Path.Combine(programFiles, "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
-
-        var result = InstallationDetector.IsWinGetInstall(wingetPath);
-
-        Assert.True(result);
-    }
-
-    [Fact]
-    public void IsWinGetInstall_PathNotUnderWinGetPackages_ReturnsFalse()
-    {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
-
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        Assert.SkipWhen(string.IsNullOrEmpty(localAppData), "LOCALAPPDATA not available.");
-
-        // Path that looks similar but is NOT under WinGet\Packages
-        var otherPath = Path.Combine(localAppData, "SomeOtherApp", "aspire.exe");
-
-        var result = InstallationDetector.IsWinGetInstall(otherPath);
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void IsWinGetInstall_BoundarySafety_SimilarPrefixReturnsFalse()
-    {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
-
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        Assert.SkipWhen(string.IsNullOrEmpty(localAppData), "LOCALAPPDATA not available.");
-
-        // "Packages2" should NOT match "Packages" — boundary safety check
-        var similarPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages2", "aspire.exe");
-
-        var result = InstallationDetector.IsWinGetInstall(similarPath);
-
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void GetInstallationInfo_WinGetPath_ReturnsSelfUpdateDisabledWithGenericMessage()
-    {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "WinGet detection only applies on Windows.");
-
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        Assert.SkipWhen(string.IsNullOrEmpty(localAppData), "LOCALAPPDATA not available.");
-
-        // Use a path that looks like a WinGet install (no config file needed)
-        var wingetProcessPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
-        var detector = new InstallationDetector(_logger, wingetProcessPath);
-
-        var info = detector.GetInstallationInfo();
-
-        Assert.False(info.IsDotNetTool);
-        Assert.True(info.SelfUpdateDisabled);
-        Assert.Equal(InstallationDetector.PackageManagerUpdateInstructions, info.UpdateInstructions);
-    }
-
-    [Fact]
-    public void GetInstallationInfo_ConfigFileTakesPriorityOverWinGetPath()
-    {
-        // If .aspire-update.json exists, it should take priority over WinGet path detection
-        var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
-        try
-        {
-            var processPath = Path.Combine(tempDir.FullName, "aspire");
-            File.WriteAllText(processPath, "");
-
-            var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
-            File.WriteAllText(configPath, """
-                {
-                    "selfUpdateDisabled": true,
-                    "updateInstructions": "brew upgrade --cask aspire"
-                }
-                """);
-
-            var detector = new InstallationDetector(_logger, processPath);
-
-            var info = detector.GetInstallationInfo();
-
-            // Config file instructions take priority
-            Assert.True(info.SelfUpdateDisabled);
-            Assert.Equal("brew upgrade --cask aspire", info.UpdateInstructions);
-        }
-        finally
-        {
-            tempDir.Delete(recursive: true);
-        }
-    }
-
+    [SkipOnPlatform(TestPlatforms.Windows, "File permission tests require Unix-style chmod")]
     [Fact]
     public void GetInstallationInfo_UnreadableConfigFile_FailsClosed()
     {
-        Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows),
-            "File permission tests require Unix-style chmod");
-
         // When .aspire-update.json exists but is unreadable (e.g., permissions issue),
         // the detector should fail closed — treating it as if self-update is disabled.
         var tempDir = Directory.CreateTempSubdirectory("aspire-install-test");
@@ -605,14 +386,14 @@ public class InstallationDetectorTests
         {
             var binDir = Path.Combine(tempDir.FullName, "bin");
             Directory.CreateDirectory(binDir);
-            var aspireExePath = Path.Combine(binDir, "aspire");
+            var aspireExePath = Path.Combine(binDir, AspireBinaryName);
             File.WriteAllText(aspireExePath, "fake");
 
             var configFilePath = Path.Combine(binDir, ".aspire-update.json");
             File.WriteAllText(configFilePath, """{ "selfUpdateDisabled": true }""");
 
-            // Make the file unreadable (guarded by Assert.SkipUnless above)
-#pragma warning disable CA1416 // Platform compatibility — guarded by runtime check above
+            // Make the file unreadable (guarded by SkipOnPlatform attribute)
+#pragma warning disable CA1416 // Platform compatibility — guarded by SkipOnPlatform attribute
             File.SetUnixFileMode(configFilePath, UnixFileMode.None);
 #pragma warning restore CA1416
 
@@ -628,11 +409,112 @@ public class InstallationDetectorTests
             var configFilePath = Path.Combine(tempDir.FullName, "bin", ".aspire-update.json");
             if (File.Exists(configFilePath))
             {
-#pragma warning disable CA1416 // Platform compatibility — guarded by runtime check above
+#pragma warning disable CA1416 // Platform compatibility — guarded by SkipOnPlatform attribute
                 File.SetUnixFileMode(configFilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
 #pragma warning restore CA1416
             }
 
+            tempDir.Delete(recursive: true);
+        }
+    }
+}
+
+[SkipOnPlatform(TestPlatforms.AnyUnix, "WinGet detection only applies on Windows.")]
+public class WinGetInstallationDetectorTests
+{
+    private readonly ILogger<InstallationDetector> _logger = NullLoggerFactory.Instance.CreateLogger<InstallationDetector>();
+    private static string AspireBinaryName => OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
+
+    [Fact]
+    public void IsWinGetInstall_PathUnderUserWinGetPackages_ReturnsTrue()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        var wingetPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
+
+        var result = InstallationDetector.IsWinGetInstall(wingetPath);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsWinGetInstall_PathUnderMachineWinGetPackages_ReturnsTrue()
+    {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+        var wingetPath = Path.Combine(programFiles, "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
+
+        var result = InstallationDetector.IsWinGetInstall(wingetPath);
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void IsWinGetInstall_PathNotUnderWinGetPackages_ReturnsFalse()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        var otherPath = Path.Combine(localAppData, "SomeOtherApp", "aspire.exe");
+
+        var result = InstallationDetector.IsWinGetInstall(otherPath);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void IsWinGetInstall_BoundarySafety_SimilarPrefixReturnsFalse()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        // "Packages2" should NOT match "Packages" — boundary safety check
+        var similarPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages2", "aspire.exe");
+
+        var result = InstallationDetector.IsWinGetInstall(similarPath);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void GetInstallationInfo_WinGetPath_ReturnsSelfUpdateDisabledWithGenericMessage()
+    {
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        var wingetProcessPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages", "Microsoft.Aspire_8wekyb3d8bbwe", "aspire.exe");
+        var detector = new InstallationDetector(_logger, wingetProcessPath);
+
+        var info = detector.GetInstallationInfo();
+
+        Assert.False(info.IsDotNetTool);
+        Assert.True(info.SelfUpdateDisabled);
+        Assert.Equal(InstallationDetector.PackageManagerUpdateInstructions, info.UpdateInstructions);
+    }
+
+    [Fact]
+    public void GetInstallationInfo_ConfigFileTakesPriorityOverWinGetPath()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-detector-test");
+        try
+        {
+            var processPath = Path.Combine(tempDir.FullName, AspireBinaryName);
+            File.WriteAllText(processPath, "");
+
+            var configPath = Path.Combine(tempDir.FullName, InstallationDetector.UpdateConfigFileName);
+            File.WriteAllText(configPath, """
+                {
+                    "selfUpdateDisabled": true,
+                    "updateInstructions": "brew upgrade --cask aspire"
+                }
+                """);
+
+            var detector = new InstallationDetector(_logger, processPath);
+
+            var info = detector.GetInstallationInfo();
+
+            Assert.True(info.SelfUpdateDisabled);
+            Assert.Equal("brew upgrade --cask aspire", info.UpdateInstructions);
+        }
+        finally
+        {
             tempDir.Delete(recursive: true);
         }
     }
