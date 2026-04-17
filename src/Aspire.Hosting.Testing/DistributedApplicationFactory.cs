@@ -314,6 +314,20 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
         hostBuilderOptions.Configuration ??= new();
         hostBuilderOptions.Configuration.AddInMemoryCollection(additionalConfig);
 
+        // Also push launch profile values into Args so they have highest priority.
+        // In .NET 10 HostApplicationBuilder adds AddEnvironmentVariables() (all process env vars)
+        // which can override the in-memory collection above when the test host process has env vars
+        // set from the test project's own launchSettings.json (e.g., in MTP native test runner mode).
+        // Command-line args are the highest-priority configuration source in HostApplicationBuilder.
+        if (additionalConfig.Count > 0)
+        {
+            var launchProfileArgs = additionalConfig
+                .Where(kv => kv.Value is not null)
+                .Select(kv => $"--{kv.Key}={kv.Value}")
+                .ToArray();
+            hostBuilderOptions.Args = [.. hostBuilderOptions.Args ?? [], .. launchProfileArgs];
+        }
+
         void SetDefault(string key, string? value)
         {
             if (existingConfig[key] is null)
