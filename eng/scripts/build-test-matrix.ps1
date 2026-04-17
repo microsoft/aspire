@@ -27,7 +27,7 @@
 
   Output format:
   {
-    "tests": [ { entry with supportedOSes array and requiresNugets boolean }, ... ]
+    "tests": [ { entry with supportedOSes array and properties sub-object }, ... ]
   }
 #>
 
@@ -43,14 +43,28 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# Load CI test property definitions from the single source of truth
+$script:CITestsPropertiesPath = Join-Path $PSScriptRoot '../testing/CITestsProperties.props'
+[xml]$ciTestsPropsXml = Get-Content $script:CITestsPropertiesPath
+$script:ciTestsPropertyDefs = [ordered]@{}
+foreach ($item in $ciTestsPropsXml.Project.ItemGroup.CITestsProperty) {
+  $script:ciTestsPropertyDefs[$item.Include] = @{
+    Default = ($item.Default -eq 'true')
+  }
+}
+
 # Default values applied to all entries
 $script:defaults = @{
   extraTestArgs = ''
-  requiresNugets = $false
-  requiresTestSdk = $false
+  properties = [ordered]@{}
   testSessionTimeout = '20m'
   testHangTimeout = '10m'
   supportedOSes = @('windows', 'linux', 'macos')
+}
+
+# Populate default property values from CITestsProperties.props
+foreach ($propName in $script:ciTestsPropertyDefs.Keys) {
+  $script:defaults.properties[$propName] = $script:ciTestsPropertyDefs[$propName].Default
 }
 
 Write-Host "Building canonical test matrix"
@@ -60,6 +74,23 @@ Write-Host "Artifacts directory: $ArtifactsDir"
 function ConvertTo-Boolean {
   param($Value)
   return ($Value -eq 'true' -or $Value -eq $true)
+}
+
+# Helper function to copy CI test properties from metadata into an entry's properties sub-object.
+# Reads from the 'properties' sub-object (new format) or top-level keys (legacy format).
+function Copy-CITestProperties {
+  param(
+    [Parameter(Mandatory=$true)]$Entry,
+    [Parameter(Mandatory=$true)]$Metadata
+  )
+
+  $propsSource = if ($Metadata.PSObject.Properties['properties'] -and $Metadata.properties) { $Metadata.properties } else { $Metadata }
+  $Entry['properties'] = [ordered]@{}
+  foreach ($propName in $script:ciTestsPropertyDefs.Keys) {
+    if ($propsSource.PSObject.Properties[$propName]) {
+      $Entry['properties'][$propName] = $propsSource.$propName
+    }
+  }
 }
 
 # Helper function to apply defaults and normalize an entry
@@ -74,10 +105,32 @@ function Complete-EntryWithDefaults {
     $Entry['supportedOSes'] = $script:defaults.supportedOSes
   }
 
-  # Normalize boolean values
-  $Entry['requiresNugets'] = if ($Entry.Contains('requiresNugets')) { ConvertTo-Boolean $Entry['requiresNugets'] } else { $false }
-  $Entry['requiresTestSdk'] = if ($Entry.Contains('requiresTestSdk')) { ConvertTo-Boolean $Entry['requiresTestSdk'] } else { $false }
-  $Entry['requiresCliArchive'] = if ($Entry.Contains('requiresCliArchive')) { ConvertTo-Boolean $Entry['requiresCliArchive'] } else { $false }
+  # Ensure properties sub-object exists
+  if (-not $Entry.Contains('properties') -or -not $Entry['properties']) {
+    $Entry['properties'] = [ordered]@{}
+  }
+
+  # If properties is a PSCustomObject (from JSON), convert to ordered hashtable
+  $props = $Entry['properties']
+  if ($props -is [PSCustomObject]) {
+    $converted = [ordered]@{}
+    foreach ($p in $props.PSObject.Properties) {
+      $converted[$p.Name] = $p.Value
+    }
+    $props = $converted
+    $Entry['properties'] = $props
+  }
+
+  # Normalize boolean values within properties using CITestsProperties.props definitions
+  foreach ($propName in $script:ciTestsPropertyDefs.Keys) {
+    $propDefault = $script:ciTestsPropertyDefs[$propName].Default
+    $props[$propName] = if ($props.Contains($propName)) { ConvertTo-Boolean $props[$propName] } else { $propDefault }
+  }
+
+  # Remove any legacy top-level boolean keys (property names that belong in the properties sub-object)
+  foreach ($key in $script:ciTestsPropertyDefs.Keys) {
+    if ($Entry.Contains($key)) { $Entry.Remove($key) }
+  }
 
   return $Entry
 }
@@ -103,10 +156,9 @@ function New-RegularTestEntry {
   if ($Metadata) {
     if ($Metadata.PSObject.Properties['testSessionTimeout']) { $entry['testSessionTimeout'] = $Metadata.testSessionTimeout }
     if ($Metadata.PSObject.Properties['testHangTimeout']) { $entry['testHangTimeout'] = $Metadata.testHangTimeout }
-    if ($Metadata.PSObject.Properties['requiresNugets']) { $entry['requiresNugets'] = $Metadata.requiresNugets }
-    if ($Metadata.PSObject.Properties['requiresTestSdk']) { $entry['requiresTestSdk'] = $Metadata.requiresTestSdk }
-    if ($Metadata.PSObject.Properties['requiresCliArchive']) { $entry['requiresCliArchive'] = $Metadata.requiresCliArchive }
     if ($Metadata.PSObject.Properties['extraTestArgs'] -and $Metadata.extraTestArgs) { $entry['extraTestArgs'] = $Metadata.extraTestArgs }
+
+    Copy-CITestProperties -Entry $entry -Metadata $Metadata
   }
 
   # Add supported OSes
@@ -163,9 +215,7 @@ function New-CollectionTestEntry {
     if ($Metadata.PSObject.Properties['testHangTimeout']) { $entry['testHangTimeout'] = $Metadata.testHangTimeout }
   }
 
-  if ($Metadata.PSObject.Properties['requiresNugets']) { $entry['requiresNugets'] = $Metadata.requiresNugets }
-  if ($Metadata.PSObject.Properties['requiresTestSdk']) { $entry['requiresTestSdk'] = $Metadata.requiresTestSdk }
-  if ($Metadata.PSObject.Properties['requiresCliArchive']) { $entry['requiresCliArchive'] = $Metadata.requiresCliArchive }
+  Copy-CITestProperties -Entry $entry -Metadata $Metadata
 
   # Add test filter for collection-based splitting
   if ($IsUncollected) {
@@ -213,9 +263,8 @@ function New-ClassTestEntry {
 
   if ($Metadata.PSObject.Properties['testSessionTimeout']) { $entry['testSessionTimeout'] = $Metadata.testSessionTimeout }
   if ($Metadata.PSObject.Properties['testHangTimeout']) { $entry['testHangTimeout'] = $Metadata.testHangTimeout }
-  if ($Metadata.PSObject.Properties['requiresNugets']) { $entry['requiresNugets'] = $Metadata.requiresNugets }
-  if ($Metadata.PSObject.Properties['requiresTestSdk']) { $entry['requiresTestSdk'] = $Metadata.requiresTestSdk }
-  if ($Metadata.PSObject.Properties['requiresCliArchive']) { $entry['requiresCliArchive'] = $Metadata.requiresCliArchive }
+
+  Copy-CITestProperties -Entry $entry -Metadata $Metadata
 
   # Add test filter for class-based splitting
   $entry['extraTestArgs'] = "--filter-class `"$ClassName`""
@@ -321,8 +370,8 @@ Write-Host "Generated $($matrixEntries.Count) total matrix entries"
 
 $sortedEntries = @($matrixEntries | Sort-Object -Property projectName, name)
 
-$requiresNugetsCount = @($sortedEntries | Where-Object { $_.requiresNugets -eq $true }).Count
-$noNugetsCount = @($sortedEntries | Where-Object { $_.requiresNugets -ne $true }).Count
+$requiresNugetsCount = @($sortedEntries | Where-Object { $_.properties.requiresNugets -eq $true }).Count
+$noNugetsCount = @($sortedEntries | Where-Object { $_.properties.requiresNugets -ne $true }).Count
 
 Write-Host "  - Requiring NuGets: $requiresNugetsCount"
 Write-Host "  - Not requiring NuGets: $noNugetsCount"

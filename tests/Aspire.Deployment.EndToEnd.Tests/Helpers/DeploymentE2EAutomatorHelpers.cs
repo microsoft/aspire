@@ -163,7 +163,7 @@ internal static class DeploymentE2EAutomatorHelpers
         timeout ??= TimeSpan.FromMinutes(5);
         await auto.TypeAsync("aspire destroy --yes");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(Aspire.Cli.Resources.ConsoleActivityLoggerStrings.PipelineSucceeded, timeout: timeout.Value);
+        await auto.WaitForPipelineSuccessAsync(timeout: timeout.Value);
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 }

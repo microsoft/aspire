@@ -12,6 +12,11 @@
         <target state="needs-review-translation">Diffuser les journaux en temps réel au fur et à mesure de leur écriture.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Générer les journaux au format JSON (NDJSON).</target>

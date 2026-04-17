@@ -72,6 +72,47 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_NoMatchingCommand_SingleInstance_MessageUsesDisplayName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myResource-abcdwxyz", "abcdwxyz", 0)
+            ]));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "NotFound");
+
+        Assert.False(result.Success);
+        Assert.Equal("Command 'NotFound' not available for resource 'myResource'.", result.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_NoMatchingCommand_HasReplicas_MessageUsesResourceId()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myResource-abcdwxyz", "abcdwxyz", 0),
+            new DcpInstance("myResource-efghwxyz", "efghwxyz", 1)
+            ]));
+        custom.WithAnnotation(new ReplicaAnnotation(2));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "NotFound");
+
+        Assert.False(result.Success);
+        Assert.Contains("'myResource-abcdwxyz'", result.Message);
+        Assert.Contains("'myResource-efghwxyz'", result.Message);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_ResourceNameMultipleMatches_Success()
     {
         // Arrange

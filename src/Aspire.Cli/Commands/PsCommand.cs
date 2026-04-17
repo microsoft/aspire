@@ -175,7 +175,7 @@ internal sealed class PsCommand : BaseCommand
             {
                 try
                 {
-                    var snapshots = await connection.GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
+                    var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
                     resources = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardUrl, includeEnvironmentVariableValues: false);
                 }
                 catch (Exception ex)
@@ -204,6 +204,8 @@ internal sealed class PsCommand : BaseCommand
             return;
         }
 
+        var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
+
         var table = new Table();
         table.AddBoldColumn(PsCommandStrings.HeaderPath);
         table.AddBoldColumn(PsCommandStrings.HeaderPid);
@@ -212,15 +214,14 @@ internal sealed class PsCommand : BaseCommand
 
         foreach (var appHost in appHosts)
         {
-            var shortPath = ShortenPath(appHost.AppHostPath);
+            var shortPath = shortPaths[appHost.AppHostPath];
             var cliPid = appHost.CliPid?.ToString(CultureInfo.InvariantCulture) ?? "-";
             var dashboard = "-";
             if (!string.IsNullOrEmpty(appHost.DashboardUrl))
             {
-                if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out var dashboardUri))
+                if (Uri.TryCreate(appHost.DashboardUrl, UriKind.Absolute, out _))
                 {
-                    var displayText = $"{dashboardUri.Scheme}://{dashboardUri.Authority}";
-                    dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(displayText)}[/]";
+                    dashboard = $"[link={Markup.Escape(appHost.DashboardUrl)}]{Markup.Escape(appHost.DashboardUrl)}[/]";
                 }
                 else
                 {
@@ -238,29 +239,4 @@ internal sealed class PsCommand : BaseCommand
         _interactionService.DisplayRenderable(table);
     }
 
-    private static string ShortenPath(string path)
-    {
-        var fileName = Path.GetFileName(path);
-
-        if (string.IsNullOrEmpty(fileName))
-        {
-            return path;
-        }
-
-        // For .csproj files, just show the filename (folder often has same name)
-        if (fileName.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
-        {
-            return fileName;
-        }
-
-        // For single-file AppHosts (.cs), show parent/filename
-        var directory = Path.GetDirectoryName(path);
-        var parentFolder = !string.IsNullOrEmpty(directory)
-            ? Path.GetFileName(directory)
-            : null;
-
-        return !string.IsNullOrEmpty(parentFolder)
-            ? $"{parentFolder}/{fileName}"
-            : fileName;
-    }
 }

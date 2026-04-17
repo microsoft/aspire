@@ -62,8 +62,8 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync();
 
-        // Dashboard resource should be skipped
-        Assert.DoesNotContain(result, r => r.Name == KnownResourceNames.AspireDashboard);
+        // Dashboard resource should now be included
+        Assert.Contains(result, r => r.Name == KnownResourceNames.AspireDashboard);
 
         // Parameter resource (no replicas) should be returned with matching Name/DisplayName
         var paramSnapshot = Assert.Single(result, r => r.Name == "myparam");
@@ -311,8 +311,6 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var log2 = Assert.Single(logs, l => l.ResourceName == "resource2");
         Assert.Equal($"{TestTimestamp} Log from resource2", log2.Content);
-
-        Assert.DoesNotContain(logs, l => l.ResourceName == KnownResourceNames.AspireDashboard);
 
         await app.StopAsync();
     }

@@ -211,6 +211,50 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PsCommand_TableFormat_IncludesDashboardLoginTokenInDisplayedUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 1234,
+                CliProcessId = 5678
+            },
+            DashboardUrlsState = new DashboardUrlsState
+            {
+                BaseUrlWithLoginToken = "http://localhost:18888/login?t=abc123"
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.DisableAnsi = true;
+        });
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var output = string.Join(Environment.NewLine, textWriter.Logs);
+        var normalizedOutput = output.Replace(Environment.NewLine, string.Empty, StringComparison.Ordinal);
+        var expectedDashboardUrl = new Uri("http://localhost:18888/login?t=abc123").AbsoluteUri;
+        Assert.Contains(expectedDashboardUrl, normalizedOutput, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task PsCommand_JsonFormat_NoResults_WritesEmptyArrayToStdout()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

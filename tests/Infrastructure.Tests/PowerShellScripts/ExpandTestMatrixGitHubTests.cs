@@ -599,13 +599,13 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         var e2eEntries = nugetsLinux.Include.Where(e => e.ProjectName == "LinuxE2E").ToArray();
         Assert.Single(e2eEntries);
         Assert.Equal("ubuntu-latest", e2eEntries[0].RunsOn);
-        Assert.True(e2eEntries[0].RequiresNugets);
+        Assert.True(e2eEntries[0].Properties.GetValueOrDefault("requiresNugets"));
 
         // CLI E2E: 1 project × 1 OS = 1, in requires-cli-archive matrix
         var cliE2eEntries = cliArchiveMatrix.Include.Where(e => e.ProjectName == "CliE2E").ToArray();
         Assert.Single(cliE2eEntries);
         Assert.Equal("ubuntu-latest", cliE2eEntries[0].RunsOn);
-        Assert.True(cliE2eEntries[0].RequiresCliArchive);
+        Assert.True(cliE2eEntries[0].Properties.GetValueOrDefault("requiresCliArchive"));
 
         // Total no-nugets: 3 + 6 = 9, Total nugets: 1 (linux only), Total cli-archive: 1
         Assert.Equal(9, allNoNugets.Length);

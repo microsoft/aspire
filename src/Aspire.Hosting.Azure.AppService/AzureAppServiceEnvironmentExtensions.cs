@@ -354,27 +354,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
     private static AzureContainerRegistryResource CreateDefaultAzureContainerRegistry(IDistributedApplicationBuilder builder, string name)
     {
-        var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
-        {
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, resourceName) =>
-                {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = resourceName;
-                    return resource;
-                },
-                (infra) => new ContainerRegistryService(infra.AspireResource.GetBicepIdentifier())
-                {
-                    Sku = new ContainerRegistrySku { Name = ContainerRegistrySkuName.Basic },
-                    Tags = { { "aspire-resource-name", infra.AspireResource.Name } }
-                });
-
-            infrastructure.Add(registry);
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer });
-        };
-
-        var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
+        var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
         if (builder.ExecutionContext.IsPublishMode)
         {
             builder.AddResource(resource);

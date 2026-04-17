@@ -11,6 +11,7 @@
 
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -872,6 +873,28 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.NotNull(reporter);
         Assert.Contains("failing-step", reporter.CreatedSteps);
         Assert.Contains(reporter.CompletedSteps, step => step.StepTitle == "failing-step" && step.CompletionState == CompletionState.CompletedWithError);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenStepThrowsProcessFailedException_RethrowsWithoutWrapping()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        var pipeline = new DistributedApplicationPipeline();
+        var expected = new ProcessFailedException("Docker build failed with exit code 1.", 1, ["output-001"]);
+
+        pipeline.AddStep("failing-step", _ => Task.FromException(expected));
+
+        var context = CreateDeployingContext(builder.Build());
+
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(() => pipeline.ExecuteAsync(context)).DefaultTimeout();
+
+        Assert.Same(expected, exception);
+        Assert.DoesNotContain("Step 'failing-step' failed:", exception.Message);
+        Assert.Contains("output-001", exception.Message);
     }
 
     [Fact]

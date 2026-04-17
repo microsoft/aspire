@@ -70,6 +70,11 @@ internal static class CliTestHelper
 
         options.ConfigurationCallback(configurationValues);
 
+        if (options.DisableAnsi)
+        {
+            configurationValues.TryAdd("NO_COLOR", "1");
+        }
+
         configBuilder.AddInMemoryCollection(configurationValues);
 
         var globalSettingsFilePath = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "settings.global.json");

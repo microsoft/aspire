@@ -503,28 +503,16 @@ public static class AzureContainerAppExtensions
     {
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
         {
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, resourceName) =>
+            ContainerRegistryInfrastructure.ConfigureContainerRegistry(infrastructure,
+                configureNewRegistry: (newRegistry, infra) =>
                 {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = resourceName;
-                    return resource;
-                },
-                (infra) =>
-                {
-                    var newRegistry = new ContainerRegistryService(infra.AspireResource.GetBicepIdentifier())
-                    {
-                        Sku = new ContainerRegistrySku { Name = ContainerRegistrySkuName.Basic },
-                        Tags = { { "aspire-resource-name", infra.AspireResource.Name } }
-                    };
-
                     if (containerAppEnvironment.UseAzdNamingConvention)
                     {
                         var resourceToken = new ProvisioningVariable("resourceToken", typeof(string))
                         {
                             Value = BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)
                         };
-                        infrastructure.Add(resourceToken);
+                        infra.Add(resourceToken);
 
                         newRegistry.Name = new FunctionCallExpression(
                             new IdentifierExpression("replace"),
@@ -535,13 +523,7 @@ public static class AzureContainerAppExtensions
                             new StringLiteralExpression("-"),
                             new StringLiteralExpression(""));
                     }
-
-                    return newRegistry;
                 });
-
-            infrastructure.Add(registry);
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer });
         };
 
         var resource = new AzureContainerRegistryResource(name, configureInfrastructure);

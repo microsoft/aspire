@@ -1,7 +1,7 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import create_builder
+from aspire_app import ReferenceExpression, create_builder
 
 
 with create_builder() as builder:
@@ -189,7 +189,56 @@ with create_builder() as builder:
     _config_exists = builder_configuration.exists()
     builder_execution_context = builder.execution_context
     execution_context_service_provider = builder_execution_context.service_provider
-    _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_application_model()
+    _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
+
+    def configure_eventing_subscriber(registration_context):
+        _subscriber_execution_context = registration_context.execution_context
+
+        def on_eventing_before_start(before_start_event):
+            subscriber_services = before_start_event.services
+            aspire_store = subscriber_services.get_aspire_store()
+            _content_backed_filename = aspire_store.get_file_name_with_content("validation-apphost.py", "apphost.py")
+
+        def on_eventing_after_resources_created(after_resources_created_event):
+            after_resources_created_services = after_resources_created_event.services
+            after_resources_created_model = after_resources_created_event.model
+            _after_resources_created_eventing = after_resources_created_services.get_eventing()
+            _after_resources_created_resources = after_resources_created_model.get_resources()
+
+        registration_context.on_before_start(on_eventing_before_start)
+        registration_context.on_after_resources_created(on_eventing_after_resources_created)
+
+    builder.add_eventing_subscriber(configure_eventing_subscriber)
+    builder.try_add_eventing_subscriber(lambda _registration_context: None)
+
+    container.with_args(["--validation"])
+
+    def configure_certificate_trust(requested_trust_scope):
+        _requested_trust_scope = requested_trust_scope
+        return {
+            "CertificateBundlePath": ReferenceExpression.format_string("/etc/ssl/certs/custom-bundle.pem"),
+            "CertificateDirectoriesPath": ReferenceExpression.format_string("/etc/ssl/certs/custom"),
+            "RootCertificatesPath": "/etc/ssl/certs",
+            "IsContainer": True,
+        }
+
+    def configure_https_certificate(certificate_info):
+        _certificate_subject = certificate_info.get("Subject")
+        _certificate_thumbprint = certificate_info.get("Thumbprint")
+        return {
+            "CertificatePath": ReferenceExpression.format_string("/certificates/tls.crt"),
+            "KeyPath": ReferenceExpression.format_string("/certificates/tls.key"),
+            "PfxPath": ReferenceExpression.format_string("/certificates/tls.pfx"),
+        }
+
+    execution_config_builder = container.create_execution_config()
+    execution_config_builder.with_arguments_config()
+    execution_config_builder.with_env_vars_config()
+    execution_config_builder.with_certificate_trust_config(configure_certificate_trust)
+    execution_config_builder.with_https_certificate_config(configure_https_certificate)
+    execution_config = execution_config_builder.build(builder_execution_context)
+    _certificate_trust_data = execution_config.get_certificate_trust_data()
+    _https_certificate_data = execution_config.get_https_certificate_data()
     before_start_subscription = builder.subscribe_before_start(lambda *_args, **_kwargs: None)
     after_resources_created_subscription = builder.subscribe_after_resources_created(lambda *_args, **_kwargs: None)
     builder_eventing = builder.eventing

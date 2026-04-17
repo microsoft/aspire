@@ -522,7 +522,7 @@ add_to_shell_profile() {
     esac
 
     # Get the appropriate shell config file
-    local config_file
+    local config_file=""
 
     # Find the first existing config file
     for file in $config_files; do
@@ -611,12 +611,33 @@ get_pr_head_sha() {
 
     say_verbose "Getting HEAD SHA for PR #$pr_number"
 
-    local head_sha
-    if ! head_sha=$(gh_api_call "${GH_REPOS_BASE}/pulls/$pr_number" ".head.sha" "Failed to get HEAD SHA for PR #$pr_number"); then
-        say_info "This could mean:"
-        say_info "  - The PR number does not exist"
-        say_info "  - You don't have access to the repository"
+    local repo_owner repo_name
+    if [[ "$REPO" =~ ^([^/]+)/([^/]+)$ ]]; then
+        repo_owner="${BASH_REMATCH[1]}"
+        repo_name="${BASH_REMATCH[2]}"
+    else
+        say_error "Invalid repository format '$REPO'. Expected 'owner/name'."
         exit 1
+    fi
+
+    local graphql_query='query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) { pullRequest(number:$number) { headRefOid } } }'
+    local gh_cmd=(gh api graphql -f query="$graphql_query" -f owner="$repo_owner" -f name="$repo_name" -F number="$pr_number" --jq ".data.repository.pullRequest.headRefOid")
+
+    say_verbose "Calling GitHub API: ${gh_cmd[*]}"
+
+    local head_sha
+    if head_sha=$("${gh_cmd[@]}" 2>/dev/null) && [[ -n "$head_sha" && "$head_sha" != "null" ]]; then
+        # GraphQL succeeded with a valid SHA
+        :
+    else
+        say_verbose "GraphQL PR head lookup failed or returned empty, falling back to REST API"
+
+        if ! head_sha=$(gh_api_call "${GH_REPOS_BASE}/pulls/$pr_number" ".head.sha" "Failed to get HEAD SHA for PR #$pr_number using REST fallback"); then
+            say_info "This could mean:"
+            say_info "  - The PR number does not exist"
+            say_info "  - You don't have access to the repository"
+            exit 1
+        fi
     fi
 
     if [[ -z "$head_sha" || "$head_sha" == "null" ]]; then
@@ -1054,73 +1075,80 @@ download_and_install_from_pr() {
     fi
 }
 
-# =============================================================================
-# Main Execution
-# =============================================================================
+# Main entry point — wraps everything after function definitions.
+# Guarded so that `source get-aspire-cli-pr.sh` loads functions without
+# executing the main flow (enables Tier-1 unit tests).
+main() {
+    # Parse command line arguments
+    parse_args "$@"
 
-# Parse command line arguments
-parse_args "$@"
+    if [[ "$SHOW_HELP" == true ]]; then
+        show_help
+        exit 0
+    fi
 
-if [[ "$SHOW_HELP" == true ]]; then
-    show_help
-    exit 0
-fi
+    HOST_OS=$(detect_os)
 
-HOST_OS=$(detect_os)
+    if [[ "$HOST_OS" == "unsupported" ]]; then
+        say_error "Unsupported operating system detected: $(uname -s). Supported values: win (Git Bash/MinGW/MSYS), linux, linux-musl, osx. Use --os to override when appropriate."
+        exit 1
+    fi
 
-if [[ "$HOST_OS" == "unsupported" ]]; then
-    say_error "Unsupported operating system detected: $(uname -s). Supported values: win (Git Bash/MinGW/MSYS), linux, linux-musl, osx. Use --os to override when appropriate."
-    exit 1
-fi
+    # Check gh dependency
+    check_gh_dependency
 
-# Check gh dependency
-check_gh_dependency
-
-# Set default install prefix if not provided
-if [[ -z "$INSTALL_PREFIX" ]]; then
-    INSTALL_PREFIX="$HOME/.aspire"
-    INSTALL_PREFIX_UNEXPANDED="\$HOME/.aspire"
-else
-    INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
-fi
-
-# Set paths based on install prefix
-cli_install_dir="$INSTALL_PREFIX/bin"
-INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
-
-# Create a temporary directory for downloads
-if [[ "$DRY_RUN" == true ]]; then
-    temp_dir="/tmp/aspire-cli-pr-dry-run"
-else
-    temp_dir=$(mktemp -d -t aspire-cli-pr-download-XXXXXX)
-    say_verbose "Creating temporary directory: $temp_dir"
-fi
-
-# Set trap for cleanup on exit
-cleanup() {
-    remove_temp_dir "$temp_dir"
-}
-trap cleanup EXIT
-
-# Download and install from PR or workflow run ID
-if ! download_and_install_from_pr "$temp_dir"; then
-    exit 1
-fi
-
-# Add to shell profile for persistent PATH
-if [[ "$HIVE_ONLY" != true ]]; then
-    if [[ "$SKIP_PATH" == true ]]; then
-        say_info "Skipping PATH configuration due to --skip-path flag"
+    # Set default install prefix if not provided
+    if [[ -z "$INSTALL_PREFIX" ]]; then
+        INSTALL_PREFIX="$HOME/.aspire"
+        INSTALL_PREFIX_UNEXPANDED="\$HOME/.aspire"
     else
-        add_to_shell_profile "$cli_install_dir" "$INSTALL_PATH_UNEXPANDED"
+        INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
+    fi
 
-        # Add to current session PATH, if the path is not already in PATH
-        if  [[ ":$PATH:" != *":$cli_install_dir:"* ]]; then
-            if [[ "$DRY_RUN" == true ]]; then
-                say_info "[DRY RUN] Would add $cli_install_dir to PATH"
-            else
-                export PATH="$cli_install_dir:$PATH"
+    # Set paths based on install prefix
+    cli_install_dir="$INSTALL_PREFIX/bin"
+    INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+
+    # Create a temporary directory for downloads
+    if [[ "$DRY_RUN" == true ]]; then
+        temp_dir="/tmp/aspire-cli-pr-dry-run"
+    else
+        temp_dir=$(mktemp -d -t aspire-cli-pr-download-XXXXXX)
+        say_verbose "Creating temporary directory: $temp_dir"
+    fi
+
+    # Set trap for cleanup on exit
+    cleanup() {
+        remove_temp_dir "$temp_dir"
+    }
+    trap cleanup EXIT
+
+    # Download and install from PR or workflow run ID
+    if ! download_and_install_from_pr "$temp_dir"; then
+        exit 1
+    fi
+
+    # Add to shell profile for persistent PATH
+    if [[ "$HIVE_ONLY" != true ]]; then
+        if [[ "$SKIP_PATH" == true ]]; then
+            say_info "Skipping PATH configuration due to --skip-path flag"
+        else
+            add_to_shell_profile "$cli_install_dir" "$INSTALL_PATH_UNEXPANDED"
+
+            # Add to current session PATH, if the path is not already in PATH
+            if  [[ ":$PATH:" != *":$cli_install_dir:"* ]]; then
+                if [[ "$DRY_RUN" == true ]]; then
+                    say_info "[DRY RUN] Would add $cli_install_dir to PATH"
+                else
+                    export PATH="$cli_install_dir:$PATH"
+                fi
             fi
         fi
     fi
+}
+
+# Only run main when executed directly (not when sourced for unit tests).
+# Use ${BASH_SOURCE[0]:-$0} so the guard works under `curl | bash -s` where BASH_SOURCE is unset.
+if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
+    main "$@"
 fi

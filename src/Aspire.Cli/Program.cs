@@ -642,6 +642,9 @@ public class Program
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var isPlayground = CliHostEnvironment.IsPlaygroundMode(configuration);
+        var supportsAnsi = hostEnvironment.SupportsAnsi;
+        var supportsInteractiveOutput = hostEnvironment.SupportsInteractiveOutput;
+        var usePlaygroundFormatting = isPlayground && supportsAnsi && supportsInteractiveOutput;
 
         // Create custom output that handles width detection better in CI environments
         // and encapsulates ASPIRE_CONSOLE_WIDTH environment variable handling
@@ -649,22 +652,16 @@ public class Program
 
         var settings = new AnsiConsoleSettings()
         {
-            Ansi = isPlayground ? AnsiSupport.Yes : AnsiSupport.Detect,
-            Interactive = isPlayground ? InteractionSupport.Yes : InteractionSupport.Detect,
-            ColorSystem = isPlayground ? ColorSystemSupport.Standard : ColorSystemSupport.Detect,
+            Ansi = supportsAnsi ? AnsiSupport.Yes : AnsiSupport.No,
+            Interactive = supportsInteractiveOutput ? InteractionSupport.Detect : InteractionSupport.No,
+            ColorSystem = supportsAnsi ? ColorSystemSupport.EightBit : ColorSystemSupport.NoColors,
             Out = output,
         };
 
-        // Use SupportsAnsi from hostEnvironment which already checks ASPIRE_ANSI_PASS_THRU
-        if (hostEnvironment.SupportsAnsi)
+        if (usePlaygroundFormatting)
         {
-            settings.Ansi = AnsiSupport.Yes;
-            // Using EightBit color system for better color support of Aspire brand colors in terminals that support ANSI
-            settings.ColorSystem = ColorSystemSupport.EightBit;
-        }
+            settings.Interactive = InteractionSupport.Yes;
 
-        if (isPlayground)
-        {
             // Enrichers interfere with interactive playground experience so
             // this suppresses the default enrichers so that the CLI experience
             // is more like what we would get in an interactive experience.
@@ -675,8 +672,7 @@ public class Program
             };
         }
 
-        var ansiConsole = AnsiConsole.Create(settings);
-        return ansiConsole;
+        return AnsiConsole.Create(settings);
     }
 
     public static async Task<int> Main(string[] args)

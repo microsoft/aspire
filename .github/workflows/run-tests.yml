@@ -27,28 +27,11 @@ on:
       versionOverrideArg:
         required: false
         type: string
-      # Triggers downloading the built nugets, and running the tests
-      # from the archive outside the repo
-      requiresNugets:
+      # JSON object of test properties (e.g. {"requiresNugets": true})
+      properties:
         required: false
-        type: boolean
-        default: false
-      # Installs the sdks used for test via tests/workloads.proj
-      # Useful for tests that can't use system dotnet
-      requiresTestSdk:
-        required: false
-        type: boolean
-        default: false
-      # Controls whether to set CLI E2E environment variables (GH_TOKEN, GITHUB_PR_NUMBER, GITHUB_PR_HEAD_SHA)
-      requiresCliArchive:
-        required: false
-        type: boolean
-        default: false
-      # Controls whether to install Playwright browsers during project build
-      enablePlaywrightInstall:
-        required: false
-        type: boolean
-        default: false
+        type: string
+        default: '{}'
       os:
         required: false
         type: string
@@ -107,7 +90,7 @@ jobs:
       - name: Set up .NET Core
         uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
         # Used for running tests outside the repo
-        if: ${{ inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         with:
           dotnet-version: |
             8.x
@@ -136,14 +119,14 @@ jobs:
         run: docker info
 
       - name: Download built nugets
-        if: ${{ inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: built-nugets
           path: ${{ github.workspace }}/artifacts/packages
 
       - name: Copy nugets to the correct location
-        if: ${{ inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         shell: pwsh
         run: |
           $packageRoot = "${{ github.workspace }}/artifacts/packages"
@@ -159,7 +142,7 @@ jobs:
           }
 
       - name: Compute RID for arch-specific packages
-        if: ${{ inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         id: compute_rid
         shell: pwsh
         run: |
@@ -179,7 +162,7 @@ jobs:
           "rid=$rid"    | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Download arch-specific nugets
-        if: ${{ inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -187,7 +170,7 @@ jobs:
           path: ${{ github.workspace }}/arch-specific
 
       - name: Merge arch-specific nugets into package feed
-        if: ${{ inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         shell: pwsh
         run: |
           $dest = "${{ github.workspace }}/artifacts/packages/Debug/Shipping"
@@ -207,7 +190,7 @@ jobs:
           }
 
       - name: Install sdk for nuget based testing
-        if: ${{ inputs.requiresTestSdk }}
+        if: ${{ fromJson(inputs.properties).requiresTestSdk == true }}
         run: >
           ${{ env.DOTNET_SCRIPT }} build ${{ github.workspace }}/tests/workloads.proj
           /p:SkipPackageCheckForTemplatesTesting=true
@@ -243,24 +226,24 @@ jobs:
           echo "TEST_ASSEMBLY_NAME=$filenameWithoutExtension" >> $env:GITHUB_ENV
 
       - name: Build test project
-        if: ${{ ! inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets != true }}
         run: >
           ${{ env.BUILD_SCRIPT }}
           -restore
           -ci
           -build
           -projects ${{ env.TEST_PROJECT_PATH }}
-          ${{ !inputs.enablePlaywrightInstall && '/p:InstallBrowsersForPlaywright=false' || '' }}
+          ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }}
           ${{ inputs.versionOverrideArg }}
 
       - name: Build and archive test project
-        if: ${{ inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         run: >
           ${{ env.BUILD_SCRIPT }} -restore -ci -build -projects ${{ env.TEST_PROJECT_PATH }}
           /p:PrepareForHelix=true
           /p:ArchiveTests=true
           /bl:${{ github.workspace }}/artifacts/log/Debug/BuildAndArchive.binlog
-          ${{ !inputs.enablePlaywrightInstall && '/p:InstallBrowsersForPlaywright=false' || '' }}
+          ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }}
           ${{ inputs.versionOverrideArg }}
 
       # Workaround for bug in Azure Functions Worker SDK. See https://github.com/Azure/azure-functions-dotnet-worker/issues/2969.
@@ -272,7 +255,7 @@ jobs:
           ${{ env.DOTNET_SCRIPT }} build ${{ github.workspace }}/playground/AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj /p:SkipUnstableEmulators=true
 
       - name: Unpack tests
-        if: ${{ inputs.requiresNugets }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true }}
         shell: pwsh
         run: |
           # Find all zip files in the given path
@@ -322,20 +305,20 @@ jobs:
         run: ${{ env.DOTNET_SCRIPT }} build-server shutdown
 
       - name: Run nuget dependent tests (Linux/macOS)
-        if: ${{ inputs.requiresNugets && runner.os != 'Windows' }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true && runner.os != 'Windows' }}
         working-directory: ${{ github.workspace }}/run-tests/
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
           BUILT_NUGETS_PATH: ${{ github.workspace }}/artifacts/packages/Debug/Shipping
           NUGET_PACKAGES: ${{ github.workspace }}/nuget-cache
-          PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
+          PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
-          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
-          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
+          GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
@@ -362,23 +345,23 @@ jobs:
           exit $TEST_EXIT_CODE
 
       - name: Run nuget dependent tests (Windows)
-        if: ${{ inputs.requiresNugets && runner.os == 'Windows' }}
+        if: ${{ fromJson(inputs.properties).requiresNugets == true && runner.os == 'Windows' }}
         working-directory: ${{ github.workspace }}/run-tests/
         shell: pwsh
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
           BUILT_NUGETS_PATH: ${{ github.workspace }}/artifacts/packages/Debug/Shipping
           NUGET_PACKAGES: ${{ github.workspace }}/nuget-cache
-          PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
+          PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Prevent VBCSCompiler from starting during tests. See #15832
           UseSharedCompilation: false
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
-          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
-          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
+          GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
@@ -414,7 +397,7 @@ jobs:
           }
 
       - name: Run tests (Linux/macOS)
-        if: ${{ ! inputs.requiresNugets && runner.os != 'Windows' }}
+        if: ${{ fromJson(inputs.properties).requiresNugets != true && runner.os != 'Windows' }}
         id: run-tests-unix
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
@@ -422,12 +405,12 @@ jobs:
           # In this step, we are not using Arcade, but want to make sure that MSBuild is able to evaluate correctly.
           # So, we manually set NUGET_PACKAGES
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
-          PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
+          PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
-          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
-          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
+          GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
@@ -460,13 +443,13 @@ jobs:
           exit $TEST_EXIT_CODE
 
       - name: Run tests (Windows)
-        if: ${{ ! inputs.requiresNugets && runner.os == 'Windows' }}
+        if: ${{ fromJson(inputs.properties).requiresNugets != true && runner.os == 'Windows' }}
         id: run-tests-windows
         shell: pwsh
         env:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
-          PLAYWRIGHT_INSTALLED: ${{ !inputs.enablePlaywrightInstall && 'false' || 'true' }}
+          PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Prevent the Roslyn compiler server (VBCSCompiler) from starting during tests.
           # On 2-core runners, VBCSCompiler consumes ~150% CPU / 700MB RAM and starves the
@@ -475,9 +458,9 @@ jobs:
           # See https://github.com/microsoft/aspire/issues/15832
           UseSharedCompilation: false
           # PR metadata and token for CLI E2E tests that download artifacts from a PR
-          GITHUB_PR_NUMBER: ${{ inputs.requiresCliArchive && github.event.pull_request.number || '' }}
-          GITHUB_PR_HEAD_SHA: ${{ inputs.requiresCliArchive && github.event.pull_request.head.sha || '' }}
-          GH_TOKEN: ${{ inputs.requiresCliArchive && github.token || '' }}
+          GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
+          GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
+          GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners

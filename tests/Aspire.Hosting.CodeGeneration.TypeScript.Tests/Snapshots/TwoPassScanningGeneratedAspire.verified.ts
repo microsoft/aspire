@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -121,11 +121,20 @@ type ExecutableResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applicatio
 /** Handle to ExecuteCommandContext */
 type ExecuteCommandContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext'>;
 
+/** Handle to IAspireStore */
+type IAspireStoreHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore'>;
+
 /** Handle to IComputeResource */
 type IComputeResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource'>;
 
 /** Handle to IContainerFilesDestinationResource */
 type IContainerFilesDestinationResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource'>;
+
+/** Handle to IExecutionConfigurationBuilder */
+type IExecutionConfigurationBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder'>;
+
+/** Handle to IExecutionConfigurationResult */
+type IExecutionConfigurationResultHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult'>;
 
 /** Handle to IExpressionValue */
 type IExpressionValueHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue'>;
@@ -183,6 +192,9 @@ type ResourceUrlsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.A
 
 /** Handle to UpdateCommandStateContext */
 type UpdateCommandStateContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext'>;
+
+/** Handle to EventingSubscriberRegistrationContext */
+type EventingSubscriberRegistrationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext'>;
 
 /** Handle to ConnectionStringResource */
 type ConnectionStringResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ConnectionStringResource'>;
@@ -404,6 +416,21 @@ export interface AddContainerOptions {
     tag?: string;
 }
 
+/** DTO interface for CertificateTrustExecutionConfigurationContext */
+export interface CertificateTrustExecutionConfigurationContext {
+    certificateBundlePath?: ReferenceExpression;
+    certificateDirectoriesPath?: ReferenceExpression;
+    rootCertificatesPath?: string;
+    isContainer?: boolean;
+}
+
+/** DTO interface for CertificateTrustExecutionConfigurationExportData */
+export interface CertificateTrustExecutionConfigurationExportData {
+    scope?: CertificateTrustScope;
+    certificateSubjects?: string[];
+    customBundlePaths?: string[];
+}
+
 /** DTO interface for CommandOptions */
 export interface CommandOptions {
     description?: string;
@@ -469,6 +496,31 @@ export interface HttpCommandExportOptions {
     endpointName?: string;
     methodName?: string;
     resultMode?: HttpCommandResultMode;
+}
+
+/** DTO interface for HttpsCertificateExecutionConfigurationContext */
+export interface HttpsCertificateExecutionConfigurationContext {
+    certificatePath?: ReferenceExpression;
+    keyPath?: ReferenceExpression;
+    pfxPath?: ReferenceExpression;
+}
+
+/** DTO interface for HttpsCertificateExecutionConfigurationExportData */
+export interface HttpsCertificateExecutionConfigurationExportData {
+    subject?: string;
+    thumbprint?: string;
+    keyPathExpression?: string;
+    pfxPathExpression?: string;
+    isKeyPathReferenced?: boolean;
+    isPfxPathReferenced?: boolean;
+    password?: string;
+}
+
+/** DTO interface for HttpsCertificateInfo */
+export interface HttpsCertificateInfo {
+    subject?: string;
+    issuer?: string;
+    thumbprint?: string;
 }
 
 /** DTO interface for ReferenceEnvironmentInjectionOptions */
@@ -593,6 +645,11 @@ export interface AppendValueProviderOptions {
 
 export interface ArgOptions {
     defaultValue?: string;
+}
+
+export interface BuildOptions {
+    resourceLogger?: Awaitable<Logger>;
+    cancellationToken?: AbortSignal | CancellationToken;
 }
 
 export interface CompleteStepMarkdownOptions {
@@ -2147,6 +2204,9 @@ export interface EndpointReference {
     tlsEnabled: {
         get: () => Promise<boolean>;
     };
+    isHttpSchemeNamedEndpoint: {
+        get: () => Promise<boolean>;
+    };
     excludeReferenceEndpoint: {
         get: () => Promise<boolean>;
     };
@@ -2269,6 +2329,16 @@ class EndpointReferenceImpl implements EndpointReference {
         get: async (): Promise<boolean> => {
             return await this._client.invokeCapability<boolean>(
                 'Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled',
+                { context: this._handle }
+            );
+        },
+    };
+
+    /** Gets the IsHttpSchemeNamedEndpoint property */
+    isHttpSchemeNamedEndpoint = {
+        get: async (): Promise<boolean> => {
+            return await this._client.invokeCapability<boolean>(
+                'Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint',
                 { context: this._handle }
             );
         },
@@ -2781,6 +2851,119 @@ class EnvironmentCallbackContextImpl implements EnvironmentCallbackContext {
             return new DistributedApplicationExecutionContextImpl(handle, this._client);
         },
     };
+
+}
+
+// ============================================================================
+// EventingSubscriberRegistrationContext
+// ============================================================================
+
+export interface EventingSubscriberRegistrationContext {
+    toJSON(): MarshalledHandle;
+    executionContext: {
+        get: () => Promise<DistributedApplicationExecutionContext>;
+    };
+    cancellationToken: {
+        get: () => Promise<CancellationToken>;
+    };
+    onBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    onAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+}
+
+export interface EventingSubscriberRegistrationContextPromise extends PromiseLike<EventingSubscriberRegistrationContext> {
+    onBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    onAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+}
+
+// ============================================================================
+// EventingSubscriberRegistrationContextImpl
+// ============================================================================
+
+/**
+ * Type class for EventingSubscriberRegistrationContext.
+ */
+class EventingSubscriberRegistrationContextImpl implements EventingSubscriberRegistrationContext {
+    constructor(private _handle: EventingSubscriberRegistrationContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Gets the ExecutionContext property */
+    executionContext = {
+        get: async (): Promise<DistributedApplicationExecutionContext> => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        },
+    };
+
+    /** Gets the CancellationToken property */
+    cancellationToken = {
+        get: async (): Promise<CancellationToken> => {
+            const result = await this._client.invokeCapability<string | null>(
+                'Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken',
+                { context: this._handle }
+            );
+            return CancellationToken.fromValue(result);
+        },
+    };
+
+    /** Subscribes an eventing subscriber to the BeforeStart event */
+    async onBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as BeforeStartEventHandle;
+            const arg = new BeforeStartEventImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { context: this._handle, callback: callbackId };
+        return await this._client.invokeCapability<DistributedApplicationEventSubscriptionHandle>(
+            'Aspire.Hosting/eventingSubscriberOnBeforeStart',
+            rpcArgs
+        );
+    }
+
+    /** Subscribes an eventing subscriber to the AfterResourcesCreated event */
+    async onAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as AfterResourcesCreatedEventHandle;
+            const arg = new AfterResourcesCreatedEventImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { context: this._handle, callback: callbackId };
+        return await this._client.invokeCapability<DistributedApplicationEventSubscriptionHandle>(
+            'Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated',
+            rpcArgs
+        );
+    }
+
+}
+
+/**
+ * Thenable wrapper for EventingSubscriberRegistrationContext that enables fluent chaining.
+ */
+class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscriberRegistrationContextPromise {
+    constructor(private _promise: Promise<EventingSubscriberRegistrationContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = EventingSubscriberRegistrationContext, TResult2 = never>(
+        onfulfilled?: ((value: EventingSubscriberRegistrationContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Subscribes an eventing subscriber to the BeforeStart event */
+    onBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        return this._promise.then(obj => obj.onBeforeStart(callback));
+    }
+
+    /** Subscribes an eventing subscriber to the AfterResourcesCreated event */
+    onAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        return this._promise.then(obj => obj.onAfterResourcesCreated(callback));
+    }
 
 }
 
@@ -4857,6 +5040,65 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
 }
 
 // ============================================================================
+// AspireStore
+// ============================================================================
+
+export interface AspireStore {
+    toJSON(): MarshalledHandle;
+    getFileNameWithContent(filenameTemplate: string, sourceFilename: string): Promise<string>;
+}
+
+export interface AspireStorePromise extends PromiseLike<AspireStore> {
+    getFileNameWithContent(filenameTemplate: string, sourceFilename: string): Promise<string>;
+}
+
+// ============================================================================
+// AspireStoreImpl
+// ============================================================================
+
+/**
+ * Type class for AspireStore.
+ */
+class AspireStoreImpl implements AspireStore {
+    constructor(private _handle: IAspireStoreHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Gets a deterministic file path for the specified file contents */
+    async getFileNameWithContent(filenameTemplate: string, sourceFilename: string): Promise<string> {
+        const rpcArgs: Record<string, unknown> = { aspireStore: this._handle, filenameTemplate, sourceFilename };
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting/getFileNameWithContent',
+            rpcArgs
+        );
+    }
+
+}
+
+/**
+ * Thenable wrapper for AspireStore that enables fluent chaining.
+ */
+class AspireStorePromiseImpl implements AspireStorePromise {
+    constructor(private _promise: Promise<AspireStore>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = AspireStore, TResult2 = never>(
+        onfulfilled?: ((value: AspireStore) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Gets a deterministic file path for the specified file contents */
+    getFileNameWithContent(filenameTemplate: string, sourceFilename: string): Promise<string> {
+        return this._promise.then(obj => obj.getFileNameWithContent(filenameTemplate, sourceFilename));
+    }
+
+}
+
+// ============================================================================
 // Configuration
 // ============================================================================
 
@@ -5029,6 +5271,8 @@ export interface DistributedApplicationBuilder {
     getConfiguration(): ConfigurationPromise;
     subscribeBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
+    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise;
     addTestVault(name: string): TestVaultResourcePromise;
 }
@@ -5060,6 +5304,8 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     getConfiguration(): ConfigurationPromise;
     subscribeBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
+    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise;
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise;
     addTestVault(name: string): TestVaultResourcePromise;
 }
@@ -5578,6 +5824,46 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         );
     }
 
+    /** Adds an eventing subscriber */
+    /** @internal */
+    async _addEventingSubscriberInternal(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): Promise<DistributedApplicationBuilder> {
+        const subscribeId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as EventingSubscriberRegistrationContextHandle;
+            const arg = new EventingSubscriberRegistrationContextImpl(argHandle, this._client);
+            await subscribe(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, subscribe: subscribeId };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/addEventingSubscriber',
+            rpcArgs
+        );
+        return this;
+    }
+
+    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._addEventingSubscriberInternal(subscribe), this._client);
+    }
+
+    /** Attempts to add an eventing subscriber */
+    /** @internal */
+    async _tryAddEventingSubscriberInternal(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): Promise<DistributedApplicationBuilder> {
+        const subscribeId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as EventingSubscriberRegistrationContextHandle;
+            const arg = new EventingSubscriberRegistrationContextImpl(argHandle, this._client);
+            await subscribe(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, subscribe: subscribeId };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting/tryAddEventingSubscriber',
+            rpcArgs
+        );
+        return this;
+    }
+
+    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._tryAddEventingSubscriberInternal(subscribe), this._client);
+    }
+
     /** Adds a test Redis resource */
     /** @internal */
     async _addTestRedisInternal(name: string, port?: number): Promise<TestRedisResource> {
@@ -5757,6 +6043,16 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
         return this._promise.then(obj => obj.subscribeAfterResourcesCreated(callback));
     }
 
+    /** Adds an eventing subscriber */
+    addEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._promise.then(obj => obj.addEventingSubscriber(subscribe)), this._client);
+    }
+
+    /** Attempts to add an eventing subscriber */
+    tryAddEventingSubscriber(subscribe: (arg: EventingSubscriberRegistrationContext) => Promise<void>): DistributedApplicationBuilderPromise {
+        return new DistributedApplicationBuilderPromiseImpl(this._promise.then(obj => obj.tryAddEventingSubscriber(subscribe)), this._client);
+    }
+
     /** Adds a test Redis resource */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.addTestRedis(name, options)), this._client);
@@ -5931,6 +6227,249 @@ class DistributedApplicationPipelinePromiseImpl implements DistributedApplicatio
     /** Configures the application pipeline via a callback */
     configure(callback: (arg: PipelineConfigurationContext) => Promise<void>): DistributedApplicationPipelinePromise {
         return new DistributedApplicationPipelinePromiseImpl(this._promise.then(obj => obj.configure(callback)), this._client);
+    }
+
+}
+
+// ============================================================================
+// ExecutionConfigurationBuilder
+// ============================================================================
+
+export interface ExecutionConfigurationBuilder {
+    toJSON(): MarshalledHandle;
+    build(executionContext: Awaitable<DistributedApplicationExecutionContext>, options?: BuildOptions): ExecutionConfigurationResultPromise;
+    withHttpsCertificateConfig(configContextFactory: (arg: HttpsCertificateInfo) => Promise<HttpsCertificateExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise;
+    withArgumentsConfig(): ExecutionConfigurationBuilderPromise;
+    withEnvironmentVariablesConfig(): ExecutionConfigurationBuilderPromise;
+    withCertificateTrustConfig(configContextFactory: (arg: CertificateTrustScope) => Promise<CertificateTrustExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise;
+}
+
+export interface ExecutionConfigurationBuilderPromise extends PromiseLike<ExecutionConfigurationBuilder> {
+    build(executionContext: Awaitable<DistributedApplicationExecutionContext>, options?: BuildOptions): ExecutionConfigurationResultPromise;
+    withHttpsCertificateConfig(configContextFactory: (arg: HttpsCertificateInfo) => Promise<HttpsCertificateExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise;
+    withArgumentsConfig(): ExecutionConfigurationBuilderPromise;
+    withEnvironmentVariablesConfig(): ExecutionConfigurationBuilderPromise;
+    withCertificateTrustConfig(configContextFactory: (arg: CertificateTrustScope) => Promise<CertificateTrustExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise;
+}
+
+// ============================================================================
+// ExecutionConfigurationBuilderImpl
+// ============================================================================
+
+/**
+ * Type class for ExecutionConfigurationBuilder.
+ */
+class ExecutionConfigurationBuilderImpl implements ExecutionConfigurationBuilder {
+    constructor(private _handle: IExecutionConfigurationBuilderHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Builds the execution configuration */
+    /** @internal */
+    async _buildInternal(executionContext: Awaitable<DistributedApplicationExecutionContext>, resourceLogger?: Awaitable<Logger>, cancellationToken?: AbortSignal | CancellationToken): Promise<ExecutionConfigurationResult> {
+        executionContext = isPromiseLike(executionContext) ? await executionContext : executionContext;
+        resourceLogger = isPromiseLike(resourceLogger) ? await resourceLogger : resourceLogger;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, executionContext };
+        if (resourceLogger !== undefined) rpcArgs.resourceLogger = resourceLogger;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        const result = await this._client.invokeCapability<IExecutionConfigurationResultHandle>(
+            'Aspire.Hosting/buildExecutionConfiguration',
+            rpcArgs
+        );
+        return new ExecutionConfigurationResultImpl(result, this._client);
+    }
+
+    build(executionContext: Awaitable<DistributedApplicationExecutionContext>, options?: BuildOptions): ExecutionConfigurationResultPromise {
+        let resourceLogger = options?.resourceLogger;
+        const cancellationToken = options?.cancellationToken;
+        const flushAndBuild = async () => { await this._client.flushPendingPromises(); return this._buildInternal(executionContext, resourceLogger, cancellationToken); };
+        return new ExecutionConfigurationResultPromiseImpl(flushAndBuild(), this._client, false);
+    }
+
+    /** Adds an HTTPS certificate configuration gatherer */
+    /** @internal */
+    async _withHttpsCertificateConfigInternal(configContextFactory: (arg: HttpsCertificateInfo) => Promise<HttpsCertificateExecutionConfigurationContext>): Promise<ExecutionConfigurationBuilder> {
+        const configContextFactoryId = registerCallback(async (argData: unknown) => {
+            const arg = wrapIfHandle(argData) as HttpsCertificateInfo;
+            return await configContextFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, configContextFactory: configContextFactoryId };
+        const result = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+            'Aspire.Hosting/withHttpsCertificateConfigExport',
+            rpcArgs
+        );
+        return new ExecutionConfigurationBuilderImpl(result, this._client);
+    }
+
+    withHttpsCertificateConfig(configContextFactory: (arg: HttpsCertificateInfo) => Promise<HttpsCertificateExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._withHttpsCertificateConfigInternal(configContextFactory), this._client);
+    }
+
+    /** Adds an arguments configuration gatherer */
+    /** @internal */
+    async _withArgumentsConfigInternal(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+            'Aspire.Hosting/withArgumentsConfig',
+            rpcArgs
+        );
+        return new ExecutionConfigurationBuilderImpl(result, this._client);
+    }
+
+    withArgumentsConfig(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._withArgumentsConfigInternal(), this._client);
+    }
+
+    /** Adds an environment variables configuration gatherer */
+    /** @internal */
+    async _withEnvironmentVariablesConfigInternal(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+            'Aspire.Hosting/withEnvironmentVariablesConfig',
+            rpcArgs
+        );
+        return new ExecutionConfigurationBuilderImpl(result, this._client);
+    }
+
+    withEnvironmentVariablesConfig(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._withEnvironmentVariablesConfigInternal(), this._client);
+    }
+
+    /** Adds a certificate trust configuration gatherer */
+    /** @internal */
+    async _withCertificateTrustConfigInternal(configContextFactory: (arg: CertificateTrustScope) => Promise<CertificateTrustExecutionConfigurationContext>): Promise<ExecutionConfigurationBuilder> {
+        const configContextFactoryId = registerCallback(async (argData: unknown) => {
+            const arg = wrapIfHandle(argData) as CertificateTrustScope;
+            return await configContextFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, configContextFactory: configContextFactoryId };
+        const result = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+            'Aspire.Hosting/withCertificateTrustConfig',
+            rpcArgs
+        );
+        return new ExecutionConfigurationBuilderImpl(result, this._client);
+    }
+
+    withCertificateTrustConfig(configContextFactory: (arg: CertificateTrustScope) => Promise<CertificateTrustExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._withCertificateTrustConfigInternal(configContextFactory), this._client);
+    }
+
+}
+
+/**
+ * Thenable wrapper for ExecutionConfigurationBuilder that enables fluent chaining.
+ */
+class ExecutionConfigurationBuilderPromiseImpl implements ExecutionConfigurationBuilderPromise {
+    constructor(private _promise: Promise<ExecutionConfigurationBuilder>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ExecutionConfigurationBuilder, TResult2 = never>(
+        onfulfilled?: ((value: ExecutionConfigurationBuilder) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Builds the execution configuration */
+    build(executionContext: Awaitable<DistributedApplicationExecutionContext>, options?: BuildOptions): ExecutionConfigurationResultPromise {
+        return new ExecutionConfigurationResultPromiseImpl(this._promise.then(obj => obj.build(executionContext, options)), this._client);
+    }
+
+    /** Adds an HTTPS certificate configuration gatherer */
+    withHttpsCertificateConfig(configContextFactory: (arg: HttpsCertificateInfo) => Promise<HttpsCertificateExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.withHttpsCertificateConfig(configContextFactory)), this._client);
+    }
+
+    /** Adds an arguments configuration gatherer */
+    withArgumentsConfig(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.withArgumentsConfig()), this._client);
+    }
+
+    /** Adds an environment variables configuration gatherer */
+    withEnvironmentVariablesConfig(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.withEnvironmentVariablesConfig()), this._client);
+    }
+
+    /** Adds a certificate trust configuration gatherer */
+    withCertificateTrustConfig(configContextFactory: (arg: CertificateTrustScope) => Promise<CertificateTrustExecutionConfigurationContext>): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.withCertificateTrustConfig(configContextFactory)), this._client);
+    }
+
+}
+
+// ============================================================================
+// ExecutionConfigurationResult
+// ============================================================================
+
+export interface ExecutionConfigurationResult {
+    toJSON(): MarshalledHandle;
+    getCertificateTrustData(): Promise<CertificateTrustExecutionConfigurationExportData>;
+    getHttpsCertificateData(): Promise<HttpsCertificateExecutionConfigurationExportData>;
+}
+
+export interface ExecutionConfigurationResultPromise extends PromiseLike<ExecutionConfigurationResult> {
+    getCertificateTrustData(): Promise<CertificateTrustExecutionConfigurationExportData>;
+    getHttpsCertificateData(): Promise<HttpsCertificateExecutionConfigurationExportData>;
+}
+
+// ============================================================================
+// ExecutionConfigurationResultImpl
+// ============================================================================
+
+/**
+ * Type class for ExecutionConfigurationResult.
+ */
+class ExecutionConfigurationResultImpl implements ExecutionConfigurationResult {
+    constructor(private _handle: IExecutionConfigurationResultHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** Gets certificate trust execution-configuration data */
+    async getCertificateTrustData(): Promise<CertificateTrustExecutionConfigurationExportData> {
+        const rpcArgs: Record<string, unknown> = { configuration: this._handle };
+        return await this._client.invokeCapability<CertificateTrustExecutionConfigurationExportData>(
+            'Aspire.Hosting/getCertificateTrustData',
+            rpcArgs
+        );
+    }
+
+    /** Gets HTTPS certificate execution-configuration data */
+    async getHttpsCertificateData(): Promise<HttpsCertificateExecutionConfigurationExportData> {
+        const rpcArgs: Record<string, unknown> = { configuration: this._handle };
+        return await this._client.invokeCapability<HttpsCertificateExecutionConfigurationExportData>(
+            'Aspire.Hosting/getHttpsCertificateData',
+            rpcArgs
+        );
+    }
+
+}
+
+/**
+ * Thenable wrapper for ExecutionConfigurationResult that enables fluent chaining.
+ */
+class ExecutionConfigurationResultPromiseImpl implements ExecutionConfigurationResultPromise {
+    constructor(private _promise: Promise<ExecutionConfigurationResult>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ExecutionConfigurationResult, TResult2 = never>(
+        onfulfilled?: ((value: ExecutionConfigurationResult) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Gets certificate trust execution-configuration data */
+    getCertificateTrustData(): Promise<CertificateTrustExecutionConfigurationExportData> {
+        return this._promise.then(obj => obj.getCertificateTrustData());
+    }
+
+    /** Gets HTTPS certificate execution-configuration data */
+    getHttpsCertificateData(): Promise<HttpsCertificateExecutionConfigurationExportData> {
+        return this._promise.then(obj => obj.getHttpsCertificateData());
     }
 
 }
@@ -6603,6 +7142,7 @@ export interface ServiceProvider {
     getResourceLoggerService(): ResourceLoggerServicePromise;
     getDistributedApplicationModel(): DistributedApplicationModelPromise;
     getResourceNotificationService(): ResourceNotificationServicePromise;
+    getAspireStore(): AspireStorePromise;
     getUserSecretsManager(): UserSecretsManagerPromise;
 }
 
@@ -6612,6 +7152,7 @@ export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
     getResourceLoggerService(): ResourceLoggerServicePromise;
     getDistributedApplicationModel(): DistributedApplicationModelPromise;
     getResourceNotificationService(): ResourceNotificationServicePromise;
+    getAspireStore(): AspireStorePromise;
     getUserSecretsManager(): UserSecretsManagerPromise;
 }
 
@@ -6703,6 +7244,21 @@ class ServiceProviderImpl implements ServiceProvider {
         return new ResourceNotificationServicePromiseImpl(this._getResourceNotificationServiceInternal(), this._client);
     }
 
+    /** Gets the Aspire store from the service provider */
+    /** @internal */
+    async _getAspireStoreInternal(): Promise<AspireStore> {
+        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
+        const result = await this._client.invokeCapability<IAspireStoreHandle>(
+            'Aspire.Hosting/getAspireStore',
+            rpcArgs
+        );
+        return new AspireStoreImpl(result, this._client);
+    }
+
+    getAspireStore(): AspireStorePromise {
+        return new AspireStorePromiseImpl(this._getAspireStoreInternal(), this._client);
+    }
+
     /** Gets the user secrets manager from the service provider */
     /** @internal */
     async _getUserSecretsManagerInternal(): Promise<UserSecretsManager> {
@@ -6758,6 +7314,11 @@ class ServiceProviderPromiseImpl implements ServiceProviderPromise {
     /** Gets the resource notification service from the service provider */
     getResourceNotificationService(): ResourceNotificationServicePromise {
         return new ResourceNotificationServicePromiseImpl(this._promise.then(obj => obj.getResourceNotificationService()), this._client);
+    }
+
+    /** Gets the Aspire store from the service provider */
+    getAspireStore(): AspireStorePromise {
+        return new AspireStorePromiseImpl(this._promise.then(obj => obj.getAspireStore()), this._client);
     }
 
     /** Gets the user secrets manager from the service provider */
@@ -6937,6 +7498,7 @@ export interface ConnectionStringResource {
     onConnectionStringAvailable(callback: (arg: ConnectionStringAvailableEvent) => Promise<void>): ConnectionStringResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ConnectionStringResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ConnectionStringResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ConnectionStringResourcePromise;
     withConfig(config: TestConfigDto): ConnectionStringResourcePromise;
     withConnectionString(connectionString: ReferenceExpression): ConnectionStringResourcePromise;
@@ -6996,6 +7558,7 @@ export interface ConnectionStringResourcePromise extends PromiseLike<ConnectionS
     onConnectionStringAvailable(callback: (arg: ConnectionStringAvailableEvent) => Promise<void>): ConnectionStringResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ConnectionStringResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ConnectionStringResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ConnectionStringResourcePromise;
     withConfig(config: TestConfigDto): ConnectionStringResourcePromise;
     withConnectionString(connectionString: ReferenceExpression): ConnectionStringResourcePromise;
@@ -7581,6 +8144,15 @@ class ConnectionStringResourceImpl extends ResourceBuilderBase<ConnectionStringR
         return new ConnectionStringResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ConnectionStringResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -8151,6 +8723,11 @@ class ConnectionStringResourcePromiseImpl implements ConnectionStringResourcePro
         return new ConnectionStringResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ConnectionStringResourcePromise {
         return new ConnectionStringResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -8302,6 +8879,7 @@ export interface ContainerRegistryResource {
     onResourceStopped(callback: (arg: ResourceStoppedEvent) => Promise<void>): ContainerRegistryResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ContainerRegistryResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ContainerRegistryResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ContainerRegistryResourcePromise;
     withConfig(config: TestConfigDto): ContainerRegistryResourcePromise;
     withCreatedAt(createdAt: string): ContainerRegistryResourcePromise;
@@ -8350,6 +8928,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     onResourceStopped(callback: (arg: ResourceStoppedEvent) => Promise<void>): ContainerRegistryResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ContainerRegistryResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ContainerRegistryResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ContainerRegistryResourcePromise;
     withConfig(config: TestConfigDto): ContainerRegistryResourcePromise;
     withCreatedAt(createdAt: string): ContainerRegistryResourcePromise;
@@ -8790,6 +9369,15 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /** Subscribes to the ResourceReady event */
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
+    }
+
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -9287,6 +9875,11 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -9490,6 +10083,7 @@ export interface ContainerResource {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ContainerResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ContainerResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ContainerResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ContainerResourcePromise;
     withConfig(config: TestConfigDto): ContainerResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ContainerResourcePromise;
@@ -9602,6 +10196,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ContainerResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ContainerResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ContainerResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ContainerResourcePromise;
     withConfig(config: TestConfigDto): ContainerResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ContainerResourcePromise;
@@ -11143,6 +11738,15 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -11995,6 +12599,11 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -12192,6 +12801,7 @@ export interface CSharpAppResource {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): CSharpAppResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): CSharpAppResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): CSharpAppResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): CSharpAppResourcePromise;
     withConfig(config: TestConfigDto): CSharpAppResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): CSharpAppResourcePromise;
@@ -12288,6 +12898,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): CSharpAppResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): CSharpAppResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): CSharpAppResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): CSharpAppResourcePromise;
     withConfig(config: TestConfigDto): CSharpAppResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): CSharpAppResourcePromise;
@@ -13570,6 +14181,15 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         return new CSharpAppResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -14342,6 +14962,11 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -14545,6 +15170,7 @@ export interface DotnetToolResource {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): DotnetToolResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): DotnetToolResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): DotnetToolResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): DotnetToolResourcePromise;
     withConfig(config: TestConfigDto): DotnetToolResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): DotnetToolResourcePromise;
@@ -14647,6 +15273,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): DotnetToolResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): DotnetToolResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): DotnetToolResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): DotnetToolResourcePromise;
     withConfig(config: TestConfigDto): DotnetToolResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): DotnetToolResourcePromise;
@@ -16016,6 +16643,15 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -16818,6 +17454,11 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -17015,6 +17656,7 @@ export interface ExecutableResource {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ExecutableResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ExecutableResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ExecutableResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ExecutableResourcePromise;
     withConfig(config: TestConfigDto): ExecutableResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ExecutableResourcePromise;
@@ -17111,6 +17753,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ExecutableResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ExecutableResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ExecutableResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ExecutableResourcePromise;
     withConfig(config: TestConfigDto): ExecutableResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ExecutableResourcePromise;
@@ -18390,6 +19033,15 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -19162,6 +19814,11 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -19314,6 +19971,7 @@ export interface ExternalServiceResource {
     onResourceStopped(callback: (arg: ResourceStoppedEvent) => Promise<void>): ExternalServiceResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ExternalServiceResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ExternalServiceResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ExternalServiceResourcePromise;
     withConfig(config: TestConfigDto): ExternalServiceResourcePromise;
     withCreatedAt(createdAt: string): ExternalServiceResourcePromise;
@@ -19363,6 +20021,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     onResourceStopped(callback: (arg: ResourceStoppedEvent) => Promise<void>): ExternalServiceResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ExternalServiceResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ExternalServiceResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ExternalServiceResourcePromise;
     withConfig(config: TestConfigDto): ExternalServiceResourcePromise;
     withCreatedAt(createdAt: string): ExternalServiceResourcePromise;
@@ -19822,6 +20481,15 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /** Subscribes to the ResourceReady event */
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
+    }
+
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -20324,6 +20992,11 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -20466,6 +21139,7 @@ export interface ParameterResource {
     onResourceStopped(callback: (arg: ResourceStoppedEvent) => Promise<void>): ParameterResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ParameterResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ParameterResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ParameterResourcePromise;
     withConfig(config: TestConfigDto): ParameterResourcePromise;
     withCreatedAt(createdAt: string): ParameterResourcePromise;
@@ -20515,6 +21189,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     onResourceStopped(callback: (arg: ResourceStoppedEvent) => Promise<void>): ParameterResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ParameterResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ParameterResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ParameterResourcePromise;
     withConfig(config: TestConfigDto): ParameterResourcePromise;
     withCreatedAt(createdAt: string): ParameterResourcePromise;
@@ -20972,6 +21647,15 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /** Subscribes to the ResourceReady event */
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
+    }
+
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -21474,6 +22158,11 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -21661,6 +22350,7 @@ export interface ProjectResource {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ProjectResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ProjectResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ProjectResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ProjectResourcePromise;
     withConfig(config: TestConfigDto): ProjectResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ProjectResourcePromise;
@@ -21757,6 +22447,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ProjectResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ProjectResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ProjectResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ProjectResourcePromise;
     withConfig(config: TestConfigDto): ProjectResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ProjectResourcePromise;
@@ -23039,6 +23730,15 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         return new ProjectResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -23811,6 +24511,11 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -24024,6 +24729,7 @@ export interface TestDatabaseResource {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): TestDatabaseResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): TestDatabaseResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): TestDatabaseResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise;
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise;
@@ -24136,6 +24842,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): TestDatabaseResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): TestDatabaseResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): TestDatabaseResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise;
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise;
@@ -25677,6 +26384,15 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -26529,6 +27245,11 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -26746,6 +27467,7 @@ export interface TestRedisResource {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): TestRedisResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): TestRedisResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): TestRedisResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise;
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise;
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise;
@@ -26874,6 +27596,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): TestRedisResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): TestRedisResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): TestRedisResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise;
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise;
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise;
@@ -28486,6 +29209,15 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _addTestChildDatabaseInternal(name: string, databaseName?: string): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
@@ -29527,6 +30259,11 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds a child database to a test Redis resource */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(name, options)), this._client);
@@ -29800,6 +30537,7 @@ export interface TestVaultResource {
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): TestVaultResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): TestVaultResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): TestVaultResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise;
     withConfig(config: TestConfigDto): TestVaultResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise;
@@ -29913,6 +30651,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): TestVaultResourcePromise;
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): TestVaultResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): TestVaultResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise;
     withConfig(config: TestConfigDto): TestVaultResourcePromise;
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise;
@@ -31455,6 +32194,15 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
+    }
+
     /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -32322,6 +33070,11 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
+    }
+
     /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
@@ -32654,6 +33407,7 @@ export interface Resource {
     onResourceStopped(callback: (arg: ResourceStoppedEvent) => Promise<void>): ResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise;
     withConfig(config: TestConfigDto): ResourcePromise;
     withCreatedAt(createdAt: string): ResourcePromise;
@@ -32702,6 +33456,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     onResourceStopped(callback: (arg: ResourceStoppedEvent) => Promise<void>): ResourcePromise;
     onInitializeResource(callback: (arg: InitializeResourceEvent) => Promise<void>): ResourcePromise;
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ResourcePromise;
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise;
     withConfig(config: TestConfigDto): ResourcePromise;
     withCreatedAt(createdAt: string): ResourcePromise;
@@ -33142,6 +33897,15 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /** Subscribes to the ResourceReady event */
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._onResourceReadyInternal(callback), this._client);
+    }
+
+    /** Creates an execution configuration builder */
+    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        const rpcArgs: Record<string, unknown> = { resource: this._handle };
+        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
+            'Aspire.Hosting/createExecutionConfiguration',
+            rpcArgs
+        );
     }
 
     /** @internal */
@@ -33637,6 +34401,11 @@ class ResourcePromiseImpl implements ResourcePromise {
     /** Subscribes to the ResourceReady event */
     onResourceReady(callback: (arg: ResourceReadyEvent) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
+    }
+
+    /** Creates an execution configuration builder */
+    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
+        return this._promise.then(obj => obj.createExecutionConfiguration());
     }
 
     /** Adds an optional string parameter */
@@ -35264,8 +36033,8 @@ export async function connect(): Promise<AspireClientRpc> {
  *
  * @example
  * const builder = await createBuilder();
- * builder.addRedis("cache");
- * builder.addContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp");
+ * await builder.addRedis("cache");
+ * await builder.addContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp");
  * const app = await builder.build();
  * await app.run();
  */
@@ -35372,6 +36141,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointRe
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression', (handle, client) => new EndpointReferenceExpressionImpl(handle as EndpointReferenceExpressionHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext', (handle, client) => new EndpointUpdateContextImpl(handle as EndpointUpdateContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext', (handle, client) => new EnvironmentCallbackContextImpl(handle as EnvironmentCallbackContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext', (handle, client) => new EventingSubscriberRegistrationContextImpl(handle as EventingSubscriberRegistrationContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext', (handle, client) => new ExecuteCommandContextImpl(handle as ExecuteCommandContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent', (handle, client) => new InitializeResourceEventImpl(handle as InitializeResourceEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext', (handle, client) => new PipelineConfigurationContextImpl(handle as PipelineConfigurationContextHandle, client));
@@ -35393,10 +36163,13 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore', (handle, client) => new AspireStoreImpl(handle as IAspireStoreHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration', (handle, client) => new ConfigurationImpl(handle as IConfigurationHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder', (handle, client) => new DistributedApplicationBuilderImpl(handle as IDistributedApplicationBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing', (handle, client) => new DistributedApplicationEventingImpl(handle as IDistributedApplicationEventingHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline', (handle, client) => new DistributedApplicationPipelineImpl(handle as IDistributedApplicationPipelineHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder', (handle, client) => new ExecutionConfigurationBuilderImpl(handle as IExecutionConfigurationBuilderHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult', (handle, client) => new ExecutionConfigurationResultImpl(handle as IExecutionConfigurationResultHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment', (handle, client) => new HostEnvironmentImpl(handle as IHostEnvironmentHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger', (handle, client) => new LoggerImpl(handle as ILoggerHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory', (handle, client) => new LoggerFactoryImpl(handle as ILoggerFactoryHandle, client));

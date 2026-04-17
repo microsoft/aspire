@@ -51,7 +51,7 @@ public class BuildTestMatrixTests : IDisposable
         Assert.Equal("MyProject", entry.ProjectName);
         Assert.Equal("MyProj", entry.Name);
         Assert.Equal("regular", entry.Type);
-        Assert.False(entry.RequiresNugets);
+        Assert.False(entry.Properties.GetValueOrDefault("requiresNugets"));
     }
 
     [Fact]
@@ -250,8 +250,8 @@ public class BuildTestMatrixTests : IDisposable
 
         var matrix = ParseCanonicalMatrix(outputFile);
         Assert.Equal(2, matrix.Tests.Length);
-        Assert.Contains(matrix.Tests, e => e.ProjectName == "NeedsNugets" && e.RequiresNugets == true);
-        Assert.Contains(matrix.Tests, e => e.ProjectName == "NoNugets" && e.RequiresNugets == false);
+        Assert.Contains(matrix.Tests, e => e.ProjectName == "NeedsNugets" && e.Properties.GetValueOrDefault("requiresNugets") == true);
+        Assert.Contains(matrix.Tests, e => e.ProjectName == "NoNugets" && e.Properties.GetValueOrDefault("requiresNugets") == false);
     }
 
     [Fact]
@@ -373,7 +373,7 @@ public class BuildTestMatrixTests : IDisposable
 
         var matrix = ParseCanonicalMatrix(outputFile);
         var entry = Assert.Single(matrix.Tests);
-        Assert.True(entry.RequiresTestSdk);
+        Assert.True(entry.Properties.GetValueOrDefault("requiresTestSdk"));
     }
 
     [Fact]
@@ -571,6 +571,172 @@ public class BuildTestMatrixTests : IDisposable
         Assert.Equal("macos-latest-xlarge", entry.Runners["macos"]);
     }
 
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task AllCITestsPropertiesAppearInOutputWithDefaults()
+    {
+        // Verifies that every property defined in CITestsProperties.props
+        // appears in the canonical matrix output with its default value
+        // when the input metadata doesn't set any properties to true.
+        var expectedProperties = ReadCITestsPropertyNames();
+
+        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
+        Directory.CreateDirectory(artifactsDir);
+
+        TestDataBuilder.CreateTestsMetadataJson(
+            Path.Combine(artifactsDir, "DefaultProps.tests-metadata.json"),
+            projectName: "DefaultProps",
+            testProjectPath: "tests/DefaultProps/DefaultProps.csproj");
+
+        var outputFile = Path.Combine(_tempDir.Path, "matrix.json");
+
+        var result = await RunScript(artifactsDir, outputFile);
+
+        result.EnsureSuccessful();
+
+        var matrix = ParseCanonicalMatrix(outputFile);
+        var entry = Assert.Single(matrix.Tests);
+
+        foreach (var propName in expectedProperties)
+        {
+            Assert.True(entry.Properties.ContainsKey(propName),
+                $"Expected property '{propName}' from CITestsProperties.props to be present in matrix output, but it was missing.");
+            Assert.False(entry.Properties[propName],
+                $"Expected property '{propName}' to have default value 'false', but it was 'true'.");
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task DefaultsAreAppliedWhenPropertiesAreMissingFromMetadata()
+    {
+        // Create metadata JSON manually with a partial properties object
+        // (only requiresNugets=true, everything else omitted) to verify
+        // that the script fills in defaults from CITestsProperties.props.
+        var expectedProperties = ReadCITestsPropertyNames();
+
+        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
+        Directory.CreateDirectory(artifactsDir);
+
+        var partialMetadata = """
+            {
+              "projectName": "PartialProps",
+              "testProjectPath": "tests/PartialProps/PartialProps.csproj",
+              "shortName": "PartialProps",
+              "splitTests": "false",
+              "properties": {
+                "requiresNugets": true
+              },
+              "supportedOSes": ["windows", "linux"]
+            }
+            """;
+        File.WriteAllText(
+            Path.Combine(artifactsDir, "PartialProps.tests-metadata.json"),
+            partialMetadata);
+
+        var outputFile = Path.Combine(_tempDir.Path, "matrix.json");
+
+        var result = await RunScript(artifactsDir, outputFile);
+
+        result.EnsureSuccessful();
+
+        var matrix = ParseCanonicalMatrix(outputFile);
+        var entry = Assert.Single(matrix.Tests);
+
+        // requiresNugets should be true (from input)
+        Assert.True(entry.Properties["requiresNugets"]);
+
+        // All other properties should be present with their default value (false)
+        foreach (var propName in expectedProperties.Where(p => p != "requiresNugets"))
+        {
+            Assert.True(entry.Properties.ContainsKey(propName),
+                $"Expected property '{propName}' to be filled in by defaults, but it was missing.");
+            Assert.False(entry.Properties[propName],
+                $"Expected property '{propName}' default to be 'false', but it was 'true'.");
+        }
+    }
+
+    [Fact]
+    public void CITestsPropertiesPropsFileIsValidAndComplete()
+    {
+        // Validates that CITestsProperties.props is well-formed XML
+        // and contains the expected property definitions.
+        var propsPath = Path.Combine(FindRepoRoot(), "eng", "testing", "CITestsProperties.props");
+        Assert.True(File.Exists(propsPath), $"CITestsProperties.props not found at {propsPath}");
+
+        var doc = new System.Xml.XmlDocument();
+        doc.Load(propsPath);
+
+        var items = doc.SelectNodes("/Project/ItemGroup/CITestsProperty");
+        Assert.NotNull(items);
+        Assert.True(items.Count > 0, "CITestsProperties.props should define at least one CITestsProperty item.");
+
+        foreach (System.Xml.XmlElement item in items)
+        {
+            var include = item.GetAttribute("Include");
+            var msbuildProp = item.GetAttribute("MSBuildProp");
+            var defaultVal = item.GetAttribute("Default");
+
+            Assert.False(string.IsNullOrWhiteSpace(include),
+                "Each CITestsProperty must have an Include attribute (JSON key name).");
+            Assert.False(string.IsNullOrWhiteSpace(msbuildProp),
+                $"CITestsProperty '{include}' must have an MSBuildProp attribute.");
+            Assert.False(string.IsNullOrWhiteSpace(defaultVal),
+                $"CITestsProperty '{include}' must have a Default attribute.");
+
+            // JSON keys should be camelCase (start with lowercase)
+            Assert.True(char.IsLower(include[0]),
+                $"CITestsProperty Include '{include}' should be camelCase (start with lowercase).");
+
+            // MSBuild properties should be PascalCase (start with uppercase)
+            Assert.True(char.IsUpper(msbuildProp[0]),
+                $"CITestsProperty MSBuildProp '{msbuildProp}' should be PascalCase (start with uppercase).");
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task SplitTestEntriesInheritAllCITestsProperties()
+    {
+        // Verifies that partition-based split test entries also get
+        // all properties from CITestsProperties.props.
+        var expectedProperties = ReadCITestsPropertyNames();
+
+        var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
+        Directory.CreateDirectory(artifactsDir);
+
+        TestDataBuilder.CreateSplitTestsMetadataJson(
+            Path.Combine(artifactsDir, "SplitProps.tests-metadata.json"),
+            projectName: "SplitProps",
+            testProjectPath: "tests/SplitProps/SplitProps.csproj",
+            shortName: "SplitP",
+            requiresNugets: true);
+
+        TestDataBuilder.CreateTestsPartitionsJson(
+            Path.Combine(artifactsDir, "SplitProps.tests-partitions.json"),
+            "PartA");
+
+        var outputFile = Path.Combine(_tempDir.Path, "matrix.json");
+
+        var result = await RunScript(artifactsDir, outputFile);
+
+        result.EnsureSuccessful();
+
+        var matrix = ParseCanonicalMatrix(outputFile);
+        Assert.True(matrix.Tests.Length >= 2, "Expected at least 2 entries (partition + uncollected).");
+
+        foreach (var entry in matrix.Tests)
+        {
+            foreach (var propName in expectedProperties)
+            {
+                Assert.True(entry.Properties.ContainsKey(propName),
+                    $"Split entry '{entry.Name}' is missing property '{propName}'.");
+            }
+            Assert.True(entry.Properties["requiresNugets"],
+                $"Split entry '{entry.Name}' should have requiresNugets=true.");
+        }
+    }
+
     private async Task<CommandResult> RunScript(string artifactsDir, string outputFile)
     {
         using var cmd = new PowerShellCommand(_scriptPath, _output)
@@ -600,5 +766,26 @@ public class BuildTestMatrixTests : IDisposable
             dir = dir.Parent;
         }
         throw new InvalidOperationException("Could not find repository root");
+    }
+
+    /// <summary>
+    /// Reads the CITestsProperties.props XML file and returns
+    /// the list of property names (Include attributes).
+    /// </summary>
+    private static HashSet<string> ReadCITestsPropertyNames()
+    {
+        var propsPath = Path.Combine(FindRepoRoot(), "eng", "testing", "CITestsProperties.props");
+        var doc = new System.Xml.XmlDocument();
+        doc.Load(propsPath);
+
+        var items = doc.SelectNodes("/Project/ItemGroup/CITestsProperty")
+            ?? throw new InvalidOperationException("No CITestsProperty items found in CITestsProperties.props");
+
+        var names = new HashSet<string>();
+        foreach (System.Xml.XmlElement item in items)
+        {
+            names.Add(item.GetAttribute("Include"));
+        }
+        return names;
     }
 }
