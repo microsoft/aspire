@@ -45,6 +45,8 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
 
     public void Dispose()
     {
+        outputHelper.WriteLine($"Disposing temporary workspace at: {repoDirectory.FullName}");
+
         // On Windows, file handles held by disposed StreamWriters may not be
         // released instantly. Retry with backoff to handle transient locks.
         // On Linux/macOS, Delete(true) can partially succeed (remove the directory)
