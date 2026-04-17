@@ -64,7 +64,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var notifier = provider.GetRequiredService<ICliUpdateNotifier>();
 
         await notifier.CheckForCliUpdatesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
@@ -120,7 +120,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var notifier = provider.GetRequiredService<ICliUpdateNotifier>();
 
         await notifier.CheckForCliUpdatesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
@@ -176,7 +176,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var notifier = provider.GetRequiredService<ICliUpdateNotifier>();
 
         await notifier.CheckForCliUpdatesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
@@ -228,7 +228,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var notifier = provider.GetRequiredService<ICliUpdateNotifier>();
 
         await notifier.CheckForCliUpdatesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
@@ -246,7 +246,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
         services.AddSingleton<INuGetPackageCache, TestNuGetPackageCache>();
         services.AddSingleton<ICliUpdateNotifier, CliUpdateNotifier>();
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var service = provider.GetRequiredService<ICliUpdateNotifier>();
 
         // Mock packages with a newer stable version
@@ -271,7 +271,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
         services.AddSingleton<INuGetPackageCache, TestNuGetPackageCache>();
         services.AddSingleton<ICliUpdateNotifier, CliUpdateNotifier>();
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var service = provider.GetRequiredService<ICliUpdateNotifier>();
 
         // Act & Assert (should not throw)

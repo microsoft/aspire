@@ -20,7 +20,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("add --help");
@@ -85,7 +85,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add");
@@ -160,7 +160,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add docker");
@@ -243,7 +243,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add docker --version 9.2.0");
@@ -324,7 +324,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add red");
@@ -393,7 +393,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<AddCommand>();
@@ -433,7 +433,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add");
@@ -509,7 +509,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add nonexistentpackage");
@@ -562,7 +562,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return mockInteraction;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
         var prompter = new AddCommandPrompter(interactionService);
@@ -610,7 +610,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return mockInteraction;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
         var prompter = new AddCommandPrompter(interactionService);
@@ -658,7 +658,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return mockInteraction;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
         var prompter = new AddCommandPrompter(interactionService);
@@ -733,7 +733,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             };
         });
         
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Act - without hives, should automatically select from implicit channel without prompting
         var command = provider.GetRequiredService<AddCommand>();
@@ -801,7 +801,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<AddCommand>();
@@ -906,7 +906,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         // Use "postgre" instead of "postgresql" - should still find it via fuzzy search
@@ -991,7 +991,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         // Use "sql" - should match both PostgreSQL and MySql, but not Redis or RabbitMQ
@@ -1061,7 +1061,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         // Use "azureapp" (Azure AppContainers) - should find Azure.AppContainers via fuzzy search

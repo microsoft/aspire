@@ -1,4 +1,4 @@
-﻿parameters:
+parameters:
   SpeciaL_ApP:
     SpeciaL_ApP_image: "SpeciaL-ApP:latest"
 secrets:
@@ -6,9 +6,6 @@ secrets:
     param3: ""
     ConnectionStrings__api_cs: ""
 config:
-  env_dashboard:
-    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
-    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   SpeciaL_ApP:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ConnectionStrings__api_cs2: "host.local:80"

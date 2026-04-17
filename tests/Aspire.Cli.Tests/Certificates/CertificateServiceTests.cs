@@ -37,7 +37,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -95,7 +95,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -134,7 +134,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -193,7 +193,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -229,7 +229,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         // If this does not throw then the code is behaving correctly.
@@ -281,7 +281,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -336,7 +336,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -391,7 +391,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();

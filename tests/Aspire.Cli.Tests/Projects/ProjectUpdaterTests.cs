@@ -109,7 +109,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -221,7 +221,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -360,7 +360,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -513,7 +513,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -656,7 +656,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -761,7 +761,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -864,7 +864,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1007,7 +1007,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1130,7 +1130,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1244,7 +1244,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1354,7 +1354,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1452,7 +1452,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1554,7 +1554,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1633,7 +1633,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1715,7 +1715,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1794,7 +1794,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1877,7 +1877,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1965,7 +1965,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -2047,7 +2047,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -2126,7 +2126,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -2217,7 +2217,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -2344,7 +2344,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();

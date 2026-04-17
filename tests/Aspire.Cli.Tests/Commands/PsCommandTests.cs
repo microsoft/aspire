@@ -18,7 +18,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps --help");
@@ -33,7 +33,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps");
@@ -52,7 +52,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"ps --format {format}");
@@ -70,7 +70,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"ps --format {format}");
@@ -85,7 +85,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps --format invalid");
@@ -135,7 +135,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             options.OutputTextWriter = textWriter;
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps --format json");
@@ -193,7 +193,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             options.OutputTextWriter = textWriter;
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps --format json");
@@ -239,7 +239,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             options.DisableAnsi = true;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps");
@@ -263,7 +263,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         {
             options.OutputTextWriter = textWriter;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps --format json");
@@ -329,7 +329,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             options.OutputTextWriter = textWriter;
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps --format json --resources");
@@ -391,7 +391,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             options.OutputTextWriter = textWriter;
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("ps --format json");
@@ -444,7 +444,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             options.OutputTextWriter = textWriter;
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // --resources with table format should not fetch resources

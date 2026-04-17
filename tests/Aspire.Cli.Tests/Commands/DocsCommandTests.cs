@@ -18,7 +18,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs");
@@ -36,7 +36,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs list");
@@ -53,7 +53,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs list --format json");
@@ -71,7 +71,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
             options.DocsSearchServiceFactory = _ => new TestDocsSearchService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs search redis");
@@ -89,7 +89,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
             options.DocsSearchServiceFactory = _ => new TestDocsSearchService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs search redis -n 3");
@@ -107,7 +107,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
             options.DocsSearchServiceFactory = _ => new TestDocsSearchService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs search redis --format json");
@@ -124,7 +124,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs get redis-integration");
@@ -141,7 +141,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs get redis-integration --section \"Getting Started\"");
@@ -185,7 +185,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs get nonexistent-page");

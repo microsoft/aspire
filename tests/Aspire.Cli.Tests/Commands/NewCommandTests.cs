@@ -31,7 +31,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new --help");
@@ -71,7 +71,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         Assert.NotEmpty(command.Subcommands);
@@ -85,7 +85,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         Assert.NotEmpty(command.Subcommands);
@@ -126,7 +126,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -183,7 +183,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -236,7 +236,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --name MyApp --output . --use-redis-cache --test-framework None");
@@ -291,7 +291,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --output notsrc --use-redis-cache --test-framework None");
@@ -369,7 +369,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
@@ -446,7 +446,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
@@ -504,7 +504,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --name MyApp --output . --use-redis-cache --test-framework None");
@@ -558,7 +558,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --name MyApp --output . --use-redis-cache --test-framework None --version 9.2.0");
@@ -589,7 +589,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new");
@@ -645,7 +645,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -698,7 +698,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -778,7 +778,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --name TestApp --output .");
@@ -856,7 +856,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -924,7 +924,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new --name TestApp --output .");
 
@@ -947,7 +947,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
 
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == "aspire-test");
@@ -998,7 +998,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new --name TestApp --output .");
 
@@ -1053,7 +1053,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-java-empty --name TestApp --output . --localhost-tld false");
 
@@ -1088,7 +1088,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-empty --name TestApp --output . --localhost-tld false");
@@ -1151,7 +1151,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-empty --name TestApp --output .");
 
@@ -1202,7 +1202,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-ts-empty --name TestApp --output . --localhost-tld false");
 
@@ -1258,7 +1258,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         // Do not pass --output so the default "./TestApp" path is used via the prompter
         var result = command.Parse("new aspire-ts-empty --name TestApp --localhost-tld false");
@@ -1355,7 +1355,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-ts-empty --name TestApp --output .");
 
@@ -1434,7 +1434,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult(true);
         }));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-ts-starter --name TestApp --output . --channel daily --localhost-tld false");
 
@@ -1499,7 +1499,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton<IInteractionService>(interactionService);
         services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((directory, cancellationToken) => Task.FromResult(false)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-ts-starter --name TestApp --output . --channel daily --localhost-tld false");
 
@@ -1544,7 +1544,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-empty --name TestApp --output .");
@@ -1601,7 +1601,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -1657,7 +1657,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-ts-empty --name TestApp --output .");
@@ -1721,7 +1721,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -1789,7 +1789,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -1853,7 +1853,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
@@ -1924,7 +1924,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     return runner;
                 };
             });
-            var provider = services.BuildServiceProvider();
+            using var provider = services.BuildServiceProvider();
 
             var command = provider.GetRequiredService<RootCommand>();
             var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
