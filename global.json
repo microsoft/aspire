@@ -30,6 +30,9 @@
       ]
     }
   },
+  "test": {
+    "runner": "Microsoft.Testing.Platform"
+  },
   "msbuild-sdks": {
     "Microsoft.Build.NoTargets": "3.7.0",
     "Microsoft.Build.Traversal": "3.2.0",

@@ -23,9 +23,9 @@
     <RunOnAzdoHelixLinux>true</RunOnAzdoHelixLinux>
 
     <_QuarantinedTestRunAdditionalArgs>--filter-trait "quarantined=true"</_QuarantinedTestRunAdditionalArgs>
-    <_NonQuarantinedTestRunAdditionalArgs>--filter-not-trait "quarantined=true"</_NonQuarantinedTestRunAdditionalArgs>
+    <_NonQuarantinedTestRunAdditionalArgs Condition="'$(SkipDefaultTestFilters)' != 'true'">--filter-not-trait "quarantined=true"</_NonQuarantinedTestRunAdditionalArgs>
     <_OuterloopTestRunAdditionalArgs>--filter-trait "outerloop=true"</_OuterloopTestRunAdditionalArgs>
-    <_NonOuterloopTestRunAdditionalArgs>--filter-not-trait "outerloop=true"</_NonOuterloopTestRunAdditionalArgs>
+    <_NonOuterloopTestRunAdditionalArgs Condition="'$(SkipDefaultTestFilters)' != 'true'">--filter-not-trait "outerloop=true"</_NonOuterloopTestRunAdditionalArgs>
 
     <_ShortName Condition="'$(TestShortName)' != ''">$(TestShortName)</_ShortName>
     <_ShortName Condition="'$(_ShortName)' == ''">$([System.IO.Path]::GetFileNameWithoutExtension('$(MSBuildProjectName)').Replace('Aspire.', '').Replace('.Tests', ''))</_ShortName>
