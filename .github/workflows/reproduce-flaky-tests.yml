@@ -32,7 +32,7 @@ env:
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest"
+  TARGET_OSES: "ubuntu-latest,windows-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
