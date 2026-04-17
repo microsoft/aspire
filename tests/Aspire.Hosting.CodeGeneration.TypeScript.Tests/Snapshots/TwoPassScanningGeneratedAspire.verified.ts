@@ -1238,16 +1238,6 @@ export class EndpointReference {
         },
     };
 
-    /** Gets the IsHttpSchemeNamedEndpoint property */
-    isHttpSchemeNamedEndpoint = {
-        get: async (): Promise<boolean> => {
-            return await this._client.invokeCapability<boolean>(
-                'Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint',
-                { context: this._handle }
-            );
-        },
-    };
-
     /** Gets the ExcludeReferenceEndpoint property */
     excludeReferenceEndpoint = {
         get: async (): Promise<boolean> => {

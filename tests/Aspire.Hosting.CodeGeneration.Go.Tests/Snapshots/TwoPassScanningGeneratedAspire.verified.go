@@ -6254,18 +6254,6 @@ func (s *EndpointReference) TlsEnabled() (*bool, error) {
 	return result.(*bool), nil
 }
 
-// IsHttpSchemeNamedEndpoint gets the IsHttpSchemeNamedEndpoint property
-func (s *EndpointReference) IsHttpSchemeNamedEndpoint() (*bool, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*bool), nil
-}
-
 // ExcludeReferenceEndpoint gets the ExcludeReferenceEndpoint property
 func (s *EndpointReference) ExcludeReferenceEndpoint() (*bool, error) {
 	reqArgs := map[string]any{

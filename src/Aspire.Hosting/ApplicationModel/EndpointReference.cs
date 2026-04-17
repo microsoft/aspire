@@ -75,7 +75,7 @@ public sealed class EndpointReference : IManifestExpressionProvider, IValueProvi
     /// This is done to allow http endpoints that are dynamically updated to https to be mapped correctly despite the endpoint name no longer
     /// matching the scheme.
     /// </summary>
-    public bool IsHttpSchemeNamedEndpoint => string.Equals(EndpointName, "http", StringComparisons.EndpointAnnotationUriScheme) ||
+    internal bool IsHttpSchemeNamedEndpoint => string.Equals(EndpointName, "http", StringComparisons.EndpointAnnotationUriScheme) ||
         string.Equals(EndpointName, "https", StringComparisons.EndpointAnnotationUriScheme);
 
     /// <summary>
