@@ -272,6 +272,39 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         await app.StopAsync();
     }
+
+    [Fact]
+    public async Task WaitForResourceAsync_ReturnsAmbiguousErrorForReplicatedLogicalName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var resourceWithReplicas = builder.AddResource(new CustomResource("myresource"));
+        resourceWithReplicas.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myresource-abc123", "abc123", 0),
+            new DcpInstance("myresource-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.WaitForResourceAsync(new WaitForResourceRequest
+        {
+            ResourceName = "myresource",
+            Status = "up",
+            TimeoutSeconds = 5
+        });
+
+        Assert.False(response.Success);
+        Assert.False(response.ResourceNotFound);
+        Assert.Equal("Resource 'myresource' is ambiguous because it has multiple replicas. Specify the exact instance name.", response.ErrorMessage);
+
+        await app.StopAsync();
+    }
+
     private sealed class CustomResource(string name) : Resource(name)
     {
     }

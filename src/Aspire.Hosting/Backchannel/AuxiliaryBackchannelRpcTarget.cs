@@ -249,15 +249,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         ArgumentNullException.ThrowIfNull(request);
 
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
-        var targetResource = ResolveWaitTarget(notificationService, request.ResourceName);
+        var targetResolution = ResolveWaitTarget(notificationService, request.ResourceName);
+        var targetResource = targetResolution.Target;
 
         if (targetResource is null)
         {
             return new WaitForResourceResponse
             {
                 Success = false,
-                ResourceNotFound = true,
-                ErrorMessage = $"Resource '{request.ResourceName}' was not found."
+                ResourceNotFound = targetResolution.ResourceNotFound,
+                ErrorMessage = targetResolution.ErrorMessage
             };
         }
 
@@ -391,11 +392,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         throw new OperationCanceledException(cancellationMessage);
     }
 
-    private WaitResourceTarget? ResolveWaitTarget(ResourceNotificationService notificationService, string requestedResourceName)
+    private WaitTargetResolutionResult ResolveWaitTarget(ResourceNotificationService notificationService, string requestedResourceName)
     {
         if (notificationService.TryGetCurrentState(requestedResourceName, out var resourceEvent))
         {
-            return new WaitResourceTarget(requestedResourceName, resourceEvent.ResourceId, null);
+            return WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, resourceEvent.ResourceId, null));
         }
 
         // During startup the resource may not have published its first snapshot yet, so fall back to
@@ -403,16 +404,19 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var appModel = serviceProvider.GetService<DistributedApplicationModel>();
         if (appModel is null)
         {
-            return new WaitResourceTarget(requestedResourceName, requestedResourceName, requestedResourceName);
+            return WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, requestedResourceName, requestedResourceName));
         }
 
         var matchingResource = appModel.Resources.SingleOrDefault(resource => string.Equals(resource.Name, requestedResourceName, StringComparisons.ResourceName));
         if (matchingResource is not null)
         {
             var resolvedResourceNames = matchingResource.GetResolvedResourceNames();
-            return resolvedResourceNames.Length == 1
-                ? new WaitResourceTarget(requestedResourceName, resolvedResourceNames[0], null)
-                : null;
+            return resolvedResourceNames.Length switch
+            {
+                1 => WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, resolvedResourceNames[0], null)),
+                > 1 => WaitTargetResolutionResult.Ambiguous(requestedResourceName),
+                _ => WaitTargetResolutionResult.NotFound(requestedResourceName)
+            };
         }
 
         var resolvedMatches = appModel.Resources
@@ -421,9 +425,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             .Take(2)
             .ToArray();
 
-        return resolvedMatches.Length == 1
-            ? new WaitResourceTarget(requestedResourceName, resolvedMatches[0], null)
-            : null;
+        return resolvedMatches.Length switch
+        {
+            1 => WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, resolvedMatches[0], null)),
+            > 1 => WaitTargetResolutionResult.Ambiguous(requestedResourceName),
+            _ => WaitTargetResolutionResult.NotFound(requestedResourceName)
+        };
     }
 
     private sealed record WaitResourceTarget(string DisplayName, string? ResourceId, string? ResourceName)
@@ -433,6 +440,21 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             return (ResourceId is not null && string.Equals(resourceEvent.ResourceId, ResourceId, StringComparisons.ResourceName))
                 || (ResourceName is not null && string.Equals(resourceEvent.Resource.Name, ResourceName, StringComparisons.ResourceName));
         }
+    }
+
+    private sealed record WaitTargetResolutionResult(WaitResourceTarget? Target, bool ResourceNotFound, string ErrorMessage)
+    {
+        public static WaitTargetResolutionResult Success(WaitResourceTarget target) => new(target, ResourceNotFound: false, string.Empty);
+
+        public static WaitTargetResolutionResult NotFound(string requestedResourceName) => new(
+            null,
+            ResourceNotFound: true,
+            $"Resource '{requestedResourceName}' was not found.");
+
+        public static WaitTargetResolutionResult Ambiguous(string requestedResourceName) => new(
+            null,
+            ResourceNotFound: false,
+            $"Resource '{requestedResourceName}' is ambiguous because it has multiple replicas. Specify the exact instance name.");
     }
 
     #endregion
