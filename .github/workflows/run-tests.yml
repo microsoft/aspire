@@ -331,6 +331,7 @@ jobs:
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
             --crashdump \
             --hangdump \
+            --hangdump-type none \
             --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
@@ -380,6 +381,7 @@ jobs:
               --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
               --crashdump `
               --hangdump `
+              --hangdump-type none `
               --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
               --filter-not-trait "category=failing" `
@@ -432,6 +434,7 @@ jobs:
             --report-trx \
             --crashdump \
             --hangdump \
+            --hangdump-type none \
             --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
             --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
@@ -488,6 +491,7 @@ jobs:
               --report-trx `
               --crashdump `
               --hangdump `
+              --hangdump-type none `
               --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
               --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `

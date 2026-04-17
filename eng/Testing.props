@@ -34,7 +34,7 @@
   <PropertyGroup>
     <BlameHangTimeout Condition="'$(BlameHangTimeout)' == '' and '$(MSBuildProjectName)' == 'Aspire.Hosting.SqlServer.Tests'">20m</BlameHangTimeout>
     <BlameHangTimeout Condition="'$(BlameHangTimeout)' == ''">10m</BlameHangTimeout>
-    <_BlameArgs>--hangdump --hangdump-timeout $(BlameHangTimeout) --crashdump</_BlameArgs>
+    <_BlameArgs>--hangdump --hangdump-type none --hangdump-timeout $(BlameHangTimeout) --crashdump</_BlameArgs>
 
     <TestRunnerAdditionalArguments>$(TestRunnerAdditionalArguments) --filter-not-trait &quot;category=failing&quot;</TestRunnerAdditionalArguments>
     <!-- ignore exit code 8 (zero tests ran)
