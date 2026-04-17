@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
@@ -18,7 +18,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<ExtensionInternalCommand>();
         
@@ -30,7 +30,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("extension --help");
@@ -44,7 +44,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("extension");
@@ -65,7 +65,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = _ => new SingleProjectFileProjectLocator(projectFile);
             options.OutputTextWriter = capturedOutput;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("extension get-apphosts");
@@ -107,7 +107,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = _ => new MultipleProjectsProjectLocator([projectFile1, projectFile2]);
             options.OutputTextWriter = capturedOutput;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("extension get-apphosts");
@@ -146,7 +146,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         {
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("extension get-apphosts");
@@ -164,7 +164,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         {
             options.ProjectLocatorFactory = _ => new ThrowingProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("extension get-apphosts");
@@ -178,7 +178,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("extension get-apphosts --help");

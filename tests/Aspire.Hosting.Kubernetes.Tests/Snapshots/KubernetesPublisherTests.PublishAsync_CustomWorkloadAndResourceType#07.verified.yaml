@@ -1,11 +1,15 @@
 ﻿---
-apiVersion: "v1"
-kind: "ConfigMap"
+apiVersion: "keda.sh/v1alpha1"
+kind: "ScaledObject"
 metadata:
-  name: "myapp-config"
+  name: "myapp-scaler"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
-data:
-  ASPNETCORE_ENVIRONMENT: "{{ .Values.config.myapp.ASPNETCORE_ENVIRONMENT }}"
+spec:
+  scaleTargetRef:
+    name: "myapp-rollout"
+    kind: "Rollout"
+  minReplicaCount: 1
+  maxReplicaCount: 3

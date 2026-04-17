@@ -23,7 +23,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel spans");
@@ -41,7 +41,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"telemetry spans --limit {limitValue}");
@@ -56,7 +56,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
             [
                 new ResourceInfoJson { Name = "frontend", InstanceId = null },
@@ -91,7 +91,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
             [
                 new ResourceInfoJson { Name = "apiservice", InstanceId = guid1.ToString() },
@@ -187,7 +187,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel spans --dashboard-url http://localhost:18888");
 
@@ -211,7 +211,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => testInteractionService;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel spans --dashboard-url http://localhost:18888 --apphost TestAppHost.csproj");
 
@@ -249,7 +249,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel spans --dashboard-url http://localhost:18888");
 

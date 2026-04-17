@@ -1,11 +1,8 @@
-﻿parameters:
+parameters:
   api:
     api_image: "api:latest"
 secrets: {}
 config:
-  env_dashboard:
-    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
-    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   api:
     PORT: "8000"
   gateway:

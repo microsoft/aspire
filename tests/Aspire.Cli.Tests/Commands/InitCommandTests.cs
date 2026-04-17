@@ -49,7 +49,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act
@@ -101,7 +101,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act
@@ -200,7 +200,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act - Invoke init command
@@ -282,7 +282,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act - Invoke init command
@@ -378,7 +378,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act - Invoke init command
@@ -511,7 +511,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<InitCommand>();
         var result = command.Parse("init --channel stable");
@@ -536,7 +536,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return new TestPackagingServiceWithChannelTracking(_ => { });
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<InitCommand>();
         var result = command.Parse("init --channel invalid-channel");
@@ -585,7 +585,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         var parseResult = initCommand.Parse("init");
@@ -636,7 +636,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         var parseResult = initCommand.Parse("init");

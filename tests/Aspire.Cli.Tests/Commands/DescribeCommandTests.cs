@@ -19,7 +19,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --help");
@@ -33,7 +33,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe");
@@ -52,7 +52,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"describe --format {format} --help");
@@ -70,7 +70,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"describe --format {format} --help");
@@ -85,7 +85,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --format invalid");
@@ -100,7 +100,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --follow --help");
@@ -115,7 +115,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --watch --help");
@@ -130,7 +130,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("resources --help");
@@ -145,7 +145,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --follow --format json --help");
@@ -160,7 +160,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe myresource --help");
@@ -175,7 +175,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe myresource --follow --format json --help");
@@ -258,7 +258,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
             // Duplicate - identical to the first snapshot
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -302,7 +302,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
             // Duplicate - identical to the first snapshot
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -336,7 +336,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
         ], dashboardUrlsState: new DashboardUrlsState
         {
@@ -364,7 +364,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
         ], dashboardUrlsState: new DashboardUrlsState
         {
@@ -395,7 +395,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
             new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
             new ResourceSnapshot { Name = "hidden-svc", DisplayName = "hidden-svc", ResourceType = "Project", State = "Running", IsHidden = true },
@@ -421,7 +421,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
             new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
             new ResourceSnapshot { Name = "hidden-svc", DisplayName = "hidden-svc", ResourceType = "Project", State = "Running", IsHidden = true },
@@ -449,7 +449,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
             new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
         ]);
@@ -474,7 +474,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
             new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
         ]);
@@ -502,7 +502,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateDescribeTestServices(workspace, outputWriter, [
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
             new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
         ]);

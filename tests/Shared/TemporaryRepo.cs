@@ -45,13 +45,70 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
 
     public void Dispose()
     {
+        outputHelper.WriteLine($"Disposing temporary workspace at: {repoDirectory.FullName}");
+
+        // On Windows, file handles held by disposed StreamWriters may not be
+        // released instantly. Retry with backoff to handle transient locks.
+        // On Linux/macOS, Delete(true) can partially succeed (remove the directory)
+        // yet still throw IOException, so subsequent retries see DirectoryNotFoundException.
+        const int maxRetries = 5;
+        for (var i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                repoDirectory.Delete(true);
+                return;
+            }
+            catch (DirectoryNotFoundException)
+            {
+                // Directory was already deleted (possibly by a previous attempt
+                // that removed the directory but still threw). Nothing to clean up.
+                return;
+            }
+            catch (IOException) when (i < maxRetries - 1)
+            {
+                Thread.Sleep(500 * (i + 1));
+            }
+            catch (IOException)
+            {
+                // Bulk delete failed after all retries. Delete files individually
+                // to surface the exact file name that is still locked.
+                DeleteContentsIndividually(repoDirectory);
+            }
+        }
+    }
+
+    private static void DeleteContentsIndividually(DirectoryInfo directory)
+    {
+        if (!directory.Exists)
+        {
+            return;
+        }
+
+        foreach (var child in directory.EnumerateDirectories())
+        {
+            DeleteContentsIndividually(child);
+        }
+
+        foreach (var file in directory.EnumerateFiles())
+        {
+            try
+            {
+                file.Delete();
+            }
+            catch (IOException ex)
+            {
+                throw new IOException($"Cannot delete '{file.FullName}': {ex.Message}", ex);
+            }
+        }
+
         try
         {
-            repoDirectory.Delete(true);
+            directory.Delete(false);
         }
-        catch (Exception ex)
+        catch (IOException ex)
         {
-            Console.WriteLine($"Error disposing TemporaryRepo: {ex.Message}");
+            throw new IOException($"Cannot delete directory '{directory.FullName}': {ex.Message}", ex);
         }
     }
 

@@ -33,7 +33,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions()
         {
@@ -73,7 +73,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -102,7 +102,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -140,7 +140,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             });
             return configBuilder.Build();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -169,7 +169,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -198,7 +198,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -227,7 +227,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -265,7 +265,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -306,7 +306,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -349,7 +349,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -387,7 +387,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         {
             options.DisabledFeatures = [KnownFeatures.UpdateNotificationsEnabled];
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -427,7 +427,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         {
             options.EnabledFeatures = [KnownFeatures.UpdateNotificationsEnabled];
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -469,7 +469,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         {
             options.DisabledFeatures = [KnownFeatures.UpdateNotificationsEnabled];
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -535,7 +535,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel();
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
 
         var exitCode = await runner.RunAsync(
@@ -561,7 +561,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -614,7 +614,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -681,7 +681,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -747,7 +747,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -829,7 +829,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(project2File.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions
         {
@@ -870,7 +870,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(referencedProject.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -900,7 +900,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions()
         {
@@ -946,7 +946,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions()
         {
@@ -991,7 +991,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Use watch=true and NoLaunchProfile=false to ensure some empty strings are generated
         var options = new ProcessInvocationOptions()
@@ -1036,7 +1036,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions()
         {
@@ -1087,7 +1087,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions()
         {
@@ -1136,7 +1136,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions()
         {
@@ -1184,7 +1184,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -1220,7 +1220,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -1254,7 +1254,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
@@ -1300,7 +1300,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
@@ -1341,7 +1341,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
@@ -1399,7 +1399,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -1437,7 +1437,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -1475,7 +1475,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
@@ -1515,7 +1515,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var options = new ProcessInvocationOptions();
 
