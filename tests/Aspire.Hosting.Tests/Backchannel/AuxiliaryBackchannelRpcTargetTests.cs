@@ -227,7 +227,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
         });
 
-        var response = await waitTask.WaitAsync(TimeSpan.FromSeconds(10)).DefaultTimeout();
+        var response = await waitTask.WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
 
         Assert.True(response.Success);
 
@@ -264,7 +264,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
         });
 
-        var response = await waitTask.WaitAsync(TimeSpan.FromSeconds(10)).DefaultTimeout();
+        var response = await waitTask.WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
 
         Assert.True(response.Success);
 
