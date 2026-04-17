@@ -218,7 +218,6 @@ jobs:
             ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" \
               --no-restore \
               --no-build \
-              --output Detailed \
               -- \
               --timeout 10m \
               --results-directory "${{ github.workspace }}/testresults" \
@@ -285,7 +284,6 @@ jobs:
             & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
               --no-restore `
               --no-build `
-              --output Detailed `
               -- `
               --timeout 10m `
               --results-directory "${{ github.workspace }}/testresults" `

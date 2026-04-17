@@ -424,7 +424,6 @@ jobs:
           ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} \
             --no-restore \
             --no-build \
-            --output Detailed \
             -- \
             --ignore-exit-code 8 \
             --report-trx \
@@ -479,7 +478,6 @@ jobs:
             & ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} `
               --no-restore `
               --no-build `
-              --output Detailed `
               -- `
               --ignore-exit-code 8 `
               --report-trx `
