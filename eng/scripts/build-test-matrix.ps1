@@ -56,9 +56,8 @@ foreach ($item in $ciTestsPropsXml.Project.ItemGroup.CITestsProperty) {
 # Default values applied to all entries
 $script:defaults = @{
   extraTestArgs = ''
+  mtpBaseArgs = ''
   properties = [ordered]@{}
-  testSessionTimeout = '20m'
-  testHangTimeout = '10m'
   supportedOSes = @('windows', 'linux', 'macos')
 }
 
@@ -98,9 +97,8 @@ function Complete-EntryWithDefaults {
   param([Parameter(Mandatory=$true)]$Entry)
 
   # Apply defaults for missing properties
-  if (-not $Entry['testSessionTimeout']) { $Entry['testSessionTimeout'] = $script:defaults.testSessionTimeout }
-  if (-not $Entry['testHangTimeout']) { $Entry['testHangTimeout'] = $script:defaults.testHangTimeout }
   if (-not $Entry.Contains('extraTestArgs')) { $Entry['extraTestArgs'] = $script:defaults.extraTestArgs }
+  if (-not $Entry.Contains('mtpBaseArgs')) { $Entry['mtpBaseArgs'] = $script:defaults.mtpBaseArgs }
   if (-not $Entry['supportedOSes'] -or $Entry['supportedOSes'].Count -eq 0) {
     $Entry['supportedOSes'] = $script:defaults.supportedOSes
   }
@@ -154,9 +152,8 @@ function New-RegularTestEntry {
 
   # Add metadata if available
   if ($Metadata) {
-    if ($Metadata.PSObject.Properties['testSessionTimeout']) { $entry['testSessionTimeout'] = $Metadata.testSessionTimeout }
-    if ($Metadata.PSObject.Properties['testHangTimeout']) { $entry['testHangTimeout'] = $Metadata.testHangTimeout }
     if ($Metadata.PSObject.Properties['extraTestArgs'] -and $Metadata.extraTestArgs) { $entry['extraTestArgs'] = $Metadata.extraTestArgs }
+    if ($Metadata.PSObject.Properties['mtpBaseArgs'] -and $Metadata.mtpBaseArgs) { $entry['mtpBaseArgs'] = $Metadata.mtpBaseArgs }
 
     Copy-CITestProperties -Entry $entry -Metadata $Metadata
   }
@@ -197,22 +194,11 @@ function New-CollectionTestEntry {
     splitTests = $true
   }
 
-  # Use uncollected timeouts if available, otherwise use regular
-  if ($IsUncollected) {
-    if ($Metadata.PSObject.Properties['uncollectedTestsSessionTimeout']) {
-      $entry['testSessionTimeout'] = $Metadata.uncollectedTestsSessionTimeout
-    } elseif ($Metadata.PSObject.Properties['testSessionTimeout']) {
-      $entry['testSessionTimeout'] = $Metadata.testSessionTimeout
-    }
-
-    if ($Metadata.PSObject.Properties['uncollectedTestsHangTimeout']) {
-      $entry['testHangTimeout'] = $Metadata.uncollectedTestsHangTimeout
-    } elseif ($Metadata.PSObject.Properties['testHangTimeout']) {
-      $entry['testHangTimeout'] = $Metadata.testHangTimeout
-    }
-  } else {
-    if ($Metadata.PSObject.Properties['testSessionTimeout']) { $entry['testSessionTimeout'] = $Metadata.testSessionTimeout }
-    if ($Metadata.PSObject.Properties['testHangTimeout']) { $entry['testHangTimeout'] = $Metadata.testHangTimeout }
+  # For uncollected entries, use uncollectedMtpBaseArgs (which has different timeouts)
+  if ($IsUncollected -and $Metadata.PSObject.Properties['uncollectedMtpBaseArgs'] -and $Metadata.uncollectedMtpBaseArgs) {
+    $entry['mtpBaseArgs'] = $Metadata.uncollectedMtpBaseArgs
+  } elseif ($Metadata.PSObject.Properties['mtpBaseArgs'] -and $Metadata.mtpBaseArgs) {
+    $entry['mtpBaseArgs'] = $Metadata.mtpBaseArgs
   }
 
   Copy-CITestProperties -Entry $entry -Metadata $Metadata
@@ -261,8 +247,7 @@ function New-ClassTestEntry {
     splitTests = $true
   }
 
-  if ($Metadata.PSObject.Properties['testSessionTimeout']) { $entry['testSessionTimeout'] = $Metadata.testSessionTimeout }
-  if ($Metadata.PSObject.Properties['testHangTimeout']) { $entry['testHangTimeout'] = $Metadata.testHangTimeout }
+  if ($Metadata.PSObject.Properties['mtpBaseArgs'] -and $Metadata.mtpBaseArgs) { $entry['mtpBaseArgs'] = $Metadata.mtpBaseArgs }
 
   Copy-CITestProperties -Entry $entry -Metadata $Metadata
 

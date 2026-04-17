@@ -94,8 +94,7 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
@@ -112,8 +111,7 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
@@ -132,8 +130,7 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
@@ -150,8 +147,7 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
@@ -168,8 +164,7 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}
@@ -186,8 +181,7 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       properties: ${{ toJson(matrix.properties) }}

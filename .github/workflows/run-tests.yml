@@ -13,14 +13,13 @@ on:
         # relative the repo root
         required: false
         type: string
-      testSessionTimeout:
+      # Base MTP diagnostic args (hangdump, crashdump, timeouts, etc.) — sourced from eng/Testing.props MtpBaseArgs.
+      # Timeouts are baked in per-project by MSBuild; the default here is a fallback for direct callers only.
+      # See docs/ci/mtp-args-pipeline.md for details.
+      mtpBaseArgs:
         required: false
         type: string
-        default: "20m"
-      testHangTimeout:
-        required: false
-        type: string
-        default: "10m"
+        default: "--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none"
       extraTestArgs:
         required: false
         type: string
@@ -50,11 +49,6 @@ jobs:
     name: ${{ inputs.testShortName }} (${{ inputs.os }})
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
-      # Resolve once so the fallback isn't duplicated across all four test-runner steps.
-      # The '|| default' is needed because GitHub Actions passes empty strings for
-      # unset workflow_call inputs, bypassing the input-level default: values.
-      EFFECTIVE_TEST_SESSION_TIMEOUT: ${{ inputs.testSessionTimeout || '20m' }}
-      EFFECTIVE_TEST_HANG_TIMEOUT: ${{ inputs.testHangTimeout || '10m' }}
     steps:
       - name: Validate arguments
         shell: pwsh
@@ -327,15 +321,10 @@ jobs:
 
           # Run tests
           dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll \
-            --ignore-exit-code 8 \
+            ${{ inputs.mtpBaseArgs }} \
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
-            --crashdump \
-            --hangdump \
-            --hangdump-type none \
-            --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
-            --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
             ${{ inputs.extraTestArgs }} \
             ${{ inputs.ignoreTestFailures && '|| true' || '' }}
           TEST_EXIT_CODE=$?
@@ -377,15 +366,10 @@ jobs:
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
             dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll `
-              --ignore-exit-code 8 `
+              ${{ inputs.mtpBaseArgs }} `
               --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
-              --crashdump `
-              --hangdump `
-              --hangdump-type none `
-              --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
               --filter-not-trait "category=failing" `
-              --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }
@@ -428,14 +412,9 @@ jobs:
             --no-restore \
             --no-build \
             -- \
-            --ignore-exit-code 8 \
+            ${{ inputs.mtpBaseArgs }} \
             --report-trx \
-            --crashdump \
-            --hangdump \
-            --hangdump-type none \
-            --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
-            --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
             ${{ inputs.extraTestArgs }} \
             ${{ inputs.ignoreTestFailures && '|| true' || '' }}
           TEST_EXIT_CODE=$?
@@ -483,14 +462,9 @@ jobs:
               --no-restore `
               --no-build `
               -- `
-              --ignore-exit-code 8 `
+              ${{ inputs.mtpBaseArgs }} `
               --report-trx `
-              --crashdump `
-              --hangdump `
-              --hangdump-type none `
-              --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
-              --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }

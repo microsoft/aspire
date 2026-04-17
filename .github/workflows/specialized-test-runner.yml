@@ -142,8 +142,7 @@ jobs:
       testShortName: ${{ matrix.tests.project }}
       properties: ${{ toJson(matrix.tests.properties) }}
       os: ${{ matrix.tests.os }}
-      testSessionTimeout: ${{ matrix.tests.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.tests.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.tests.mtpBaseArgs }}
       extraTestArgs: ${{ inputs.extraTestArgs }}
       ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
 

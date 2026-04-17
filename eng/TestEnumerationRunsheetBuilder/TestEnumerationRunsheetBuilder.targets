@@ -64,10 +64,6 @@
       <_SupportedOSesJson Condition="'$(_SupportedOSesJson)' != ''">$(_SupportedOSesJson.TrimEnd(','))</_SupportedOSesJson>
 
       <!-- Use custom timeout values if provided, otherwise use defaults -->
-      <_TestSessionTimeout Condition="'$(TestSessionTimeout)' != ''">$(TestSessionTimeout)</_TestSessionTimeout>
-      <_TestSessionTimeout Condition="'$(TestSessionTimeout)' == ''">20m</_TestSessionTimeout>
-      <_TestHangTimeout Condition="'$(TestHangTimeout)' != ''">$(TestHangTimeout)</_TestHangTimeout>
-      <_TestHangTimeout Condition="'$(TestHangTimeout)' == ''">10m</_TestHangTimeout>
       <_UncollectedTestsSessionTimeout Condition="'$(UncollectedTestsSessionTimeout)' != ''">$(UncollectedTestsSessionTimeout)</_UncollectedTestsSessionTimeout>
       <_UncollectedTestsSessionTimeout Condition="'$(UncollectedTestsSessionTimeout)' == ''">15m</_UncollectedTestsSessionTimeout>
       <_UncollectedTestsHangTimeout Condition="'$(UncollectedTestsHangTimeout)' != ''">$(UncollectedTestsHangTimeout)</_UncollectedTestsHangTimeout>
@@ -106,10 +102,8 @@ $(_PropertiesJsonInner)
   },
   "splitTests": "$(SplitTestsOnCI)",
   "supportedOSes": [$(_SupportedOSesJson)],
-  "testSessionTimeout": "$(_TestSessionTimeout)",
-  "testHangTimeout": "$(_TestHangTimeout)",
-  "uncollectedTestsSessionTimeout": "$(_UncollectedTestsSessionTimeout)",
-  "uncollectedTestsHangTimeout": "$(_UncollectedTestsHangTimeout)"$(_RunnersJsonLine)
+  "mtpBaseArgs": "$(MtpBaseArgs)",
+  "uncollectedMtpBaseArgs": "$(_UncollectedMtpBaseArgs)"$(_RunnersJsonLine)
 }</_MetadataJson>
 
       <!-- Use TestArchiveTestsDir if set (for Templates/EndToEnd tests), otherwise use default helix dir -->

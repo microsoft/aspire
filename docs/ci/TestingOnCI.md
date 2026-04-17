@@ -12,6 +12,8 @@ The CI test infrastructure uses a unified matrix generation system that:
 4. Expands the matrix for specific CI platforms (GitHub Actions, Azure DevOps)
 5. Runs tests in parallel across multiple operating systems
 
+For how MTP diagnostic arguments (hang dump, crash dump, etc.) flow through this pipeline, see [MTP Args Pipeline](mtp-args-pipeline.md).
+
 ## Architecture
 
 ```text
