@@ -306,10 +306,11 @@ public static class AzureKubernetesEnvironmentExtensions
     }
 
     /// <summary>
-    /// Enables workload identity on the AKS environment, allowing pods to authenticate
+    /// Enables or disables workload identity on the AKS environment, allowing pods to authenticate
     /// to Azure services using federated credentials.
     /// </summary>
     /// <param name="builder">The resource builder.</param>
+    /// <param name="enabled"><c>true</c> to enable workload identity (the default); <c>false</c> to disable it.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
     /// <remarks>
     /// This ensures the AKS cluster is configured with OIDC issuer and workload identity enabled.
@@ -318,12 +319,13 @@ public static class AzureKubernetesEnvironmentExtensions
     /// </remarks>
     [AspireExport(Description = "Enables workload identity on the AKS cluster")]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithWorkloadIdentity(
-        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder)
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        bool enabled = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Resource.OidcIssuerEnabled = true;
-        builder.Resource.WorkloadIdentityEnabled = true;
+        builder.Resource.OidcIssuerEnabled = enabled;
+        builder.Resource.WorkloadIdentityEnabled = enabled;
         return builder;
     }
 
