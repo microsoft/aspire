@@ -16,6 +16,7 @@ using Aspire.Shared;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
+using StreamJsonRpc;
 
 namespace Aspire.Cli.Commands;
 
@@ -160,7 +161,17 @@ internal sealed class DescribeCommand : BaseCommand
 
         if (follow)
         {
-            return await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken);
+            try
+            {
+                return await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken);
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsExpectedBackchannelDisconnect(ex))
+            {
+                // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
+                // describe --follow is active. Treat the lost watch as a normal end of stream
+                // rather than surfacing it as an unexpected CLI failure.
+                return ExitCodeConstants.Success;
+            }
         }
         else
         {
@@ -260,6 +271,13 @@ internal sealed class DescribeCommand : BaseCommand
         }
 
         return ExitCodeConstants.Success;
+    }
+
+    private static bool IsExpectedBackchannelDisconnect(Exception ex)
+    {
+        return ex is ConnectionLostException
+            || ex is ObjectDisposedException
+            || ex is OperationCanceledException { InnerException: ConnectionLostException };
     }
 
     private void DisplayResourcesTable(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl)

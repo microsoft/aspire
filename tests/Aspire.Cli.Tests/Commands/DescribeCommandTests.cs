@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.TestServices;
@@ -332,6 +333,33 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DescribeCommand_Follow_WhenBackchannelIsDisposed_ExitsSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+        ], configureConnection: connection =>
+        {
+            connection.WatchResourceSnapshotsHandler = static (_, cancellationToken) => ThrowObjectDisposedAfterSnapshot(cancellationToken);
+        });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonLines = outputWriter.Logs
+            .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Single(jsonLines);
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("unexpected error occurred", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task DescribeCommand_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -528,7 +556,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         TestOutputTextWriter outputWriter,
         List<ResourceSnapshot> resourceSnapshots,
         bool disableAnsi = false,
-        DashboardUrlsState? dashboardUrlsState = null)
+        DashboardUrlsState? dashboardUrlsState = null,
+        Action<TestAppHostAuxiliaryBackchannel>? configureConnection = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -542,6 +571,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
             ResourceSnapshots = resourceSnapshots,
             DashboardUrlsState = dashboardUrlsState
         };
+        configureConnection?.Invoke(connection);
         monitor.AddConnection("hash1", "socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -552,5 +582,21 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         });
 
         return services.BuildServiceProvider();
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterSnapshot([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceSnapshot
+        {
+            Name = "redis",
+            DisplayName = "redis",
+            ResourceType = "Container",
+            State = "Running"
+        };
+
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
     }
 }
