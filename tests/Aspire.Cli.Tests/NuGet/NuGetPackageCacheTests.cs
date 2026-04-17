@@ -34,7 +34,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
         var packages = await nuGetPackageCache.GetCliPackagesAsync(workspace.WorkspaceRoot, prerelease: true, nugetConfigFile: null, CancellationToken.None).DefaultTimeout();
@@ -69,7 +69,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
@@ -109,7 +109,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
@@ -145,7 +145,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
         
@@ -189,7 +189,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();

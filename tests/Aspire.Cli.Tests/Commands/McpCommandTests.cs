@@ -15,7 +15,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("mcp");
@@ -30,7 +30,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("mcp --help");
@@ -44,7 +44,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("mcp start --help");
@@ -58,7 +58,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var rootCommand = provider.GetRequiredService<RootCommand>();
         var mcpCommand = rootCommand.Subcommands.FirstOrDefault(c => c.Name == "mcp");
@@ -72,7 +72,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var rootCommand = provider.GetRequiredService<RootCommand>();
         var mcpCommand = rootCommand.Subcommands.FirstOrDefault(c => c.Name == "mcp");
@@ -88,7 +88,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var rootCommand = provider.GetRequiredService<RootCommand>();
         var mcpCommand = rootCommand.Subcommands.FirstOrDefault(c => c.Name == "mcp");
@@ -102,7 +102,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent");
@@ -117,7 +117,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent --help");
@@ -131,7 +131,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent mcp --help");
@@ -145,7 +145,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent init --help");
@@ -159,7 +159,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var rootCommand = provider.GetRequiredService<RootCommand>();
         var agentCommand = rootCommand.Subcommands.FirstOrDefault(c => c.Name == "agent");
@@ -174,7 +174,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var rootCommand = provider.GetRequiredService<RootCommand>();
         var agentCommand = rootCommand.Subcommands.FirstOrDefault(c => c.Name == "agent");
@@ -190,7 +190,7 @@ public class McpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var rootCommand = provider.GetRequiredService<RootCommand>();
         var agentCommand = rootCommand.Subcommands.FirstOrDefault(c => c.Name == "agent");

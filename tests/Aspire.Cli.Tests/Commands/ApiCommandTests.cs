@@ -18,7 +18,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs api");
@@ -35,7 +35,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs api list csharp");
@@ -52,7 +52,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs api search emulator --language typescript --format json");
@@ -69,7 +69,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs api get csharp/aspire.test.package/testtype");
@@ -86,7 +86,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs api get missing/id");

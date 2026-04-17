@@ -23,7 +23,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel");
@@ -215,7 +215,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"otel {otelCommand} --dashboard-url http://localhost:18888");
 

@@ -27,7 +27,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run --help");
@@ -44,7 +44,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
@@ -61,7 +61,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             options.ProjectLocatorFactory = _ => new MultipleProjectFilesProjectLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
@@ -78,7 +78,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             options.ProjectLocatorFactory = _ => new ProjectFileDoesNotExistLocator();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run --apphost /tmp/doesnotexist.csproj");
@@ -99,7 +99,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
             options.CliUpdateNotifierFactory = _ => testNotifier;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run --detach");
@@ -120,7 +120,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
             options.CliUpdateNotifierFactory = _ => testNotifier;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
@@ -200,7 +200,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = projectLocatorFactory;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
@@ -321,7 +321,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = runnerFactory;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -376,7 +376,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = runnerFactory;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -446,7 +446,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = (sp) => new TestInteractionService();
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -539,7 +539,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -609,7 +609,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -678,7 +678,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         // Pass --start-debug-session to avoid watch mode (which skips build)
         var result = command.Parse("run --start-debug-session");
@@ -741,7 +741,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled];
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -800,7 +800,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.EnabledFeatures = [KnownFeatures.DefaultWatchEnabled];
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -859,7 +859,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.DisabledFeatures = [KnownFeatures.DefaultWatchEnabled];
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -918,7 +918,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             // Don't explicitly set the feature flag
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
@@ -938,7 +938,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
 
         var options = new ProcessInvocationOptions();
@@ -988,7 +988,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
 
         var options = new ProcessInvocationOptions();
@@ -1034,7 +1034,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
 
         var options = new ProcessInvocationOptions { Debug = true };
@@ -1084,7 +1084,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
 
         var options = new ProcessInvocationOptions { Debug = false };
@@ -1129,7 +1129,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
 
         var options = new ProcessInvocationOptions { Debug = true };
@@ -1175,7 +1175,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
 
         var options = new ProcessInvocationOptions();
@@ -1221,7 +1221,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<DotNetCliRunner>>();
 
         var options = new ProcessInvocationOptions();
@@ -1323,7 +1323,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = runnerFactory;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run --no-build");
 
@@ -1395,7 +1395,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 options.DotNetCliRunnerFactory = runnerFactory;
             });
 
-            var provider = services.BuildServiceProvider();
+            using var provider = services.BuildServiceProvider();
             var command = provider.GetRequiredService<RootCommand>();
             var result = command.Parse("run --isolated");
 
@@ -1456,7 +1456,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.FeatureFlagsFactory = featuresFactory;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run --no-build");
 
@@ -1471,7 +1471,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run -- --custom-arg value");
@@ -1605,7 +1605,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             // without --non-interactive, this would trigger the early return.
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         // Parse with --non-interactive to simulate the child of `aspire start`
         var result = command.Parse("run --non-interactive");
