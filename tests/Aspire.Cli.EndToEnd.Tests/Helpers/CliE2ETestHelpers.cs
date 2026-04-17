@@ -432,6 +432,7 @@ internal static class CliE2ETestHelpers
         var containerName = GenerateDockerContainerName();
         var options = new DockerContainerOptions
         {
+            AutoRemove = true,
             Image = PodmanBaseImageName,
             WorkingDirectory = "/workspace",
         };

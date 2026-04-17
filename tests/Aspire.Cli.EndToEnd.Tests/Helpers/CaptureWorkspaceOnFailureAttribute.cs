@@ -57,6 +57,7 @@ internal sealed class CaptureWorkspaceOnFailureAttribute : BeforeAfterTestAttrib
                     workspaceValue is string localWorkspacePath)
                 {
                     Console.WriteLine($"Failed test workspace preserved at: {localWorkspacePath}");
+                    TemporaryWorkspace.ReleasePreservation(localWorkspacePath, deleteDirectory: false);
                 }
 
                 foreach (var kvp in TestContext.Current.KeyValueStorage)

@@ -27,7 +27,6 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
         var strategy = CliInstallStrategy.Detect();
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
@@ -40,6 +39,7 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
 
         if (strategy.Mode == CliInstallMode.PullRequest)
         {
+            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
@@ -138,7 +138,6 @@ builder.Build().Run();
         var strategy = CliInstallStrategy.Detect();
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
@@ -151,6 +150,7 @@ builder.Build().Run();
 
         if (strategy.Mode == CliInstallMode.PullRequest)
         {
+            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
