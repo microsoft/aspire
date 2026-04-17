@@ -228,7 +228,7 @@ jobs:
 
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
             if [ "$RESULT" -eq 0 ]; then
-              if ! grep -qE "Total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
+              if ! grep -qiE "total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
                 echo "::error::Iteration $i: Zero tests executed. Verify TEST_FILTER and quarantine settings."
                 RESULT=8
               fi
@@ -294,7 +294,7 @@ jobs:
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
             if ($result -eq 0) {
               $content = Get-Content $iterOutput -Raw -ErrorAction SilentlyContinue
-              if (-not ($content -match 'Total:\s*[1-9]')) {
+              if (-not ($content -match '(?i)total:\s*[1-9]')) {
                 Write-Host "::error::Iteration ${i}: Zero tests executed. Verify TEST_FILTER and quarantine settings."
                 $result = 8
               }
