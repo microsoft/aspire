@@ -21,7 +21,7 @@ public class InstallationDetectorTests
 
         Assert.False(info.IsDotNetTool);
         Assert.False(info.SelfUpdateDisabled);
-        Assert.Null(info.UpdateInstructions);
+        Assert.Equal(InstallationDetector.SelfUpdateInstructions, info.UpdateInstructions);
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public class InstallationDetectorTests
 
         Assert.False(info.IsDotNetTool);
         Assert.False(info.SelfUpdateDisabled);
-        Assert.Null(info.UpdateInstructions);
+        Assert.Equal(InstallationDetector.SelfUpdateInstructions, info.UpdateInstructions);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class InstallationDetectorTests
 
         Assert.True(info.IsDotNetTool);
         Assert.False(info.SelfUpdateDisabled);
-        Assert.Null(info.UpdateInstructions);
+        Assert.Equal(InstallationDetector.DotNetToolUpdateInstructions, info.UpdateInstructions);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public class InstallationDetectorTests
 
         Assert.True(info.IsDotNetTool);
         Assert.False(info.SelfUpdateDisabled);
-        Assert.Null(info.UpdateInstructions);
+        Assert.Equal(InstallationDetector.DotNetToolUpdateInstructions, info.UpdateInstructions);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class InstallationDetectorTests
 
             Assert.False(info.IsDotNetTool);
             Assert.False(info.SelfUpdateDisabled);
-            Assert.Null(info.UpdateInstructions);
+            Assert.Equal(InstallationDetector.SelfUpdateInstructions, info.UpdateInstructions);
         }
         finally
         {
@@ -140,7 +140,7 @@ public class InstallationDetectorTests
 
             Assert.False(info.IsDotNetTool);
             Assert.False(info.SelfUpdateDisabled);
-            Assert.Null(info.UpdateInstructions);
+            Assert.Equal(InstallationDetector.SelfUpdateInstructions, info.UpdateInstructions);
         }
         finally
         {
@@ -223,7 +223,7 @@ public class InstallationDetectorTests
             // selfUpdateDisabled defaults to false, so self-update is not disabled
             Assert.False(info.IsDotNetTool);
             Assert.False(info.SelfUpdateDisabled);
-            Assert.Null(info.UpdateInstructions);
+            Assert.Equal(InstallationDetector.SelfUpdateInstructions, info.UpdateInstructions);
         }
         finally
         {

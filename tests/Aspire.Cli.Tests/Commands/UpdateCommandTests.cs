@@ -1263,7 +1263,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
                 InstallationInfo = new InstallationInfo(
                     IsDotNetTool: true,
                     SelfUpdateDisabled: false,
-                    UpdateInstructions: null)
+                    UpdateInstructions: InstallationDetector.DotNetToolUpdateInstructions)
             };
 
             var interactionService = new TestInteractionService();
@@ -1280,7 +1280,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, exitCode);
         Assert.Contains(interactionService!.DisplayedMessages,
-            m => m.Message.Contains("installed as a .NET tool"));
+            m => m.Message.Contains("Self-update is disabled"));
         Assert.Contains(interactionService.DisplayedPlainTexts,
             t => t.Contains("dotnet tool update -g Aspire.Cli"));
     }
@@ -1299,7 +1299,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
                 InstallationInfo = new InstallationInfo(
                     IsDotNetTool: true,
                     SelfUpdateDisabled: false,
-                    UpdateInstructions: null)
+                    UpdateInstructions: InstallationDetector.DotNetToolUpdateInstructions)
             };
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
@@ -1360,7 +1360,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
 
         Assert.False(confirmCallbackInvoked, "Confirm prompt should NOT be shown when running as dotnet tool");
         Assert.Contains(interactionService!.DisplayedMessages,
-            m => m.Message.Contains("installed as a .NET tool"));
+            m => m.Message.Contains("Self-update is disabled"));
         Assert.Contains(interactionService.DisplayedPlainTexts,
             t => t.Contains("dotnet tool update -g Aspire.Cli"));
         Assert.Equal(0, exitCode);
@@ -1380,7 +1380,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
                 InstallationInfo = new InstallationInfo(
                     IsDotNetTool: true,
                     SelfUpdateDisabled: false,
-                    UpdateInstructions: null)
+                    UpdateInstructions: InstallationDetector.DotNetToolUpdateInstructions)
             };
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
@@ -1413,7 +1413,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
 
         Assert.False(confirmCallbackInvoked, "Confirm prompt should NOT be shown when running as dotnet tool");
         Assert.Contains(interactionService!.DisplayedMessages,
-            m => m.Message.Contains("installed as a .NET tool"));
+            m => m.Message.Contains("Self-update is disabled"));
         Assert.Contains(interactionService.DisplayedPlainTexts,
             t => t.Contains("dotnet tool update -g Aspire.Cli"));
     }

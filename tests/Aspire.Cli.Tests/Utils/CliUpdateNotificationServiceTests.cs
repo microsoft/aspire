@@ -371,7 +371,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 InstallationInfo = new InstallationInfo(
                     IsDotNetTool: true,
                     SelfUpdateDisabled: false,
-                    UpdateInstructions: null)
+                    UpdateInstructions: InstallationDetector.DotNetToolUpdateInstructions)
             };
 
             configure.CliUpdateNotifierFactory = (sp) =>
