@@ -299,13 +299,13 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
                     // See https://github.com/dotnet/runtime/blob/8edaf7460777e791b6279b395a68a77533db2d20/src/libraries/Microsoft.Extensions.Hosting/src/HostApplicationBuilder.cs#L96
                     if (key.StartsWith("DOTNET_", StringComparison.OrdinalIgnoreCase))
                     {
-                        SetDefault(key["DOTNET_".Length..], value);
+                        SetDefaultAlias(key["DOTNET_".Length..], canonicalKey: key, value);
                     }
 
                     // See https://github.com/dotnet/aspnetcore/blob/4ce2db7b8d85c07cad2c59242edc19af6a91b0d7/src/DefaultBuilder/src/WebApplicationBuilder.cs#L38
                     if (key.StartsWith("ASPNETCORE_", StringComparison.OrdinalIgnoreCase))
                     {
-                        SetDefault(key["ASPNETCORE_".Length..], value);
+                        SetDefaultAlias(key["ASPNETCORE_".Length..], canonicalKey: key, value);
                     }
                 }
             }
@@ -314,11 +314,36 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
         hostBuilderOptions.Configuration ??= new();
         hostBuilderOptions.Configuration.AddInMemoryCollection(additionalConfig);
 
+        // Also push launch profile values into Args so they have highest priority.
+        // HostApplicationBuilder calls AddEnvironmentVariables() which picks up all process env vars.
+        // In MTP native test runner mode, the test project IS the executable, so the test project's
+        // own launchSettings.json env vars become process env vars that override the in-memory
+        // collection above. Command-line args are the highest-priority configuration source.
+        if (additionalConfig.Count > 0)
+        {
+            var launchProfileArgs = additionalConfig
+                .Where(kv => kv.Value is not null)
+                .Select(kv => $"--{kv.Key}={kv.Value}")
+                .ToArray();
+            hostBuilderOptions.Args = [.. hostBuilderOptions.Args ?? [], .. launchProfileArgs];
+        }
+
         void SetDefault(string key, string? value)
         {
             if (existingConfig[key] is null)
             {
                 additionalConfig[key] = value;
+            }
+        }
+
+        // Like SetDefault, but also skips the alias if the canonical prefixed key
+        // (e.g., DOTNET_ENVIRONMENT for alias ENVIRONMENT) is already explicitly set.
+        // This prevents the alias from overriding a user-supplied canonical key.
+        void SetDefaultAlias(string aliasKey, string canonicalKey, string? value)
+        {
+            if (existingConfig[aliasKey] is null && existingConfig[canonicalKey] is null)
+            {
+                additionalConfig[aliasKey] = value;
             }
         }
     }
