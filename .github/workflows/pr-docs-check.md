@@ -4,8 +4,13 @@ description: |
   PR is merged against main or release/* branches, this workflow determines
   whether microsoft/aspire.dev needs a documentation PR. If documentation
   updates are required, it creates a draft PR with the changes following the
-  doc-writer skill conventions. It also comments on the original PR with a
-  link to the draft PR (or a "no docs needed" message).
+  doc-writer skill conventions. The draft PR is targeted at the aspire.dev
+  branch that matches the source PR's milestone (e.g. milestone 13.3 -> the
+  release/13.3 branch on aspire.dev, 13.2.1 -> release/13.2.1), creating the
+  release branch from aspire.dev main if it does not yet exist. When no
+  milestone can be resolved, the draft PR targets aspire.dev main. It also
+  comments on the original PR with a link to the draft PR (or a "no docs
+  needed" message).
 
 on:
   pull_request:
@@ -81,7 +86,12 @@ safe-outputs:
       uses: actions/checkout@v6.0.2
       with:
         repository: microsoft/aspire.dev
-        ref: ${{ github.base_ref || github.event.pull_request.base.ref || github.ref_name || github.event.repository.default_branch }}
+        # Seed the mirrored workspace at aspire.dev's default branch. The
+        # actual base branch for the draft PR is resolved by the agent (from
+        # milestone/linked-issue/source base) and passed to the
+        # create_pull_request safe output via its `base` field; the
+        # safe-outputs tool handles branching from that base.
+        ref: main
         token: ${{ steps.safe-outputs-app-token.outputs.token }}
         persist-credentials: false
         path: _repos/aspire.dev
@@ -153,7 +163,9 @@ PR number above, including:
 - Title and description
 - Author username
 - Base branch (e.g., `main` or `release/X.Y`)
+- Milestone (if any)
 - The list of changed files
+- Any issues linked via `Closes #N` / `Fixes #N` / `Resolves #N` in the PR body
 
 Start with the PR metadata and changed-file list. Only inspect diff hunks for files that
 are likely to affect user-facing behavior, configuration, or public API surface, or when
@@ -162,7 +174,47 @@ the significance is unclear from filenames alone.
 If this was triggered via `workflow_dispatch`, use the `pr_number` input to look up
 the PR details.
 
-## Step 2: Detect Significant Changes and Decide Whether a Docs PR Is Required
+## Step 2: Determine Target Branch on `microsoft/aspire.dev`
+
+All draft docs PRs must be based on the `microsoft/aspire.dev` branch that
+corresponds to the release represented by the source PR. Resolve the target
+branch using this priority order, stopping at the first match:
+
+1. **PR milestone.** Use the milestone title on the source PR itself.
+2. **Linked issue milestone.** For each issue linked via `Closes/Fixes/Resolves #N`
+   in the PR body, use the first non-empty milestone title found (in link
+   order).
+3. **PR base branch.** If the PR's base branch matches `release/X.Y` or
+   `release/X.Y.Z`, use that directly.
+4. **Fallback.** Use `main`.
+
+**Normalize milestone titles** with the regex `^v?(\d+)\.(\d+)(?:\.(\d+))?`:
+
+- Match with two groups (e.g., `13.3`, `13.3 - Preview 1`, `v13.3`) →
+  `release/13.3`.
+- Match with three groups (e.g., `13.2.1`, `v13.2.1`) → `release/13.2.1`.
+- Titles that don't match the regex fall through to the next priority.
+
+The result of this step is a single **target branch** string, either `main` or
+`release/X.Y[.Z]`.
+
+## Step 3: Ensure the Target Branch Exists on `microsoft/aspire.dev`
+
+If the resolved target branch is `main`, no action is needed — skip to Step 4.
+
+Otherwise, use the GitHub tools (same app-token credentials) against
+`microsoft/aspire.dev` to:
+
+1. Check whether the `release/X.Y[.Z]` branch already exists (for example, via
+   list-branches or get-ref).
+2. If it does **not** exist, create it from the current tip of `main` on
+   `microsoft/aspire.dev` using the Git refs API (create a ref named
+   `refs/heads/release/X.Y[.Z]` pointing at `main`'s HEAD SHA).
+
+Record the target branch so later steps can use it. Subsequent documentation
+edits and the draft PR must be based on this branch.
+
+## Step 4: Detect Significant Changes and Decide Whether a Docs PR Is Required
 
 Review the PR metadata and candidate diffs for **significant user-facing changes**.
 
@@ -201,7 +253,7 @@ Do not create a docs PR for minor or already-understood changes just because the
 docs-adjacent area. If the change is small, internal, or already covered by existing docs,
 treat it as **no docs PR required**.
 
-## Step 3: If No Docs PR Is Required
+## Step 5: If No Docs PR Is Required
 
 If you determine that no docs PR is required because the change is not significant or the
 existing docs already cover it sufficiently:
@@ -212,7 +264,7 @@ existing docs already cover it sufficiently:
      "test/build changes only", or "existing docs already cover this behavior")
 2. **Stop here** — do not proceed to the remaining steps.
 
-## Step 4: Read the doc-writer Skill
+## Step 6: Read the doc-writer Skill
 
 Read the file `.github/skills/doc-writer/SKILL.md` from the checked-out
 `microsoft/aspire.dev` workspace. This skill contains comprehensive guidelines for
@@ -225,7 +277,7 @@ writing documentation on the Aspire docs site, including:
 
 **You must follow all guidelines in the doc-writer skill when writing documentation.**
 
-## Step 5: Browse Existing Documentation
+## Step 7: Browse Existing Documentation
 
 Explore the existing documentation in `src/frontend/src/content/docs/` to:
 
@@ -235,7 +287,7 @@ Explore the existing documentation in `src/frontend/src/content/docs/` to:
 - Understand the current documentation structure, naming conventions, and patterns
 - Find related pages that should be cross-referenced
 
-## Step 6: Write Documentation Changes
+## Step 8: Write Documentation Changes
 
 Based on your analysis, make the actual file changes in the workspace:
 
@@ -253,9 +305,15 @@ Ensure all changes follow the doc-writer skill guidelines from Step 4. Include:
 - Cross-references to related documentation pages
 - Correct use of Aside, Steps, Tabs, and other components
 
-## Step 7: Create Draft PR
+## Step 9: Create Draft PR
 
 Create a draft pull request on `microsoft/aspire.dev` with:
+
+**Base branch**: the target branch resolved in Step 2 (and ensured to exist in
+Step 3). When emitting the `create_pull_request` safe output, set its `base`
+field to this branch (for example, `release/13.3`, `release/13.2.1`, or
+`main`). Do **not** default to `main` unless that is the explicitly resolved
+target.
 
 **Title**: A clear, concise title describing the documentation work
 (the `[docs]` prefix will be added automatically)
@@ -263,17 +321,20 @@ Create a draft pull request on `microsoft/aspire.dev` with:
 **Description** that includes:
 - A prominent link to the source PR: `Documents changes from microsoft/aspire#<number>`
 - The PR author mention: `@<author>`
+- The resolved target branch and how it was chosen (e.g., "Targeting
+  `release/13.3` based on the source PR's milestone `13.3`.")
 - Why this PR is needed (the significant change and the docs gap it addresses)
 - A summary of what documentation was added or changed
 - A list of files modified or created
 - Whether pages were updated or newly created
 
-## Step 8: Comment on Source PR
+## Step 10: Comment on Source PR
 
 After the draft PR is created, **comment on the original PR** in `microsoft/aspire`
 (PR number from Step 1) with:
 
 - A message indicating documentation updates have been drafted
 - A link to the newly created draft PR on `microsoft/aspire.dev`
+- The target branch the draft PR was opened against (e.g., `release/13.3`)
 - A brief summary of what documentation changes were made
 - A note that the draft PR needs human review before merging
