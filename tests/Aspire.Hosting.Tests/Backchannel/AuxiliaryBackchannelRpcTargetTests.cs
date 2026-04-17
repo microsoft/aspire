@@ -363,6 +363,49 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceLogsAsync_ReturnsLogsForSingleReplica_WhenResolvedInstanceNameIsPassed()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var resourceWithReplicas = builder.AddResource(new CustomResource("myresource"));
+        resourceWithReplicas.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myresource-abc123", "abc123", 0),
+            new DcpInstance("myresource-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        resourceLoggerService.TimeProvider = new FixedTimeProvider();
+
+        await app.StartAsync();
+
+        var logger1 = resourceLoggerService.GetLogger("myresource-abc123");
+        logger1.LogInformation("Log from replica 1");
+        resourceLoggerService.Complete("myresource-abc123");
+
+        var logger2 = resourceLoggerService.GetLogger("myresource-def456");
+        logger2.LogInformation("Log from replica 2");
+        resourceLoggerService.Complete("myresource-def456");
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var logs = new List<ResourceLogLine>();
+        await foreach (var logLine in target.GetResourceLogsAsync("myresource-def456", follow: false))
+        {
+            logs.Add(logLine);
+        }
+
+        var log = Assert.Single(logs);
+        Assert.Equal("myresource-def456", log.ResourceName);
+        Assert.Equal($"{TestTimestamp} Log from replica 2", log.Content);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
     public async Task GetResourceLogsAsync_FollowMode_StreamsLogs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
