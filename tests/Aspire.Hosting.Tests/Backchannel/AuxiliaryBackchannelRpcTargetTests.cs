@@ -274,6 +274,71 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WaitForResourceAsync_CancelledSingleInstanceResolvedName_UsesLogicalDisplayName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var resourceWithReplicas = builder.AddResource(new CustomResource("myresource"));
+        resourceWithReplicas.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myresource-abc123", "abc123", 0)
+        ]));
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => target.WaitForResourceAsync(new WaitForResourceRequest
+        {
+            ResourceName = "myresource-abc123",
+            Status = "healthy",
+            TimeoutSeconds = 5
+        }, cancellationTokenSource.Token));
+
+        Assert.Equal("Resource 'myresource' failed to become healthy before the operation was cancelled.", exception.Message);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task WaitForResourceAsync_CancelledReplicaResolvedName_UsesReplicaDisplayName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var resourceWithReplicas = builder.AddResource(new CustomResource("myresource"));
+        resourceWithReplicas.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myresource-abc123", "abc123", 0),
+            new DcpInstance("myresource-def456", "def456", 1)
+        ]));
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.Cancel();
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(() => target.WaitForResourceAsync(new WaitForResourceRequest
+        {
+            ResourceName = "myresource-abc123",
+            Status = "healthy",
+            TimeoutSeconds = 5
+        }, cancellationTokenSource.Token));
+
+        Assert.Equal("Resource 'myresource-abc123' failed to become healthy before the operation was cancelled.", exception.Message);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
     public async Task WaitForResourceAsync_ReturnsAmbiguousErrorForReplicatedLogicalName()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
