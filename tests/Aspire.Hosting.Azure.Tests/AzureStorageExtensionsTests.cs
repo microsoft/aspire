@@ -938,18 +938,27 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
         // Documents order-matters: when AddBlobContainer is called before any AddBlobs,
         // the implicit default-named service is auto-created. A later custom-named
         // AddBlobs creates an additional resource — same behavior as the existing
-        // default-name test pre-PR #10635.
+        // default-name test pre-PR #10635. Also pins that subsequent AddBlobContainer
+        // calls continue to attach to the implicit default-named service rather than
+        // re-parenting to the later custom-named service.
         using var builder = TestDistributedApplicationBuilder.Create();
         var storage = builder.AddAzureStorage("storage");
 
-        storage.AddBlobContainer("originals");
+        var originals = storage.AddBlobContainer("originals");
         var customBlobs = storage.AddBlobs("blobs");
+        var derived = storage.AddBlobContainer("derived");
 
         var blobServices = builder.Resources.OfType<AzureBlobStorageResource>().ToList();
         Assert.Equal(2, blobServices.Count);
-        Assert.Contains(blobServices, r => r.Name == "storage-blobs");
-        Assert.Contains(blobServices, r => r.Name == "blobs");
+
+        var defaultBlobService = Assert.Single(blobServices, r => r.Name == "storage-blobs");
+        var customBlobService = Assert.Single(blobServices, r => r.Name == "blobs");
+
         Assert.Equal("blobs", customBlobs.Resource.Name);
+        Assert.Same(customBlobService, customBlobs.Resource);
+
+        Assert.Same(defaultBlobService, originals.Resource.Parent);
+        Assert.Same(defaultBlobService, derived.Resource.Parent);
     }
 
     [Fact]
