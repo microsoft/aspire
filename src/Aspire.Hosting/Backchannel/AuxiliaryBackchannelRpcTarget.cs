@@ -630,26 +630,30 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         if (resourceName is not null)
         {
-            var resource = appModel.Resources.FirstOrDefault(r => string.Equals(r.Name, resourceName, StringComparisons.ResourceName));
-            if (resource is not null)
+            // Match by logical name (stream all instances) or resolved instance name like
+            // "apiservice-abc123" (stream just that one) — MCP advertises the resolved form.
+            foreach (var resource in appModel.Resources)
             {
-                resourcesToLog.AddRange(resource.GetResolvedResourceNames());
-            }
-            else
-            {
-                // Fall back to resolved instance names (e.g. "apiservice-abc123") so callers such
-                // as the MCP server, which advertises resources by their resolved names, still match.
-                var matchedInstance = appModel.Resources
-                    .SelectMany(r => r.GetResolvedResourceNames())
-                    .FirstOrDefault(n => string.Equals(n, resourceName, StringComparisons.ResourceName));
+                var resolvedNames = resource.GetResolvedResourceNames();
 
-                if (matchedInstance is null)
+                if (string.Equals(resource.Name, resourceName, StringComparisons.ResourceName))
                 {
-                    logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
-                    yield break;
+                    resourcesToLog.AddRange(resolvedNames);
+                    break;
                 }
 
-                resourcesToLog.Add(matchedInstance);
+                var matchedInstance = resolvedNames.FirstOrDefault(n => string.Equals(n, resourceName, StringComparisons.ResourceName));
+                if (matchedInstance is not null)
+                {
+                    resourcesToLog.Add(matchedInstance);
+                    break;
+                }
+            }
+
+            if (resourcesToLog.Count == 0)
+            {
+                logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
+                yield break;
             }
         }
         else
