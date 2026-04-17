@@ -293,7 +293,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             options.DotNetCliRunnerFactory = _ => runner;
         });
 
-        using var provider = services.BuildServiceProvider();
+        var provider = services.BuildServiceProvider();
         _serviceProviders.Add(provider);
         return provider.GetRequiredService<DotNetAppHostProject>();
     }
