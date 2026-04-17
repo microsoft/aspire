@@ -47,9 +47,14 @@ internal sealed class InstallationDetector : IInstallationDetector
     internal const string UpdateConfigFileName = ".aspire-update.json";
 
     /// <summary>
-    /// Generic update message shown to WinGet users (rustup-style, does not name a specific package manager).
+    /// Generic update message shown when the CLI appears to be managed by a package manager but the specific one cannot be determined.
     /// </summary>
     internal const string PackageManagerUpdateInstructions = "If you installed the Aspire CLI through a package manager, use that package manager to update.";
+
+    /// <summary>
+    /// Update instructions for WinGet installations.
+    /// </summary>
+    internal const string WinGetUpdateInstructions = "winget upgrade Microsoft.Aspire";
 
     /// <summary>
     /// Update instructions for .NET global tool installations.
@@ -115,7 +120,7 @@ internal sealed class InstallationDetector : IInstallationDetector
         if (!string.IsNullOrEmpty(resolvedPath) && IsWinGetInstall(resolvedPath))
         {
             _logger.LogDebug("CLI appears to be installed via WinGet (process path is under a WinGet packages directory).");
-            return new InstallationInfo(IsDotNetTool: false, SelfUpdateDisabled: true, UpdateInstructions: PackageManagerUpdateInstructions);
+            return new InstallationInfo(IsDotNetTool: false, SelfUpdateDisabled: true, UpdateInstructions: WinGetUpdateInstructions);
         }
 
         // Default: script install or direct binary, self-update is available
