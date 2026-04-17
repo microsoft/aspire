@@ -124,7 +124,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
             [
                 new ResourceInfoJson { Name = "apiservice", InstanceId = null },

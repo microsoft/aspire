@@ -574,7 +574,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(
+        using var provider = CreateLogsTestServices(
             workspace,
             outputWriter,
             disableAnsi: true,
@@ -606,7 +606,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(
+        using var provider = CreateLogsTestServices(
             workspace,
             outputWriter,
             disableAnsi: true,
