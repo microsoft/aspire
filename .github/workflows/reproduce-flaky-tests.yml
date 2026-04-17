@@ -28,18 +28,18 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.YourTestMethodName"'
+  TEST_FILTER: '--filter-trait "Partition=1"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
-  TARGET_OSES: "ubuntu-latest,windows-latest"
+  TARGET_OSES: "ubuntu-latest"
 
   # Number of parallel runners per OS
   # Total jobs = RUNNERS_PER_OS × number of OSes (must be ≤ 256)
-  RUNNERS_PER_OS: "3"
+  RUNNERS_PER_OS: "16"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "3"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -220,6 +220,10 @@ jobs:
               --no-build \
               -- \
               --timeout 10m \
+              --hangdump \
+              --hangdump-type full \
+              --hangdump-timeout 10m \
+              --crashdump \
               --results-directory "${{ github.workspace }}/testresults" \
               ${{ env.TEST_FILTER }} \
               2>&1 | tee "$ITER_OUTPUT"
@@ -286,6 +290,10 @@ jobs:
               --no-build `
               -- `
               --timeout 10m `
+              --hangdump `
+              --hangdump-type full `
+              --hangdump-timeout 10m `
+              --crashdump `
               --results-directory "${{ github.workspace }}/testresults" `
               ${{ env.TEST_FILTER }} *> $iterOutput
             $result = $LASTEXITCODE
@@ -325,11 +333,19 @@ jobs:
           if ($fail -gt 0) { exit 1 }
 
       - name: Upload failure logs
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: failures-${{ matrix.os }}-${{ matrix.index }}
           path: all-results/
+          if-no-files-found: ignore
+
+      - name: Upload testresults (hangdumps, crashdumps)
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: testresults-${{ matrix.os }}-${{ matrix.index }}
+          path: testresults/
           if-no-files-found: ignore
 
   results:
