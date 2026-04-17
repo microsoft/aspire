@@ -381,14 +381,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
     private WaitTargetResolutionResult ResolveWaitTarget(ResourceNotificationService notificationService, string requestedResourceName)
     {
+        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
         if (notificationService.TryGetCurrentState(requestedResourceName, out var resourceEvent))
         {
-            return WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, resourceEvent.ResourceId, null));
+            return WaitTargetResolutionResult.Success(new WaitResourceTarget(
+                ResolveDisplayName(appModel, requestedResourceName, resourceEvent.ResourceId),
+                resourceEvent.ResourceId,
+                null));
         }
 
         // During startup the resource may not have published its first snapshot yet, so fall back to
         // the app model to resolve the requested logical name or resolved resource id.
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
         if (appModel is null)
         {
             return WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, requestedResourceName, requestedResourceName));
@@ -407,17 +410,36 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
 
         var resolvedMatches = appModel.Resources
-            .SelectMany(resource => resource.GetResolvedResourceNames())
-            .Where(resourceName => string.Equals(resourceName, requestedResourceName, StringComparisons.ResourceName))
+            .Select(resource => new { Resource = resource, ResolvedResourceNames = resource.GetResolvedResourceNames() })
+            .Where(match => match.ResolvedResourceNames.Any(resourceName => string.Equals(resourceName, requestedResourceName, StringComparisons.ResourceName)))
             .Take(2)
             .ToArray();
 
         return resolvedMatches.Length switch
         {
-            1 => WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, resolvedMatches[0], null)),
+            1 => WaitTargetResolutionResult.Success(new WaitResourceTarget(
+                resolvedMatches[0].ResolvedResourceNames.Length == 1 ? resolvedMatches[0].Resource.Name : requestedResourceName,
+                requestedResourceName,
+                null)),
             > 1 => WaitTargetResolutionResult.Ambiguous(requestedResourceName),
             _ => WaitTargetResolutionResult.NotFound(requestedResourceName)
         };
+    }
+
+    private static string ResolveDisplayName(DistributedApplicationModel? appModel, string requestedResourceName, string resolvedResourceName)
+    {
+        if (appModel is null)
+        {
+            return requestedResourceName;
+        }
+
+        var matchingResource = appModel.Resources
+            .Select(resource => new { Resource = resource, ResolvedResourceNames = resource.GetResolvedResourceNames() })
+            .SingleOrDefault(match => match.ResolvedResourceNames.Any(resourceName => string.Equals(resourceName, resolvedResourceName, StringComparisons.ResourceName)));
+
+        return matchingResource is { ResolvedResourceNames.Length: 1 }
+            ? matchingResource.Resource.Name
+            : requestedResourceName;
     }
 
     private sealed record WaitResourceTarget(string DisplayName, string? ResourceId, string? ResourceName)
