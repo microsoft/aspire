@@ -157,6 +157,11 @@
         <target state="translated">Impossible d’écrire dans le répertoire d’installation « {0} ». Exécutez la mise à jour avec des autorisations élevées (par exemple, en utilisant sudo sur Linux/macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresChannel">
+        <source>Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</source>
+        <target state="new">Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">La référence de package n’a pas d’identité.</target>

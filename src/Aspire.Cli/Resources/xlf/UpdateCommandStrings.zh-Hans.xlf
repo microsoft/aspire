@@ -157,6 +157,11 @@
         <target state="translated">无法写入安装目录“{0}”。请使用提升的权限运行更新(例如，在 Linux/macOS 上使用 sudo)。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresChannel">
+        <source>Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</source>
+        <target state="new">Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">包引用没有标识。</target>

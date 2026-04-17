@@ -157,6 +157,11 @@
         <target state="translated">無法寫入安裝目錄 '{0}'。請使用提高的權限來執行更新 (例如，在Linux/macOS上使用 sudo)。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresChannel">
+        <source>Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</source>
+        <target state="new">Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">套件參考沒有 Identity。</target>

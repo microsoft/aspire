@@ -157,6 +157,11 @@
         <target state="translated">Não é possível gravar no diretório de instalação '{0}'. Execute a atualização com permissões elevadas (por exemplo, usando sudo no Linux/macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresChannel">
+        <source>Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</source>
+        <target state="new">Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">A referência do pacote não tem Identidade.</target>

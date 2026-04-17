@@ -1725,4 +1725,211 @@ public class UpdateCommandScriptInstallTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService!.DisplayedMessages,
             m => m.Message.Contains("Updating to channel"));
     }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_NonInteractive_WithNoChannel_ReturnsErrorGracefully()
+    {
+        // Regression test for https://github.com/dotnet/aspire/issues/15600
+        // When running in non-interactive mode (e.g., CI) without --channel,
+        // the command should return an error instead of crashing with an unhandled exception.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InstallationDetectorFactory = _ => new TestInstallationDetector
+            {
+                InstallationInfo = new InstallationInfo(
+                    IsDotNetTool: false,
+                    SelfUpdateDisabled: false,
+                    UpdateInstructions: null)
+            };
+
+            // Simulate non-interactive mode: PromptForSelectionAsync throws InvalidOperationException
+            // just like ConsoleInteractionService does when there's no TTY
+            options.InteractionServiceFactory = _ => new NonInteractiveTestInteractionService();
+
+            options.CliDownloaderFactory = _ =>
+            {
+                var tmpDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "tmp"));
+                return new TestCliDownloader(tmpDir);
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+        var interactionService = provider.GetRequiredService<IInteractionService>() as NonInteractiveTestInteractionService;
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(0, exitCode);
+        Assert.Contains(interactionService!.DisplayedErrors,
+            e => e.Contains("--channel"));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_ProjectUpdate_NonInteractive_WithHivesAndNoChannel_ReturnsErrorGracefully()
+    {
+        // Regression test for https://github.com/dotnet/aspire/issues/15600
+        // When PR hives exist and no --channel is specified in non-interactive mode,
+        // the channel selection prompt cannot be shown — the command should fail gracefully.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a hive directory to trigger the channel selection prompt path
+        workspace.CreateDirectory(".aspire").CreateSubdirectory("hives").CreateSubdirectory("pr-12345");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            // Simulate non-interactive mode
+            options.InteractionServiceFactory = _ => new NonInteractiveTestInteractionService();
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (ct) =>
+                {
+                    var fakeCache = new FakeNuGetPackageCache();
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                    var stableChannel = PackageChannel.CreateExplicitChannel(
+                        "stable", PackageChannelQuality.Stable,
+                        new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
+                        fakeCache);
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, stableChannel });
+                }
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+        var interactionService = provider.GetRequiredService<IInteractionService>() as NonInteractiveTestInteractionService;
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(0, exitCode);
+        Assert.Contains(interactionService!.DisplayedErrors,
+            e => e.Contains("--channel"));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_ProjectUpdate_WithChannelOption_DoesNotSaveChannelToGlobalConfig()
+    {
+        // Regression test for config cross-contamination (https://github.com/dotnet/aspire/issues/15614)
+        // Selecting a channel during project update must NOT persist it to global config,
+        // as that would cause other CLI installs (e.g., WinGet) to inherit the channel.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configKeysSet = new List<string>();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.ConfigurationServiceFactory = _ => new Aspire.Cli.Tests.TestServices.TestConfigurationService
+            {
+                OnSetConfiguration = (key, value, isGlobal) =>
+                {
+                    configKeysSet.Add(key);
+                }
+            };
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                {
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (ct) =>
+                {
+                    var stableChannel = PackageChannel.CreateExplicitChannel(
+                        "stable", PackageChannelQuality.Stable,
+                        new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
+                        null!,
+                        cliDownloadBaseUrl: "https://aka.ms/dotnet/aspire");
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
+                }
+            };
+        });
+
+        var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --channel stable");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.DoesNotContain("channel", configKeysSet);
+    }
+}
+
+/// <summary>
+/// Simulates non-interactive mode by throwing InvalidOperationException on any prompt,
+/// matching the behavior of ConsoleInteractionService when no TTY is available.
+/// </summary>
+internal sealed class NonInteractiveTestInteractionService : IInteractionService
+{
+    private const string NonInteractiveMessage = "Interactive input is not supported in non-interactive mode.";
+
+    public ConsoleOutput Console { get; set; }
+    public List<string> DisplayedErrors { get; } = [];
+
+    public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
+    public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
+
+    public Task<string> PromptForStringAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, CancellationToken cancellationToken = default)
+        => throw new InvalidOperationException(NonInteractiveMessage);
+
+    public Task<string> PromptForFilePathAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, CancellationToken cancellationToken = default)
+        => throw new InvalidOperationException(NonInteractiveMessage);
+
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull
+        => throw new InvalidOperationException(NonInteractiveMessage);
+
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, CancellationToken cancellationToken = default) where T : notnull
+        => throw new InvalidOperationException(NonInteractiveMessage);
+
+    public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default)
+        => throw new InvalidOperationException(NonInteractiveMessage);
+
+    public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
+    public void DisplayError(string errorMessage) => DisplayedErrors.Add(errorMessage);
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
+    public void DisplaySuccess(string message, bool allowMarkup = false) { }
+    public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
+    public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
+    public void DisplayCancellationMessage() { }
+    public void DisplayEmptyLine() { }
+    public void DisplayPlainText(string text) { }
+    public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null) { }
+    public void DisplayMarkupLine(string markup) { }
+    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) { }
+    public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false) { }
+    public void DisplayRenderable(IRenderable renderable) { }
+    public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback) => callback(_ => { });
 }

@@ -168,4 +168,7 @@
   <data name="SelfUpdateDisabledMessage" xml:space="preserve">
     <value>Self-update is disabled for this installation.</value>
   </data>
+  <data name="NonInteractiveRequiresChannel" xml:space="preserve">
+    <value>Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</value>
+  </data>
 </root>

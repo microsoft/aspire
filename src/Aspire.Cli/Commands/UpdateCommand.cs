@@ -139,6 +139,13 @@ internal sealed class UpdateCommand : BaseCommand
                 InteractionService.DisplayCancellationMessage();
                 return ExitCodeConstants.InvalidCommand;
             }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("interactive"))
+            {
+                // Non-interactive mode (e.g., CI) cannot prompt for channel selection.
+                // Guide the user to specify --channel explicitly.
+                InteractionService.DisplayError(UpdateCommandStrings.NonInteractiveRequiresChannel);
+                return ExitCodeConstants.InvalidCommand;
+            }
         }
 
         // Otherwise, handle project update
@@ -292,6 +299,13 @@ internal sealed class UpdateCommand : BaseCommand
             }
             
             return HandleProjectLocatorException(ex, InteractionService, Telemetry);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("interactive"))
+        {
+            // Non-interactive mode (e.g., CI) cannot prompt for channel selection.
+            // Guide the user to specify --channel explicitly.
+            InteractionService.DisplayError(UpdateCommandStrings.NonInteractiveRequiresChannel);
+            return ExitCodeConstants.FailedToUpgradeProject;
         }
         catch (OperationCanceledException)
         {

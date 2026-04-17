@@ -157,6 +157,11 @@
         <target state="translated">설치 디렉터리 '{0}'에 쓸 수 없습니다. 관리자 권한으로 업데이트를 실행하세요(예: Linux/macOS에서 sudo 사용).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresChannel">
+        <source>Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</source>
+        <target state="new">Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">패키지 참조에 ID가 없습니다.</target>

@@ -157,6 +157,11 @@
         <target state="translated">Не удается записать в каталог установки "{0}". Запустите обновление с повышенными правами (например, используя sudo в Linux или macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveRequiresChannel">
+        <source>Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</source>
+        <target state="new">Cannot prompt for channel selection in non-interactive mode. Use --channel to specify a channel (e.g., --channel stable).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">Ссылка на пакет не содержит удостоверение.</target>
