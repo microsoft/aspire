@@ -413,17 +413,15 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
+          # MSBuild properties passed via env vars (new MTP dotnet test mode doesn't support /p:)
+          TrxFileNamePrefix: ${{ inputs.testShortName }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
 
-          # Run tests
-          ${{ env.DOTNET_SCRIPT }} test ${{ env.TEST_PROJECT_PATH }} \
-            /p:ContinuousIntegrationBuild=true \
-            /p:TrxFileNamePrefix="${{ inputs.testShortName }}" \
-            -bl:${{ github.workspace }}/testresults/test.binlog \
-            -tl:false \
+          # Run tests (using MTP-native dotnet test mode)
+          ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} \
             --no-restore \
             --no-build \
             -- \
@@ -464,6 +462,8 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
+          # MSBuild properties passed via env vars (new MTP dotnet test mode doesn't support /p:)
+          TrxFileNamePrefix: ${{ inputs.testShortName }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
@@ -474,12 +474,8 @@ jobs:
           try {
             # Ensure UTF-8 encoding for all output on Windows
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-            # Run tests
-            & ${{ env.DOTNET_SCRIPT }} test ${{ env.TEST_PROJECT_PATH }} `
-              /p:ContinuousIntegrationBuild=true `
-              /p:TrxFileNamePrefix="${{ inputs.testShortName }}" `
-              -bl:${{ github.workspace }}/testresults/test.binlog `
-              -tl:false `
+            # Run tests (using MTP-native dotnet test mode)
+            & ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} `
               --no-restore `
               --no-build `
               -- `
