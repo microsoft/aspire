@@ -4,6 +4,9 @@
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Xml.Linq;
 using Aspire.TypeSystem;
 
@@ -32,6 +35,9 @@ public static class AtsCapabilityScanner
         /// <summary>Enum types found in capability signatures, serialized as strings.</summary>
         public List<AtsEnumTypeInfo> EnumTypes { get; init; } = [];
 
+        /// <summary>Immutable values exported into guest SDKs.</summary>
+        public List<AtsExportedValueInfo> ExportedValues { get; init; } = [];
+
         /// <summary>Diagnostics (warnings/errors) generated during scanning.</summary>
         public List<AtsDiagnostic> Diagnostics { get; init; } = [];
 
@@ -58,6 +64,7 @@ public static class AtsCapabilityScanner
                 HandleTypes = HandleTypes,
                 DtoTypes = DtoTypes,
                 EnumTypes = EnumTypes,
+                ExportedValues = ExportedValues,
                 Diagnostics = Diagnostics
             };
 
@@ -124,6 +131,7 @@ public static class AtsCapabilityScanner
         var allTypeInfos = new List<AtsTypeInfo>();
         var allDtoTypes = new List<AtsDtoTypeInfo>();
         var allEnumTypes = new List<AtsEnumTypeInfo>();
+        var allExportedValues = new List<AtsExportedValueInfo>();
         var allDiagnostics = new List<AtsDiagnostic>();
         var allMethods = new Dictionary<string, MethodInfo>();
         var allProperties = new Dictionary<string, PropertyInfo>();
@@ -182,6 +190,8 @@ public static class AtsCapabilityScanner
                 }
             }
 
+            allExportedValues.AddRange(result.ExportedValues);
+
             // Merge runtime registries (methods and properties)
             foreach (var (id, method) in result.Methods)
             {
@@ -217,6 +227,7 @@ public static class AtsCapabilityScanner
             HandleTypes = allTypeInfos,
             DtoTypes = allDtoTypes,
             EnumTypes = allEnumTypes,
+            ExportedValues = allExportedValues,
             Diagnostics = allDiagnostics,
             Methods = allMethods,
             Properties = allProperties
@@ -263,6 +274,7 @@ public static class AtsCapabilityScanner
         var capabilities = new List<AtsCapabilityInfo>();
         var typeInfos = new List<AtsTypeInfo>();
         var dtoTypes = new List<AtsDtoTypeInfo>();
+        var exportedValues = new List<AtsExportedValueInfo>();
         var diagnostics = new List<AtsDiagnostic>();
 
         // Runtime registries for CapabilityDispatcher
@@ -331,6 +343,8 @@ public static class AtsCapabilityScanner
                     dtoTypes.Add(dtoInfo);
                 }
             }
+
+            ScanStaticExportedValues(type, assemblyExportedTypeCache, exportedValues, diagnostics);
 
             // Check for [AspireExport(AtsTypeId = "...")] on types
             var typeExportAttr = GetAspireExportAttribute(type);
@@ -471,6 +485,7 @@ public static class AtsCapabilityScanner
             HandleTypes = typeInfos,
             DtoTypes = dtoTypes,
             EnumTypes = enumTypes,
+            ExportedValues = exportedValues,
             Diagnostics = diagnostics,
             Methods = methods,
             Properties = properties
@@ -996,6 +1011,163 @@ public static class AtsCapabilityScanner
             Description = typeDescription,
             Properties = properties
         };
+    }
+
+    private static void ScanStaticExportedValues(
+        Type type,
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        List<AtsExportedValueInfo> exportedValues,
+        List<AtsDiagnostic> diagnostics)
+    {
+        var xmlDoc = LoadXmlDocumentation(type.Assembly);
+
+        foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+        {
+            var valueAttr = AttributeDataReader.GetAspireValueData(field);
+            if (valueAttr is null)
+            {
+                continue;
+            }
+
+            if (!field.IsPublic)
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on non-public field '{field.Name}'. Exported values must be public.",
+                    $"{type.FullName}.{field.Name}"));
+                continue;
+            }
+
+            TryCreateExportedValue(
+                valueAttr,
+                type,
+                memberName: field.Name,
+                memberType: field.FieldType,
+                getValue: () => field.GetValue(null),
+                docMemberName: $"F:{type.FullName}.{field.Name}",
+                assemblyExportedTypeCache,
+                xmlDoc,
+                exportedValues,
+                diagnostics);
+        }
+
+        foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+        {
+            var valueAttr = AttributeDataReader.GetAspireValueData(property);
+            if (valueAttr is null)
+            {
+                continue;
+            }
+
+            if (property.GetMethod is not { IsStatic: true, IsPublic: true })
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on property '{property.Name}'. Exported value properties must have a public static getter.",
+                    $"{type.FullName}.{property.Name}"));
+                continue;
+            }
+
+            if (property.GetIndexParameters().Length != 0)
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on indexed property '{property.Name}'. Indexed properties are not supported.",
+                    $"{type.FullName}.{property.Name}"));
+                continue;
+            }
+
+            TryCreateExportedValue(
+                valueAttr,
+                type,
+                memberName: property.Name,
+                memberType: property.PropertyType,
+                getValue: () => property.GetValue(null),
+                docMemberName: $"P:{type.FullName}.{property.Name}",
+                assemblyExportedTypeCache,
+                xmlDoc,
+                exportedValues,
+                diagnostics);
+        }
+    }
+
+    private static void TryCreateExportedValue(
+        AspireValueData valueAttr,
+        Type declaringType,
+        string memberName,
+        Type memberType,
+        Func<object?> getValue,
+        string docMemberName,
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        XDocument? xmlDoc,
+        List<AtsExportedValueInfo> exportedValues,
+        List<AtsDiagnostic> diagnostics)
+    {
+        try
+        {
+            var typeRef = CreateTypeRef(memberType, enumCollector: null, assemblyExportedTypeCache);
+            if (!IsSupportedExportedValueType(typeRef))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on '{declaringType.FullName}.{memberName}'. Exported values must be primitives, enums, DTOs, arrays, dictionaries, or unions of those types.",
+                    $"{declaringType.FullName}.{memberName}"));
+                return;
+            }
+
+            exportedValues.Add(new AtsExportedValueInfo
+            {
+                PathSegments = BuildExportedValuePath(declaringType, valueAttr, memberName),
+                Type = typeRef!,
+                Value = SerializeExportedValue(getValue(), memberType),
+                Description = GetXmlDocSummary(xmlDoc, docMemberName)
+            });
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+            diagnostics.Add(AtsDiagnostic.Warning(
+                $"Skipping [AspireValue] on '{declaringType.FullName}.{memberName}': {ex.Message}",
+                $"{declaringType.FullName}.{memberName}"));
+        }
+    }
+
+    private static bool IsSupportedExportedValueType(AtsTypeRef? typeRef)
+    {
+        if (typeRef is null)
+        {
+            return false;
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => typeRef.TypeId != AtsConstants.CancellationToken && typeRef.TypeId != AtsConstants.Void,
+            AtsTypeCategory.Enum => true,
+            AtsTypeCategory.Dto => true,
+            AtsTypeCategory.Array => IsSupportedExportedValueType(typeRef.ElementType),
+            AtsTypeCategory.Dict => IsSupportedExportedValueType(typeRef.KeyType) && IsSupportedExportedValueType(typeRef.ValueType),
+            AtsTypeCategory.Union => typeRef.UnionTypes is not null && typeRef.UnionTypes.All(IsSupportedExportedValueType),
+            _ => false
+        };
+    }
+
+    private static JsonNode? SerializeExportedValue(object? value, Type memberType)
+    {
+        return JsonSerializer.SerializeToNode(value, memberType, s_exportedValueSerializerOptions);
+    }
+
+    private static IReadOnlyList<string> BuildExportedValuePath(Type declaringType, AspireValueData valueAttr, string memberName)
+    {
+        var pathSegments = new List<string> { valueAttr.CatalogName };
+        var nestedSegments = new Stack<string>();
+
+        for (var current = declaringType; current.DeclaringType is not null; current = current.DeclaringType)
+        {
+            nestedSegments.Push(current.Name);
+        }
+
+        while (nestedSegments.Count > 0)
+        {
+            pathSegments.Add(nestedSegments.Pop());
+        }
+
+        pathSegments.Add(valueAttr.Name ?? memberName);
+        return pathSegments;
     }
 
     /// <summary>
@@ -2722,6 +2894,10 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static readonly ConcurrentDictionary<string, XDocument?> s_xmlDocCache = new(StringComparer.Ordinal);
     private static readonly ConcurrentDictionary<Type, byte> s_assemblyExportedTypeCache = new();
+    private static readonly JsonSerializerOptions s_exportedValueSerializerOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
 
     private static AssemblyExportedTypeCache CreateAssemblyExportedTypeCache(IEnumerable<Assembly> assemblies)
     {

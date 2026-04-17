@@ -572,6 +572,22 @@ export interface TestNestedDto {
 }
 
 // ============================================================================
+// Exported Values
+// ============================================================================
+
+export namespace TestConfigs {
+    export const Default = { name: "default", port: 6379, enabled: true, optionalField: "cache" } as TestConfigDto;
+
+    export namespace Profiles {
+        export const Development = { name: "development", port: 5001, enabled: false, optionalField: null } as TestConfigDto;
+
+    }
+
+    export const Secure = { name: "secure", port: 6380, enabled: true, optionalField: null } as TestConfigDto;
+
+}
+
+// ============================================================================
 // Options Interfaces
 // ============================================================================
 

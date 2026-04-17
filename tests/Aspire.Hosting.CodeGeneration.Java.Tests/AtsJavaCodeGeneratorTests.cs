@@ -43,6 +43,23 @@ public class AtsJavaCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var testConfigsJava = files["TestConfigs.java"];
+
+        Assert.Contains("public final class TestConfigs", testConfigsJava);
+        Assert.Contains("static final TestConfigDto Default", testConfigsJava);
+        Assert.Contains("static final class Profiles", testConfigsJava);
+        Assert.Contains("static final TestConfigDto Development", testConfigsJava);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithTestTypes_IncludesCapabilities()
     {
         // Arrange

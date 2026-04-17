@@ -910,6 +910,27 @@ impl TestDeeplyNestedDto {
 }
 
 // ============================================================================
+// Exported Values
+// ============================================================================
+
+pub mod test_configs {
+    pub fn default() -> TestConfigDto {
+        serde_json::from_value::<TestConfigDto>(json!({"Name":"default","Port":6379,"Enabled":true,"OptionalField":"cache"}))
+            .expect("generated exported value should deserialize")
+    }
+    pub mod profiles {
+        pub fn development() -> TestConfigDto {
+            serde_json::from_value::<TestConfigDto>(json!({"Name":"development","Port":5001,"Enabled":false,"OptionalField":null}))
+                .expect("generated exported value should deserialize")
+        }
+    }
+    pub fn secure() -> TestConfigDto {
+        serde_json::from_value::<TestConfigDto>(json!({"Name":"secure","Port":6380,"Enabled":true,"OptionalField":null}))
+            .expect("generated exported value should deserialize")
+    }
+}
+
+// ============================================================================
 // Handle Wrappers
 // ============================================================================
 

@@ -1,4 +1,4 @@
-import { type FoundryModel, FoundryRole, createBuilder } from './.modules/aspire.js';
+import { FoundryModels, type FoundryModel, FoundryRole, createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -12,11 +12,7 @@ const chat = await foundry
         const _capacity: number = await deployment.skuCapacity.get();
     });
 
-const model: FoundryModel = {
-    name: 'gpt-4.1-mini',
-    version: '1',
-    format: 'OpenAI'
-};
+const model: FoundryModel = FoundryModels.OpenAI.Gpt41Mini;
 
 const _chatFromModel = await foundry.addDeploymentFromModel('chat-from-model', model);
 
@@ -50,7 +46,7 @@ const _keyVaultConnection = await project.addKeyVaultConnection(keyVault);
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');
 const _builderProjectModel = await builderProject.addModelDeployment('builder-project-model', 'Phi-4-mini', '1', 'Microsoft');
-const _projectModel = await project.addModelDeploymentFromModel('project-model', model);
+const _projectModel = await project.addModelDeploymentFromModel('project-model', FoundryModels.Microsoft.Phi4);
 const hostedAgent = await builder.addExecutable(
     'hosted-agent',
     'node',

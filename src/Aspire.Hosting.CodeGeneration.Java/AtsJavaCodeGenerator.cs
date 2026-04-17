@@ -4,9 +4,17 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json.Nodes;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Java;
+
+internal sealed class JavaExportedValueTreeNode
+{
+    public Dictionary<string, JavaExportedValueTreeNode> Children { get; } = new(StringComparer.Ordinal);
+
+    public AtsExportedValueInfo? Value { get; set; }
+}
 
 /// <summary>
 /// Generates a Java SDK using the ATS (Aspire Type System) capability-based API.
@@ -395,6 +403,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         var capabilities = context.Capabilities;
         var dtoTypes = context.DtoTypes;
         var enumTypes = context.EnumTypes;
+        var exportedValues = context.ExportedValues;
 
         _enumNames.Clear();
         foreach (var enumType in enumTypes)
@@ -419,6 +428,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteHeader();
         GenerateEnumTypes(enumTypes);
         GenerateDtoTypes(dtoTypes);
+        GenerateExportedValues(exportedValues, dtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal));
         GenerateOptionTypes();
         GenerateHandleTypes(handleTypes, capabilitiesByTarget);
         GenerateHandleWrapperRegistrations(handleTypes, collectionTypes);
@@ -554,6 +564,144 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
         }
+    }
+
+    private void GenerateExportedValues(
+        IReadOnlyList<AtsExportedValueInfo> exportedValues,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        if (exportedValues.Count == 0)
+        {
+            return;
+        }
+
+        var root = BuildExportedValueTree(exportedValues);
+
+        WriteLine("// ============================================================================");
+        WriteLine("// Exported Values");
+        WriteLine("// ============================================================================");
+        WriteLine();
+
+        foreach (var (name, node) in root.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            WriteLine($"final class {name} {{");
+            WriteLine($"    private {name}() {{ }}");
+            WriteLine();
+            WriteJavaExportedValueChildren(node, dtoTypesById, indentLevel: 1);
+            WriteLine("}");
+            WriteLine();
+        }
+    }
+
+    private void WriteJavaExportedValueChildren(
+        JavaExportedValueTreeNode node,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById,
+        int indentLevel)
+    {
+        var indent = new string(' ', indentLevel * 4);
+
+        foreach (var (name, child) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            if (child.Value is { } valueInfo)
+            {
+                if (!string.IsNullOrWhiteSpace(valueInfo.Description))
+                {
+                    WriteLine($"{indent}/** {valueInfo.Description} */");
+                }
+
+                var javaType = MapTypeRefToJava(valueInfo.Type, isOptional: false, useBoxedTypes: true);
+                var expression = RenderJavaExportedValue(valueInfo.Value, valueInfo.Type, dtoTypesById);
+                WriteLine($"{indent}static final {javaType} {name} = {expression};");
+            }
+            else
+            {
+                WriteLine($"{indent}static final class {name} {{");
+                WriteLine($"{indent}    private {name}() {{ }}");
+                WriteLine();
+                WriteJavaExportedValueChildren(child, dtoTypesById, indentLevel + 1);
+                WriteLine($"{indent}}}");
+            }
+
+            WriteLine();
+        }
+    }
+
+    private string RenderJavaExportedValue(
+        JsonNode? value,
+        AtsTypeRef typeRef,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        if (value is null)
+        {
+            return "null";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => value.ToJsonString(),
+            AtsTypeCategory.Enum => $"{MapTypeRefToJava(typeRef, false)}.fromValue({value.ToJsonString()})",
+            AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
+                => RenderJavaDtoValue(obj, dtoInfo, dtoTypesById),
+            AtsTypeCategory.Array when value is JsonArray arr
+                => $"new {MapTypeRefToJava(typeRef.ElementType, false)}[] {{ {string.Join(", ", arr.Select(item => RenderJavaExportedValue(item, typeRef.ElementType!, dtoTypesById)))} }}",
+            AtsTypeCategory.List when value is JsonArray arr
+                => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new ArrayList<>(List.of({string.Join(", ", arr.Select(item => RenderJavaExportedValue(item, typeRef.ElementType!, dtoTypesById)))}))",
+            AtsTypeCategory.Dict when value is JsonObject obj
+                => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new HashMap<>(Map.ofEntries({string.Join(", ", obj.Select(pair => $"Map.entry({JsonValue.Create(pair.Key)!.ToJsonString()}, {RenderJavaExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)})"))}))",
+            _ => value.ToJsonString()
+        };
+    }
+
+    private string RenderJavaDtoValue(
+        JsonObject value,
+        AtsDtoTypeInfo dtoInfo,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        var sb = new StringBuilder();
+        sb.Append("new ");
+        sb.Append(_dtoNames[dtoInfo.TypeId]);
+        sb.Append("() {{ ");
+
+        foreach (var property in dtoInfo.Properties)
+        {
+            if (!value.TryGetPropertyValue(property.Name, out var propertyValue))
+            {
+                continue;
+            }
+
+            sb.Append("set");
+            sb.Append(ToPascalCase(property.Name));
+            sb.Append('(');
+            sb.Append(RenderJavaExportedValue(propertyValue, property.Type, dtoTypesById));
+            sb.Append("); ");
+        }
+
+        sb.Append("}}");
+        return sb.ToString();
+    }
+
+    private static JavaExportedValueTreeNode BuildExportedValueTree(IReadOnlyList<AtsExportedValueInfo> exportedValues)
+    {
+        var root = new JavaExportedValueTreeNode();
+
+        foreach (var exportedValue in exportedValues)
+        {
+            var current = root;
+            foreach (var segment in exportedValue.PathSegments)
+            {
+                if (!current.Children.TryGetValue(segment, out var child))
+                {
+                    child = new JavaExportedValueTreeNode();
+                    current.Children[segment] = child;
+                }
+
+                current = child;
+            }
+
+            current.Value = exportedValue;
+        }
+
+        return root;
     }
 
     private void CollectOptionsClasses(IReadOnlyList<AtsCapabilityInfo> capabilities)

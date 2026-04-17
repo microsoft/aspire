@@ -1,4 +1,4 @@
-// ===== Aspire.java =====
+﻿// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1595,6 +1595,30 @@ public class TestConfigDto {
         map.put("OptionalField", AspireClient.serializeValue(optionalField));
         return map;
     }
+}
+
+// ===== TestConfigs.java =====
+// TestConfigs.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+public final class TestConfigs {
+    private TestConfigs() { }
+
+    static final TestConfigDto Default = new TestConfigDto() {{ setName("default"); setPort(6379); setEnabled(true); setOptionalField("cache"); }};
+
+    static final class Profiles {
+        private Profiles() { }
+
+        static final TestConfigDto Development = new TestConfigDto() {{ setName("development"); setPort(5001); setEnabled(false); setOptionalField(null); }};
+
+    }
+
+    static final TestConfigDto Secure = new TestConfigDto() {{ setName("secure"); setPort(6380); setEnabled(true); setOptionalField(null); }};
+
 }
 
 // ===== TestDatabaseResource.java =====
@@ -3219,6 +3243,7 @@ public final class WithOptionalStringOptions {
 .modules/TestCallbackContext.java
 .modules/TestCollectionContext.java
 .modules/TestConfigDto.java
+.modules/TestConfigs.java
 .modules/TestDatabaseResource.java
 .modules/TestDeeplyNestedDto.java
 .modules/TestEnvironmentContext.java

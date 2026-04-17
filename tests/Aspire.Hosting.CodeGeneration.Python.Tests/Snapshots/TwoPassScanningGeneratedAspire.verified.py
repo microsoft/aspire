@@ -19,6 +19,7 @@ import threading
 import time
 import abc
 import datetime
+import types
 import typing
 from functools import cached_property as _cached_property
 from contextlib import AbstractContextManager
@@ -1822,6 +1823,17 @@ class TestNestedDto(typing.TypedDict, total=False):
     Config: TestConfigDto
     Tags: AspireList[str]
     Counts: AspireDict[str, int]
+
+
+# ============================================================================
+# Exported Values
+# ============================================================================
+
+TestConfigs = types.SimpleNamespace()
+TestConfigs.Default = typing.cast(TestConfigDto, { "Name": "default", "Port": 6379, "Enabled": True, "OptionalField": "cache" })
+TestConfigs.Profiles = types.SimpleNamespace()
+TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "Name": "development", "Port": 5001, "Enabled": False, "OptionalField": None })
+TestConfigs.Secure = typing.cast(TestConfigDto, { "Name": "secure", "Port": 6380, "Enabled": True, "OptionalField": None })
 
 
 # ============================================================================

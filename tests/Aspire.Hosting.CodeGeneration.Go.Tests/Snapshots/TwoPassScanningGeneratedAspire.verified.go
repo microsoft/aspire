@@ -532,6 +532,25 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 }
 
 // ============================================================================
+// Exported Values
+// ============================================================================
+
+var TestConfigs = struct {
+	Default *TestConfigDto
+	Profiles struct {
+		Development *TestConfigDto
+	}	Secure *TestConfigDto
+}{
+	Default: &TestConfigDto{Name: "default", Port: 6379, Enabled: true, OptionalField: "cache"},
+	Profiles: struct {
+		Development *TestConfigDto
+	}{
+		Development: &TestConfigDto{Name: "development", Port: 5001, Enabled: false, OptionalField: nil},
+	},
+	Secure: &TestConfigDto{Name: "secure", Port: 6380, Enabled: true, OptionalField: nil},
+}
+
+// ============================================================================
 // Handle Wrappers
 // ============================================================================
 

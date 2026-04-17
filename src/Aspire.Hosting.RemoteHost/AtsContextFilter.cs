@@ -108,6 +108,7 @@ internal static class AtsContextFilter
             HandleTypes = context.HandleTypes.Where(type => includedHandleTypeIds.Contains(type.AtsTypeId)).ToList(),
             DtoTypes = context.DtoTypes.Where(type => includedDtoTypeIds.Contains(type.TypeId)).ToList(),
             EnumTypes = context.EnumTypes.Where(type => includedEnumTypeIds.Contains(type.TypeId)).ToList(),
+            ExportedValues = context.ExportedValues.Where(value => ShouldIncludeExportedValue(value.Type, includedDtoTypeIds, includedEnumTypeIds)).ToList(),
             Diagnostics = context.Diagnostics
         };
 
@@ -125,6 +126,30 @@ internal static class AtsContextFilter
         }
 
         return filteredContext;
+    }
+
+    private static bool ShouldIncludeExportedValue(
+        AtsTypeRef? typeRef,
+        HashSet<string> includedDtoTypeIds,
+        HashSet<string> includedEnumTypeIds)
+    {
+        if (typeRef is null)
+        {
+            return false;
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => true,
+            AtsTypeCategory.Dto => includedDtoTypeIds.Contains(typeRef.TypeId),
+            AtsTypeCategory.Enum => includedEnumTypeIds.Contains(typeRef.TypeId),
+            AtsTypeCategory.Array => ShouldIncludeExportedValue(typeRef.ElementType, includedDtoTypeIds, includedEnumTypeIds),
+            AtsTypeCategory.Dict => ShouldIncludeExportedValue(typeRef.KeyType, includedDtoTypeIds, includedEnumTypeIds)
+                && ShouldIncludeExportedValue(typeRef.ValueType, includedDtoTypeIds, includedEnumTypeIds),
+            AtsTypeCategory.Union => typeRef.UnionTypes is not null
+                && typeRef.UnionTypes.All(type => ShouldIncludeExportedValue(type, includedDtoTypeIds, includedEnumTypeIds)),
+            _ => false
+        };
     }
 
     private static void CollectReferencedType(
