@@ -290,7 +290,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var resourceEvent = await WaitForResourceEventAsync(
             notificationService,
             target,
-            re => ShouldYield(WaitBehavior.StopOnResourceUnavailable, re.Snapshot),
+            re => ResourceNotificationService.ShouldYieldHealthyWait(WaitBehavior.StopOnResourceUnavailable, re.Snapshot),
             $"Resource '{target.DisplayName}' failed to become healthy before the operation was cancelled.",
             cancellationToken).ConfigureAwait(false);
 
@@ -314,19 +314,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             State = resourceEvent.Snapshot.State?.Text,
             HealthStatus = resourceEvent.Snapshot.HealthStatus?.ToString()
         };
-
-        // Keep this aligned with the local ShouldYield helper in ResourceNotificationService.WaitForResourceHealthyAsync.
-        static bool ShouldYield(WaitBehavior waitBehavior, CustomResourceSnapshot snapshot) =>
-            waitBehavior switch
-            {
-                WaitBehavior.WaitOnResourceUnavailable => snapshot.HealthStatus == HealthStatus.Healthy,
-                WaitBehavior.StopOnResourceUnavailable => snapshot.HealthStatus == HealthStatus.Healthy ||
-                                                       snapshot.State?.Text == KnownResourceStates.Finished ||
-                                                       snapshot.State?.Text == KnownResourceStates.Exited ||
-                                                       snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-                                                       snapshot.State?.Text == KnownResourceStates.RuntimeUnhealthy,
-                _ => throw new DistributedApplicationException($"Unexpected wait behavior: {waitBehavior}")
-            };
     }
 
     private static async Task<WaitForResourceResponse> WaitForRunningAsync(ResourceNotificationService notificationService, WaitResourceTarget target, CancellationToken cancellationToken)
