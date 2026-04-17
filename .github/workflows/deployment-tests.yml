@@ -242,6 +242,7 @@ jobs:
           ./dotnet.sh test --project tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
             -c Release \
             --results-directory ${{ github.workspace }}/testresults \
+            --output Detailed \
             -- \
             --report-trx --report-trx-filename "${{ matrix.shortname }}.trx" \
             --filter-not-trait "quarantined=true" \

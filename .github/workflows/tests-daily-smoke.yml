@@ -49,6 +49,7 @@ jobs:
         run: |
           dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
             --no-build \
+            --output Detailed \
             -- \
             --filter-class "*.SmokeTests" \
             --filter-not-trait "quarantined=true" \
