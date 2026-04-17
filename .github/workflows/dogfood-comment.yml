@@ -13,12 +13,14 @@ on:
 
 jobs:
   add-dogfood-comment:
-    # Only run on the microsoft org to avoid running on forks.
-    # For workflow_run: only run when triggered by a pull_request event.
+    # For workflow_run: only handle fork PRs (same-repo PRs get the comment
+    # inline in tests.yml right after build_packages).
+    # Also handle manual workflow_dispatch.
     if: >-
       github.repository_owner == 'microsoft' &&
       (github.event_name == 'workflow_dispatch' ||
-       github.event.workflow_run.event == 'pull_request')
+       (github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.head_repository.full_name != github.repository))
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -78,6 +80,18 @@ jobs:
             
             // Unique marker to identify dogfooding comments
             const dogfoodMarker = '<!-- dogfood-pr -->';
+
+            // Skip if comment already exists
+            const comments = await github.rest.issues.listComments({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            if (comments.data.some(c => c.body.includes(dogfoodMarker))) {
+              core.info('Dogfood comment already exists, skipping');
+              return;
+            }
             
             const comment = `${dogfoodMarker}
             🚀 **Dogfood this PR with:**
@@ -93,29 +107,9 @@ jobs:
             iex "& { $(irm ${psScript}) } ${prNumber}"
             \`\`\``;
 
-            // Check for existing dogfooding comment
-            const comments = await github.rest.issues.listComments({
+            await github.rest.issues.createComment({
               issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
+              body: comment
             });
-
-            const existingComment = comments.data.find(comment => comment.body.includes(dogfoodMarker));
-
-            if (existingComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                comment_id: existingComment.id,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                issue_number: prNumber,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-            }
