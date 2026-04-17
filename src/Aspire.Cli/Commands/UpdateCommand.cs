@@ -105,16 +105,8 @@ internal sealed class UpdateCommand : BaseCommand
         {
             var installInfo = _installationDetector.GetInstallationInfo();
 
-            // When running as a dotnet tool, print the update command instead of executing
-            if (installInfo.IsDotNetTool)
-            {
-                InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                InteractionService.DisplayPlainText("  dotnet tool update -g Aspire.Cli");
-                return 0;
-            }
-
-            // When self-update is disabled (e.g., installed via WinGet/Homebrew), show instructions
-            if (installInfo.SelfUpdateDisabled)
+            // When running as a dotnet tool or self-update is disabled, show update instructions
+            if (installInfo.IsDotNetTool || installInfo.SelfUpdateDisabled)
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.SelfUpdateDisabledMessage);
                 if (!string.IsNullOrEmpty(installInfo.UpdateInstructions))
@@ -212,15 +204,8 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 var installInfo = _installationDetector.GetInstallationInfo();
 
-                if (installInfo.IsDotNetTool)
+                if (installInfo.IsDotNetTool || installInfo.SelfUpdateDisabled)
                 {
-                    // Show dotnet tool update message instead of prompting
-                    InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                    InteractionService.DisplayPlainText("  dotnet tool update -g Aspire.Cli");
-                }
-                else if (installInfo.SelfUpdateDisabled)
-                {
-                    // Show package manager instructions instead of prompting
                     InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.SelfUpdateDisabledMessage);
                     if (!string.IsNullOrEmpty(installInfo.UpdateInstructions))
                     {
@@ -264,12 +249,7 @@ internal sealed class UpdateCommand : BaseCommand
                 var installInfo = _installationDetector.GetInstallationInfo();
 
                 // Only prompt for self-update if not running as dotnet tool, not disabled, and downloader is available
-                if (installInfo.IsDotNetTool)
-                {
-                    InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                    InteractionService.DisplayPlainText("  dotnet tool update -g Aspire.Cli");
-                }
-                else if (installInfo.SelfUpdateDisabled)
+                if (installInfo.IsDotNetTool || installInfo.SelfUpdateDisabled)
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.SelfUpdateDisabledMessage);
                     if (!string.IsNullOrEmpty(installInfo.UpdateInstructions))

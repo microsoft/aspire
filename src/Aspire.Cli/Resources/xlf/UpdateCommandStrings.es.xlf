@@ -77,11 +77,6 @@
         <target state="needs-review-translation">Actualizar las integraciones en el proyecto Aspire. (Versión preliminar)</target>
         <note />
       </trans-unit>
-      <trans-unit id="DotNetToolSelfUpdateMessage">
-        <source>To update the Aspire CLI when installed as a .NET tool, run:</source>
-        <target state="translated">Para actualizar la CLI de Aspire cuando está instalada como herramienta de .NET, ejecute:</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
         <source>Executing: {0}</source>
         <target state="translated">Ejecutando: {0}</target>

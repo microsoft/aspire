@@ -105,7 +105,7 @@ namespace Aspire.Cli.Resources {
     internal static string ChannelOptionDescriptionWithStaging => ResourceManager.GetString("ChannelOptionDescriptionWithStaging", resourceCulture);
     internal static string QualityOptionDescription => ResourceManager.GetString("QualityOptionDescription", resourceCulture);
     internal static string QualityOptionDescriptionWithStaging => ResourceManager.GetString("QualityOptionDescriptionWithStaging", resourceCulture);
-    internal static string DotNetToolSelfUpdateMessage => ResourceManager.GetString("DotNetToolSelfUpdateMessage", resourceCulture);
+
     internal static string MigratedToNewSdkFormat => ResourceManager.GetString("MigratedToNewSdkFormat", resourceCulture);
     internal static string RemovedObsoleteAppHostPackage => ResourceManager.GetString("RemovedObsoleteAppHostPackage", resourceCulture);
     internal static string NoWritePermissionToInstallDirectory => ResourceManager.GetString("NoWritePermissionToInstallDirectory", resourceCulture);

@@ -13,7 +13,7 @@ on:
       cliChannel:
         description: >
           Distribution channel to embed in the CLI binary (e.g., 'stable', 'daily', 'pr').
-          When empty, defaults to 'stable' via Common.projitems.
+          When empty, defaults to 'ci' via Common.projitems.
         required: false
         type: string
         default: ci

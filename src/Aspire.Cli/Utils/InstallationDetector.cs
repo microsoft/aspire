@@ -51,6 +51,16 @@ internal sealed class InstallationDetector : IInstallationDetector
     /// </summary>
     internal const string PackageManagerUpdateInstructions = "If you installed the Aspire CLI through a package manager, use that package manager to update.";
 
+    /// <summary>
+    /// Update instructions for .NET global tool installations.
+    /// </summary>
+    internal const string DotNetToolUpdateInstructions = "dotnet tool update -g Aspire.Cli";
+
+    /// <summary>
+    /// Update instructions for script/direct-binary installations.
+    /// </summary>
+    internal const string SelfUpdateInstructions = "aspire update --self";
+
     public InstallationDetector(ILogger<InstallationDetector> logger)
         : this(logger, Environment.ProcessPath)
     {
@@ -82,7 +92,7 @@ internal sealed class InstallationDetector : IInstallationDetector
         if (IsDotNetToolProcess(_processPath))
         {
             _logger.LogDebug("CLI is running as a .NET tool.");
-            return new InstallationInfo(IsDotNetTool: true, SelfUpdateDisabled: false, UpdateInstructions: null);
+            return new InstallationInfo(IsDotNetTool: true, SelfUpdateDisabled: false, UpdateInstructions: DotNetToolUpdateInstructions);
         }
 
         // Resolve symlinks once (critical for Homebrew on macOS where the binary is symlinked)
@@ -109,7 +119,7 @@ internal sealed class InstallationDetector : IInstallationDetector
         }
 
         // Default: script install or direct binary, self-update is available
-        return new InstallationInfo(IsDotNetTool: false, SelfUpdateDisabled: false, UpdateInstructions: null);
+        return new InstallationInfo(IsDotNetTool: false, SelfUpdateDisabled: false, UpdateInstructions: SelfUpdateInstructions);
     }
 
     private static bool IsDotNetToolProcess(string? processPath)
@@ -166,29 +176,21 @@ internal sealed class InstallationDetector : IInstallationDetector
 
         var normalizedPath = Path.GetFullPath(resolvedPath);
 
-        // Check user-scope WinGet packages directory
+        var candidateDirs = new List<string>();
+
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (!string.IsNullOrEmpty(localAppData))
         {
-            var userPackagesDir = Path.GetFullPath(Path.Combine(localAppData, "Microsoft", "WinGet", "Packages"));
-            if (IsUnderDirectory(normalizedPath, userPackagesDir))
-            {
-                return true;
-            }
+            candidateDirs.Add(Path.GetFullPath(Path.Combine(localAppData, "Microsoft", "WinGet", "Packages")));
         }
 
-        // Check machine-scope WinGet packages directory
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         if (!string.IsNullOrEmpty(programFiles))
         {
-            var machinePackagesDir = Path.GetFullPath(Path.Combine(programFiles, "WinGet", "Packages"));
-            if (IsUnderDirectory(normalizedPath, machinePackagesDir))
-            {
-                return true;
-            }
+            candidateDirs.Add(Path.GetFullPath(Path.Combine(programFiles, "WinGet", "Packages")));
         }
 
-        return false;
+        return candidateDirs.Any(dir => IsUnderDirectory(normalizedPath, dir));
     }
 
     /// <summary>
@@ -242,21 +244,9 @@ internal sealed class InstallationDetector : IInstallationDetector
 
             return config;
         }
-        catch (JsonException ex)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            // Malformed JSON — fail closed (safer for package managers)
-            _logger.LogWarning(ex, "Failed to parse {FileName}. Treating as self-update disabled.", UpdateConfigFileName);
-            return new AspireUpdateConfig { SelfUpdateDisabled = true };
-        }
-        catch (IOException ex)
-        {
-            // File read error — fail closed
-            _logger.LogWarning(ex, "Failed to read {FileName}. Treating as self-update disabled.", UpdateConfigFileName);
-            return new AspireUpdateConfig { SelfUpdateDisabled = true };
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            // Permission error — fail closed
+            // Malformed JSON, file read error, or permission error — fail closed (safer for package managers)
             _logger.LogWarning(ex, "Failed to read {FileName}. Treating as self-update disabled.", UpdateConfigFileName);
             return new AspireUpdateConfig { SelfUpdateDisabled = true };
         }

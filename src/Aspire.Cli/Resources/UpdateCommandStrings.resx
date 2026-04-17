@@ -132,9 +132,6 @@
   <data name="QualityOptionDescriptionWithStaging" xml:space="preserve">
     <value>Quality level to update to (stable, staging, daily)</value>
   </data>
-  <data name="DotNetToolSelfUpdateMessage" xml:space="preserve">
-    <value>To update the Aspire CLI when installed as a .NET tool, run:</value>
-  </data>
   <data name="MigratedToNewSdkFormat" xml:space="preserve">
     <value>Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</value>
   </data>

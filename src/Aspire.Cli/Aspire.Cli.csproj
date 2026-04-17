@@ -26,9 +26,8 @@
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
 
     <!-- Distribution channel baked into the binary via AssemblyMetadata.
-         Set by CI/packaging: "stable", "daily", or "pr".
+         Set by CI/packaging (see eng/clipack/Common.projitems for the default).
          Empty/unset means dev/inner-loop build (uses implicit channel). -->
-    <CliChannel Condition="'$(CliChannel)' == ''"></CliChannel>
   </PropertyGroup>
 
   <ItemGroup>

@@ -60,9 +60,7 @@ internal class CliUpdateNotifier(
                 return;
             }
 
-            var updateCommand = installInfo.IsDotNetTool
-                ? "dotnet tool update -g Aspire.Cli"
-                : "aspire update";
+            var updateCommand = installInfo.UpdateInstructions ?? "aspire update --self";
 
             interactionService.DisplayVersionUpdateNotification(newerVersion.ToString(), updateCommand);
         }

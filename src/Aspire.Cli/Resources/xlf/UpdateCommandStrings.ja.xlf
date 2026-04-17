@@ -77,11 +77,6 @@
         <target state="needs-review-translation">Aspire プロジェクトの統合を更新します。(プレビュー)</target>
         <note />
       </trans-unit>
-      <trans-unit id="DotNetToolSelfUpdateMessage">
-        <source>To update the Aspire CLI when installed as a .NET tool, run:</source>
-        <target state="translated">.NET ツールとしてインストールされたときに Aspire CLI を更新するには、次を実行します。</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
         <source>Executing: {0}</source>
         <target state="translated">次を実行しています: {0}</target>

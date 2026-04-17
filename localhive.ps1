@@ -125,6 +125,9 @@ function Write-Log   { param([string]$m) Write-Host "[localhive] $m" }
 function Write-Warn  { param([string]$m) Write-Warning "[localhive] $m" }
 function Write-Err   { param([string]$m) Write-Error "[localhive] $m" }
 
+# Channel embedded in the CLI binary for localhive builds
+$DefaultCliChannel = 'local'
+
 if ($Help) { Show-Usage; exit 0 }
 
 # Validate flag combinations
@@ -309,7 +312,7 @@ if (-not $SkipBundle) {
   $skipNativeArg = if ($NativeAot) { '' } else { '/p:SkipNativeBuild=true' }
 
   Write-Log "Building bundle (aspire-managed + DCP$(if ($NativeAot) { ' + native AOT CLI' }))..."
-  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix", "/p:CliChannel=local", "/p:TargetRid=$bundleRid")
+  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix", "/p:CliChannel=$DefaultCliChannel", "/p:TargetRid=$bundleRid")
   if (-not $NativeAot) {
     $buildArgs += '/p:SkipNativeBuild=true'
   }
@@ -425,7 +428,7 @@ if (-not $SkipCli) {
 
     $installedCliPath = Join-Path $cliBinDir $cliExeName
     Write-Log "Aspire CLI installed to: $installedCliPath"
-    Write-Log "CLI has embedded channel 'pr' - hive packages at $aspireRoot\packages\"
+    Write-Log "CLI has embedded channel '$DefaultCliChannel' - hive packages at $aspireRoot\packages\"
 
     if (-not $Output) {
 

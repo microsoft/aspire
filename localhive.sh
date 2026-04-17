@@ -78,6 +78,9 @@ fi
 
 REPO_ROOT=$(cd "${scriptroot}"; pwd)
 
+# Channel embedded in the CLI binary for localhive builds
+DEFAULT_CLI_CHANNEL="local"
+
 CONFIG=""
 HIVE_NAME="local"
 USE_COPY=0
@@ -301,10 +304,10 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
 
   if [[ $NATIVE_AOT -eq 1 ]]; then
     log "Building bundle (aspire-managed + DCP + native AOT CLI)..."
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=local" "/p:TargetRid=$BUNDLE_RID"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=$DEFAULT_CLI_CHANNEL" "/p:TargetRid=$BUNDLE_RID"
   else
     log "Building bundle (aspire-managed + DCP)..."
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=local" "/p:TargetRid=$BUNDLE_RID"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=$DEFAULT_CLI_CHANNEL" "/p:TargetRid=$BUNDLE_RID"
   fi
   if [[ $? -ne 0 ]]; then
     error "Bundle build failed."
@@ -380,7 +383,7 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     chmod +x "$CLI_BIN_DIR/aspire"
 
     log "Aspire CLI installed to: $CLI_BIN_DIR/aspire"
-    log "CLI has embedded channel 'pr' — hive packages at $ASPIRE_ROOT/packages/"
+    log "CLI has embedded channel '$DEFAULT_CLI_CHANNEL' — hive packages at $ASPIRE_ROOT/packages/"
 
     if [[ -z "$OUTPUT_DIR" ]]; then
 
