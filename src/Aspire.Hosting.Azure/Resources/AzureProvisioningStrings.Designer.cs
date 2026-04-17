@@ -295,5 +295,139 @@ namespace Aspire.Hosting.Azure.Resources {
                 return ResourceManager.GetString("ResourceGroupSelectionMessage", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Azure credential provider.
+        /// </summary>
+        internal static string CredentialDialogTitle {
+            get {
+                return ResourceManager.GetString("CredentialDialogTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Select how you want to authenticate to Azure:.
+        /// </summary>
+        internal static string CredentialSelectionMessage {
+            get {
+                return ResourceManager.GetString("CredentialSelectionMessage", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Credential provider.
+        /// </summary>
+        internal static string CredentialLabel {
+            get {
+                return ResourceManager.GetString("CredentialLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Select credential provider.
+        /// </summary>
+        internal static string CredentialPlaceholder {
+            get {
+                return ResourceManager.GetString("CredentialPlaceholder", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Azure CLI (az).
+        /// </summary>
+        internal static string CredentialProviderAzureCli {
+            get {
+                return ResourceManager.GetString("CredentialProviderAzureCli", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Visual Studio.
+        /// </summary>
+        internal static string CredentialProviderVisualStudio {
+            get {
+                return ResourceManager.GetString("CredentialProviderVisualStudio", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Visual Studio Code.
+        /// </summary>
+        internal static string CredentialProviderVisualStudioCode {
+            get {
+                return ResourceManager.GetString("CredentialProviderVisualStudioCode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Azure PowerShell.
+        /// </summary>
+        internal static string CredentialProviderAzurePowerShell {
+            get {
+                return ResourceManager.GetString("CredentialProviderAzurePowerShell", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Azure Developer CLI (azd).
+        /// </summary>
+        internal static string CredentialProviderAzureDeveloperCli {
+            get {
+                return ResourceManager.GetString("CredentialProviderAzureDeveloperCli", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Interactive Browser.
+        /// </summary>
+        internal static string CredentialProviderInteractiveBrowser {
+            get {
+                return ResourceManager.GetString("CredentialProviderInteractiveBrowser", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Default (auto-detect).
+        /// </summary>
+        internal static string CredentialProviderDefault {
+            get {
+                return ResourceManager.GetString("CredentialProviderDefault", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Detecting available credential providers....
+        /// </summary>
+        internal static string CredentialDetectionInProgress {
+            get {
+                return ResourceManager.GetString("CredentialDetectionInProgress", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No credential providers detected. You can use Interactive Browser to sign in, or install Azure CLI, Visual Studio, or Azure Developer CLI..
+        /// </summary>
+        internal static string CredentialNoProvidersDetected {
+            get {
+                return ResourceManager.GetString("CredentialNoProvidersDetected", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to To use Azure local provisioning, you need to be logged in with one of the following:
+        ///
+        ///- **Azure CLI**: Run `az login`
+        ///- **Visual Studio**: Sign in through Tools → Options → Azure Service Authentication
+        ///- **Visual Studio Code**: Install Azure Account extension and sign in
+        ///- **Azure PowerShell**: Run `Connect-AzAccount`
+        ///- **Azure Developer CLI**: Run `azd auth login`
+        ///
+        ///Or use Interactive Browser to sign in now..
+        /// </summary>
+        internal static string CredentialLoginGuidanceMessage {
+            get {
+                return ResourceManager.GetString("CredentialLoginGuidanceMessage", resourceCulture);
+            }
+        }
     }
 }

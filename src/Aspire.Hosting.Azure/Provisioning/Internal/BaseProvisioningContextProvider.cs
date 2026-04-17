@@ -5,6 +5,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
+using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
@@ -33,6 +34,7 @@ internal abstract partial class BaseProvisioningContextProvider(
     internal const string SubscriptionIdName = "SubscriptionId";
     internal const string ResourceGroupName = "ResourceGroup";
     internal const string TenantName = "Tenant";
+    internal const string CredentialSourceName = "CredentialSource";
 
     protected readonly IInteractionService _interactionService = interactionService;
     protected readonly AzureProvisionerOptions _options = options.Value;
@@ -361,5 +363,23 @@ internal abstract partial class BaseProvisioningContextProvider(
             .Select(location => KeyValuePair.Create(location.Name, location.DisplayName ?? location.Name))
             .OrderBy(kvp => kvp.Value)
             .ToList();
+    }
+
+    /// <summary>
+    /// Gets the display name for a credential provider.
+    /// </summary>
+    protected static string GetCredentialProviderDisplayName(string provider)
+    {
+        return provider switch
+        {
+            "AzureCli" => AzureProvisioningStrings.CredentialProviderAzureCli,
+            "VisualStudio" => AzureProvisioningStrings.CredentialProviderVisualStudio,
+            "VisualStudioCode" => AzureProvisioningStrings.CredentialProviderVisualStudioCode,
+            "AzurePowerShell" => AzureProvisioningStrings.CredentialProviderAzurePowerShell,
+            "AzureDeveloperCli" => AzureProvisioningStrings.CredentialProviderAzureDeveloperCli,
+            "InteractiveBrowser" => AzureProvisioningStrings.CredentialProviderInteractiveBrowser,
+            "Default" => AzureProvisioningStrings.CredentialProviderDefault,
+            _ => provider
+        };
     }
 }

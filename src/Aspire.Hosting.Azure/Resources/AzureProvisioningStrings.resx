@@ -198,4 +198,55 @@ To learn more, see the [Azure provisioning docs](https://aka.ms/dotnet/aspire/az
   <data name="ResourceGroupSelectionMessage" xml:space="preserve">
     <value>Select your Azure resource group or enter a new name:</value>
   </data>
+  <data name="CredentialDialogTitle" xml:space="preserve">
+    <value>Azure credential provider</value>
+  </data>
+  <data name="CredentialSelectionMessage" xml:space="preserve">
+    <value>Select how you want to authenticate to Azure:</value>
+  </data>
+  <data name="CredentialLabel" xml:space="preserve">
+    <value>Credential provider</value>
+  </data>
+  <data name="CredentialPlaceholder" xml:space="preserve">
+    <value>Select credential provider</value>
+  </data>
+  <data name="CredentialProviderAzureCli" xml:space="preserve">
+    <value>Azure CLI (az)</value>
+  </data>
+  <data name="CredentialProviderVisualStudio" xml:space="preserve">
+    <value>Visual Studio</value>
+  </data>
+  <data name="CredentialProviderVisualStudioCode" xml:space="preserve">
+    <value>Visual Studio Code</value>
+  </data>
+  <data name="CredentialProviderAzurePowerShell" xml:space="preserve">
+    <value>Azure PowerShell</value>
+  </data>
+  <data name="CredentialProviderAzureDeveloperCli" xml:space="preserve">
+    <value>Azure Developer CLI (azd)</value>
+  </data>
+  <data name="CredentialProviderInteractiveBrowser" xml:space="preserve">
+    <value>Interactive Browser</value>
+  </data>
+  <data name="CredentialProviderDefault" xml:space="preserve">
+    <value>Default (auto-detect)</value>
+  </data>
+  <data name="CredentialDetectionInProgress" xml:space="preserve">
+    <value>Detecting available credential providers...</value>
+  </data>
+  <data name="CredentialNoProvidersDetected" xml:space="preserve">
+    <value>No credential providers detected. You can use Interactive Browser to sign in, or install Azure CLI, Visual Studio, or Azure Developer CLI.</value>
+  </data>
+  <data name="CredentialLoginGuidanceMessage" xml:space="preserve">
+    <value>To use Azure local provisioning, you need to be logged in with one of the following:
+
+- **Azure CLI**: Run `az login`
+- **Visual Studio**: Sign in through Tools → Options → Azure Service Authentication
+- **Visual Studio Code**: Install Azure Account extension and sign in
+- **Azure PowerShell**: Run `Connect-AzAccount`
+- **Azure Developer CLI**: Run `azd auth login`
+
+Or use Interactive Browser to sign in now.</value>
+    <comment>Contains markdown</comment>
+  </data>
 </root>

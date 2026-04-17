@@ -81,6 +81,12 @@ internal sealed class PublishModeProvisioningContextProvider(
 
     private async Task RetrieveAzureProvisioningOptions(CancellationToken cancellationToken = default)
     {
+        // Prompt for credential provider first if not already configured
+        if (string.IsNullOrEmpty(_options.CredentialSource) || _options.CredentialSource == "Default")
+        {
+            await PromptForCredentialProviderAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         while (_options.Location == null || _options.SubscriptionId == null)
         {
             // Skip tenant prompting if subscription ID is already set
@@ -110,6 +116,74 @@ internal sealed class PublishModeProvisioningContextProvider(
                     continue;
                 }
             }
+        }
+    }
+
+    private async Task PromptForCredentialProviderAsync(CancellationToken cancellationToken)
+    {
+        List<string>? availableProviders = null;
+
+        var step = await activityReporter.CreateStepAsync(
+            "detect-credentials",
+            cancellationToken).ConfigureAwait(false);
+
+        await using (step.ConfigureAwait(false))
+        {
+            try
+            {
+                var task = await step.CreateTaskAsync(AzureProvisioningStrings.CredentialDetectionInProgress, cancellationToken).ConfigureAwait(false);
+
+                await using (task.ConfigureAwait(false))
+                {
+                    var detector = new CredentialProviderDetector(_logger);
+                    availableProviders = await detector.DetectAvailableProvidersAsync(_options.TenantId, cancellationToken).ConfigureAwait(false);
+                }
+
+                await step.SucceedAsync($"Detected {availableProviders.Count} credential provider(s)", cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to detect credential providers.");
+                await step.FailAsync($"Failed to detect credential providers: {ex.Message}", cancellationToken).ConfigureAwait(false);
+                
+                // Fall back to showing all options if detection fails
+                availableProviders = ["AzureCli", "VisualStudio", "VisualStudioCode", "AzurePowerShell", "AzureDeveloperCli", "InteractiveBrowser"];
+            }
+        }
+
+        // Show guidance if no providers (except InteractiveBrowser) were detected
+        string? message = null;
+        if (availableProviders.Count == 1 && availableProviders[0] == "InteractiveBrowser")
+        {
+            message = AzureProvisioningStrings.CredentialLoginGuidanceMessage;
+        }
+
+        var credentialOptions = availableProviders
+            .Select(provider => KeyValuePair.Create(provider, GetCredentialProviderDisplayName(provider)))
+            .ToList();
+
+        var result = await _interactionService.PromptInputsAsync(
+            AzureProvisioningStrings.CredentialDialogTitle,
+            message ?? AzureProvisioningStrings.CredentialSelectionMessage,
+            [
+                new InteractionInput
+                {
+                    Name = CredentialSourceName,
+                    InputType = InputType.Choice,
+                    Label = AzureProvisioningStrings.CredentialLabel,
+                    Required = true,
+                    Options = [..credentialOptions]
+                }
+            ],
+            new InputsDialogInteractionOptions
+            {
+                EnableMessageMarkdown = !string.IsNullOrEmpty(message)
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (!result.Canceled)
+        {
+            _options.CredentialSource = result.Data[CredentialSourceName].Value ?? "Default";
         }
     }
 

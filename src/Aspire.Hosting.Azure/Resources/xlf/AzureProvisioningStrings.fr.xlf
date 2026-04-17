@@ -2,6 +2,92 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../AzureProvisioningStrings.resx">
     <body>
+      <trans-unit id="CredentialDetectionInProgress">
+        <source>Detecting available credential providers...</source>
+        <target state="new">Detecting available credential providers...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialDialogTitle">
+        <source>Azure credential provider</source>
+        <target state="new">Azure credential provider</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialLabel">
+        <source>Credential provider</source>
+        <target state="new">Credential provider</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialLoginGuidanceMessage">
+        <source>To use Azure local provisioning, you need to be logged in with one of the following:
+
+- **Azure CLI**: Run `az login`
+- **Visual Studio**: Sign in through Tools → Options → Azure Service Authentication
+- **Visual Studio Code**: Install Azure Account extension and sign in
+- **Azure PowerShell**: Run `Connect-AzAccount`
+- **Azure Developer CLI**: Run `azd auth login`
+
+Or use Interactive Browser to sign in now.</source>
+        <target state="new">To use Azure local provisioning, you need to be logged in with one of the following:
+
+- **Azure CLI**: Run `az login`
+- **Visual Studio**: Sign in through Tools → Options → Azure Service Authentication
+- **Visual Studio Code**: Install Azure Account extension and sign in
+- **Azure PowerShell**: Run `Connect-AzAccount`
+- **Azure Developer CLI**: Run `azd auth login`
+
+Or use Interactive Browser to sign in now.</target>
+        <note>Contains markdown</note>
+      </trans-unit>
+      <trans-unit id="CredentialNoProvidersDetected">
+        <source>No credential providers detected. You can use Interactive Browser to sign in, or install Azure CLI, Visual Studio, or Azure Developer CLI.</source>
+        <target state="new">No credential providers detected. You can use Interactive Browser to sign in, or install Azure CLI, Visual Studio, or Azure Developer CLI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialPlaceholder">
+        <source>Select credential provider</source>
+        <target state="new">Select credential provider</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialProviderAzureCli">
+        <source>Azure CLI (az)</source>
+        <target state="new">Azure CLI (az)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialProviderAzureDeveloperCli">
+        <source>Azure Developer CLI (azd)</source>
+        <target state="new">Azure Developer CLI (azd)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialProviderAzurePowerShell">
+        <source>Azure PowerShell</source>
+        <target state="new">Azure PowerShell</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialProviderDefault">
+        <source>Default (auto-detect)</source>
+        <target state="new">Default (auto-detect)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialProviderInteractiveBrowser">
+        <source>Interactive Browser</source>
+        <target state="new">Interactive Browser</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialProviderVisualStudio">
+        <source>Visual Studio</source>
+        <target state="new">Visual Studio</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialProviderVisualStudioCode">
+        <source>Visual Studio Code</source>
+        <target state="new">Visual Studio Code</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CredentialSelectionMessage">
+        <source>Select how you want to authenticate to Azure:</source>
+        <target state="new">Select how you want to authenticate to Azure:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InputsMessage">
         <source>The model contains Azure resources that require an Azure Subscription.
 

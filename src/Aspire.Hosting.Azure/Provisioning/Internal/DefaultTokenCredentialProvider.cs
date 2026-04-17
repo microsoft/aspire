@@ -15,6 +15,7 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
     private readonly DistributedApplicationExecutionContext _distributedApplicationExecutionContext;
     private TokenCredential? _credential;
     private string? _lastTenantId;
+    private string? _lastCredentialSource;
     private readonly object _lock = new();
 
     public DefaultTokenCredentialProvider(
@@ -34,12 +35,14 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
             lock (_lock)
             {
                 var currentTenantId = _options.Value.TenantId;
+                var currentCredentialSource = _options.Value.CredentialSource;
 
-                // Recreate credential if tenant ID has changed or credential doesn't exist
-                if (_credential == null || _lastTenantId != currentTenantId)
+                // Recreate credential if tenant ID or credential source has changed, or credential doesn't exist
+                if (_credential == null || _lastTenantId != currentTenantId || _lastCredentialSource != currentCredentialSource)
                 {
                     _credential = CreateCredential(currentTenantId);
                     _lastTenantId = currentTenantId;
+                    _lastCredentialSource = currentCredentialSource;
                 }
 
                 return _credential;
@@ -68,6 +71,11 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
                 TenantId = tenantId,
                 AdditionallyAllowedTenants = { "*" }
             }),
+            "VisualStudioCode" => new VisualStudioCodeCredential(new()
+            {
+                TenantId = tenantId,
+                AdditionallyAllowedTenants = { "*" }
+            }),
             "AzureDeveloperCli" => new AzureDeveloperCliCredential(new()
             {
                 TenantId = tenantId,
@@ -77,21 +85,13 @@ internal class DefaultTokenCredentialProvider : ITokenCredentialProvider
             {
                 TenantId = tenantId
             }),
-            // Use AzureCli as default for publish mode when no explicit credential source is set
-            null or "Default" when _distributedApplicationExecutionContext.IsPublishMode => new AzureCliCredential(new()
+            // Use AzureCli as default when no explicit credential source is set
+            null or "Default" => new AzureCliCredential(new()
             {
                 TenantId = tenantId,
                 AdditionallyAllowedTenants = { "*" }
             }),
-            _ => new DefaultAzureCredential(new DefaultAzureCredentialOptions()
-            {
-                TenantId = tenantId,
-                ExcludeManagedIdentityCredential = true,
-                ExcludeWorkloadIdentityCredential = true,
-                ExcludeAzurePowerShellCredential = true,
-                CredentialProcessTimeout = TimeSpan.FromSeconds(15),
-                AdditionallyAllowedTenants = { "*" }
-            })
+            _ => throw new InvalidOperationException($"Unsupported credential source: {credentialSetting}")
         };
 
         return credential;

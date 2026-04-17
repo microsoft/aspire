@@ -125,9 +125,46 @@ internal sealed class RunModeProvisioningContextProvider(
             {
                 var inputs = new List<InteractionInput>();
 
+                // Add credential provider selection if not already configured
+                if (string.IsNullOrEmpty(_options.CredentialSource) || _options.CredentialSource == "Default")
+                {
+                    inputs.Add(new InteractionInput
+                    {
+                        Name = CredentialSourceName,
+                        InputType = InputType.Choice,
+                        Label = AzureProvisioningStrings.CredentialLabel,
+                        Required = true,
+                        Placeholder = AzureProvisioningStrings.CredentialPlaceholder,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            LoadCallback = async (context) =>
+                            {
+                                var detector = new CredentialProviderDetector(_logger);
+                                var availableProviders = await detector.DetectAvailableProvidersAsync(_options.TenantId, cancellationToken).ConfigureAwait(false);
+
+                                context.Input.Options = availableProviders
+                                    .Select(provider => KeyValuePair.Create(provider, GetCredentialProviderDisplayName(provider)))
+                                    .ToList();
+
+                                // Show guidance if no providers (except InteractiveBrowser) were detected
+                                if (availableProviders.Count == 1 && availableProviders[0] == "InteractiveBrowser")
+                                {
+                                    // No actual credential providers detected, only InteractiveBrowser fallback
+                                    _logger.LogWarning(AzureProvisioningStrings.CredentialNoProvidersDetected);
+                                }
+                            }
+                        }
+                    });
+                }
+
                 // Skip tenant prompting if subscription ID is already set
                 if (string.IsNullOrEmpty(_options.SubscriptionId))
                 {
+                    // Determine if tenant should depend on credential source
+                    var tenantDependsOn = (string.IsNullOrEmpty(_options.CredentialSource) || _options.CredentialSource == "Default")
+                        ? new[] { CredentialSourceName }
+                        : Array.Empty<string>();
+
                     inputs.Add(new InteractionInput
                     {
                         Name = TenantName,
@@ -140,13 +177,20 @@ internal sealed class RunModeProvisioningContextProvider(
                         {
                             LoadCallback = async (context) =>
                             {
+                                // If credential was just selected, update the option
+                                if (context.AllInputs.TryGetByName(CredentialSourceName, out var credentialInput))
+                                {
+                                    _options.CredentialSource = credentialInput.Value ?? "Default";
+                                }
+
                                 var (tenantOptions, fetchSucceeded) =
                                     await TryGetTenantsAsync(cancellationToken).ConfigureAwait(false);
 
                                 context.Input.Options = fetchSucceeded
                                     ? tenantOptions!
                                     : [];
-                            }
+                            },
+                            DependsOnInputs = tenantDependsOn
                         }
                     });
                 }
@@ -307,6 +351,12 @@ internal sealed class RunModeProvisioningContextProvider(
 
                 if (!result.Canceled)
                 {
+                    // Set credential source if it was part of the input
+                    if (result.Data.TryGetByName(CredentialSourceName, out var credentialInput))
+                    {
+                        _options.CredentialSource = credentialInput.Value ?? "Default";
+                    }
+                    
                     // Only set tenant ID if it was part of the input (when subscription ID wasn't already set)
                     if (result.Data.TryGetByName(TenantName, out var tenantInput))
                     {
