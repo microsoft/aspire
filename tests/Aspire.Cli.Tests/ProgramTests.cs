@@ -60,13 +60,4 @@ public class ProgramTests
         Assert.Contains("hello", output, StringComparison.Ordinal);
         Assert.DoesNotContain("\u001b", output, StringComparison.Ordinal);
     }
-
-    private sealed class TestCliHostEnvironment(bool supportsAnsi, bool supportsInteractiveOutput) : ICliHostEnvironment
-    {
-        public bool SupportsInteractiveInput => supportsInteractiveOutput;
-
-        public bool SupportsInteractiveOutput => supportsInteractiveOutput;
-
-        public bool SupportsAnsi => supportsAnsi;
-    }
 }
