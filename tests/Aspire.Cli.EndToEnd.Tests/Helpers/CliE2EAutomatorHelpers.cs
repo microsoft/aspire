@@ -437,10 +437,9 @@ internal static class CliE2EAutomatorHelpers
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // If DASHBOARD_URL is empty, the apphost likely crashed — dump logs for diagnostics
+        // If DASHBOARD_URL is empty, the apphost likely crashed — dump logs for diagnostics.
         await auto.TypeAsync(
             "if [ -z \"$DASHBOARD_URL\" ]; then " +
-            "echo 'dashboard-url-empty'; " +
             "echo '=== ASPIRE START JSON ==='; cat " + jsonFile + "; echo '=== END JSON ==='; " +
             "echo '=== ALL LOGS ==='; ls -lt ~/.aspire/logs/ 2>/dev/null; echo '=== END LIST ==='; " +
             "DETACH_LOG=$(ls -t ~/.aspire/logs/cli_*detach*.log 2>/dev/null | head -1); " +
@@ -450,6 +449,37 @@ internal static class CliE2EAutomatorHelpers
             "fi");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
+
+        // Check whether $DASHBOARD_URL was set using variable expansion so the marker
+        // text in the output differs from the typed command text. The typed command
+        // shows the literal "${DASHBOARD_URL}" on screen, while the shell output
+        // shows the expanded value — "URLCHECK::URLEND" when empty.
+        await auto.TypeAsync("echo \"URLCHECK:${DASHBOARD_URL}:URLEND\"");
+        await auto.EnterAsync();
+
+        var dashboardUrlEmpty = false;
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            var emptySearcher = new CellPatternSearcher().FindPattern("URLCHECK::URLEND");
+            if (emptySearcher.Search(snapshot).Count > 0)
+            {
+                dashboardUrlEmpty = true;
+            }
+
+            var promptSearcher = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+            return promptSearcher.Search(snapshot).Count > 0;
+        }, timeout: TimeSpan.FromSeconds(30), description: $"dashboard URL check [{counter.Value} OK]");
+        counter.Increment();
+
+        if (dashboardUrlEmpty)
+        {
+            throw new InvalidOperationException(
+                "Dashboard URL was empty after aspire start. " +
+                "The sed extraction failed to find a dashboardUrl in the JSON output. " +
+                "Check terminal output for CLI logs and JSON content.");
+        }
 
         await auto.TypeAsync(
             "curl -ksSL -o /dev/null -w 'dashboard-http-%{http_code}' \"$DASHBOARD_URL\" " +
