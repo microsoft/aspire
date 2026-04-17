@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 
@@ -9,6 +10,7 @@ namespace Aspire.Cli.Agents;
 /// <summary>
 /// Represents a skill that can be installed into a skill location.
 /// </summary>
+[DebuggerDisplay("Name = {Name}, Description = {Description}, IsDefault = {IsDefault}")]
 internal sealed class SkillDefinition
 {
     /// <summary>
@@ -151,4 +153,7 @@ internal sealed class SkillDefinition
     /// Gets all available skill definitions.
     /// </summary>
     public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, PlaywrightCli, DotnetInspect];
+
+    /// <inheritdoc />
+    public override string ToString() => Name;
 }

@@ -39,6 +39,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenProjectOptionSpecified_PassesProjectFileToProjectLocator()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+        FileInfo? capturedProjectFile = null;
+        var projectLocatorInvoked = false;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -46,7 +48,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
                 {
-                    Assert.NotNull(projectFile);
+                    projectLocatorInvoked = true;
+                    capturedProjectFile = projectFile;
                     return Task.FromResult<FileInfo?>(projectFile);
                 }
             };
@@ -57,7 +60,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
             {
-                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
                 {
                     return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
                 }
@@ -76,6 +79,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.Equal(0, exitCode);
+        Assert.True(projectLocatorInvoked);
+        Assert.NotNull(capturedProjectFile);
+        Assert.Equal("AppHost.csproj", capturedProjectFile.Name);
     }
 
     [Fact]
@@ -151,6 +157,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var confirmCallbackInvoked = false;
+        string? confirmPrompt = null;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
@@ -166,9 +173,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 ConfirmCallback = (prompt, defaultValue) =>
                 {
-                    // Verify the correct prompt is shown
                     confirmCallbackInvoked = true;
-                    Assert.Contains("Would you like to update the Aspire CLI", prompt);
+                    confirmPrompt = prompt;
                     return false; // User says no
                 }
             };
@@ -186,6 +192,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.True(confirmCallbackInvoked, "Confirm prompt should have been shown");
+        Assert.NotNull(confirmPrompt);
+        Assert.Contains("Would you like to update the Aspire CLI", confirmPrompt);
         Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
     }
 
@@ -195,6 +203,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var confirmCallbackInvoked = false;
+        string? confirmPrompt = null;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
@@ -210,8 +219,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 ConfirmCallback = (prompt, defaultValue) =>
                 {
                     confirmCallbackInvoked = true;
-                    // Verify the correct prompt is shown after project update
-                    Assert.Contains("An update is available for the Aspire CLI", prompt);
+                    confirmPrompt = prompt;
                     return false; // User says no
                 }
             };
@@ -220,7 +228,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
             {
-                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
                 {
                     return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
                 }
@@ -259,7 +267,95 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.True(confirmCallbackInvoked, "Confirm prompt should have been shown after successful project update");
+        Assert.NotNull(confirmPrompt);
+        Assert.Contains("An update is available for the Aspire CLI", confirmPrompt);
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WithoutAutoConfirmOption_UsesFalseConfirmationDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var updateProjectInvoked = false;
+        var confirmBindingResolved = false;
+        var confirmBindingValue = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                {
+                    updateProjectInvoked = true;
+                    (confirmBindingResolved, confirmBindingValue) = context.ConfirmBinding.Resolve();
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.True(updateProjectInvoked);
+        Assert.False(confirmBindingResolved);
+        Assert.False(confirmBindingValue);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WithYesOption_ResolvesConfirmationFromCli()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var updateProjectInvoked = false;
+        var confirmBindingResolved = false;
+        var confirmBindingValue = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                {
+                    updateProjectInvoked = true;
+                    (confirmBindingResolved, confirmBindingValue) = context.ConfirmBinding.Resolve();
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.True(updateProjectInvoked);
+        Assert.True(confirmBindingResolved);
+        Assert.True(confirmBindingValue);
     }
 
     [Fact]
@@ -291,7 +387,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
             {
-                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
                 {
                     return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
                 }
@@ -348,8 +444,6 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
                 {
                     promptForSelectionInvoked = true;
-                    // If this is called, it means the channel prompt was shown
-                    Assert.Fail("Channel prompt should not be shown when --channel option is provided");
                     return "stable";
                 }
             };
@@ -395,8 +489,6 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
                 {
                     promptForSelectionInvoked = true;
-                    // If this is called, it means the quality prompt was shown
-                    Assert.Fail("Quality prompt should not be shown when --quality option is provided");
                     return "stable";
                 }
             };
@@ -491,8 +583,6 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
                 {
                     promptForSelectionInvoked = true;
-                    // If this is called, it means the channel prompt was shown
-                    Assert.Fail("Channel prompt should not be shown when --channel option is provided");
                     return choices.Cast<PackageChannel>().First();
                 }
             };
@@ -501,9 +591,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
             {
-                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
                 {
-                    capturedChannel = channel;
+                    capturedChannel = context.Channel;
                     return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
                 }
             };
@@ -558,8 +648,6 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
                 {
                     promptForSelectionInvoked = true;
-                    // If this is called, it means the channel prompt was shown
-                    Assert.Fail("Channel prompt should not be shown when --quality option is provided");
                     return choices.Cast<PackageChannel>().First();
                 }
             };
@@ -568,9 +656,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
             {
-                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
                 {
-                    capturedChannel = channel;
+                    capturedChannel = context.Channel;
                     return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
                 }
             };
@@ -682,7 +770,6 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
                 {
                     promptForSelectionInvoked = true;
-                    Assert.Fail("Channel prompt should not be shown when --channel option is provided");
                     return choices.Cast<PackageChannel>().First();
                 }
             };
@@ -691,9 +778,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
             {
-                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
                 {
-                    capturedChannel = channel;
+                    capturedChannel = context.Channel;
                     return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
                 }
             };
@@ -813,9 +900,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
             {
-                UpdateProjectAsyncCallback = (projectFile, channel, cancellationToken) =>
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
                 {
-                    updatedWithChannel = channel.Name;
+                    updatedWithChannel = context.Channel.Name;
                     return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
                 }
             };
@@ -1024,16 +1111,16 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
 
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatusAsync(statusText, action, emoji, allowMarkup);
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatus(statusText, action, emoji, allowMarkup);
-    public Task<string> PromptForStringAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, CancellationToken cancellationToken = default) 
-        => _innerService.PromptForStringAsync(promptText, defaultValue, validator, isSecret, required, cancellationToken);
-    public Task<string> PromptForFilePathAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, CancellationToken cancellationToken = default)
-        => _innerService.PromptForFilePathAsync(promptText, defaultValue, validator, directory, required, cancellationToken);
-    public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default) 
-        => _innerService.ConfirmAsync(promptText, defaultValue, cancellationToken);
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull 
-        => _innerService.PromptForSelectionAsync(promptText, choices, choiceFormatter, cancellationToken);
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, CancellationToken cancellationToken = default) where T : notnull 
-        => _innerService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, cancellationToken);
+    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) 
+        => _innerService.PromptForStringAsync(promptText, validator, isSecret, required, binding, cancellationToken);
+    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+        => _innerService.PromptForFilePathAsync(promptText, validator, directory, required, binding, cancellationToken);
+    public Task<bool> ConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) 
+        => _innerService.ConfirmAsync(promptText, binding, cancellationToken);
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull 
+        => _innerService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, cancellationToken);
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull 
+        => _innerService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, cancellationToken);
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) 
         => _innerService.DisplayIncompatibleVersionError(ex, appHostHostingVersion);
     public void DisplayError(string errorMessage) => _innerService.DisplayError(errorMessage);
@@ -1062,34 +1149,16 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
 // Test implementation of IProjectUpdater
 internal sealed class TestProjectUpdater : IProjectUpdater
 {
-    public Func<FileInfo, PackageChannel, CancellationToken, Task<ProjectUpdateResult>>? UpdateProjectAsyncCallback { get; set; }
+    public Func<UpdatePackagesContext, CancellationToken, Task<ProjectUpdateResult>>? UpdateProjectAsyncCallback { get; set; }
 
-    public Task<ProjectUpdateResult> UpdateProjectAsync(FileInfo projectFile, PackageChannel channel, CancellationToken cancellationToken = default)
+    public Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default)
     {
         if (UpdateProjectAsyncCallback != null)
         {
-            return UpdateProjectAsyncCallback(projectFile, channel, cancellationToken);
+            return UpdateProjectAsyncCallback(context, cancellationToken);
         }
 
         // Default behavior
         return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
-    }
-}
-
-// Test implementation of IPackagingService
-internal sealed class TestPackagingService : IPackagingService
-{
-    public Func<CancellationToken, Task<IEnumerable<PackageChannel>>>? GetChannelsAsyncCallback { get; set; }
-
-    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
-    {
-        if (GetChannelsAsyncCallback != null)
-        {
-            return GetChannelsAsyncCallback(cancellationToken);
-        }
-
-        // Default behavior - return a fake channel
-        var testChannel = new PackageChannel("test", PackageChannelQuality.Stable, null, null!);
-        return Task.FromResult<IEnumerable<PackageChannel>>(new[] { testChannel });
     }
 }

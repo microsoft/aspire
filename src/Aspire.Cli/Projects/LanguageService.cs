@@ -98,7 +98,7 @@ internal sealed class LanguageService : ILanguageService
             "Which language would you like to use?",
             languages,
             lang => lang.DisplayName,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return (_projectFactory.GetProject(selected), selected);
     }

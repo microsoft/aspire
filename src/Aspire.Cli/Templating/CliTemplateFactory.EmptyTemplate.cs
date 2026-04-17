@@ -32,14 +32,30 @@ internal sealed partial class CliTemplateFactory
         if (string.IsNullOrWhiteSpace(projectName))
         {
             var defaultName = _executionContext.WorkingDirectory.Name;
-            projectName = await _prompter.PromptForProjectNameAsync(defaultName, cancellationToken);
+
+            if (!_hostEnvironment.SupportsInteractiveInput)
+            {
+                projectName = defaultName;
+            }
+            else
+            {
+                projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
+            }
         }
 
         var outputPath = inputs.Output;
         if (string.IsNullOrWhiteSpace(outputPath))
         {
             var defaultOutputPath = $"./{projectName}";
-            outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, cancellationToken);
+
+            if (!_hostEnvironment.SupportsInteractiveInput)
+            {
+                outputPath = defaultOutputPath;
+            }
+            else
+            {
+                outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, cancellationToken);
+            }
         }
         outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
 
@@ -108,34 +124,23 @@ internal sealed partial class CliTemplateFactory
 
     private async Task<bool> ResolveUseLocalhostTldAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var localhostTldOptionSpecified = parseResult.Tokens.Any(token =>
-            string.Equals(token.Value, "--localhost-tld", StringComparisons.CliInputOrOutput));
-        var useLocalhostTld = parseResult.GetValue(_localhostTldOption);
-        if (!localhostTldOptionSpecified)
-        {
-            if (!_hostEnvironment.SupportsInteractiveInput)
-            {
-                return false;
-            }
+        var binding = PromptBinding.CreateBoolAsSelection(parseResult, _localhostTldOption, TemplatingStrings.Yes, TemplatingStrings.No);
 
-            useLocalhostTld = await _interactionService.PromptForSelectionAsync(
-                TemplatingStrings.UseLocalhostTld_Prompt,
-                [TemplatingStrings.No, TemplatingStrings.Yes],
-                choice => choice,
-                cancellationToken) switch
-            {
-                var choice when string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput) => true,
-                var choice when string.Equals(choice, TemplatingStrings.No, StringComparisons.CliInputOrOutput) => false,
-                _ => throw new InvalidOperationException(TemplatingStrings.UseLocalhostTld_UnexpectedChoice)
-            };
-        }
+        var selected = await _interactionService.PromptForSelectionAsync(
+            TemplatingStrings.UseLocalhostTld_Prompt,
+            [TemplatingStrings.No, TemplatingStrings.Yes],
+            choice => choice,
+            binding: binding,
+            cancellationToken: cancellationToken);
 
-        if (useLocalhostTld ?? false)
+        var useLocalhostTld = string.Equals(selected, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput);
+
+        if (useLocalhostTld)
         {
             _interactionService.DisplayMessage(KnownEmojis.CheckMark, TemplatingStrings.UseLocalhostTld_UsingLocalhostTld);
         }
 
-        return useLocalhostTld ?? false;
+        return useLocalhostTld;
     }
 
     private async Task ApplyLocalhostTldToScaffoldedRunProfileAsync(string outputPath, string projectName, CancellationToken cancellationToken)

@@ -92,6 +92,21 @@
         <target state="translated">没有可供选择的项目: {0}</target>
         <note>{0} is the original selection prompt text.</note>
       </trans-unit>
+      <trans-unit id="NonInteractiveAvailableValues">
+        <source>Available values: {0}</source>
+        <target state="new">Available values: {0}</target>
+        <note>{0} is a comma-separated list of valid values</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveInvalidValue">
+        <source>The value '{0}' is not valid for {1}.</source>
+        <target state="new">The value '{0}' is not valid for {1}.</target>
+        <note>{0} is the provided value. {1} is the option/argument display name.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveOptionRequired">
+        <source>The {0} option must be specified when running in non-interactive mode.</source>
+        <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
+        <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
+      </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
         <target state="translated">该操作已取消。</target>

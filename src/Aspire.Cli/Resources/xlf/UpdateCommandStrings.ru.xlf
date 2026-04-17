@@ -157,6 +157,11 @@
         <target state="translated">Не удается записать в каталог установки "{0}". Запустите обновление с повышенными правами (например, используя sudo в Linux или macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NuGetConfigDirOptionDescription">
+        <source>Directory to create or update the NuGet.config file in</source>
+        <target state="new">Directory to create or update the NuGet.config file in</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">Ссылка на пакет не содержит удостоверение.</target>
@@ -255,6 +260,11 @@
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>
         <target state="translated">Какой каталог для файла NuGet.config?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YesOptionDescription">
+        <source>Automatically confirm all update prompts without asking</source>
+        <target state="new">Automatically confirm all update prompts without asking</target>
         <note />
       </trans-unit>
     </body>

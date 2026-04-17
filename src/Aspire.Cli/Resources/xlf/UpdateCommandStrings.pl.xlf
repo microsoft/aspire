@@ -157,6 +157,11 @@
         <target state="translated">Nie można zapisać w katalogu instalacyjnym „{0}”. Uruchom aktualizację z podniesionymi uprawnieniami (np. używając programu sudo w systemie Linux lub macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NuGetConfigDirOptionDescription">
+        <source>Directory to create or update the NuGet.config file in</source>
+        <target state="new">Directory to create or update the NuGet.config file in</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">Odwołanie do pakietu nie ma tożsamości.</target>
@@ -255,6 +260,11 @@
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>
         <target state="translated">Który katalog dla pliku NuGet.config?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YesOptionDescription">
+        <source>Automatically confirm all update prompts without asking</source>
+        <target state="new">Automatically confirm all update prompts without asking</target>
         <note />
       </trans-unit>
     </body>

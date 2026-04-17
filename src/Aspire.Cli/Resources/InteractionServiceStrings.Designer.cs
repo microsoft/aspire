@@ -214,6 +214,33 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Available values: {0}.
+        /// </summary>
+        public static string NonInteractiveAvailableValues {
+            get {
+                return ResourceManager.GetString("NonInteractiveAvailableValues", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The value &apos;{0}&apos; is not valid for {1}..
+        /// </summary>
+        public static string NonInteractiveInvalidValue {
+            get {
+                return ResourceManager.GetString("NonInteractiveInvalidValue", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The {0} option must be specified when running in non-interactive mode..
+        /// </summary>
+        public static string NonInteractiveOptionRequired {
+            get {
+                return ResourceManager.GetString("NonInteractiveOptionRequired", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to [yellow]A new version of Aspire is available: {0}[/].
         /// </summary>
         public static string NewCliVersionAvailable {

@@ -165,4 +165,10 @@
   <data name="SelfOptionDescription" xml:space="preserve">
     <value>Update the Aspire CLI itself to the latest version</value>
   </data>
+  <data name="YesOptionDescription" xml:space="preserve">
+    <value>Automatically confirm all update prompts without asking</value>
+  </data>
+  <data name="NuGetConfigDirOptionDescription" xml:space="preserve">
+    <value>Directory to create or update the NuGet.config file in</value>
+  </data>
 </root>
