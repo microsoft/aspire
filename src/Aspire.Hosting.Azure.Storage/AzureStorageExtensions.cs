@@ -489,7 +489,7 @@ public static class AzureStorageExtensions
 
         blobContainerName ??= name;
 
-        var parentBuilder = builder.Resource.ImplicitBlobService ?? GetBlobService(builder);
+        var parentBuilder = builder.Resource.ImplicitBlobService ??= GetBlobService(builder);
         AzureBlobStorageContainerResource resource = new(name, blobContainerName, parentBuilder.Resource);
         builder.Resource.BlobContainers.Add(resource);
 
@@ -532,7 +532,7 @@ public static class AzureStorageExtensions
 
         dataLakeFileSystemName ??= name;
 
-        var parentBuilder = builder.Resource.ImplicitDataLakeService ?? GetDataLakeService(builder);
+        var parentBuilder = builder.Resource.ImplicitDataLakeService ??= GetDataLakeService(builder);
         AzureDataLakeStorageFileSystemResource resource = new(name, dataLakeFileSystemName, parentBuilder.Resource);
         builder.Resource.DataLakeFileSystems.Add(resource);
 
@@ -653,7 +653,7 @@ public static class AzureStorageExtensions
 
         queueName ??= name;
 
-        var parentBuilder = builder.Resource.ImplicitQueueService ?? builder.GetQueueService();
+        var parentBuilder = builder.Resource.ImplicitQueueService ??= builder.GetQueueService();
         AzureQueueStorageQueueResource resource = new(name, queueName, parentBuilder.Resource);
         builder.Resource.Queues.Add(resource);
 
