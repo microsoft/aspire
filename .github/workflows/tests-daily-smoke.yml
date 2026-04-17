@@ -53,7 +53,7 @@ jobs:
             --filter-class "*.SmokeTests" \
             --filter-not-trait "quarantined=true" \
             --filter-not-trait "outerloop=true" \
-            --hangdump --hangdump-timeout 15m
+            --hangdump --hangdump-type none --hangdump-timeout 15m
 
       - name: Upload test recordings
         if: always()
