@@ -103,22 +103,9 @@ internal sealed class MacOSCertificateManager : CertificateManager
             // We can't guarantee that the temp file is in a directory with sensible permissions, but we're not exporting the private key
             ExportCertificate(publicCertificate, tmpFile, includePrivateKey: false, password: null, CertificateKeyExportFormat.Pfx);
 
-            // Load from the on-disk PFX to avoid triggering a macOS Keychain access prompt.
-            var onDiskPfxPath = GetCertificateFilePath(publicCertificate);
-            if (File.Exists(onDiskPfxPath))
-            {
-                try
-                {
-                    using var diskCert = X509CertificateLoader.LoadPkcs12FromFile(onDiskPfxPath, password: null);
-                    var aspireLookup = GetAspireCertificateHash(publicCertificate);
-                    ExportCertificate(diskCert, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
-                    ExportCertificate(diskCert, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pem"), includePrivateKey: true, null, CertificateKeyExportFormat.Pem);
-                }
-                catch
-                {
-                    // Best effort — the app host will fall back to accessing the keychain directly.
-                }
-            }
+            // Write to the Aspire cache before trust so the app host can find the
+            // key material without a separate Keychain access prompt later.
+            WriteAspireCacheFromDiskPfx(GetCertificateFilePath(publicCertificate), publicCertificate);
 
             if (Log.IsEnabled())
             {
@@ -161,11 +148,15 @@ internal sealed class MacOSCertificateManager : CertificateManager
     {
         try
         {
-            ExportCertificate(candidate, GetCertificateFilePath(candidate), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
+            var onDiskPfxPath = GetCertificateFilePath(candidate);
 
-            var aspireLookup = GetAspireCertificateHash(candidate);
-            ExportCertificate(candidate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
-            ExportCertificate(candidate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pem"), includePrivateKey: true, null, CertificateKeyExportFormat.Pem);
+            // The .aspnet PFX write needs to use the keychain-backed cert since
+            // it's the authoritative source being corrected.
+            ExportCertificate(candidate, onDiskPfxPath, includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
+
+            // For the Aspire cache, load from the on-disk PFX we just wrote to avoid
+            // a second keychain access prompt.
+            WriteAspireCacheFromDiskPfx(onDiskPfxPath, candidate);
         }
         catch (Exception ex)
         {
@@ -345,7 +336,6 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
             var aspireLookup = GetAspireCertificateHash(certificate);
             ExportCertificate(certificate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
-            ExportCertificate(certificate, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pem"), includePrivateKey: true, null, CertificateKeyExportFormat.Pem);
         }
         catch (Exception ex)
         {
@@ -397,6 +387,48 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
     private static string GetCertificateFilePath(X509Certificate2 certificate) =>
         Path.Combine(s_macOSUserHttpsCertificateLocation, $"aspnetcore-localhost-{certificate.Thumbprint}.pfx");
+
+    /// <summary>
+    /// Writes Aspire hosting cache entries (PFX and PEM key) by loading the certificate from the
+    /// on-disk PFX at <paramref name="onDiskPfxPath"/> to avoid triggering a macOS Keychain
+    /// access prompt. This is a best-effort operation; failures are silently ignored so the
+    /// app host can fall back to caching at startup.
+    /// </summary>
+    private void WriteAspireCacheFromDiskPfx(string onDiskPfxPath, X509Certificate2 certificate)
+    {
+        if (!File.Exists(onDiskPfxPath))
+        {
+            return;
+        }
+
+        try
+        {
+            using var diskCert = X509CertificateLoader.LoadPkcs12FromFile(onDiskPfxPath, password: null, X509KeyStorageFlags.Exportable);
+            var aspireLookup = GetAspireCertificateHash(certificate);
+
+            CreateDirectoryWithPermissions(s_aspireDevCertsCacheDirectory);
+
+            // Write PFX cache
+            ExportCertificate(diskCert, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
+
+            // Write PEM key cache — must match the format produced by DeveloperCertificateService.ExportKeyPemFromRsa
+            using var key = diskCert.GetRSAPrivateKey();
+            if (key is not null)
+            {
+                var keyBytes = key.ExportPkcs8PrivateKey();
+                var pem = PemEncoding.Write("PRIVATE KEY", keyBytes);
+                Array.Clear(keyBytes, 0, keyBytes.Length);
+
+                var keyPath = Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.key");
+                File.WriteAllBytes(keyPath, Encoding.UTF8.GetBytes(pem));
+                Array.Clear(pem, 0, pem.Length);
+            }
+        }
+        catch
+        {
+            // Best effort — the app host will fall back to accessing the keychain directly.
+        }
+    }
 
     /// <summary>
     /// Computes the Aspire hosting cache key for a certificate, matching the convention

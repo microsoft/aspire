@@ -415,7 +415,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     /// </summary>
     internal async Task CreateTunnelAsync(ContainerCreationContext cctx, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
-        // Container creation tasks need to figure out dependencies of each container 
+        // Container creation tasks need to figure out dependencies of each container
         // and then create Service and TunnelConfiguration definitions for each of them.
         cctx.ContainerServicesSpecReady.Wait(cancellationToken);
         cctx.ContainerServicesChan.Writer.Complete();
@@ -642,7 +642,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Type = ContainerFileSystemEntryType.File,
                     Contents = new string(keyPem),
                 });
-
                 Array.Clear(keyPem, 0, keyPem.Length);
             }
 
@@ -654,7 +653,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Type = ContainerFileSystemEntryType.File,
                     RawContents = Convert.ToBase64String(pfxBytes),
                 });
-
                 Array.Clear(pfxBytes, 0, pfxBytes.Length);
             }
 

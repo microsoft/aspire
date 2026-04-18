@@ -200,8 +200,10 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
 
     /// <summary>
     /// Returns the certificate PEM format key and/or PFX bytes for the specified certificate.
-    /// On macOS, ASP.NET Core development certificate key material is cached to avoid
-    /// triggering repeated keychain prompts.
+    /// On macOS, both outputs are cached as separate files to avoid triggering repeated
+    /// keychain prompts. The cache is read without loading any PFX into an X509Certificate2,
+    /// because EphemeralKeySet is not supported on macOS with net8.0 and loading without it
+    /// imports the private key into the keychain.
     /// </summary>
     /// <param name="certificate">The certificate to export key material from.</param>
     /// <param name="password">The password for the private key, or <c>null</c> for unencrypted export.</param>
@@ -216,6 +218,18 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
         bool needPfx,
         CancellationToken cancellationToken)
     {
+        if (!needKeyPem && !needPfx)
+        {
+            return (null, null);
+        }
+
+        // This is a user managed certificate, not an asp.net core style dev cert
+        if (!certificate.IsAspNetCoreDevelopmentCertificate())
+        {
+            return ExportFromPrivateKey(certificate, password, needKeyPem, needPfx);
+        }
+
+        // For dev certs we prefer reading from cache to avoid repeated keychain access prompts
         var lookup = certificate.Thumbprint;
         if (password is not null)
         {
@@ -224,169 +238,117 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
 
         lookup = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(lookup)));
 
-        char[]? pemKey = null;
-        byte[]? pfxBytes = null;
-
         // Ensure only one thread at a time is resolving certificates to avoid concurrent cache misses
         // all trying to update the cache at the same time.
         await s_certificateCacheSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var keyFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.key");
             var pfxFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.pfx");
+            var keyFileName = Path.Join(s_userDevCertificateLocation, $"{lookup}.key");
 
-            // Try to load from cache first.
-            if (needKeyPem)
+            // Try to read cached files. On cache hit, return the raw bytes directly
+            // without loading them into X509Certificate2 (which would import the key into
+            // the macOS keychain on net8.0).
+            var cachedPfx = TryReadCacheFile(pfxFileName);
+            var cachedKey = TryReadCacheFile(keyFileName);
+
+            if (cachedPfx is not null && cachedKey is not null)
             {
-                pemKey = TryReadCachedKeyPem(certificate, keyFileName);
+                return (
+                    needKeyPem ? new string(Encoding.UTF8.GetString(cachedKey)).ToCharArray() : null,
+                    needPfx ? cachedPfx : null);
             }
 
-            if (needPfx)
-            {
-                pfxBytes = TryReadCachedPfx(certificate, password, pfxFileName);
-            }
+            // Fall back to accessing the private key directly (triggers a keychain prompt on macOS).
+            // Always produce both formats for caching, even if the caller only needs one.
+            var result = ExportFromPrivateKey(certificate, password, needKeyPem: true, needPfx: true);
 
-            // If everything was cached, we're done.
-            var needKeyPemFromCert = needKeyPem && pemKey is null;
-            var needPfxFromCert = needPfx && pfxBytes is null;
+            WriteCacheFiles(pfxFileName, result.pfxBytes, keyFileName, result.keyPem);
 
-            if (needKeyPemFromCert || needPfxFromCert)
-            {
-                // Derive both formats from a single private key access to avoid
-                // triggering multiple macOS Keychain prompts.
-                (pemKey, pfxBytes) = ExportKeyMaterial(certificate, password, pemKey, pfxBytes, needKeyPemFromCert, needPfxFromCert);
-
-                // Cache whatever we just derived.
-                await WriteCacheFilesAsync(certificate, keyFileName, pfxFileName, pemKey, pfxBytes, needKeyPemFromCert, needPfxFromCert, cancellationToken).ConfigureAwait(false);
-            }
+            return (needKeyPem ? result.keyPem : null, needPfx ? result.pfxBytes : null);
         }
         finally
         {
             s_certificateCacheSemaphore.Release();
         }
-
-        return (pemKey, pfxBytes);
     }
 
-    private static char[]? TryReadCachedKeyPem(X509Certificate2 certificate, string keyFileName)
+    /// <summary>
+    /// Reads a cache file from disk, returning null if it doesn't exist or is empty.
+    /// </summary>
+    private static byte[]? TryReadCacheFile(string path)
     {
-        if (!OperatingSystem.IsMacOS() || !certificate.IsAspNetCoreDevelopmentCertificate())
-        {
-            return null;
-        }
-
         try
         {
-            if (File.Exists(keyFileName))
+            if (!File.Exists(path))
             {
-                var keyCandidate = File.ReadAllText(keyFileName);
-                if (!string.IsNullOrEmpty(keyCandidate))
-                {
-                    return keyCandidate.ToCharArray();
-                }
+                return null;
             }
+
+            var bytes = File.ReadAllBytes(path);
+            return bytes.Length > 0 ? bytes : null;
         }
         catch
         {
-            // Ignore errors and retrieve the key from the certificate
-        }
-
-        return null;
-    }
-
-    private static byte[]? TryReadCachedPfx(X509Certificate2 certificate, string? password, string pfxFileName)
-    {
-        if (!certificate.IsAspNetCoreDevelopmentCertificate())
-        {
             return null;
         }
-
-        try
-        {
-            if (File.Exists(pfxFileName))
-            {
-                var pfxCandidate = File.ReadAllBytes(pfxFileName);
-                if (pfxCandidate.Length > 0)
-                {
-                    using var tempCert = new X509Certificate2(pfxCandidate, password);
-                    if (tempCert.Thumbprint.Equals(certificate.Thumbprint, StringComparison.Ordinal))
-                    {
-                        return pfxCandidate;
-                    }
-                }
-            }
-        }
-        catch
-        {
-            // Ignore errors and retrieve the key from the certificate
-        }
-
-        return null;
     }
 
-    private static (char[]? pemKey, byte[]? pfxBytes) ExportKeyMaterial(
-        X509Certificate2 certificate,
-        string? password,
-        char[]? existingPemKey,
-        byte[]? existingPfxBytes,
-        bool needKeyPem,
-        bool needPfx)
+    /// <summary>
+    /// Exports PEM key and/or PFX from the certificate using a single private key access.
+    /// </summary>
+    private static (char[]? keyPem, byte[]? pfxBytes) ExportFromPrivateKey(
+        X509Certificate2 certificate, string? password, bool needKeyPem, bool needPfx)
     {
-        var pemKey = existingPemKey;
-        var pfxBytes = existingPfxBytes;
-
-        if (needKeyPem)
+        if (!needKeyPem && !needPfx)
         {
-            using var privateKey = certificate.GetRSAPrivateKey();
-            if (privateKey is null)
-            {
-                throw new InvalidOperationException("The certificate does not have an associated RSA private key.");
-            }
+            return (null, null);
+        }
 
-            var keyBytes = privateKey.ExportEncryptedPkcs8PrivateKey(
-                password ?? string.Empty,
-                new PbeParameters(
-                    PbeEncryptionAlgorithm.Aes256Cbc,
-                    HashAlgorithmName.SHA256,
-                    iterationCount: password is null ? 1 : 100_000));
-            pemKey = PemEncoding.Write("ENCRYPTED PRIVATE KEY", keyBytes);
+        using var privateKey = certificate.GetRSAPrivateKey();
+        if (privateKey is null)
+        {
+            return (null, null);
+        }
 
-            if (password is null)
-            {
-                using var tempKey = RSA.Create();
-                tempKey.ImportFromEncryptedPem(pemKey, string.Empty);
-                Array.Clear(keyBytes, 0, keyBytes.Length);
-                Array.Clear(pemKey, 0, pemKey.Length);
-                keyBytes = tempKey.ExportPkcs8PrivateKey();
-                pemKey = PemEncoding.Write("PRIVATE KEY", keyBytes);
-            }
+        var keyPem = needKeyPem ? ExportKeyPemFromRsa(privateKey, password) : null;
+        var pfxBytes = needPfx ? certificate.Export(X509ContentType.Pfx, password) : null;
 
+        return (keyPem, pfxBytes);
+    }
+
+    /// <summary>
+    /// Exports an RSA private key in PEM format.
+    /// </summary>
+    private static char[] ExportKeyPemFromRsa(RSA privateKey, string? password)
+    {
+        var keyBytes = privateKey.ExportEncryptedPkcs8PrivateKey(
+            password ?? string.Empty,
+            new PbeParameters(
+                PbeEncryptionAlgorithm.Aes256Cbc,
+                HashAlgorithmName.SHA256,
+                iterationCount: password is null ? 1 : 100_000));
+        var pemKey = PemEncoding.Write("ENCRYPTED PRIVATE KEY", keyBytes);
+
+        if (password is null)
+        {
+            using var tempKey = RSA.Create();
+            tempKey.ImportFromEncryptedPem(pemKey, string.Empty);
             Array.Clear(keyBytes, 0, keyBytes.Length);
+            Array.Clear(pemKey, 0, pemKey.Length);
+            keyBytes = tempKey.ExportPkcs8PrivateKey();
+            pemKey = PemEncoding.Write("PRIVATE KEY", keyBytes);
         }
 
-        if (needPfx)
-        {
-            pfxBytes = certificate.Export(X509ContentType.Pfx, password);
-        }
-
-        return (pemKey, pfxBytes);
+        Array.Clear(keyBytes, 0, keyBytes.Length);
+        return pemKey;
     }
 
-    private static async Task WriteCacheFilesAsync(
-        X509Certificate2 certificate,
-        string keyFileName,
-        string pfxFileName,
-        char[]? pemKey,
-        byte[]? pfxBytes,
-        bool writeKey,
-        bool writePfx,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Writes PFX and PEM key cache files. Best-effort; failures are silently ignored.
+    /// </summary>
+    private static void WriteCacheFiles(string pfxFileName, byte[]? pfxBytes, string keyFileName, char[]? keyPem)
     {
-        if (!certificate.IsAspNetCoreDevelopmentCertificate())
-        {
-            return;
-        }
-
         try
         {
             if (OperatingSystem.IsWindows())
@@ -398,19 +360,19 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
                 Directory.CreateDirectory(s_userDevCertificateLocation, UnixFileMode.UserExecute | UnixFileMode.UserWrite | UnixFileMode.UserRead);
             }
 
-            if (writeKey && pemKey is not null && OperatingSystem.IsMacOS())
-            {
-                await File.WriteAllTextAsync(keyFileName, new string(pemKey), cancellationToken).ConfigureAwait(false);
-            }
-
-            if (writePfx && pfxBytes is not null)
+            if (pfxBytes is not null)
             {
                 File.WriteAllBytes(pfxFileName, pfxBytes);
+            }
+
+            if (keyPem is not null)
+            {
+                File.WriteAllBytes(keyFileName, Encoding.UTF8.GetBytes(keyPem));
             }
         }
         catch
         {
-            // This is a best effort caching operation
+            // Best-effort caching operation.
         }
     }
 }

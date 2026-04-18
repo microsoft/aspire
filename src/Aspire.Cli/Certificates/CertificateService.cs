@@ -74,7 +74,7 @@ internal sealed class CertificateService(
 
         // Use the machine-readable check (available in .NET 10 SDK which is the minimum required)
         var trustResult = await CheckMachineReadableAsync();
-        await HandleMachineReadableTrustAsync(trustResult, environmentVariables, cancellationToken);
+        await HandleMachineReadableTrustAsync(trustResult, environmentVariables);
 
         return new EnsureCertificatesTrustedResult
         {
@@ -92,9 +92,6 @@ internal sealed class CertificateService(
             InteractionServiceStrings.TrustingCertificates,
             () => Task.FromResult(certificateToolRunner.TrustHttpCertificate()),
             emoji: KnownEmojis.LockedWithKey);
-
-        // Pre-export key material to avoid subsequent keychain prompts
-        await certificateToolRunner.PreExportKeyMaterialAsync(cancellationToken);
 
         if (CertificateHelpers.IsSuccessfulTrustResult(trustResultCode))
         {
@@ -121,14 +118,10 @@ internal sealed class CertificateService(
 
     private async Task HandleMachineReadableTrustAsync(
         CertificateTrustResult trustResult,
-        Dictionary<string, string> environmentVariables,
-        CancellationToken cancellationToken)
+        Dictionary<string, string> environmentVariables)
     {
-        // If fully trusted, pre-export key material to ensure the cache is primed
-        // even if the certificate was trusted by a previous SDK or tool.
         if (trustResult.IsFullyTrusted)
         {
-            await certificateToolRunner.PreExportKeyMaterialAsync(cancellationToken);
             return;
         }
 
@@ -172,9 +165,6 @@ internal sealed class CertificateService(
 
             // Re-check trust status after trust operation
             trustResult = certificateToolRunner.CheckHttpCertificate();
-
-            // Pre-export key material to avoid subsequent keychain prompts
-            await certificateToolRunner.PreExportKeyMaterialAsync(cancellationToken);
         }
 
         // If partially trusted (either initially or after trust), configure SSL_CERT_DIR on Linux

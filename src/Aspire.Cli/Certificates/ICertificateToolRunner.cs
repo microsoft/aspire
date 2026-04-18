@@ -29,12 +29,4 @@ internal interface ICertificateToolRunner
     /// Removes all HTTPS development certificates.
     /// </summary>
     CertificateCleanResult CleanHttpCertificate();
-
-    /// <summary>
-    /// Pre-exports the developer certificate's key material to the well-known cache location
-    /// (<c>~/.aspire/dev-certs/https/</c>) so that the app host can access it without triggering
-    /// a macOS Keychain access prompt. This is a best-effort operation; failures are silently ignored.
-    /// On non-macOS platforms, this is a no-op.
-    /// </summary>
-    Task PreExportKeyMaterialAsync(CancellationToken cancellationToken);
 }
