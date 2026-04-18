@@ -75,15 +75,12 @@ public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
+            // Step 2: Set up CLI environment
             // The workflow builds and installs the CLI to ~/.aspire/bin before running tests
             // We just need to source it in the bash session
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                // Source the CLI environment (sets PATH and other env vars)
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
+            output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
+            await auto.InstallAspireCliAsync(installStrategy, counter);
 
             // Step 3: Create starter project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating starter project...");
@@ -100,14 +97,8 @@ public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            // In CI, aspire add shows a version selection prompt
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync(); // select first version (PR build)
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            // aspire add may show a version selection prompt
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 6: Modify AppHost.cs to add Azure Container App Environment
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);

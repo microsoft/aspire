@@ -70,12 +70,11 @@ public sealed class AzureLogAnalyticsDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            // Step 2: Set up CLI environment
+            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
+                output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
+                await auto.InstallAspireCliAsync(installStrategy, counter);
+            
 
             // Step 3: Create single-file AppHost using aspire init
             output.WriteLine("Step 3: Creating single-file AppHost with aspire init...");
@@ -86,13 +85,7 @@ public sealed class AzureLogAnalyticsDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.OperationalInsights");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5: Modify apphost.cs to add Azure Log Analytics Workspace resource
             var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");

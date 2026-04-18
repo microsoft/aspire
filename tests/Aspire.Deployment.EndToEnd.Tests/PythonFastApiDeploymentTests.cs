@@ -75,19 +75,12 @@ public sealed class PythonFastApiDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
+            // Step 2: Set up CLI environment
             // Python apphosts need the full bundle because
             // the prebuilt AppHost server is required for aspire new with Python templates.
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                var prNumber = DeploymentE2ETestHelpers.GetPrNumber();
-                if (prNumber > 0)
-                {
-                    output.WriteLine($"Step 2: Installing Aspire bundle from PR #{prNumber}...");
-                    await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
-                }
-                await auto.SourceAspireBundleEnvironmentAsync(counter);
-            }
+            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
+            output.WriteLine($"Step 2: Installing Aspire bundle using {installStrategy}...");
+            await auto.InstallAspireCliAsync(installStrategy, counter, includeBundlePath: true);
 
             // Step 3: Create Python FastAPI project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating Python FastAPI project...");

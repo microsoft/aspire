@@ -278,7 +278,7 @@ internal static class KubernetesDeployTestHelpers
         {
             await auto.TypeAsync($"aspire add {package}");
             await auto.EnterAsync();
-            await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
         }
 
         // Step 4: Add client NuGet packages to ApiService (--prerelease needed for PR builds)

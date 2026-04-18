@@ -70,12 +70,11 @@ public sealed class AzureEventHubsDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            // Step 2: Set up CLI environment
+            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
+                output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
+                await auto.InstallAspireCliAsync(installStrategy, counter);
+            
 
             // Step 3: Create single-file AppHost using aspire init
             output.WriteLine("Step 3: Creating single-file AppHost with aspire init...");
@@ -89,17 +88,9 @@ public sealed class AzureEventHubsDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.ContainerApps");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                // First, handle integration selection prompt
-                await auto.WaitUntilTextAsync("Select an integration to add:", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();  // Select first integration (azure-appcontainers)
-                // Then, handle version selection prompt
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();  // Select first version (PR build)
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitUntilTextAsync("Select an integration to add:", timeout: TimeSpan.FromSeconds(60));
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 4b: Add Aspire.Hosting.Azure.EventHubs package
             // This command may only show version selection prompt (unique match)
@@ -107,14 +98,8 @@ public sealed class AzureEventHubsDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.EventHubs");
             await auto.EnterAsync();
 
-            // In CI, aspire add shows version selection prompt
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync(); // Select first version
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            // aspire add may show a version selection prompt
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5: Modify apphost.cs to add Azure Event Hubs resource
             var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");

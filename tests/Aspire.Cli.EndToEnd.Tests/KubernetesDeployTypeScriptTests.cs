@@ -69,7 +69,7 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
             // Add Kubernetes hosting package
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
             await auto.EnterAsync();
-            await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(2));
 
             // Regenerate TypeScript SDK with Kubernetes types
             await auto.TypeAsync("aspire restore");
