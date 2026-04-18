@@ -71,6 +71,36 @@ internal static partial class MarkdownToSpectreConverter
         return LinkRegex().Replace(markdown, "$1 ($2)");
     }
 
+    /// <summary>
+    /// Converts markdown to plain text suitable for redirected or non-interactive output.
+    /// </summary>
+    /// <param name="markdown">The markdown text to convert.</param>
+    /// <returns>Markdown with links rewritten to plain text and image references removed.</returns>
+    public static string ConvertToPlainText(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return markdown;
+        }
+
+        var result = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
+        result = ConvertImages(result);
+        result = ConvertLinksToPlainText(result);
+        result = HeaderLevel6Regex().Replace(result, "$1");
+        result = HeaderLevel5Regex().Replace(result, "$1");
+        result = HeaderLevel4Regex().Replace(result, "$1");
+        result = HeaderLevel3Regex().Replace(result, "$1");
+        result = HeaderLevel2Regex().Replace(result, "$1");
+        result = HeaderLevel1Regex().Replace(result, "$1");
+        result = BoldDoubleAsterisksRegex().Replace(result, "$1");
+        result = BoldDoubleUnderscoresRegex().Replace(result, "$1");
+        result = ItalicSingleAsteriskRegex().Replace(result, "$1");
+        result = ItalicSingleUnderscoreRegex().Replace(result, "$1");
+        result = StrikethroughRegex().Replace(result, "$1");
+
+        return result;
+    }
+
     private static string ConvertHeaders(string text)
     {
         // Convert ###### Header 6 (most specific first)
