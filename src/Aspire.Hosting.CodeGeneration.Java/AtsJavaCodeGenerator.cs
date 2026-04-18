@@ -611,11 +611,11 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
                 var javaType = MapTypeRefToJava(valueInfo.Type, isOptional: false, useBoxedTypes: true);
                 var expression = RenderJavaExportedValue(valueInfo.Value, valueInfo.Type, dtoTypesById);
-                WriteLine($"{indent}static final {javaType} {name} = {expression};");
+                WriteLine($"{indent}public static final {javaType} {name} = {expression};");
             }
             else
             {
-                WriteLine($"{indent}static final class {name} {{");
+                WriteLine($"{indent}public static final class {name} {{");
                 WriteLine($"{indent}    private {name}() {{ }}");
                 WriteLine();
                 WriteJavaExportedValueChildren(child, dtoTypesById, indentLevel + 1);
