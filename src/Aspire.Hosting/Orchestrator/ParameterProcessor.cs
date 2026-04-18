@@ -314,7 +314,7 @@ public sealed class ParameterProcessor(
             Value = hasExistingValue ? "true" : null,
             Description = !userSecretsManager.IsAvailable
                 ? InteractionStrings.ParametersInputsRememberDescriptionNotConfigured
-                : null,
+                : InteractionStrings.ParametersInputsRememberDescriptionConfigured,
             EnableDescriptionMarkdown = true,
             Disabled = !userSecretsManager.IsAvailable
         };
@@ -348,7 +348,9 @@ public sealed class ParameterProcessor(
                 {
                     Name = DeleteFromUserSecretsName,
                     InputType = InputType.Boolean,
-                    Label = InteractionStrings.ParametersInputsDeleteLabel
+                    Label = InteractionStrings.ParametersInputsDeleteLabel,
+                    Description = InteractionStrings.ParametersInputsDeleteDescription,
+                    EnableDescriptionMarkdown = true
                 };
                 inputs.Add(deleteFromUserSecretsInput);
             }

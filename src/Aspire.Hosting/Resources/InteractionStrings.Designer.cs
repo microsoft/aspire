@@ -178,9 +178,7 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Are you sure you want to delete the value for parameter `{0}`?
-        ///
-        ///The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there..
+        ///   Looks up a localized string similar to Are you sure you want to delete the value for parameter `{0}`?.
         /// </summary>
         internal static string DeleteParameterMessageWithUserSecrets {
             get {
@@ -230,6 +228,15 @@ namespace Aspire.Hosting.Resources {
         internal static string ParametersBarTitle {
             get {
                 return ResourceManager.GetString("ParametersBarTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets)..
+        /// </summary>
+        internal static string ParametersInputsDeleteDescription {
+            get {
+                return ResourceManager.GetString("ParametersInputsDeleteDescription", resourceCulture);
             }
         }
 
@@ -288,7 +295,16 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Requires a `UserSecretsId` to be configured in the AppHost project file. Run `aspire secret set` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information..
+        ///   Looks up a localized string similar to Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use..
+        /// </summary>
+        internal static string ParametersInputsRememberDescriptionConfigured {
+            get {
+                return ResourceManager.GetString("ParametersInputsRememberDescriptionConfigured", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information..
         /// </summary>
         internal static string ParametersInputsRememberDescriptionNotConfigured {
             get {
@@ -306,7 +322,7 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
+        ///   Looks up a localized string similar to Please provide a value for the parameter.
         ///
         ///New parameter values may not be used until dependent resources are restarted..
         /// </summary>
