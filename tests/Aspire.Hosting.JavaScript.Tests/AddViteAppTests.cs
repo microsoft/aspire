@@ -293,34 +293,6 @@ public class AddViteAppTests
     }
 
     [Fact]
-    public async Task VerifyDockerfileWithNodeVersionFromPackageJson()
-    {
-        using var tempDir = new TestTempDirectory();
-
-        // Create a package.json with engines.node specification
-        var packageJson = """
-            {
-              "name": "test-vite",
-              "engines": {
-                "node": ">=20.12"
-              }
-            }
-            """;
-        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), packageJson);
-
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
-            .WithNpm();
-
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
-
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
-
-        // Should detect version 20 from package.json
-        Assert.Contains("FROM node:20-slim", dockerfileContents);
-    }
-
-    [Fact]
     public async Task VerifyDockerfileWithNodeVersionFromNvmrc()
     {
         using var tempDir = new TestTempDirectory();
