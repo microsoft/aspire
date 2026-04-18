@@ -11,7 +11,7 @@
 
 @if (InputViewModel.Input.InputType != InputType.Boolean)
 {
-    <FluentInputLabel ForId="@ForId" Label="@InputViewModel.Input.Label" AriaLabel="@InputViewModel.Input.Description" Required="@InputViewModel.Input.Required" />
+    <FluentInputLabel ForId="@ForId" Label="@InputViewModel.Input.Label" AriaLabel="@InputViewModel.Input.Label" Required="@InputViewModel.Input.Required" />
 }
 <div class="input-line-container">
     @ChildContent(new InteractionInputFieldContext { ViewModel = InputViewModel, DescriptionId = descriptionId })
