@@ -19,7 +19,7 @@ on:
       mtpBaseArgs:
         required: false
         type: string
-        default: "--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none"
+        default: "--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none --hangdump-timeout 10m --timeout 20m"
       extraTestArgs:
         required: false
         type: string
