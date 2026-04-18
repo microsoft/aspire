@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
@@ -498,6 +499,134 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
+    /// Gets a file path rooted under the mounted workspace.
+    /// </summary>
+    internal static string GetWorkspaceFilePath(TemporaryWorkspace workspace, string relativePath)
+    {
+        return Path.Combine(workspace.WorkspaceRoot.FullName, relativePath.Replace('/', Path.DirectorySeparatorChar));
+    }
+
+    /// <summary>
+    /// Verifies the persisted <c>aspire start --format json</c> transcript contains the expected contract fields.
+    /// </summary>
+    internal static void AssertAspireStartJsonContract(TemporaryWorkspace workspace)
+    {
+        var jsonPath = GetWorkspaceFilePath(workspace, "_aspire-start.json");
+        WithJsonFailureDiagnostics("aspire start JSON", jsonPath, content =>
+        {
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+
+            Assert.True(root.ValueKind is JsonValueKind.Object, $"Expected JSON object in {jsonPath}");
+            Assert.True(root.TryGetProperty("appHostPath", out var appHostPath) &&
+                appHostPath.ValueKind is JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(appHostPath.GetString()),
+                $"Expected non-empty appHostPath in {jsonPath}");
+            Assert.True(root.TryGetProperty("appHostPid", out var appHostPid) &&
+                HasNonEmptyStringOrNumber(appHostPid),
+                $"Expected non-empty appHostPid in {jsonPath}");
+            Assert.True(root.TryGetProperty("dashboardUrl", out var dashboardUrl) &&
+                dashboardUrl.ValueKind is JsonValueKind.String &&
+                !string.IsNullOrWhiteSpace(dashboardUrl.GetString()),
+                $"Expected non-empty dashboardUrl in {jsonPath}");
+
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// Verifies the <c>aspire ps --format json</c> output contains at least one AppHost entry with the expected keys.
+    /// </summary>
+    internal static void AssertPsJsonContract(string jsonPath)
+    {
+        WithJsonFailureDiagnostics("aspire ps JSON", jsonPath, content =>
+        {
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+
+            Assert.True(root.ValueKind is JsonValueKind.Array, $"Expected JSON array in {jsonPath}");
+
+            var sawItem = false;
+            foreach (var item in root.EnumerateArray())
+            {
+                sawItem = true;
+
+                Assert.True(item.TryGetProperty("appHostPath", out var appHostPath) &&
+                    appHostPath.ValueKind is JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(appHostPath.GetString()),
+                    $"Expected non-empty appHostPath in {jsonPath}");
+                Assert.True(item.TryGetProperty("appHostPid", out var appHostPid) &&
+                    HasNonEmptyStringOrNumber(appHostPid),
+                    $"Expected non-empty appHostPid in {jsonPath}");
+            }
+
+            Assert.True(sawItem, $"Expected at least one AppHost entry in {jsonPath}");
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// Extracts the first localhost URL from a JSON file.
+    /// </summary>
+    internal static string GetFirstLocalhostUrlFromJsonFile(string jsonPath)
+    {
+        return WithJsonFailureDiagnostics("resource JSON", jsonPath, content =>
+        {
+            var match = Regex.Match(content, @"https?://localhost:\d+");
+
+            Assert.True(match.Success, $"Expected a localhost URL in {jsonPath}");
+            return match.Value;
+        });
+    }
+
+    private static bool HasNonEmptyStringOrNumber(JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.Number => true,
+            JsonValueKind.String => !string.IsNullOrWhiteSpace(value.GetString()),
+            _ => false
+        };
+    }
+
+    private static T WithJsonFailureDiagnostics<T>(string label, string jsonPath, Func<string, T> assertion)
+    {
+        string? content = null;
+
+        try
+        {
+            Assert.True(File.Exists(jsonPath), $"Expected JSON file at {jsonPath}");
+            content = File.ReadAllText(jsonPath);
+            return assertion(content);
+        }
+        catch
+        {
+            WriteJsonDiagnostic(label, jsonPath, content);
+            throw;
+        }
+    }
+
+    private static void WriteJsonDiagnostic(string label, string jsonPath, string? content)
+    {
+        var testContext = TestContext.Current;
+        var header = $"=== {label}: {jsonPath} ===";
+        var body = content ?? "<file missing or unreadable>";
+        var footer = $"=== END {label} ===";
+
+        if (testContext.TestOutputHelper is { } outputHelper)
+        {
+            outputHelper.WriteLine(header);
+            outputHelper.WriteLine(body);
+            outputHelper.WriteLine(footer);
+            return;
+        }
+
+        testContext.SendDiagnosticMessage(header);
+        testContext.SendDiagnosticMessage("{0}", body);
+        testContext.SendDiagnosticMessage(footer);
+    }
+
+    /// <summary>
     /// Reads the VersionPrefix (e.g., "13.3.0") from eng/Versions.props by parsing
     /// the MajorVersion, MinorVersion, and PatchVersion MSBuild properties.
     /// </summary>
@@ -544,7 +673,7 @@ internal static class CliE2ETestHelpers
         return string.Equals(stabilize, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void RegisterCaptureFile(string fileName, string path)
+    internal static void RegisterCaptureFile(string fileName, string path)
     {
         if (TestContext.Current is null)
         {

@@ -12,13 +12,13 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end smoke tests for the core Aspire CLI template scenarios.
+/// End-to-end smoke tests for the core Aspire CLI starter scenarios and JSON contracts.
 /// </summary>
 public sealed class SmokeTests(ITestOutputHelper output)
 {
     [CaptureWorkspaceOnFailure]
     [Fact]
-    public async Task CreateAndRunAspireStarterProject()
+    public async Task CreateAndRunDefaultAspireStarterProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -38,27 +38,11 @@ public sealed class SmokeTests(ITestOutputHelper output)
         // Install the Aspire CLI
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Create a new project using aspire new
-        await auto.AspireNewAsync("AspireStarterApp", counter, useRedisCache: false);
+        // Create a new project using aspire new with the default starter options.
+        await auto.AspireNewAsync("AspireStarterApp", counter);
 
-        // Run the project with aspire run
-        await auto.TypeAsync("aspire run");
-        await auto.EnterAsync();
-
-        // Regression test for https://github.com/microsoft/aspire/issues/13971
-        // If the apphost selection prompt appears, it means multiple apphosts were
-        // incorrectly detected (e.g., AppHost.cs was incorrectly treated as a single-file apphost)
-        await auto.WaitUntilAsync(s =>
-        {
-            if (s.ContainsText("Select an AppHost to use:"))
-            {
-                throw new InvalidOperationException(
-                    "Unexpected apphost selection prompt detected! " +
-                    "This indicates multiple apphosts were incorrectly detected.");
-            }
-            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.")
-                || s.ContainsText("Press CTRL+C to stop the apphost and exit.");
-        }, timeout: TimeSpan.FromMinutes(5), description: "Press CTRL+C message (aspire run started)");
+        // Run the project with aspire run and persist the transcript for failed-run debugging.
+        await auto.AspireRunUntilReadyAsync(workspace);
 
         // Stop the running apphost with Ctrl+C
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
@@ -156,12 +140,13 @@ public sealed class SmokeTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Creates a starter project, starts it with aspire start, and verifies the
-    /// starter resources come up and the web frontend endpoint responds with HTTP 200.
-    /// Catches runtime regressions where templates build but fail to serve traffic.
+    /// Creates a starter project, starts it with <c>aspire start --format json</c>,
+    /// validates machine-readable JSON contracts, and verifies the web frontend endpoint
+    /// responds with HTTP 200.
     /// </summary>
+    [CaptureWorkspaceOnFailure]
     [Fact]
-    public async Task StarterTemplateEndpointsRespond()
+    public async Task StarterJsonContractsAndEndpointsRespond()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect();
@@ -184,30 +169,30 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.AspireStartAsync(counter);
+        await auto.PersistAspireStartJsonAsync(workspace, counter);
+        CliE2ETestHelpers.AssertAspireStartJsonContract(workspace);
 
         await auto.TypeAsync("aspire wait webfrontend --status up --timeout 300");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("is up (running).", timeout: TimeSpan.FromMinutes(6));
         await auto.WaitForSuccessPromptAsync(counter);
 
+        var psJsonPath = await auto.CaptureJsonOutputAsync(
+            "aspire ps --format json",
+            workspace,
+            counter,
+            "ps.json");
+        CliE2ETestHelpers.AssertPsJsonContract(psJsonPath);
+
         await auto.AssertResourcesExistAsync(counter, "webfrontend", "apiservice");
 
-        await auto.TypeAsync("aspire describe webfrontend --format json > webfrontend.json");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("WEB_URL=$(grep -oE 'https?://localhost:[0-9]+' webfrontend.json | head -1); echo \"$WEB_URL\"");
-        await auto.EnterAsync();
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("http://localhost:") || s.ContainsText("https://localhost:"),
-            timeout: TimeSpan.FromSeconds(30),
-            description: "web frontend URL");
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("curl -ksSL -o /dev/null -w 'webfrontend-http-%{http_code}' \"$WEB_URL\" || echo 'webfrontend-http-failed'");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("webfrontend-http-200", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        var webfrontendJsonPath = await auto.CaptureJsonOutputAsync(
+            "aspire describe webfrontend --format json",
+            workspace,
+            counter,
+            "webfrontend.json");
+        var webUrl = CliE2ETestHelpers.GetFirstLocalhostUrlFromJsonFile(webfrontendJsonPath);
+        await auto.AssertUrlRespondsAsync(webUrl, "webfrontend", counter);
 
         await auto.AspireStopAsync(counter);
 

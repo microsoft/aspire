@@ -658,6 +658,35 @@ internal static class Hex1bAutomatorTestHelpers
     }
 
     /// <summary>
+    /// Installs dependencies, runs <c>aspire restore</c>, and then type-checks the generated TypeScript project.
+    /// </summary>
+    internal static async Task AspireRestoreAndTypeCheckTypeScriptAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string typeCheckCommand = "npx --no-install tsc --noEmit --project tsconfig.apphost.json",
+        TimeSpan? installTimeout = null,
+        TimeSpan? restoreTimeout = null,
+        TimeSpan? typeCheckTimeout = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(typeCheckCommand);
+
+        await auto.TypeAsync("npm install");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, installTimeout ?? TimeSpan.FromMinutes(5));
+
+        await auto.TypeAsync("aspire restore");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(
+            "SDK code restored successfully",
+            timeout: restoreTimeout ?? TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync(typeCheckCommand);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, typeCheckTimeout ?? TimeSpan.FromMinutes(2));
+    }
+
+    /// <summary>
     /// Runs <c>aspire init --language csharp</c> and handles the NuGet.config, URLs, and agent init prompts.
     /// </summary>
     internal static async Task AspireInitAsync(
