@@ -169,20 +169,11 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Are you sure you want to delete the value for parameter `{0}`? .
+        ///   Looks up a localized string similar to Are you sure you want to delete the value for parameter `{0}`?.
         /// </summary>
         internal static string DeleteParameterMessage {
             get {
                 return ResourceManager.GetString("DeleteParameterMessage", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Are you sure you want to delete the value for parameter `{0}`?.
-        /// </summary>
-        internal static string DeleteParameterMessageWithUserSecrets {
-            get {
-                return ResourceManager.GetString("DeleteParameterMessageWithUserSecrets", resourceCulture);
             }
         }
 

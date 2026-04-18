@@ -205,9 +205,7 @@
     <value>Set parameter</value>
   </data>
   <data name="SetParameterMessage" xml:space="preserve">
-    <value>Please provide a value for the parameter.
-
-New parameter values may not be used until dependent resources are restarted.</value>
+    <value>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</value>
     <comment>Contains markdown</comment>
   </data>
   <data name="ParametersInputsDeleteLabel" xml:space="preserve">
@@ -217,10 +215,6 @@ New parameter values may not be used until dependent resources are restarted.</v
     <value>Delete parameter value</value>
   </data>
   <data name="DeleteParameterMessage" xml:space="preserve">
-    <value>Are you sure you want to delete the value for parameter `{0}`? </value>
-    <comment>Contains markdown. {0} is the parameter name.</comment>
-  </data>
-  <data name="DeleteParameterMessageWithUserSecrets" xml:space="preserve">
     <value>Are you sure you want to delete the value for parameter `{0}`?</value>
     <comment>Contains markdown. {0} is the parameter name.</comment>
   </data>

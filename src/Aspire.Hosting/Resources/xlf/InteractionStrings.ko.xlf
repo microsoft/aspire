@@ -43,15 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DeleteParameterMessage">
-        <source>Are you sure you want to delete the value for parameter `{0}`? </source>
-        <target state="translated">`{0}` 매개 변수의 값을 삭제하시겠습니까? </target>
-        <note>Contains markdown. {0} is the parameter name.</note>
-      </trans-unit>
-      <trans-unit id="DeleteParameterMessageWithUserSecrets">
         <source>Are you sure you want to delete the value for parameter `{0}`?</source>
-        <target state="needs-review-translation">`{0}` 매개 변수의 값을 삭제하시겠습니까?
-
-이 값은 현재 [사용자 비밀](https://learn.microsoft.com/aspnet/core/security/app-secrets)에 저장되어 있습니다. 여기에서 삭제하도록 선택할 수도 있습니다.</target>
+        <target state="needs-review-translation">`{0}` 매개 변수의 값을 삭제하시겠습니까? </target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -170,9 +163,7 @@
         <note />
       </trans-unit>
       <trans-unit id="SetParameterMessage">
-        <source>Please provide a value for the parameter.
-
-New parameter values may not be used until dependent resources are restarted.</source>
+        <source>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</source>
         <target state="needs-review-translation">매개 변수에 대한 값을 제공하세요. 나중에 사용할 수 있도록 매개 변수를 [사용자 비밀](https://learn.microsoft.com/aspnet/core/security/app-secrets)에 저장할 수 있습니다.
 
 종속 리소스를 다시 시작할 때까지 새 매개 변수 값을 사용할 수 없습니다.</target>

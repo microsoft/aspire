@@ -43,15 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DeleteParameterMessage">
-        <source>Are you sure you want to delete the value for parameter `{0}`? </source>
-        <target state="translated">確定要刪除參數 `{0}` 的值?</target>
-        <note>Contains markdown. {0} is the parameter name.</note>
-      </trans-unit>
-      <trans-unit id="DeleteParameterMessageWithUserSecrets">
         <source>Are you sure you want to delete the value for parameter `{0}`?</source>
-        <target state="needs-review-translation">確定要刪除參數 `{0}` 的值?
-
-值目前儲存於 [使用者祕密](https://learn.microsoft.com/aspnet/core/security/app-secrets)。您可以選擇也從該處刪除它。</target>
+        <target state="needs-review-translation">確定要刪除參數 `{0}` 的值?</target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -170,9 +163,7 @@
         <note />
       </trans-unit>
       <trans-unit id="SetParameterMessage">
-        <source>Please provide a value for the parameter.
-
-New parameter values may not be used until dependent resources are restarted.</source>
+        <source>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</source>
         <target state="needs-review-translation">請提供參數的值。參數可以儲存到 [使用者祕密](https://learn.microsoft.com/aspnet/core/security/app-secrets) 供未來使用。
 
 除非重新啟動相依資源，否則無法使用新的參數值。</target>
