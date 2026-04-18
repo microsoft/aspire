@@ -79,7 +79,7 @@ internal static class Hex1bTestHelpers
     /// Uses default dimensions of 160x48 unless overridden.
     /// </summary>
     /// <param name="testName">The test name used for the recording file path. Defaults to the calling method name.</param>
-    /// <param name="localSubDir">The subdirectory name under the temp folder for local (non-CI) recordings.</param>
+    /// <param name="localSubDir">The subdirectory name under the local <c>TestResults/recordings</c> directory.</param>
     /// <param name="width">The terminal width in columns. Defaults to 160.</param>
     /// <param name="height">The terminal height in rows. Defaults to 48.</param>
     /// <returns>A configured <see cref="Hex1bTerminal"/> instance. Caller is responsible for disposal.</returns>
@@ -103,10 +103,10 @@ internal static class Hex1bTestHelpers
     /// <summary>
     /// Gets the path for storing asciinema recordings that will be uploaded as CI artifacts.
     /// In CI, this returns a path under $GITHUB_WORKSPACE/testresults/recordings/.
-    /// Locally, this returns a path under the system temp directory.
+    /// Locally, this returns a path under the test output <c>TestResults/recordings/</c> directory.
     /// </summary>
     /// <param name="testName">The name of the test (used as the recording filename).</param>
-    /// <param name="localSubDir">The subdirectory name under the temp folder for local (non-CI) recordings.</param>
+    /// <param name="localSubDir">The subdirectory name under the local <c>TestResults/recordings</c> directory.</param>
     /// <returns>The full path to the .cast recording file.</returns>
     internal static string GetTestResultsRecordingPath(string testName, string localSubDir)
     {
@@ -120,8 +120,8 @@ internal static class Hex1bTestHelpers
         }
         else
         {
-            // Local development - use temp directory
-            recordingsDir = Path.Combine(Path.GetTempPath(), localSubDir, "recordings");
+            // Local development - keep recordings with the rest of the test output.
+            recordingsDir = Path.Combine(AppContext.BaseDirectory, "TestResults", "recordings", localSubDir);
         }
 
         Directory.CreateDirectory(recordingsDir);
