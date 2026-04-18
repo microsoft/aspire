@@ -730,7 +730,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithDependencyFailure_ReportsFailedDependency()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
@@ -750,7 +750,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         {
             dependentStepExecuted = true;
             await Task.CompletedTask;
-        }, dependsOn: "failing-dependency");
+        }, dependsOn: "failing-dependency", requiredBy: "deploy");
 
         var context = CreateDeployingContext(builder.Build());
 
@@ -812,7 +812,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_WithFailure_PreventsOtherStepsFromStarting()
     {
         // Test that when one step fails, other steps that haven't started yet don't start
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
@@ -832,7 +832,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         {
             step2Started = true;
             await Task.CompletedTask;
-        }, dependsOn: "step1");
+        }, dependsOn: "step1", requiredBy: "deploy");
 
         var context = CreateDeployingContext(builder.Build());
 
@@ -878,7 +878,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WhenStepThrowsProcessFailedException_RethrowsWithoutWrapping()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
@@ -1448,7 +1448,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         await pipeline.ExecuteAsync(context).DefaultTimeout();
 
         Assert.True(callbackExecuted);
-        Assert.Equal(14, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, push, push-prereq, publish, publish-prereq, diagnostics, destroy, destroy-prereq + step1, step2
+        Assert.Equal(15, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, check-container-runtime, push, push-prereq, publish, publish-prereq, diagnostics, destroy, destroy-prereq + step1, step2
         Assert.Contains(capturedSteps, s => s.Name == "deploy");
         Assert.Contains(capturedSteps, s => s.Name == "process-parameters");
         Assert.Contains(capturedSteps, s => s.Name == "deploy-prereq");

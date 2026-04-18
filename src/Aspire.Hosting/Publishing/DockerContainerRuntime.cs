@@ -128,6 +128,13 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
     public override async Task BuildImageAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {
+        // Verify buildx is available before attempting a Dockerfile build
+        if (!await CheckDockerBuildxAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new DistributedApplicationException(
+                "Docker buildx is not available. Install the buildx plugin and try again.");
+        }
+
         // Normalize the context path to handle trailing slashes and relative paths
         var normalizedContextPath = Path.GetFullPath(contextPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -143,14 +150,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
     public override async Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)
     {
-        // First check if Docker daemon is running using the same check that DCP uses
-        if (!await CheckDockerDaemonAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return false;
-        }
-
-        // Then check if Docker buildx is available
-        return await CheckDockerBuildxAsync(cancellationToken).ConfigureAwait(false);
+        return await CheckDockerDaemonAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> CheckDockerDaemonAsync(CancellationToken cancellationToken)
@@ -179,10 +179,10 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
             var exitCode = await ExecuteContainerCommandWithExitCodeAsync(
                 "buildx version",
                 "Docker buildx version failed with exit code {ExitCode}.",
-                "Docker buildx is available and running.",
+                "Docker buildx is available.",
                 cancellationToken,
                 Array.Empty<object>()).ConfigureAwait(false);
-            
+
             return exitCode == 0;
         }
         catch
