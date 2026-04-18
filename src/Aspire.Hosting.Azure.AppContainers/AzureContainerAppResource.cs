@@ -97,8 +97,9 @@ public class AzureContainerAppResource : AzureProvisioningResource
             var pushSteps = context.GetSteps(targetResource, WellKnownPipelineTags.PushContainerImage);
             provisionSteps.DependsOn(pushSteps);
 
-            // Ensure summary step runs after provision
-            context.GetSteps(this, "print-summary").DependsOn(provisionSteps);
+            // Ensure summary step runs after provision.
+            // Use targetResource because the print step has Resource = targetResource (set in the step annotation above).
+            context.GetSteps(targetResource, "print-summary").DependsOn(provisionSteps);
         }));
     }
 
