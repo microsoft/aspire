@@ -362,7 +362,7 @@ if (-not $SkipCli) {
     Write-Log "Publishing Aspire CLI for target RID: $Rid"
     $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.csproj"
     $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $Rid "publish"
-    & dotnet publish $cliProj -c $effectiveConfig -r $Rid --self-contained /p:PublishAot=false /p:PublishSingleFile=true "/p:VersionSuffix=$VersionSuffix"
+    & dotnet publish $cliProj -c $effectiveConfig -r $Rid --self-contained /p:PublishAot=false /p:PublishSingleFile=true "/p:VersionSuffix=$VersionSuffix" "/p:CliChannel=$DefaultCliChannel"
     if ($LASTEXITCODE -ne 0) {
       Write-Err "CLI publish for RID $Rid failed."
       exit 1

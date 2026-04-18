@@ -373,7 +373,7 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     CLI_PROJ="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj"
     CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net10.0/$TARGET_RID/publish"
     dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" -r "$TARGET_RID" --self-contained \
-      /p:PublishAot=false /p:PublishSingleFile=true "/p:VersionSuffix=$VERSION_SUFFIX"
+      /p:PublishAot=false /p:PublishSingleFile=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:CliChannel=$DEFAULT_CLI_CHANNEL"
   else
     # Framework-dependent CLI from dotnet tool build
     CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/publish"

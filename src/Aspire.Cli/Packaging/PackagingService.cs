@@ -28,7 +28,15 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a => a.Key == "CliChannel")?.Value;
 
-        return string.IsNullOrEmpty(value) ? null : value;
+        // 'ci' is a build-time default for CI archive builds (see eng/clipack/Common.projitems)
+        // and is not a real package channel, so treat it like no channel.
+        if (string.IsNullOrEmpty(value) ||
+            string.Equals(value, "ci", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return value;
     }
 
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
