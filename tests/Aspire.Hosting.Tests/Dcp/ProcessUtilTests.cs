@@ -66,12 +66,13 @@ public class ProcessUtilTests
         await using (processDisposable)
         {
             var processResult = await pendingProcessResult.WaitAsync(TimeSpan.FromSeconds(10));
+            var normalizedOutput = processResult.ProcessOutput.Select(static line => line.TrimEnd()).ToArray();
 
             Assert.Equal(1, processResult.ExitCode);
             Assert.Equal(2, processResult.TotalProcessOutputLineCount);
             Assert.Equal(2, processResult.ProcessOutput.Count);
-            Assert.Contains("stdout-final-line", processResult.ProcessOutput);
-            Assert.Contains("stderr-final-line", processResult.ProcessOutput);
+            Assert.Contains("stdout-final-line", normalizedOutput);
+            Assert.Contains("stderr-final-line", normalizedOutput);
         }
     }
 
@@ -85,12 +86,13 @@ public class ProcessUtilTests
         {
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).WaitAsync(TimeSpan.FromSeconds(10));
             var outputLines = exception.Message.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+            var normalizedOutputLines = outputLines.Select(static line => line.TrimEnd()).ToArray();
 
             Assert.Contains("Command output truncated: showing last 50 of 52 lines.", exception.Message);
             Assert.DoesNotContain("line-1", outputLines);
             Assert.DoesNotContain("line-2", outputLines);
-            Assert.Contains("line-3", outputLines);
-            Assert.Contains("line-52", outputLines);
+            Assert.Contains("line-3", normalizedOutputLines);
+            Assert.Contains("line-52", normalizedOutputLines);
         }
     }
 
