@@ -1886,11 +1886,12 @@ public static class JavaScriptHostingExtensions
             foreach (var line in lines)
             {
                 var trimmedLine = line.Trim();
-                if (trimmedLine.StartsWith("nodejs ", StringComparison.Ordinal) ||
-                    trimmedLine.StartsWith("node ", StringComparison.Ordinal))
+                var parts = trimmedLine.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 1 &&
+                    (string.Equals(parts[0], "nodejs", StringComparison.Ordinal) ||
+                     string.Equals(parts[0], "node", StringComparison.Ordinal)))
                 {
-                    var parts = trimmedLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length > 1 && TryParseNodeVersion(parts[1], out var version))
+                    if (TryParseNodeVersion(parts[1], out var version))
                     {
                         logger.LogDebug("Detected Node.js version {Version} from .tool-versions file", version);
                         nodeVersion = version;
