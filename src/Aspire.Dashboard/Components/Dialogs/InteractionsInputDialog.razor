@@ -137,7 +137,7 @@
                                                 @bind-Value="input.ViewModel.IsChecked"
                                                 Label="@input.ViewModel.Input.Label"
                                                 Placeholder="@input.ViewModel.Input.Placeholder"
-                                                AriaLabel="@input.ViewModel.Input.Description"
+                                                AriaLabel="@input.ViewModel.Input.Label"
                                                 Disabled="input.ViewModel.InputDisabled"
                                                 aria-describedby="@input.DescriptionId" />
                             </InteractionInputField>
@@ -182,24 +182,3 @@
         </FluentButton>
     }
 </FluentDialogFooter>
-
-@code {
-    private RenderFragment? GetDescriptionContent(InteractionInput vm, string? id)
-    {
-        @if (!string.IsNullOrEmpty(vm.Description))
-        {
-            return
-            @<div class="input-description" id="@id">
-            @if (vm.EnableDescriptionMarkdown)
-            {
-                    <MarkdownRenderer MarkdownProcessor="@_markdownProcessor" Markdown="@vm.Description" SuppressParagraphOnNewLines="true" />
-            }
-            else
-            {
-                    <span>@vm.Description</span>
-            }
-            </div>;
-        }
-        return null;
-    }
-}
