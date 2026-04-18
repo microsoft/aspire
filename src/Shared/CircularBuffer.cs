@@ -88,7 +88,9 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             }
 
             var removedItem = this[0];
+#if DEBUG
             var removedItemCount = CountOccurrences(removedItem);
+#endif
 
             var internalIndex = InternalIndex(index);
 
@@ -127,9 +129,11 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             Increment(ref _end);
             _start = _end;
 
+#if DEBUG
             Debug.Assert(
                 CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
                 "Item was not correctly removed.");
+#endif
             ItemRemovedForCapacity?.Invoke(removedItem);
         }
         else
@@ -197,15 +201,19 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
         if (IsFull)
         {
             var removedItem = this[0];
+#if DEBUG
             var removedItemCount = CountOccurrences(removedItem);
+#endif
 
             _buffer[_end] = item;
             Increment(ref _end);
             _start = _end;
 
+#if DEBUG
             Debug.Assert(
                 CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
                 "Item was not correctly removed.");
+#endif
             ItemRemovedForCapacity?.Invoke(removedItem);
         }
         else
@@ -272,6 +280,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
         return (_start + index) % _buffer.Count;
     }
 
+#if DEBUG
     private int CountOccurrences(T item)
     {
         var count = 0;
@@ -285,6 +294,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
 
         return count;
     }
+#endif
 
     private void Increment(ref int index)
     {

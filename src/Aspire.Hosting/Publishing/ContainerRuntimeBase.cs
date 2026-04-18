@@ -269,7 +269,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     }
 
     /// <summary>
-    /// Executes a container runtime command and returns the process result without throwing exceptions.
+    /// Executes a container runtime command and returns the process result without throwing for non-zero exit codes.
     /// </summary>
     protected async Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
         string arguments,
