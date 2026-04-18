@@ -83,9 +83,7 @@ public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
             await auto.RunCommandAsync("az provider register --namespace Microsoft.Cache --wait", counter, TimeSpan.FromMinutes(5));
 
             // Step 2: Set up CLI environment
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter);
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create starter project (React) with Redis enabled
             output.WriteLine("Step 3: Creating React starter project with Redis...");

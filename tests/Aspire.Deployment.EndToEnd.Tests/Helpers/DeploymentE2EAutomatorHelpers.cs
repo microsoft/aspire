@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
+using Xunit;
 
 namespace Aspire.Deployment.EndToEnd.Tests.Helpers;
 
@@ -82,6 +83,57 @@ internal static class DeploymentE2EAutomatorHelpers
         }
 
         await auto.LogAspireCliVersionAsync(counter);
+    }
+
+    /// <summary>
+    /// Logs and installs the specified Aspire CLI strategy for a deployment test step.
+    /// </summary>
+    internal static async Task<CliInstallStrategy> InstallAspireCliAsync(
+        this Hex1bTerminalAutomator auto,
+        CliInstallStrategy strategy,
+        SequenceCounter counter,
+        ITestOutputHelper output,
+        string stepLabel = "Step 2",
+        bool includeBundlePath = false,
+        string artifactName = "CLI")
+    {
+        output.WriteLine($"{stepLabel}: Installing Aspire {artifactName} using {strategy}...");
+        await auto.InstallAspireCliAsync(strategy, counter, includeBundlePath);
+        return strategy;
+    }
+
+    /// <summary>
+    /// Installs the current-build Aspire CLI using the deployment test defaults.
+    /// </summary>
+    internal static Task<CliInstallStrategy> InstallCurrentBuildAspireCliAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        ITestOutputHelper output,
+        string stepLabel = "Step 2")
+    {
+        return auto.InstallAspireCliAsync(
+            DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy(),
+            counter,
+            output,
+            stepLabel);
+    }
+
+    /// <summary>
+    /// Installs the current-build Aspire bundle using the deployment test defaults.
+    /// </summary>
+    internal static Task<CliInstallStrategy> InstallCurrentBuildAspireBundleAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        ITestOutputHelper output,
+        string stepLabel = "Step 2")
+    {
+        return auto.InstallAspireCliAsync(
+            DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy(),
+            counter,
+            output,
+            stepLabel,
+            includeBundlePath: true,
+            artifactName: "bundle");
     }
 
     /// <summary>

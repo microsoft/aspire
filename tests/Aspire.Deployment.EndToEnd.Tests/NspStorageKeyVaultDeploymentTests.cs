@@ -73,10 +73,7 @@ public sealed class NspStorageKeyVaultDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-                output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
-                await auto.InstallAspireCliAsync(installStrategy, counter);
-            
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create React + ASP.NET Core project
             output.WriteLine("Step 3: Creating React + ASP.NET Core project...");

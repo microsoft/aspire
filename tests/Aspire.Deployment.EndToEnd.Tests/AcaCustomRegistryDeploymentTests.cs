@@ -75,9 +75,7 @@ public sealed class AcaCustomRegistryDeploymentTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter);
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create starter project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating starter project...");

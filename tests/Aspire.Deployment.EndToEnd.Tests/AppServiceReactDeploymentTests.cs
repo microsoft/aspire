@@ -78,9 +78,7 @@ public sealed class AppServiceReactDeploymentTests(ITestOutputHelper output)
             // Step 2: Set up CLI environment
             // The workflow builds and installs the CLI to ~/.aspire/bin before running tests
             // We just need to source it in the bash session
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter);
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create React + ASP.NET Core project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating React + ASP.NET Core project...");

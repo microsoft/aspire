@@ -75,9 +75,7 @@ public sealed class TypeScriptExpressDeploymentTests(ITestOutputHelper output)
             // Step 2: Set up CLI environment
             // TypeScript apphosts need the full bundle (not just the CLI binary) because
             // the prebuilt AppHost server is required for aspire add to regenerate SDK code.
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 2: Installing Aspire bundle using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter, includeBundlePath: true);
+            await auto.InstallCurrentBuildAspireBundleAsync(counter, output);
 
             // Step 3: Create TypeScript Express/React project using aspire new
             output.WriteLine("Step 3: Creating TypeScript Express/React project...");

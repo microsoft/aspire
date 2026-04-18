@@ -68,9 +68,7 @@ public sealed class VnetSqlServerInfraDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter);
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create single-file AppHost using aspire init
             output.WriteLine("Step 3: Creating single-file AppHost with aspire init...");

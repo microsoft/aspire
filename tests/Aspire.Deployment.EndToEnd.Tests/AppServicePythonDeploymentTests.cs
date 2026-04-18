@@ -78,9 +78,7 @@ public sealed class AppServicePythonDeploymentTests(ITestOutputHelper output)
             // Step 2: Set up CLI environment
             // Python apphosts need the full bundle because
             // the prebuilt AppHost server is required for aspire new with Python templates.
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 2: Installing Aspire bundle using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter, includeBundlePath: true);
+            await auto.InstallCurrentBuildAspireBundleAsync(counter, output);
 
             // Step 3: Create Python FastAPI project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating Python FastAPI project...");

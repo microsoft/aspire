@@ -156,9 +156,7 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
             // ===== PHASE 2: Create Aspire Project and Generate Helm Charts =====
 
             // Step 10: Set up CLI environment
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 10: Installing Aspire CLI using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter);
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output, "Step 10");
 
             // Step 11: Create starter project using aspire new with interactive prompts
             output.WriteLine("Step 11: Creating Aspire starter project...");

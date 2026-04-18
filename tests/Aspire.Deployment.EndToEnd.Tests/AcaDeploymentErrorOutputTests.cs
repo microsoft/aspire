@@ -78,9 +78,7 @@ public sealed class AcaDeploymentErrorOutputTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter);
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create single-file AppHost
             output.WriteLine("Step 3: Creating single-file AppHost...");

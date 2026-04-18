@@ -72,9 +72,7 @@ public sealed class TypeScriptVnetSqlServerInfraDeploymentTests(ITestOutputHelpe
             // Step 2: Set up CLI environment
             // TypeScript apphosts need the full bundle because
             // the prebuilt AppHost server is required for aspire add to regenerate SDK code.
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-            output.WriteLine($"Step 2: Installing Aspire bundle using {installStrategy}...");
-            await auto.InstallAspireCliAsync(installStrategy, counter, includeBundlePath: true);
+            await auto.InstallCurrentBuildAspireBundleAsync(counter, output);
 
             // Step 3: Create TypeScript AppHost using aspire init
             output.WriteLine("Step 3: Creating TypeScript AppHost with aspire init...");

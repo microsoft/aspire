@@ -282,9 +282,7 @@ builder.Build().Run();
             }
             else
             {
-                var installStrategy = localCurrentBuildStrategy!;
-                output.WriteLine($"Step 11: Installing current-build Aspire CLI using {installStrategy}...");
-                await auto.InstallAspireCliAsync(installStrategy, counter);
+                var installStrategy = await auto.InstallAspireCliAsync(localCurrentBuildStrategy!, counter, output, "Step 11");
 
                 updateCommand = installStrategy.Mode switch
                 {

@@ -85,10 +85,7 @@ public sealed class AcaExistingRegistryDeploymentTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI environment
-            var installStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
-                output.WriteLine($"Step 2: Installing Aspire CLI using {installStrategy}...");
-                await auto.InstallAspireCliAsync(installStrategy, counter);
-            
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Pre-create resource group and ACR via az CLI
             output.WriteLine("Step 3: Pre-creating resource group and ACR...");
