@@ -88,6 +88,7 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             }
 
             var removedItem = this[0];
+            var removedItemCount = CountOccurrences(removedItem);
 
             var internalIndex = InternalIndex(index);
 
@@ -126,7 +127,9 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
             Increment(ref _end);
             _start = _end;
 
-            Debug.Assert(!_buffer.Contains(removedItem), "Item was not correctly removed.");
+            Debug.Assert(
+                CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
+                "Item was not correctly removed.");
             ItemRemovedForCapacity?.Invoke(removedItem);
         }
         else
@@ -194,12 +197,15 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
         if (IsFull)
         {
             var removedItem = this[0];
+            var removedItemCount = CountOccurrences(removedItem);
 
             _buffer[_end] = item;
             Increment(ref _end);
             _start = _end;
 
-            Debug.Assert(!_buffer.Contains(removedItem), "Item was not correctly removed.");
+            Debug.Assert(
+                CountOccurrences(removedItem) == removedItemCount - 1 + (EqualityComparer<T>.Default.Equals(item, removedItem) ? 1 : 0),
+                "Item was not correctly removed.");
             ItemRemovedForCapacity?.Invoke(removedItem);
         }
         else
@@ -264,6 +270,20 @@ internal sealed class CircularBuffer<T> : IList<T>, ICollection<T>, IEnumerable<
     private int InternalIndex(int index)
     {
         return (_start + index) % _buffer.Count;
+    }
+
+    private int CountOccurrences(T item)
+    {
+        var count = 0;
+        foreach (var existingItem in _buffer)
+        {
+            if (EqualityComparer<T>.Default.Equals(existingItem, item))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private void Increment(ref int index)

@@ -1441,7 +1441,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
-    public async Task DockerBuildFailureIncludesBuildOutputInException()
+    public async Task DockerBuildFailureIncludesProcessOutputInException()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
 
@@ -1469,8 +1469,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             () => imageBuilder.BuildImageAsync(container.Resource, cts.Token));
 
         Assert.NotEqual(0, ex.ExitCode);
-        Assert.NotEmpty(ex.BuildOutput);
-        Assert.Contains(ex.BuildOutput, line => line.Contains("nonexistent-file-12345.txt"));
+        Assert.NotEmpty(ex.ProcessOutput);
+        Assert.Contains(ex.ProcessOutput, line => line.Contains("nonexistent-file-12345.txt"));
     }
 }
 

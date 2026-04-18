@@ -195,24 +195,22 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
             }
         }
 
-        var buildOutput = new BuildOutputCapture();
-
-        var exitCode = await ExecuteContainerCommandWithExitCodeAsync(
+        var processResult = await ExecuteContainerCommandWithResultAsync(
             arguments,
             "Podman build for {ImageName} failed with exit code {ExitCode}.",
             "Podman build for {ImageName} succeeded.",
             cancellationToken,
             new object[] { imageName },
             environmentVariables,
-            buildOutput).ConfigureAwait(false);
+            retainOutput: true).ConfigureAwait(false);
 
-        if (exitCode != 0)
+        if (processResult.ExitCode != 0)
         {
             throw new ProcessFailedException(
-                $"Podman build failed with exit code {exitCode}.",
-                exitCode,
-                buildOutput.ToArray(),
-                buildOutput.TotalLineCount);
+                $"Podman build failed with exit code {processResult.ExitCode}.",
+                processResult.ExitCode,
+                processResult.ProcessOutput,
+                processResult.TotalProcessOutputLineCount);
         }
     }
 

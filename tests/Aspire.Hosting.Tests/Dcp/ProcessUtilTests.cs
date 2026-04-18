@@ -37,6 +37,63 @@ public class ProcessUtilTests
         }
     }
 
+    [Fact]
+    public async Task Run_IncludesCapturedOutputInNonZeroExitException()
+    {
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(CreateFailingProcessSpec(["stdout-final-line", "stderr-final-line"], emitSecondLineToStderr: true));
+
+        await using (processDisposable)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Contains("returned non-zero exit code 1", exception.Message);
+            Assert.Contains("stdout-final-line", exception.Message);
+            Assert.Contains("stderr-final-line", exception.Message);
+        }
+    }
+
+    [Fact]
+    public async Task Run_ReturnsCapturedOutputInProcessResult_WhenRetentionEnabled()
+    {
+        var spec = CreateFailingProcessSpec(
+            ["stdout-final-line", "stderr-final-line"],
+            emitSecondLineToStderr: true,
+            throwOnNonZeroReturnCode: false,
+            retainedOutputLineCount: ProcessSpec.DefaultRetainedOutputLineCount);
+
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+
+        await using (processDisposable)
+        {
+            var processResult = await pendingProcessResult.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(1, processResult.ExitCode);
+            Assert.Equal(2, processResult.TotalProcessOutputLineCount);
+            Assert.Equal(2, processResult.ProcessOutput.Count);
+            Assert.Contains("stdout-final-line", processResult.ProcessOutput);
+            Assert.Contains("stderr-final-line", processResult.ProcessOutput);
+        }
+    }
+
+    [Fact]
+    public async Task Run_TruncatesCapturedOutputToLast50LinesInNonZeroExitException()
+    {
+        var lines = Enumerable.Range(1, 52).Select(i => $"line-{i}").ToArray();
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(CreateFailingProcessSpec(lines));
+
+        await using (processDisposable)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pendingProcessResult).WaitAsync(TimeSpan.FromSeconds(10));
+            var outputLines = exception.Message.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+
+            Assert.Contains("Command output truncated: showing last 50 of 52 lines.", exception.Message);
+            Assert.DoesNotContain("line-1", outputLines);
+            Assert.DoesNotContain("line-2", outputLines);
+            Assert.Contains("line-3", outputLines);
+            Assert.Contains("line-52", outputLines);
+        }
+    }
+
     private static ProcessSpec CreateSingleLineOutputProcessSpec(Action<string> onOutputData)
     {
         if (OperatingSystem.IsWindows())
@@ -54,6 +111,60 @@ public class ProcessUtilTests
             Arguments = "-c \"echo final-line\"",
             OnOutputData = onOutputData,
             ThrowOnNonZeroReturnCode = false
+        };
+    }
+
+    private static ProcessSpec CreateFailingProcessSpec(
+        string[] lines,
+        bool emitSecondLineToStderr = false,
+        bool throwOnNonZeroReturnCode = true,
+        int? retainedOutputLineCount = null)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var commandParts = new List<string>();
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (emitSecondLineToStderr && i == 1)
+                {
+                    commandParts.Add($"echo {lines[i]} 1>&2");
+                }
+                else
+                {
+                    commandParts.Add($"echo {lines[i]}");
+                }
+            }
+
+            commandParts.Add("exit /b 1");
+
+            return new ProcessSpec("cmd")
+            {
+                Arguments = $"/c \"{string.Join(" & ", commandParts)}\"",
+                ThrowOnNonZeroReturnCode = throwOnNonZeroReturnCode,
+                RetainedOutputLineCount = retainedOutputLineCount
+            };
+        }
+
+        var unixCommandParts = new List<string>();
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (emitSecondLineToStderr && i == 1)
+            {
+                unixCommandParts.Add($"echo {lines[i]} 1>&2");
+            }
+            else
+            {
+                unixCommandParts.Add($"echo {lines[i]}");
+            }
+        }
+
+        unixCommandParts.Add("exit 1");
+
+        return new ProcessSpec("sh")
+        {
+            Arguments = $"-c \"{string.Join("; ", unixCommandParts)}\"",
+            ThrowOnNonZeroReturnCode = throwOnNonZeroReturnCode,
+            RetainedOutputLineCount = retainedOutputLineCount
         };
     }
 }

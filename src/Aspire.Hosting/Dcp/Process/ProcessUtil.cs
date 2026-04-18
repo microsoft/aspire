@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dcp.Process;
 
@@ -19,6 +20,13 @@ internal static partial class ProcessUtil
 
     public static (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
     {
+        var retainedOutputLineCount = processSpec.RetainedOutputLineCount ?? (processSpec.ThrowOnNonZeroReturnCode ? ProcessSpec.DefaultRetainedOutputLineCount : 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(retainedOutputLineCount);
+
+        ProcessOutputCapture? outputCapture = retainedOutputLineCount > 0
+            ? new(retainedOutputLineCount)
+            : null;
+
         var process = new System.Diagnostics.Process()
         {
             StartInfo =
@@ -72,6 +80,7 @@ internal static partial class ProcessUtil
                 return;
             }
 
+            outputCapture?.Add(e.Data);
             processSpec.OnOutputData?.Invoke(e.Data);
         };
 
@@ -90,6 +99,7 @@ internal static partial class ProcessUtil
                 return;
             }
 
+            outputCapture?.Add(e.Data);
             processSpec.OnErrorData?.Invoke(e.Data);
         };
 
@@ -129,12 +139,18 @@ internal static partial class ProcessUtil
 
                     if (processSpec.ThrowOnNonZeroReturnCode && process.ExitCode != 0)
                     {
-                        processLifetimeTcs.TrySetException(new InvalidOperationException(
-                            $"Command {processSpec.ExecutablePath} {processSpec.Arguments} returned non-zero exit code {process.ExitCode}"));
+                        var message = $"Command {processSpec.ExecutablePath} {processSpec.Arguments} returned non-zero exit code {process.ExitCode}";
+
+                        if (outputCapture?.TotalLineCount > 0)
+                        {
+                            message = $"{message}{Environment.NewLine}{outputCapture.GetFormattedOutput()}";
+                        }
+
+                        processLifetimeTcs.TrySetException(new InvalidOperationException(message));
                     }
                     else
                     {
-                        processLifetimeTcs.TrySetResult(new ProcessResult(process.ExitCode));
+                        processLifetimeTcs.TrySetResult(CreateProcessResult(process.ExitCode, outputCapture));
                     }
                 }
                 catch (Exception ex)
@@ -152,6 +168,16 @@ internal static partial class ProcessUtil
         }
 
         return (processLifetimeTcs.Task, new ProcessDisposable(process, processLifetimeTcs.Task, processSpec.KillEntireProcessTree));
+    }
+
+    private static ProcessResult CreateProcessResult(int exitCode, ProcessOutputCapture? outputCapture)
+    {
+        if (outputCapture is null)
+        {
+            return new ProcessResult(exitCode);
+        }
+
+        return new ProcessResult(exitCode, outputCapture.ToArray(), outputCapture.TotalLineCount);
     }
 
     private sealed class ProcessDisposable : IAsyncDisposable

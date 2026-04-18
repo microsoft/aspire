@@ -25,9 +25,40 @@ public class ContainerRuntimeBaseTests
         Assert.Contains("stderr-final-line", exception.Message);
     }
 
-    private sealed class TestContainerRuntime() : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance)
+    [Fact]
+    public async Task LoginToRegistryAsync_IncludesCapturedOutputInFailureMessage()
     {
-        protected override string RuntimeExecutable => OperatingSystem.IsWindows() ? "cmd" : "sh";
+        var runtime = new TestContainerRuntime("dotnet");
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            runtime.LoginToRegistryAsync("registry.example.com", "user", "password", default)).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Contains("test-runtime login failed with exit code 1.", exception.Message);
+        Assert.Contains("Could not execute because the specified command or file was not found.", exception.Message);
+        Assert.Contains("dotnet-login", exception.Message);
+    }
+
+    [Fact]
+    public async Task ComposeUpAsync_IncludesCapturedOutputInFailureMessage()
+    {
+        var runtime = new TestContainerRuntime("dotnet");
+        var context = new ComposeOperationContext
+        {
+            ProjectName = "test-project",
+            WorkingDirectory = AppContext.BaseDirectory
+        };
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            runtime.ComposeUpAsync(context, default)).WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Contains("'dotnet compose up' failed with exit code 1.", exception.Message);
+        Assert.Contains("Could not execute because the specified command or file was not found.", exception.Message);
+        Assert.Contains("dotnet-compose", exception.Message);
+    }
+
+    private sealed class TestContainerRuntime(string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance)
+    {
+        protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
 
         public override string Name => "test-runtime";
 
