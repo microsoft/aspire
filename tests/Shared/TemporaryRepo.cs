@@ -56,6 +56,11 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
 
         outputHelper.WriteLine($"Disposing temporary workspace at: {repoDirectory.FullName}");
 
+        DeleteDirectoryWithRetries(repoDirectory);
+    }
+
+    private static void DeleteDirectoryWithRetries(DirectoryInfo directory)
+    {
         // On Windows, file handles held by disposed StreamWriters may not be
         // released instantly. Retry with backoff to handle transient locks.
         // On Linux/macOS, Delete(true) can partially succeed (remove the directory)
@@ -65,7 +70,7 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
         {
             try
             {
-                repoDirectory.Delete(true);
+                directory.Delete(true);
                 return;
             }
             catch (DirectoryNotFoundException)
@@ -82,7 +87,7 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
             {
                 // Bulk delete failed after all retries. Delete files individually
                 // to surface the exact file name that is still locked.
-                DeleteContentsIndividually(repoDirectory);
+                DeleteContentsIndividually(directory);
                 return;
             }
         }
@@ -142,7 +147,7 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
 
         try
         {
-            Directory.Delete(workspacePath, recursive: true);
+            DeleteDirectoryWithRetries(new DirectoryInfo(workspacePath));
         }
         catch (Exception ex)
         {
