@@ -41,6 +41,10 @@
     background-color: transparent;
 }
 
+.interaction-input-dialog .interaction-input ::deep fluent-checkbox {
+    margin-top: 4px;
+}
+
 .interaction-input-dialog .interaction-input ::deep fluent-text-field::part(end) {
     margin-inline-end: 0;
 }
