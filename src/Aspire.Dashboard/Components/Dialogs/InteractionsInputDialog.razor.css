@@ -15,6 +15,10 @@
     max-width: 500px;
 }
 
+.interaction-input-dialog .interaction-input ::deep .input-description {
+    margin-top: 2px;
+}
+
 .interaction-input-dialog .interaction-input ::deep .input-description,
 .interaction-input-dialog .interaction-input ::deep .input-description p {
     color: var(--foreground-settings-text);
