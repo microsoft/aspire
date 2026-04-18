@@ -206,6 +206,8 @@ public static class AtsCapabilityScanner
             allDiagnostics.AddRange(result.Diagnostics);
         }
 
+        allExportedValues = DeduplicateExportedValues(allExportedValues, allDiagnostics);
+
         // Pass 2: Build universe of valid types and resolve Unknown types
         // Valid types are ALL types with [AspireExport] - the ExposeProperties/ExposeMethods
         // flags control whether a wrapper class is generated, not whether the type is valid
@@ -259,7 +261,19 @@ public static class AtsCapabilityScanner
         // Filter method name collisions (overloaded methods) after expansion
         FilterMethodNameCollisions(result.Capabilities, result.Diagnostics);
 
-        return result;
+        var exportedValues = DeduplicateExportedValues(result.ExportedValues, result.Diagnostics);
+
+        return new ScanResult
+        {
+            Capabilities = result.Capabilities,
+            HandleTypes = result.HandleTypes,
+            DtoTypes = result.DtoTypes,
+            EnumTypes = result.EnumTypes,
+            ExportedValues = exportedValues,
+            Diagnostics = result.Diagnostics,
+            Methods = result.Methods,
+            Properties = result.Properties
+        };
     }
 
     /// <summary>
@@ -1103,10 +1117,10 @@ public static class AtsCapabilityScanner
         try
         {
             var typeRef = CreateTypeRef(memberType, enumCollector: null, assemblyExportedTypeCache);
-            if (!IsSupportedExportedValueType(typeRef))
+            if (!IsSupportedExportedValueType(typeRef, assemblyExportedTypeCache))
             {
                 diagnostics.Add(AtsDiagnostic.Warning(
-                    $"Skipping [AspireValue] on '{declaringType.FullName}.{memberName}'. Exported values must be primitives, enums, DTOs, arrays, dictionaries, or unions of those types.",
+                    $"Skipping [AspireValue] on '{declaringType.FullName}.{memberName}'. Exported values must serialize to copied shapes. Mutable lists, mutable dictionaries, handles, and DTOs containing them are not supported.",
                     $"{declaringType.FullName}.{memberName}"));
                 return;
             }
@@ -1127,23 +1141,70 @@ public static class AtsCapabilityScanner
         }
     }
 
-    private static bool IsSupportedExportedValueType(AtsTypeRef? typeRef)
+    private static bool IsSupportedExportedValueType(
+        AtsTypeRef? typeRef,
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        HashSet<string>? visitedDtoTypeIds = null)
     {
         if (typeRef is null)
         {
             return false;
         }
 
+        visitedDtoTypeIds ??= new HashSet<string>(StringComparer.Ordinal);
+
         return typeRef.Category switch
         {
             AtsTypeCategory.Primitive => typeRef.TypeId != AtsConstants.CancellationToken && typeRef.TypeId != AtsConstants.Void,
             AtsTypeCategory.Enum => true,
-            AtsTypeCategory.Dto => true,
-            AtsTypeCategory.Array => IsSupportedExportedValueType(typeRef.ElementType),
-            AtsTypeCategory.Dict => IsSupportedExportedValueType(typeRef.KeyType) && IsSupportedExportedValueType(typeRef.ValueType),
-            AtsTypeCategory.Union => typeRef.UnionTypes is not null && typeRef.UnionTypes.All(IsSupportedExportedValueType),
+            AtsTypeCategory.Dto => IsSupportedExportedDtoType(typeRef, assemblyExportedTypeCache, visitedDtoTypeIds),
+            AtsTypeCategory.Array => IsSupportedExportedValueType(typeRef.ElementType, assemblyExportedTypeCache, visitedDtoTypeIds),
+            AtsTypeCategory.Dict => typeRef.IsReadOnly
+                && IsSupportedExportedValueType(typeRef.KeyType, assemblyExportedTypeCache, visitedDtoTypeIds)
+                && IsSupportedExportedValueType(typeRef.ValueType, assemblyExportedTypeCache, visitedDtoTypeIds),
+            AtsTypeCategory.Union => typeRef.UnionTypes is not null
+                && typeRef.UnionTypes.All(type => IsSupportedExportedValueType(type, assemblyExportedTypeCache, visitedDtoTypeIds)),
             _ => false
         };
+    }
+
+    private static bool IsSupportedExportedDtoType(
+        AtsTypeRef typeRef,
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        HashSet<string> visitedDtoTypeIds)
+    {
+        if (typeRef.ClrType is null)
+        {
+            return false;
+        }
+
+        if (!visitedDtoTypeIds.Add(typeRef.TypeId))
+        {
+            return true;
+        }
+
+        try
+        {
+            foreach (var property in typeRef.ClrType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!property.CanRead || property.GetIndexParameters().Length != 0)
+                {
+                    continue;
+                }
+
+                var propertyTypeRef = CreateTypeRef(property.PropertyType, enumCollector: null, assemblyExportedTypeCache);
+                if (!IsSupportedExportedValueType(propertyTypeRef, assemblyExportedTypeCache, visitedDtoTypeIds))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        finally
+        {
+            _ = visitedDtoTypeIds.Remove(typeRef.TypeId);
+        }
     }
 
     private static JsonNode? SerializeExportedValue(object? value, Type memberType)
@@ -1168,6 +1229,35 @@ public static class AtsCapabilityScanner
 
         pathSegments.Add(valueAttr.Name ?? memberName);
         return pathSegments;
+    }
+
+    private static List<AtsExportedValueInfo> DeduplicateExportedValues(
+        IReadOnlyList<AtsExportedValueInfo> exportedValues,
+        List<AtsDiagnostic> diagnostics)
+    {
+        if (exportedValues.Count <= 1)
+        {
+            return [.. exportedValues];
+        }
+
+        var seenPaths = new HashSet<string>(StringComparer.Ordinal);
+        var uniqueValues = new List<AtsExportedValueInfo>(exportedValues.Count);
+
+        foreach (var exportedValue in exportedValues)
+        {
+            var path = string.Join(".", exportedValue.PathSegments);
+            if (!seenPaths.Add(path))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Duplicate exported value path '{path}'. [AspireValue] exports must use unique catalog paths; later entries are ignored.",
+                    path));
+                continue;
+            }
+
+            uniqueValues.Add(exportedValue);
+        }
+
+        return uniqueValues;
     }
 
     /// <summary>

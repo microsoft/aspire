@@ -249,6 +249,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 sb.Append(name);
                 sb.Append(' ');
                 sb.Append(RenderGoExportedValueType(child, indentLevel + 1));
+                sb.AppendLine();
             }
         }
 

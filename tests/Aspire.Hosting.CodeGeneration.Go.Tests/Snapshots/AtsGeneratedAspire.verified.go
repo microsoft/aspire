@@ -93,7 +93,8 @@ var TestConfigs = struct {
 	Default *TestConfigDto
 	Profiles struct {
 		Development *TestConfigDto
-	}	Secure *TestConfigDto
+	}
+	Secure *TestConfigDto
 }{
 	Default: &TestConfigDto{Name: "default", Port: 6379, Enabled: true, OptionalField: "cache"},
 	Profiles: struct {

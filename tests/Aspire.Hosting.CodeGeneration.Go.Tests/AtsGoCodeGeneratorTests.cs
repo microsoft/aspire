@@ -56,6 +56,7 @@ public class AtsGoCodeGeneratorTests
         Assert.Contains("Default *TestConfigDto", aspireGo);
         Assert.Contains("Profiles struct {", aspireGo);
         Assert.Contains("Development *TestConfigDto", aspireGo);
+        Assert.Matches(@"Profiles struct \{\r?\n\t\tDevelopment \*TestConfigDto\r?\n\t\}\r?\n\tSecure \*TestConfigDto", aspireGo);
     }
 
     [Fact]

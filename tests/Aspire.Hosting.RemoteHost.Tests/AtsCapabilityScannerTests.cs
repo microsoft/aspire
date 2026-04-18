@@ -436,6 +436,44 @@ public class AtsCapabilityScannerTests
 
     #endregion
 
+    #region Exported Value Tests
+
+    [Fact]
+    public void ScanAssembly_MutableDictionaryExportedValue_IsSkipped()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "InvalidValues.InvalidExportedValues.MutableMetadata");
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "InvalidValues.InvalidExportedValues.DtoWithMutableList");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("copied shapes", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValues.MutableMetadata");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("copied shapes", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValues.DtoWithMutableList");
+    }
+
+    [Fact]
+    public void ScanAssembly_DuplicateExportedValuePath_EmitsWarningAndSkipsLaterValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.Single(result.ExportedValues,
+            value => string.Join(".", value.PathSegments) == "DuplicateValues.DuplicateExportedValues.Shared");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains(
+                "Duplicate exported value path 'DuplicateValues.DuplicateExportedValues.Shared'",
+                StringComparison.Ordinal)
+            && diagnostic.Location == "DuplicateValues.DuplicateExportedValues.Shared");
+    }
+
+    #endregion
+
     #region Test Types
 
     private sealed class TestResource : Resource
@@ -473,6 +511,30 @@ public class AtsCapabilityScannerTests
             _ = callback;
             return builder;
         }
+    }
+
+    private static class InvalidExportedValues
+    {
+        [AspireValue("InvalidValues")]
+        public static Dictionary<string, string> MutableMetadata { get; } = [];
+
+        [AspireValue("InvalidValues")]
+        public static InvalidExportedDto DtoWithMutableList { get; } = new();
+    }
+
+    [AspireDto]
+    private sealed class InvalidExportedDto
+    {
+        public List<string> Items { get; set; } = [];
+    }
+
+    private static class DuplicateExportedValues
+    {
+        [AspireValue("DuplicateValues", Name = "Shared")]
+        public static string FirstShared { get; } = "first";
+
+        [AspireValue("DuplicateValues", Name = "Shared")]
+        public static string SecondShared { get; } = "second";
     }
 
     private static Assembly CreateAssemblyLevelExportCapabilityAssembly(Type parameterType)
