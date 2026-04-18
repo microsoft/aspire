@@ -835,13 +835,17 @@ public static class JavaScriptHostingExtensions
                             {
                                 var runtimeImage = baseImageAnnotation?.RuntimeImage ?? GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services);
 
+                                // Match the ownership pattern from the official Next.js sample:
+                                // https://github.com/vercel/next.js/blob/canary/examples/with-docker/Dockerfile
                                 dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
                                     .Env("NODE_ENV", "production")
-                                    .CopyFrom("build", "/app/public", "./public")
-                                    .CopyFrom("build", "/app/.next/standalone", "./")
-                                    .CopyFrom("build", "/app/.next/static", "./.next/static")
+                                    .CopyFrom("build", "/app/public", "./public", "node:node")
+                                    .Run("mkdir .next")
+                                    .Run("chown node:node .next")
+                                    .CopyFrom("build", "/app/.next/standalone", "./", "node:node")
+                                    .CopyFrom("build", "/app/.next/static", "./.next/static", "node:node")
                                     .User("node")
                                     .Entrypoint(["node", "server.js"]);
                                 break;
