@@ -1470,7 +1470,11 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         Assert.NotEqual(0, ex.ExitCode);
         Assert.NotEmpty(ex.ProcessOutput);
-        Assert.Contains(ex.ProcessOutput, line => line.Contains("nonexistent-file-12345.txt"));
+        Assert.Contains("Failed to build container image for resource 'broken-container'", ex.Message);
+
+        var newlineIndex = ex.Message.IndexOf(Environment.NewLine, StringComparison.Ordinal);
+        Assert.NotEqual(-1, newlineIndex);
+        Assert.Equal(ex.GetFormattedOutput(), ex.Message[(newlineIndex + Environment.NewLine.Length)..]);
     }
 }
 
