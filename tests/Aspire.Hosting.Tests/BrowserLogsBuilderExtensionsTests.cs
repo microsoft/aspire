@@ -268,6 +268,64 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
+    public async Task WithBrowserLogs_DisposeWaitsForCompletionObservers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
+
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
+            new BrowserLogsSessionManager(
+                sp.GetRequiredService<ResourceLoggerService>(),
+                sp.GetRequiredService<ResourceNotificationService>(),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
+                sessionFactory));
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        var app = builder.Build();
+        var disposed = false;
+
+        try
+        {
+            await app.StartAsync();
+
+            var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+            var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+            Assert.True(result.Success);
+
+            var session = Assert.Single(sessionFactory.Sessions);
+            session.PauseCompletionObserver();
+
+            var disposeTask = app.DisposeAsync().AsTask();
+
+            await session.CompletionObserverStarted.DefaultTimeout();
+            Assert.False(disposeTask.IsCompleted);
+
+            session.ResumeCompletionObserver();
+            await disposeTask.DefaultTimeout();
+            disposed = true;
+        }
+        finally
+        {
+            if (!disposed)
+            {
+                await app.DisposeAsync();
+            }
+        }
+    }
+
+    [Fact]
     public async Task BrowserEventLogger_LogsSuccessfulNetworkRequests()
     {
         var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
@@ -444,7 +502,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         int processId,
         DateTime startedAt) : IBrowserLogsRunningSession
     {
-        private Func<int, Exception?, Task>? _onCompleted;
+        private TaskCompletionSource<object?> _completionObserverGate = CreateSignaledTaskCompletionSource();
+        private readonly TaskCompletionSource<(int ExitCode, Exception? Error)> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private Task? _completionObserverTask;
 
         public string SessionId { get; } = sessionId;
 
@@ -456,21 +516,53 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public int StopCallCount { get; private set; }
 
-        public void StartCompletionObserver(Func<int, Exception?, Task> onCompleted)
+        public Task CompletionObserverStarted => CompletionObserverStartedSource.Task;
+
+        private TaskCompletionSource<object?> CompletionObserverStartedSource { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task StartCompletionObserver(Func<int, Exception?, Task> onCompleted)
         {
-            _onCompleted = onCompleted;
+            _completionObserverTask = ObserveCompletionAsync(onCompleted);
+            return _completionObserverTask;
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
             StopCallCount++;
+            _completionSource.TrySetResult((0, null));
             return Task.CompletedTask;
         }
 
-        public Task CompleteAsync(int exitCode, Exception? error = null)
+        public async Task CompleteAsync(int exitCode, Exception? error = null)
         {
-            Assert.NotNull(_onCompleted);
-            return _onCompleted!(exitCode, error);
+            _completionSource.TrySetResult((exitCode, error));
+            await (_completionObserverTask ?? Task.CompletedTask);
+        }
+
+        public void PauseCompletionObserver()
+        {
+            CompletionObserverStartedSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            _completionObserverGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        public void ResumeCompletionObserver()
+        {
+            _completionObserverGate.TrySetResult(null);
+        }
+
+        private async Task ObserveCompletionAsync(Func<int, Exception?, Task> onCompleted)
+        {
+            var (exitCode, error) = await _completionSource.Task;
+            CompletionObserverStartedSource.TrySetResult(null);
+            await _completionObserverGate.Task;
+            await onCompleted(exitCode, error);
+        }
+
+        private static TaskCompletionSource<object?> CreateSignaledTaskCompletionSource()
+        {
+            var source = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+            source.TrySetResult(null);
+            return source;
         }
     }
 }

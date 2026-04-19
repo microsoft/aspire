@@ -20,7 +20,7 @@ internal interface IBrowserLogsRunningSession
 
     DateTime StartedAt { get; }
 
-    void StartCompletionObserver(Func<int, Exception?, Task> onCompleted);
+    Task StartCompletionObserver(Func<int, Exception?, Task> onCompleted);
 
     Task StopAsync(CancellationToken cancellationToken);
 }
@@ -161,9 +161,9 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
     }
 
-    public void StartCompletionObserver(Func<int, Exception?, Task> onCompleted)
+    public Task StartCompletionObserver(Func<int, Exception?, Task> onCompleted)
     {
-        _ = ObserveCompletionAsync(onCompleted);
+        return ObserveCompletionAsync(onCompleted);
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
@@ -280,7 +280,6 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             "--no-default-browser-check",
             "--new-window",
             "--allow-insecure-localhost",
-            "--ignore-certificate-errors",
             "about:blank"
         ]);
     }

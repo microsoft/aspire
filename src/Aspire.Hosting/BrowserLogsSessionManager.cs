@@ -19,6 +19,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly IBrowserLogsRunningSessionFactory _sessionFactory;
     private readonly ConcurrentDictionary<string, ResourceSessionState> _resourceStates = new(StringComparer.Ordinal);
+    private int _disposing;
 
     public BrowserLogsSessionManager(
         IFileSystemService fileSystemService,
@@ -111,18 +112,19 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
 
             resourceState.LastBrowserExecutable = session.BrowserExecutable;
+            var completionObserver = session.StartCompletionObserver(async (exitCode, error) =>
+            {
+                await HandleSessionCompletedAsync(resource, resourceName, resourceState, session.SessionId, exitCode, error).ConfigureAwait(false);
+            });
+
             resourceState.ActiveSessions[session.SessionId] = new ActiveBrowserSession(
                 session.SessionId,
                 session.BrowserExecutable,
                 session.ProcessId,
                 session.StartedAt,
                 url,
-                session);
-
-            session.StartCompletionObserver(async (exitCode, error) =>
-            {
-                await HandleSessionCompletedAsync(resource, resourceName, resourceState, session.SessionId, exitCode, error).ConfigureAwait(false);
-            });
+                session,
+                completionObserver);
 
             await PublishResourceSnapshotAsync(
                 resource,
@@ -142,7 +144,10 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
     public async ValueTask DisposeAsync()
     {
+        Interlocked.Exchange(ref _disposing, 1);
+
         var sessionsToStop = new List<IBrowserLogsRunningSession>();
+        var completionObservers = new List<Task>();
 
         foreach (var resourceState in _resourceStates.Values)
         {
@@ -151,6 +156,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             try
             {
                 sessionsToStop.AddRange(resourceState.ActiveSessions.Values.Select(static activeSession => activeSession.Session));
+                completionObservers.AddRange(resourceState.ActiveSessions.Values.Select(static activeSession => activeSession.CompletionObserver));
             }
             finally
             {
@@ -162,6 +168,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         {
             await session.StopAsync(CancellationToken.None).ConfigureAwait(false);
         }
+
+        await Task.WhenAll(completionObservers).ConfigureAwait(false);
 
         foreach (var (_, resourceState) in _resourceStates)
         {
@@ -177,6 +185,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         int exitCode,
         Exception? error)
     {
+        if (Volatile.Read(ref _disposing) != 0)
+        {
+            return;
+        }
+
         await resourceState.Lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
 
         try
@@ -336,7 +349,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         int ProcessId,
         DateTime StartedAt,
         Uri TargetUrl,
-        IBrowserLogsRunningSession Session);
+        IBrowserLogsRunningSession Session,
+        Task CompletionObserver);
 
     private sealed record PendingBrowserSession(
         string SessionId,
