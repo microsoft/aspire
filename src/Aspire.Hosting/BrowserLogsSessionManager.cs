@@ -5,15 +5,12 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Globalization;
-using System.Net;
-using System.Net.Http.Json;
-using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging;
 using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
@@ -355,172 +352,161 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         private readonly ILogger _resourceLogger = resourceLogger;
         private readonly Dictionary<string, BrowserNetworkRequestState> _networkRequests = new(StringComparer.Ordinal);
 
-        public void HandleEvent(string method, JsonElement parameters)
+        public void HandleEvent(BrowserLogsProtocolEvent protocolEvent)
         {
-            switch (method)
+            switch (protocolEvent)
             {
-                case "Runtime.consoleAPICalled":
-                    LogConsoleMessage(parameters);
+                case BrowserLogsConsoleApiCalledEvent consoleApiCalledEvent:
+                    LogConsoleMessage(consoleApiCalledEvent.Parameters);
                     break;
-                case "Runtime.exceptionThrown":
-                    LogUnhandledException(parameters);
+                case BrowserLogsExceptionThrownEvent exceptionThrownEvent:
+                    LogUnhandledException(exceptionThrownEvent.Parameters);
                     break;
-                case "Log.entryAdded":
-                    LogEntryAdded(parameters);
+                case BrowserLogsLogEntryAddedEvent logEntryAddedEvent:
+                    LogEntryAdded(logEntryAddedEvent.Parameters);
                     break;
-                case "Network.requestWillBeSent":
-                    TrackRequestStarted(parameters);
+                case BrowserLogsRequestWillBeSentEvent requestWillBeSentEvent:
+                    TrackRequestStarted(requestWillBeSentEvent.Parameters);
                     break;
-                case "Network.responseReceived":
-                    TrackResponseReceived(parameters);
+                case BrowserLogsResponseReceivedEvent responseReceivedEvent:
+                    TrackResponseReceived(responseReceivedEvent.Parameters);
                     break;
-                case "Network.loadingFinished":
-                    TrackRequestCompleted(parameters);
+                case BrowserLogsLoadingFinishedEvent loadingFinishedEvent:
+                    TrackRequestCompleted(loadingFinishedEvent.Parameters);
                     break;
-                case "Network.loadingFailed":
-                    TrackRequestFailed(parameters);
+                case BrowserLogsLoadingFailedEvent loadingFailedEvent:
+                    TrackRequestFailed(loadingFailedEvent.Parameters);
                     break;
             }
         }
 
-        private void LogConsoleMessage(JsonElement parameters)
+        private void LogConsoleMessage(BrowserLogsRuntimeConsoleApiCalledParameters parameters)
         {
-            var level = TryGetString(parameters, "type") ?? "log";
-            var message = parameters.TryGetProperty("args", out var argsElement) && argsElement.ValueKind == JsonValueKind.Array
-                ? string.Join(" ", argsElement.EnumerateArray().Select(FormatRemoteObject).Where(static value => !string.IsNullOrEmpty(value)))
+            var level = parameters.Type ?? "log";
+            var message = parameters.Args is { Length: > 0 }
+                ? string.Join(" ", parameters.Args.Select(FormatRemoteObject).Where(static value => !string.IsNullOrEmpty(value)))
                 : string.Empty;
 
             WriteLog(MapConsoleLevel(level), $"[console.{level}] {message}".TrimEnd());
         }
 
-        private void LogUnhandledException(JsonElement parameters)
+        private void LogUnhandledException(BrowserLogsExceptionThrownParameters parameters)
         {
-            if (!parameters.TryGetProperty("exceptionDetails", out var exceptionDetails))
+            var exceptionDetails = parameters.ExceptionDetails;
+            if (exceptionDetails is null)
             {
                 return;
             }
 
-            var message = exceptionDetails.TryGetProperty("exception", out var exception) && exception.TryGetProperty("description", out var description)
-                ? description.GetString()
-                : exceptionDetails.TryGetProperty("text", out var text)
-                    ? text.GetString()
-                    : "Unhandled browser exception";
+            var message = exceptionDetails.Exception?.Description
+                ?? exceptionDetails.Text
+                ?? "Unhandled browser exception";
 
             var location = GetLocationSuffix(exceptionDetails);
             WriteLog(LogLevel.Error, $"[exception] {message}{location}");
         }
 
-        private void LogEntryAdded(JsonElement parameters)
+        private void LogEntryAdded(BrowserLogsLogEntryAddedParameters parameters)
         {
-            if (!parameters.TryGetProperty("entry", out var entry))
+            var entry = parameters.Entry;
+            if (entry is null)
             {
                 return;
             }
 
-            var level = TryGetString(entry, "level") ?? "info";
-            var text = TryGetString(entry, "text") ?? string.Empty;
+            var level = entry.Level ?? "info";
+            var text = entry.Text ?? string.Empty;
             var location = GetLocationSuffix(entry);
 
             WriteLog(MapLogEntryLevel(level), $"[log.{level}] {text}{location}".TrimEnd());
         }
 
-        private void TrackRequestStarted(JsonElement parameters)
+        private void TrackRequestStarted(BrowserLogsRequestWillBeSentParameters parameters)
         {
-            if (TryGetString(parameters, "requestId") is not { Length: > 0 } requestId)
+            if (parameters.RequestId is not { Length: > 0 } requestId || parameters.Request is not { } request)
             {
                 return;
             }
 
-            if (!parameters.TryGetProperty("request", out var request))
-            {
-                return;
-            }
-
-            var url = TryGetString(request, "url");
-            var method = TryGetString(request, "method");
+            var url = request.Url;
+            var method = request.Method;
             if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(method))
             {
                 return;
             }
 
-            var startTimestamp = TryGetDouble(parameters, "timestamp");
-
-            if (parameters.TryGetProperty("redirectResponse", out var redirectResponse) &&
+            if (parameters.RedirectResponse is not null &&
                 _networkRequests.Remove(requestId, out var redirectedRequest))
             {
-                UpdateResponse(redirectedRequest, redirectResponse);
-                LogCompletedRequest(redirectedRequest, startTimestamp, encodedDataLength: null, redirectUrl: url);
+                UpdateResponse(redirectedRequest, parameters.RedirectResponse);
+                LogCompletedRequest(redirectedRequest, parameters.Timestamp, encodedDataLength: null, redirectUrl: url);
             }
 
-            var resourceType = NormalizeResourceType(TryGetString(parameters, "type"));
             _networkRequests[requestId] = new BrowserNetworkRequestState
             {
                 Method = method,
-                Url = url,
-                ResourceType = resourceType,
-                StartTimestamp = startTimestamp
+                ResourceType = NormalizeResourceType(parameters.Type),
+                StartTimestamp = parameters.Timestamp,
+                Url = url
             };
         }
 
-        private void TrackResponseReceived(JsonElement parameters)
+        private void TrackResponseReceived(BrowserLogsResponseReceivedParameters parameters)
         {
-            if (TryGetString(parameters, "requestId") is not { Length: > 0 } requestId ||
+            if (parameters.RequestId is not { Length: > 0 } requestId ||
                 !_networkRequests.TryGetValue(requestId, out var request))
             {
                 return;
             }
 
-            if (parameters.TryGetProperty("response", out var response))
+            if (parameters.Response is not null)
             {
-                UpdateResponse(request, response);
+                UpdateResponse(request, parameters.Response);
             }
 
-            if (TryGetString(parameters, "type") is { Length: > 0 } resourceType)
+            if (parameters.Type is { Length: > 0 } resourceType)
             {
                 request.ResourceType = NormalizeResourceType(resourceType);
             }
         }
 
-        private void TrackRequestCompleted(JsonElement parameters)
+        private void TrackRequestCompleted(BrowserLogsLoadingFinishedParameters parameters)
         {
-            if (TryGetString(parameters, "requestId") is not { Length: > 0 } requestId ||
+            if (parameters.RequestId is not { Length: > 0 } requestId ||
                 !_networkRequests.Remove(requestId, out var request))
             {
                 return;
             }
 
-            LogCompletedRequest(request, TryGetDouble(parameters, "timestamp"), TryGetDouble(parameters, "encodedDataLength"), redirectUrl: null);
+            LogCompletedRequest(request, parameters.Timestamp, parameters.EncodedDataLength, redirectUrl: null);
         }
 
-        private void TrackRequestFailed(JsonElement parameters)
+        private void TrackRequestFailed(BrowserLogsLoadingFailedParameters parameters)
         {
-            if (TryGetString(parameters, "requestId") is not { Length: > 0 } requestId ||
+            if (parameters.RequestId is not { Length: > 0 } requestId ||
                 !_networkRequests.Remove(requestId, out var request))
             {
                 return;
             }
 
-            var errorText = TryGetString(parameters, "errorText") ?? "Request failed";
-            var canceled = TryGetBoolean(parameters, "canceled");
-            var blockedReason = TryGetString(parameters, "blockedReason");
             var details = new List<string>();
 
-            if (FormatDuration(request.StartTimestamp, TryGetDouble(parameters, "timestamp")) is { Length: > 0 } duration)
+            if (FormatDuration(request.StartTimestamp, parameters.Timestamp) is { Length: > 0 } duration)
             {
                 details.Add(duration);
             }
 
-            if (canceled == true)
+            if (parameters.Canceled == true)
             {
                 details.Add("canceled");
             }
 
-            if (!string.IsNullOrEmpty(blockedReason))
+            if (!string.IsNullOrEmpty(parameters.BlockedReason))
             {
-                details.Add($"blocked={blockedReason}");
+                details.Add($"blocked={parameters.BlockedReason}");
             }
 
-            WriteLog(LogLevel.Warning, $"[network.{request.ResourceType}] {request.Method} {request.Url} failed: {errorText}{FormatDetails(details)}");
+            WriteLog(LogLevel.Warning, $"[network.{request.ResourceType}] {request.Method} {request.Url} failed: {parameters.ErrorText ?? "Request failed"}{FormatDetails(details)}");
         }
 
         private void LogCompletedRequest(BrowserNetworkRequestState request, double? completedTimestamp, double? encodedDataLength, string? redirectUrl)
@@ -563,13 +549,13 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             WriteLog(LogLevel.Information, $"[network.{request.ResourceType}] {request.Method} {request.Url}{statusText}{FormatDetails(details)}");
         }
 
-        private static void UpdateResponse(BrowserNetworkRequestState request, JsonElement response)
+        private static void UpdateResponse(BrowserNetworkRequestState request, BrowserLogsResponse response)
         {
-            request.Url = TryGetString(response, "url") ?? request.Url;
-            request.StatusCode = TryGetInt32(response, "status");
-            request.StatusText = TryGetString(response, "statusText");
-            request.FromDiskCache = TryGetBoolean(response, "fromDiskCache");
-            request.FromServiceWorker = TryGetBoolean(response, "fromServiceWorker");
+            request.Url = response.Url ?? request.Url;
+            request.StatusCode = response.Status;
+            request.StatusText = response.StatusText;
+            request.FromDiskCache = response.FromDiskCache;
+            request.FromServiceWorker = response.FromServiceWorker;
         }
 
         private void WriteLog(LogLevel logLevel, string message)
@@ -599,43 +585,6 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             string.IsNullOrEmpty(resourceType)
                 ? "request"
                 : resourceType.ToLowerInvariant();
-
-        private static string? TryGetString(JsonElement element, string propertyName) =>
-            element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
-                ? property.GetString()
-                : null;
-
-        private static double? TryGetDouble(JsonElement element, string propertyName)
-        {
-            if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Number)
-            {
-                return null;
-            }
-
-            return property.TryGetDouble(out var value) ? value : null;
-        }
-
-        private static int? TryGetInt32(JsonElement element, string propertyName)
-        {
-            if (!element.TryGetProperty(propertyName, out var property) || property.ValueKind != JsonValueKind.Number)
-            {
-                return null;
-            }
-
-            if (property.TryGetInt32(out var value))
-            {
-                return value;
-            }
-
-            return property.TryGetDouble(out var doubleValue)
-                ? (int)Math.Round(doubleValue, MidpointRounding.AwayFromZero)
-                : null;
-        }
-
-        private static bool? TryGetBoolean(JsonElement element, string propertyName) =>
-            element.TryGetProperty(propertyName, out var property) && (property.ValueKind == JsonValueKind.True || property.ValueKind == JsonValueKind.False)
-                ? property.GetBoolean()
-                : null;
 
         private static string? FormatDuration(double? startTimestamp, double? endTimestamp)
         {
@@ -669,48 +618,143 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             _ => LogLevel.Information
         };
 
-        private static string FormatRemoteObject(JsonElement remoteObject)
+        private static string FormatRemoteObject(BrowserLogsProtocolRemoteObject remoteObject)
         {
-            if (remoteObject.TryGetProperty("value", out var value))
+            if (remoteObject.Value is BrowserLogsProtocolValue value)
             {
-                return value.ValueKind switch
+                return value switch
                 {
-                    JsonValueKind.String => value.GetString() ?? string.Empty,
-                    JsonValueKind.Null => "null",
-                    JsonValueKind.True => bool.TrueString,
-                    JsonValueKind.False => bool.FalseString,
-                    _ => value.GetRawText()
+                    BrowserLogsProtocolStringValue stringValue => stringValue.Value,
+                    BrowserLogsProtocolNullValue => "null",
+                    BrowserLogsProtocolBooleanValue booleanValue => booleanValue.Value ? bool.TrueString : bool.FalseString,
+                    BrowserLogsProtocolNumberValue numberValue => numberValue.RawValue,
+                    _ => FormatStructuredValue(value)
                 };
             }
 
-            if (remoteObject.TryGetProperty("unserializableValue", out var unserializableValue))
+            if (!string.IsNullOrEmpty(remoteObject.UnserializableValue))
             {
-                return unserializableValue.GetString() ?? string.Empty;
+                return remoteObject.UnserializableValue;
             }
 
-            if (remoteObject.TryGetProperty("description", out var description))
-            {
-                return description.GetString() ?? string.Empty;
-            }
-
-            return remoteObject.GetRawText();
+            return remoteObject.Description ?? string.Empty;
         }
 
-        private static string GetLocationSuffix(JsonElement details)
+        private static string FormatStructuredValue(BrowserLogsProtocolValue value)
         {
-            if (!details.TryGetProperty("url", out var urlElement))
+            var builder = new StringBuilder();
+            AppendStructuredValue(builder, value);
+            return builder.ToString();
+        }
+
+        private static void AppendStructuredValue(StringBuilder builder, BrowserLogsProtocolValue value)
+        {
+            switch (value)
             {
-                return string.Empty;
+                case BrowserLogsProtocolArrayValue arrayValue:
+                    builder.Append('[');
+                    for (var i = 0; i < arrayValue.Items.Count; i++)
+                    {
+                        if (i > 0)
+                        {
+                            builder.Append(',');
+                        }
+
+                        AppendStructuredValue(builder, arrayValue.Items[i]);
+                    }
+
+                    builder.Append(']');
+                    break;
+                case BrowserLogsProtocolBooleanValue booleanValue:
+                    builder.Append(booleanValue.Value ? "true" : "false");
+                    break;
+                case BrowserLogsProtocolNullValue:
+                    builder.Append("null");
+                    break;
+                case BrowserLogsProtocolNumberValue numberValue:
+                    builder.Append(numberValue.RawValue);
+                    break;
+                case BrowserLogsProtocolObjectValue objectValue:
+                    builder.Append('{');
+                    var needsComma = false;
+                    foreach (var (propertyName, propertyValue) in objectValue.Properties)
+                    {
+                        if (needsComma)
+                        {
+                            builder.Append(',');
+                        }
+
+                        needsComma = true;
+                        AppendEscapedString(builder, propertyName);
+                        builder.Append(':');
+                        AppendStructuredValue(builder, propertyValue);
+                    }
+
+                    builder.Append('}');
+                    break;
+                case BrowserLogsProtocolStringValue stringValue:
+                    AppendEscapedString(builder, stringValue.Value);
+                    break;
+            }
+        }
+
+        private static void AppendEscapedString(StringBuilder builder, string value)
+        {
+            builder.Append('"');
+
+            foreach (var character in value)
+            {
+                switch (character)
+                {
+                    case '\\':
+                        builder.Append("\\\\");
+                        break;
+                    case '"':
+                        builder.Append("\\\"");
+                        break;
+                    case '\b':
+                        builder.Append("\\b");
+                        break;
+                    case '\f':
+                        builder.Append("\\f");
+                        break;
+                    case '\n':
+                        builder.Append("\\n");
+                        break;
+                    case '\r':
+                        builder.Append("\\r");
+                        break;
+                    case '\t':
+                        builder.Append("\\t");
+                        break;
+                    default:
+                        if (char.IsControl(character))
+                        {
+                            builder.Append("\\u");
+                            builder.Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
+                        }
+                        else
+                        {
+                            builder.Append(character);
+                        }
+
+                        break;
+                }
             }
 
-            var url = urlElement.GetString();
+            builder.Append('"');
+        }
+
+        private static string GetLocationSuffix(BrowserLogsSourceLocation details)
+        {
+            var url = details.Url;
             if (string.IsNullOrEmpty(url))
             {
                 return string.Empty;
             }
 
-            var lineNumber = details.TryGetProperty("lineNumber", out var lineElement) ? lineElement.GetInt32() + 1 : 0;
-            var columnNumber = details.TryGetProperty("columnNumber", out var columnElement) ? columnElement.GetInt32() + 1 : 0;
+            var lineNumber = details.LineNumber + 1;
+            var columnNumber = details.ColumnNumber + 1;
 
             if (lineNumber > 0 && columnNumber > 0)
             {
@@ -722,9 +766,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
         private sealed class BrowserNetworkRequestState
         {
-            public required string Method { get; set; }
+            public bool? FromDiskCache { get; set; }
 
-            public required string Url { get; set; }
+            public bool? FromServiceWorker { get; set; }
+
+            public required string Method { get; set; }
 
             public required string ResourceType { get; set; }
 
@@ -734,42 +780,83 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
             public string? StatusText { get; set; }
 
-            public bool? FromDiskCache { get; set; }
-
-            public bool? FromServiceWorker { get; set; }
+            public required string Url { get; set; }
         }
     }
 
-    private sealed class RunningSession
-        : IBrowserLogsRunningSession
+    internal sealed class BrowserConnectionDiagnosticsLogger(string sessionId, ILogger resourceLogger)
     {
-        private static readonly HttpClient s_httpClient = new(new SocketsHttpHandler
-        {
-            UseProxy = false
-        });
-        private static readonly JsonSerializerOptions s_jsonOptions = new()
-        {
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-        };
+        private readonly ILogger _resourceLogger = resourceLogger;
+        private readonly string _sessionId = sessionId;
 
+        public void LogSetupFailure(string stage, Exception exception)
+        {
+            _resourceLogger.LogError("[{SessionId}] {Stage} failed: {Reason}", _sessionId, stage, DescribeConnectionProblem(exception));
+        }
+
+        public void LogConnectionLost(Exception exception)
+        {
+            _resourceLogger.LogWarning("[{SessionId}] Tracked browser debug connection lost: {Reason}. Attempting to reconnect.", _sessionId, DescribeConnectionProblem(exception));
+        }
+
+        public void LogReconnectAttemptFailed(int attempt, Exception exception)
+        {
+            _resourceLogger.LogWarning("[{SessionId}] Reconnect attempt {Attempt} failed: {Reason}", _sessionId, attempt, DescribeConnectionProblem(exception));
+        }
+
+        public void LogReconnectFailed(Exception exception)
+        {
+            _resourceLogger.LogError("[{SessionId}] Unable to reconnect tracked browser debug connection. Closing the tracked browser session. Last error: {Reason}", _sessionId, DescribeConnectionProblem(exception));
+        }
+
+        internal static string DescribeConnectionProblem(Exception exception)
+        {
+            var messages = new List<string>();
+
+            for (var current = exception; current is not null; current = current.InnerException)
+            {
+                var message = string.IsNullOrWhiteSpace(current.Message)
+                    ? current.GetType().Name
+                    : $"{current.GetType().Name}: {current.Message}";
+
+                if (!messages.Contains(message, StringComparer.Ordinal))
+                {
+                    messages.Add(message);
+                }
+            }
+
+            return string.Join(" --> ", messages);
+        }
+    }
+
+    private sealed class RunningSession : IBrowserLogsRunningSession
+    {
+        private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan s_browserShutdownTimeout = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan s_connectionRecoveryDelay = TimeSpan.FromMilliseconds(200);
+        private static readonly TimeSpan s_connectionRecoveryTimeout = TimeSpan.FromSeconds(5);
+
+        private readonly BrowserEventLogger _eventLogger;
+        private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
+        private readonly ILogger<BrowserLogsSessionManager> _logger;
         private readonly BrowserLogsResource _resource;
+        private readonly ILogger _resourceLogger;
         private readonly string _resourceName;
         private readonly string _sessionId;
+        private readonly CancellationTokenSource _stopCts = new();
         private readonly Uri _url;
         private readonly TempDirectory _userDataDirectory;
-        private readonly ILogger _resourceLogger;
-        private readonly ILogger<BrowserLogsSessionManager> _logger;
-        private readonly BrowserEventLogger _eventLogger;
-        private readonly CancellationTokenSource _stopCts = new();
 
-        private Process? _process;
-        private Task? _stdoutTask;
-        private Task? _stderrTask;
+        private string? _browserExecutable;
+        private Uri? _browserEndpoint;
+        private Task<ProcessResult>? _browserProcessTask;
+        private IAsyncDisposable? _browserProcessLifetime;
         private ChromeDevToolsConnection? _connection;
-        private string? _targetSessionId;
         private Task<BrowserSessionResult>? _completion;
         private int _cleanupState;
-        private string? _browserExecutable;
+        private int? _processId;
+        private string? _targetId;
+        private string? _targetSessionId;
 
         private RunningSession(
             BrowserLogsResource resource,
@@ -780,21 +867,22 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             ILogger resourceLogger,
             ILogger<BrowserLogsSessionManager> logger)
         {
+            _eventLogger = new BrowserEventLogger(sessionId, resourceLogger);
+            _connectionDiagnostics = new BrowserConnectionDiagnosticsLogger(sessionId, resourceLogger);
+            _logger = logger;
             _resource = resource;
+            _resourceLogger = resourceLogger;
             _resourceName = resourceName;
             _sessionId = sessionId;
             _url = url;
             _userDataDirectory = userDataDirectory;
-            _resourceLogger = resourceLogger;
-            _logger = logger;
-            _eventLogger = new BrowserEventLogger(sessionId, resourceLogger);
         }
 
         public string SessionId => _sessionId;
 
         public string BrowserExecutable => _browserExecutable ?? throw new InvalidOperationException("Browser executable is not available before the session starts.");
 
-        public int ProcessId => _process?.Id ?? throw new InvalidOperationException("Browser process has not started.");
+        public int ProcessId => _processId ?? throw new InvalidOperationException("Browser process has not started.");
 
         public DateTime StartedAt { get; private set; }
 
@@ -821,7 +909,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
             catch
             {
-                await session.CleanupAsync(forceKillProcess: true).ConfigureAwait(false);
+                await session.CleanupAsync().ConfigureAwait(false);
                 throw;
             }
         }
@@ -847,29 +935,18 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 }
             }
 
-            if (_process is { HasExited: false })
+            if (_browserProcessTask is { IsCompleted: false } browserProcessTask)
             {
                 using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                waitCts.CancelAfter(TimeSpan.FromSeconds(5));
+                waitCts.CancelAfter(s_browserShutdownTimeout);
 
                 try
                 {
-                    await _process.WaitForExitAsync(waitCts.Token).ConfigureAwait(false);
+                    await browserProcessTask.WaitAsync(waitCts.Token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
-                }
-
-                if (!_process.HasExited)
-                {
-                    try
-                    {
-                        _process.Kill(entireProcessTree: true);
-                    }
-                    catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
-                    {
-                        _logger.LogDebug(ex, "Failed to kill tracked browser process for resource '{ResourceName}'.", _resourceName);
-                    }
+                    await DisposeBrowserProcessAsync().ConfigureAwait(false);
                 }
             }
 
@@ -890,107 +967,272 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 throw new InvalidOperationException($"Unable to locate browser '{_resource.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
             }
 
-            var startInfo = new ProcessStartInfo(_browserExecutable)
-            {
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true
-            };
-
-            var browserDebuggingPort = AllocateBrowserDebuggingPort();
-            startInfo.ArgumentList.Add($"--user-data-dir={_userDataDirectory.Path}");
-            startInfo.ArgumentList.Add($"--remote-debugging-port={browserDebuggingPort}");
-            startInfo.ArgumentList.Add("--no-first-run");
-            startInfo.ArgumentList.Add("--no-default-browser-check");
-            startInfo.ArgumentList.Add("--new-window");
-            startInfo.ArgumentList.Add("--allow-insecure-localhost");
-            startInfo.ArgumentList.Add("--ignore-certificate-errors");
-            startInfo.ArgumentList.Add("about:blank");
-
-            _process = Process.Start(startInfo) ?? throw new InvalidOperationException($"Failed to start tracked browser process '{_browserExecutable}'.");
-            StartedAt = DateTime.UtcNow;
-            _stdoutTask = DrainStreamAsync(_process.StandardOutput, _stopCts.Token);
-            _stderrTask = DrainStreamAsync(_process.StandardError, _stopCts.Token);
+            var devToolsActivePortFilePath = GetDevToolsActivePortFilePath();
+            await StartBrowserProcessAsync(cancellationToken).ConfigureAwait(false);
             _resourceLogger.LogInformation("[{SessionId}] Started tracked browser process '{BrowserExecutable}'.", _sessionId, _browserExecutable);
-            _resourceLogger.LogInformation("[{SessionId}] Waiting for tracked browser debug endpoint on port {Port}.", _sessionId, browserDebuggingPort);
+            _resourceLogger.LogInformation("[{SessionId}] Waiting for tracked browser debug endpoint metadata in '{DevToolsActivePortFilePath}'.", _sessionId, devToolsActivePortFilePath);
 
-            var browserEndpoint = await WaitForBrowserEndpointAsync(browserDebuggingPort, cancellationToken).ConfigureAwait(false);
-            _resourceLogger.LogInformation("[{SessionId}] Discovered tracked browser debug endpoint '{Endpoint}'.", _sessionId, browserEndpoint);
-            _connection = await ChromeDevToolsConnection.ConnectAsync(browserEndpoint, HandleEventAsync, cancellationToken).ConfigureAwait(false);
-            _resourceLogger.LogInformation("[{SessionId}] Connected to the tracked browser debug endpoint.", _sessionId);
+            try
+            {
+                _browserEndpoint = await WaitForBrowserEndpointAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _connectionDiagnostics.LogSetupFailure("Discovering the tracked browser debug endpoint", ex);
+                throw;
+            }
 
-            var targetId = await _connection.CreateTargetAsync(cancellationToken).ConfigureAwait(false);
-            _resourceLogger.LogInformation("[{SessionId}] Created tracked browser target '{TargetId}'.", _sessionId, targetId);
-            _targetSessionId = await _connection.AttachToTargetAsync(targetId, cancellationToken).ConfigureAwait(false);
-            _resourceLogger.LogInformation("[{SessionId}] Attached to the tracked browser target.", _sessionId);
-            await _connection.EnablePageInstrumentationAsync(_targetSessionId, cancellationToken).ConfigureAwait(false);
-            _resourceLogger.LogInformation("[{SessionId}] Enabled tracked browser logging.", _sessionId);
-            await _connection.NavigateAsync(_targetSessionId, _url, cancellationToken).ConfigureAwait(false);
-            _resourceLogger.LogInformation("[{SessionId}] Navigated tracked browser to '{Url}'.", _sessionId, _url);
+            _resourceLogger.LogInformation("[{SessionId}] Discovered tracked browser debug endpoint '{Endpoint}'.", _sessionId, _browserEndpoint);
+
+            try
+            {
+                await ConnectAsync(createTarget: true, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _connectionDiagnostics.LogSetupFailure("Setting up the tracked browser debug connection", ex);
+                throw;
+            }
 
             _resourceLogger.LogInformation("[{SessionId}] Tracking browser console logs for '{Url}'.", _sessionId, _url);
+        }
+
+        private async Task StartBrowserProcessAsync(CancellationToken cancellationToken)
+        {
+            var processStarted = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var browserExecutable = _browserExecutable ?? throw new InvalidOperationException("Browser executable was not resolved.");
+            var processSpec = new ProcessSpec(browserExecutable)
+            {
+                Arguments = BuildBrowserArguments(),
+                InheritEnv = true,
+                OnErrorData = error => _logger.LogTrace("[{SessionId}] Tracked browser stderr: {Line}", _sessionId, error),
+                OnOutputData = output => _logger.LogTrace("[{SessionId}] Tracked browser stdout: {Line}", _sessionId, output),
+                OnStart = processId =>
+                {
+                    _processId = processId;
+                    processStarted.TrySetResult(processId);
+                },
+                ThrowOnNonZeroReturnCode = false
+            };
+
+            var (browserProcessTask, browserProcessLifetime) = ProcessUtil.Run(processSpec);
+            _browserProcessTask = browserProcessTask;
+            _browserProcessLifetime = browserProcessLifetime;
+            StartedAt = DateTime.UtcNow;
+
+            await processStarted.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        private string BuildBrowserArguments()
+        {
+            return BuildCommandLine(
+            [
+                $"--user-data-dir={_userDataDirectory.Path}",
+                "--remote-debugging-port=0",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--new-window",
+                "--allow-insecure-localhost",
+                "--ignore-certificate-errors",
+                "about:blank"
+            ]);
+        }
+
+        private async Task ConnectAsync(bool createTarget, CancellationToken cancellationToken)
+        {
+            var browserEndpoint = _browserEndpoint ?? throw new InvalidOperationException("Browser debugging endpoint is not available.");
+
+            await DisposeConnectionAsync().ConfigureAwait(false);
+
+            _connection = await ExecuteConnectionStageAsync(
+                "Connecting to the tracked browser debug endpoint",
+                () => ChromeDevToolsConnection.ConnectAsync(browserEndpoint, HandleEventAsync, _logger, cancellationToken)).ConfigureAwait(false);
+            _resourceLogger.LogInformation("[{SessionId}] Connected to the tracked browser debug endpoint.", _sessionId);
+
+            if (createTarget)
+            {
+                var createTargetResult = await ExecuteConnectionStageAsync(
+                    "Creating the tracked browser target",
+                    () => _connection.CreateTargetAsync(cancellationToken)).ConfigureAwait(false);
+                _targetId = createTargetResult.TargetId
+                    ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
+                _resourceLogger.LogInformation("[{SessionId}] Created tracked browser target '{TargetId}'.", _sessionId, _targetId);
+            }
+
+            if (_targetId is null)
+            {
+                throw new InvalidOperationException("Tracked browser target id is not available.");
+            }
+
+            var attachToTargetResult = await ExecuteConnectionStageAsync(
+                "Attaching to the tracked browser target",
+                () => _connection.AttachToTargetAsync(_targetId, cancellationToken)).ConfigureAwait(false);
+            _targetSessionId = attachToTargetResult.SessionId
+                ?? throw new InvalidOperationException("Browser target attachment did not return a session id.");
+            _resourceLogger.LogInformation("[{SessionId}] Attached to the tracked browser target.", _sessionId);
+
+            await ExecuteConnectionStageAsync(
+                "Enabling tracked browser instrumentation",
+                () => _connection.EnablePageInstrumentationAsync(_targetSessionId, cancellationToken)).ConfigureAwait(false);
+            _resourceLogger.LogInformation("[{SessionId}] Enabled tracked browser logging.", _sessionId);
+
+            if (createTarget)
+            {
+                await ExecuteConnectionStageAsync(
+                    "Navigating the tracked browser target",
+                    () => _connection.NavigateAsync(_targetSessionId, _url, cancellationToken)).ConfigureAwait(false);
+                _resourceLogger.LogInformation("[{SessionId}] Navigated tracked browser to '{Url}'.", _sessionId, _url);
+            }
+        }
+
+        private static async Task<TResult> ExecuteConnectionStageAsync<TResult>(string stage, Func<Task<TResult>> action)
+        {
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                throw new InvalidOperationException($"{stage} failed.", ex);
+            }
+        }
+
+        private static async Task ExecuteConnectionStageAsync(string stage, Func<Task> action)
+        {
+            try
+            {
+                await action().ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                throw new InvalidOperationException($"{stage} failed.", ex);
+            }
         }
 
         private async Task<BrowserSessionResult> MonitorAsync()
         {
             try
             {
-                Debug.Assert(_process is not null);
-                Debug.Assert(_connection is not null);
+                var browserProcessTask = _browserProcessTask ?? throw new InvalidOperationException("Browser process task is not available.");
 
-                var processExitTask = _process.WaitForExitAsync(CancellationToken.None);
-                var completedTask = await Task.WhenAny(processExitTask, _connection.Completion).ConfigureAwait(false);
-
-                Exception? error = null;
-                if (completedTask == _connection.Completion)
+                while (true)
                 {
+                    var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
+                    var completedTask = await Task.WhenAny(browserProcessTask, connection.Completion).ConfigureAwait(false);
+
+                    if (completedTask == browserProcessTask)
+                    {
+                        var processResult = await browserProcessTask.ConfigureAwait(false);
+                        if (!_stopCts.IsCancellationRequested)
+                        {
+                            _resourceLogger.LogInformation("[{SessionId}] Tracked browser exited with code {ExitCode}.", _sessionId, processResult.ExitCode);
+                        }
+
+                        return new BrowserSessionResult(processResult.ExitCode, Error: null);
+                    }
+
+                    Exception? connectionError = null;
                     try
                     {
-                        await _connection.Completion.ConfigureAwait(false);
+                        await connection.Completion.ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
-                        error = ex;
+                        connectionError = ex;
                     }
 
-                    if (!_stopCts.IsCancellationRequested && !_process.HasExited)
+                    if (_stopCts.IsCancellationRequested)
                     {
-                        _resourceLogger.LogWarning("[{SessionId}] Tracked browser debug connection closed before the browser process exited.", _sessionId);
-
-                        try
-                        {
-                            _process.Kill(entireProcessTree: true);
-                        }
-                        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
-                        {
-                            _logger.LogDebug(ex, "Failed to kill tracked browser process after the debug connection closed for resource '{ResourceName}'.", _resourceName);
-                        }
+                        var processResult = await browserProcessTask.ConfigureAwait(false);
+                        return new BrowserSessionResult(processResult.ExitCode, Error: null);
                     }
+
+                    connectionError ??= new InvalidOperationException("The tracked browser debug connection closed without reporting a reason.");
+
+                    if (await TryReconnectAsync(connectionError).ConfigureAwait(false))
+                    {
+                        continue;
+                    }
+
+                    await DisposeBrowserProcessAsync().ConfigureAwait(false);
+
+                    var exitResult = await browserProcessTask.ConfigureAwait(false);
+                    return new BrowserSessionResult(exitResult.ExitCode, connectionError);
                 }
-
-                await processExitTask.ConfigureAwait(false);
-
-                if (!_stopCts.IsCancellationRequested)
-                {
-                    _resourceLogger.LogInformation("[{SessionId}] Tracked browser exited with code {ExitCode}.", _sessionId, _process.ExitCode);
-                }
-
-                return new BrowserSessionResult(_process.ExitCode, error);
             }
             finally
             {
-                await CleanupAsync(forceKillProcess: false).ConfigureAwait(false);
+                await CleanupAsync().ConfigureAwait(false);
             }
         }
 
-        private ValueTask HandleEventAsync(CdpEvent cdpEvent)
+        private async Task<bool> TryReconnectAsync(Exception? connectionError)
         {
-            if (!string.Equals(cdpEvent.SessionId, _targetSessionId, StringComparison.Ordinal))
+            if (_browserEndpoint is null || _targetId is null)
+            {
+                return false;
+            }
+
+            connectionError ??= new InvalidOperationException("The tracked browser debug connection closed without reporting a reason.");
+            _connectionDiagnostics.LogConnectionLost(connectionError);
+            await DisposeConnectionAsync().ConfigureAwait(false);
+
+            var reconnectDeadline = TimeProvider.System.GetUtcNow() + s_connectionRecoveryTimeout;
+            Exception? lastError = connectionError;
+            var attempt = 0;
+
+            while (!_stopCts.IsCancellationRequested && TimeProvider.System.GetUtcNow() < reconnectDeadline)
+            {
+                if (_browserProcessTask?.IsCompleted == true)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    attempt++;
+                    await ConnectAsync(createTarget: false, _stopCts.Token).ConfigureAwait(false);
+                    _resourceLogger.LogInformation("[{SessionId}] Reconnected tracked browser debug connection.", _sessionId);
+                    return true;
+                }
+                catch (OperationCanceledException) when (_stopCts.IsCancellationRequested)
+                {
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    _connectionDiagnostics.LogReconnectAttemptFailed(attempt, ex);
+                    await DisposeConnectionAsync().ConfigureAwait(false);
+                }
+
+                try
+                {
+                    await Task.Delay(s_connectionRecoveryDelay, _stopCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_stopCts.IsCancellationRequested)
+                {
+                    return false;
+                }
+            }
+
+            if (lastError is not null)
+            {
+                _connectionDiagnostics.LogReconnectFailed(lastError);
+                _logger.LogDebug(lastError, "Timed out reconnecting tracked browser debug session for resource '{ResourceName}' and session '{SessionId}'.", _resourceName, _sessionId);
+            }
+
+            return false;
+        }
+
+        private ValueTask HandleEventAsync(BrowserLogsProtocolEvent protocolEvent)
+        {
+            if (!string.Equals(protocolEvent.SessionId, _targetSessionId, StringComparison.Ordinal))
             {
                 return ValueTask.CompletedTask;
             }
 
-            _eventLogger.HandleEvent(cdpEvent.Method, cdpEvent.Params);
+            _eventLogger.HandleEvent(protocolEvent);
             return ValueTask.CompletedTask;
         }
 
@@ -1007,72 +1249,45 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
         }
 
-        private async Task CleanupAsync(bool forceKillProcess)
+        private async Task CleanupAsync()
         {
             if (Interlocked.Exchange(ref _cleanupState, 1) != 0)
             {
                 return;
             }
 
-            if (forceKillProcess && _process is { HasExited: false })
-            {
-                try
-                {
-                    _process.Kill(entireProcessTree: true);
-                }
-                catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException)
-                {
-                    _logger.LogDebug(ex, "Failed to kill tracked browser process during cleanup for resource '{ResourceName}'.", _resourceName);
-                }
-            }
-
-            if (_connection is not null)
-            {
-                await _connection.DisposeAsync().ConfigureAwait(false);
-            }
-
-            if (_stdoutTask is not null)
-            {
-                await AwaitQuietlyAsync(_stdoutTask).ConfigureAwait(false);
-            }
-
-            if (_stderrTask is not null)
-            {
-                await AwaitQuietlyAsync(_stderrTask).ConfigureAwait(false);
-            }
-
-            _process?.Dispose();
+            await DisposeConnectionAsync().ConfigureAwait(false);
+            await DisposeBrowserProcessAsync().ConfigureAwait(false);
             _stopCts.Dispose();
             _userDataDirectory.Dispose();
         }
 
-        private static async Task AwaitQuietlyAsync(Task task)
+        private async Task DisposeBrowserProcessAsync()
         {
-            try
+            var browserProcessLifetime = _browserProcessLifetime;
+            _browserProcessLifetime = null;
+
+            if (browserProcessLifetime is not null)
             {
-                await task.ConfigureAwait(false);
-            }
-            catch
-            {
+                await browserProcessLifetime.DisposeAsync().ConfigureAwait(false);
             }
         }
 
-        private static async Task DrainStreamAsync(StreamReader reader, CancellationToken cancellationToken)
+        private async Task DisposeConnectionAsync()
         {
-            while (!cancellationToken.IsCancellationRequested)
+            var connection = _connection;
+            _connection = null;
+
+            if (connection is not null)
             {
-                var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-                if (line is null)
-                {
-                    break;
-                }
+                await connection.DisposeAsync().ConfigureAwait(false);
             }
         }
 
-        private static async Task<Uri> WaitForBrowserEndpointAsync(int browserDebuggingPort, CancellationToken cancellationToken)
+        private async Task<Uri> WaitForBrowserEndpointAsync(CancellationToken cancellationToken)
         {
-            var browserVersionUri = new Uri($"http://127.0.0.1:{browserDebuggingPort}/json/version", UriKind.Absolute);
-            var timeoutAt = TimeProvider.System.GetUtcNow() + TimeSpan.FromSeconds(30);
+            var devToolsActivePortFilePath = GetDevToolsActivePortFilePath();
+            var timeoutAt = TimeProvider.System.GetUtcNow() + s_browserEndpointTimeout;
 
             while (TimeProvider.System.GetUtcNow() < timeoutAt)
             {
@@ -1080,39 +1295,31 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
                 try
                 {
-                    using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    probeCts.CancelAfter(TimeSpan.FromSeconds(1));
-
-                    using var response = await s_httpClient.GetAsync(browserVersionUri, probeCts.Token).ConfigureAwait(false);
-                    response.EnsureSuccessStatusCode();
-
-                    var version = await response.Content.ReadFromJsonAsync<BrowserVersionResponse>(probeCts.Token).ConfigureAwait(false);
-                    if (version?.WebSocketDebuggerUrl is { } browserEndpoint)
+                    if (File.Exists(devToolsActivePortFilePath))
                     {
-                        return browserEndpoint;
+                        var contents = await File.ReadAllTextAsync(devToolsActivePortFilePath, cancellationToken).ConfigureAwait(false);
+                        if (TryParseBrowserDebugEndpoint(contents) is { } browserEndpoint)
+                        {
+                            return browserEndpoint;
+                        }
                     }
                 }
-                catch (HttpRequestException)
+                catch (IOException)
                 {
                 }
-                catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-                {
-                }
-                catch (JsonException)
+                catch (UnauthorizedAccessException)
                 {
                 }
 
                 await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
             }
 
-            throw new TimeoutException("Timed out waiting for the tracked browser to expose its debugging endpoint.");
+            throw new TimeoutException($"Timed out waiting for the tracked browser to write '{devToolsActivePortFilePath}'.");
         }
 
-        private static int AllocateBrowserDebuggingPort()
+        private string GetDevToolsActivePortFilePath()
         {
-            using var listener = new TcpListener(IPAddress.Loopback, 0);
-            listener.Start();
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
+            return Path.Combine(_userDataDirectory.Path, "DevToolsActivePort");
         }
 
         private static string? ResolveBrowserExecutable(string browser)
@@ -1192,71 +1399,171 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             };
         }
 
-        private sealed record BrowserSessionResult(int ExitCode, Exception? Error);
-
-        private sealed record CdpEvent(string Method, string? SessionId, JsonElement Params);
-
-        private sealed class BrowserVersionResponse
+        private static string BuildCommandLine(IReadOnlyList<string> arguments)
         {
-            [JsonPropertyName("webSocketDebuggerUrl")]
-            public required Uri WebSocketDebuggerUrl { get; init; }
+            var builder = new StringBuilder();
+
+            for (var i = 0; i < arguments.Count; i++)
+            {
+                if (i > 0)
+                {
+                    builder.Append(' ');
+                }
+
+                AppendCommandLineArgument(builder, arguments[i]);
+            }
+
+            return builder.ToString();
         }
+
+        // Adapted from dotnet/runtime PasteArguments.AppendArgument so ProcessSpec can safely represent Chromium flags.
+        private static void AppendCommandLineArgument(StringBuilder builder, string argument)
+        {
+            if (argument.Length != 0 && !argument.AsSpan().ContainsAny(' ', '\t', '"'))
+            {
+                builder.Append(argument);
+                return;
+            }
+
+            builder.Append('"');
+
+            var index = 0;
+            while (index < argument.Length)
+            {
+                var character = argument[index++];
+                if (character == '\\')
+                {
+                    var backslashCount = 1;
+                    while (index < argument.Length && argument[index] == '\\')
+                    {
+                        index++;
+                        backslashCount++;
+                    }
+
+                    if (index == argument.Length)
+                    {
+                        builder.Append('\\', backslashCount * 2);
+                    }
+                    else if (argument[index] == '"')
+                    {
+                        builder.Append('\\', backslashCount * 2 + 1);
+                        builder.Append('"');
+                        index++;
+                    }
+                    else
+                    {
+                        builder.Append('\\', backslashCount);
+                    }
+
+                    continue;
+                }
+
+                if (character == '"')
+                {
+                    builder.Append('\\');
+                    builder.Append('"');
+                    continue;
+                }
+
+                builder.Append(character);
+            }
+
+            builder.Append('"');
+        }
+
+        private sealed record BrowserSessionResult(int ExitCode, Exception? Error);
 
         private sealed class ChromeDevToolsConnection : IAsyncDisposable
         {
-            private readonly ClientWebSocket _webSocket;
-            private readonly Func<CdpEvent, ValueTask> _eventHandler;
-            private readonly ConcurrentDictionary<long, TaskCompletionSource<JsonElement>> _pendingCommands = new();
+            private static readonly TimeSpan s_commandTimeout = TimeSpan.FromSeconds(10);
+
+            private readonly CancellationTokenSource _disposeCts = new();
+            private readonly Func<BrowserLogsProtocolEvent, ValueTask> _eventHandler;
+            private readonly ILogger<BrowserLogsSessionManager> _logger;
+            private readonly ConcurrentDictionary<long, IPendingCommand> _pendingCommands = new();
             private readonly Task _receiveLoop;
+            private readonly SemaphoreSlim _sendLock = new(1, 1);
+            private readonly ClientWebSocket _webSocket;
             private long _nextCommandId;
 
-            public ChromeDevToolsConnection(ClientWebSocket webSocket, Func<CdpEvent, ValueTask> eventHandler)
+            private ChromeDevToolsConnection(ClientWebSocket webSocket, Func<BrowserLogsProtocolEvent, ValueTask> eventHandler, ILogger<BrowserLogsSessionManager> logger)
             {
-                _webSocket = webSocket;
                 _eventHandler = eventHandler;
+                _logger = logger;
+                _webSocket = webSocket;
                 _receiveLoop = Task.Run(ReceiveLoopAsync);
             }
 
             public Task Completion => _receiveLoop;
 
-            public static async Task<ChromeDevToolsConnection> ConnectAsync(Uri webSocketUri, Func<CdpEvent, ValueTask> eventHandler, CancellationToken cancellationToken)
+            public static async Task<ChromeDevToolsConnection> ConnectAsync(
+                Uri webSocketUri,
+                Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+                ILogger<BrowserLogsSessionManager> logger,
+                CancellationToken cancellationToken)
             {
                 var webSocket = new ClientWebSocket();
-                webSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(30);
+                webSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
                 await webSocket.ConnectAsync(webSocketUri, cancellationToken).ConfigureAwait(false);
-                return new ChromeDevToolsConnection(webSocket, eventHandler);
+                return new ChromeDevToolsConnection(webSocket, eventHandler, logger);
             }
 
-            public async Task<string> CreateTargetAsync(CancellationToken cancellationToken)
+            public Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)
             {
-                var result = await SendCommandAsync("Target.createTarget", new { url = "about:blank" }, sessionId: null, cancellationToken).ConfigureAwait(false);
-                return result.GetProperty("targetId").GetString()
-                    ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
+                return SendCommandAsync(
+                    BrowserLogsProtocol.TargetCreateTargetMethod,
+                    sessionId: null,
+                    static writer => writer.WriteString("url", "about:blank"),
+                    BrowserLogsProtocol.ParseCreateTargetResponse,
+                    cancellationToken);
             }
 
-            public async Task<string> AttachToTargetAsync(string targetId, CancellationToken cancellationToken)
+            public Task<BrowserLogsAttachToTargetResult> AttachToTargetAsync(string targetId, CancellationToken cancellationToken)
             {
-                var result = await SendCommandAsync("Target.attachToTarget", new { targetId, flatten = true }, sessionId: null, cancellationToken).ConfigureAwait(false);
-                return result.GetProperty("sessionId").GetString()
-                    ?? throw new InvalidOperationException("Browser target attachment did not return a session id.");
+                return SendCommandAsync(
+                    BrowserLogsProtocol.TargetAttachToTargetMethod,
+                    sessionId: null,
+                    writer =>
+                    {
+                        writer.WriteString("targetId", targetId);
+                        writer.WriteBoolean("flatten", true);
+                    },
+                    BrowserLogsProtocol.ParseAttachToTargetResponse,
+                    cancellationToken);
             }
 
             public async Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken)
             {
-                await SendCommandAsync("Runtime.enable", parameters: null, sessionId, cancellationToken).ConfigureAwait(false);
-                await SendCommandAsync("Log.enable", parameters: null, sessionId, cancellationToken).ConfigureAwait(false);
-                await SendCommandAsync("Page.enable", parameters: null, sessionId, cancellationToken).ConfigureAwait(false);
-                await SendCommandAsync("Network.enable", parameters: null, sessionId, cancellationToken).ConfigureAwait(false);
+                await SendCommandAsync(BrowserLogsProtocol.RuntimeEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
+                await SendCommandAsync(BrowserLogsProtocol.LogEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
+                await SendCommandAsync(BrowserLogsProtocol.PageEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
+                await SendCommandAsync(BrowserLogsProtocol.NetworkEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
             }
 
-            public Task NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken) =>
-                SendCommandAsync("Page.navigate", new { url = url.ToString() }, sessionId, cancellationToken);
+            public Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken)
+            {
+                return SendCommandAsync(
+                    BrowserLogsProtocol.PageNavigateMethod,
+                    sessionId,
+                    writer => writer.WriteString("url", url.ToString()),
+                    BrowserLogsProtocol.ParseCommandAckResponse,
+                    cancellationToken);
+            }
 
-            public Task CloseBrowserAsync(CancellationToken cancellationToken) =>
-                SendCommandAsync("Browser.close", parameters: null, sessionId: null, cancellationToken);
+            public Task<BrowserLogsCommandAck> CloseBrowserAsync(CancellationToken cancellationToken)
+            {
+                return SendCommandAsync(
+                    BrowserLogsProtocol.BrowserCloseMethod,
+                    sessionId: null,
+                    writeParameters: null,
+                    BrowserLogsProtocol.ParseCommandAckResponse,
+                    cancellationToken);
+            }
 
             public async ValueTask DisposeAsync()
             {
+                _disposeCts.Cancel();
+
                 try
                 {
                     if (_webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
@@ -1280,33 +1587,55 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 catch
                 {
                 }
+
+                _disposeCts.Dispose();
+                _sendLock.Dispose();
             }
 
-            private async Task<JsonElement> SendCommandAsync(string method, object? parameters, string? sessionId, CancellationToken cancellationToken)
+            private async Task<TResult> SendCommandAsync<TResult>(
+                string method,
+                string? sessionId,
+                Action<Utf8JsonWriter>? writeParameters,
+                ResponseParser<TResult> parseResponse,
+                CancellationToken cancellationToken)
             {
                 var commandId = Interlocked.Increment(ref _nextCommandId);
-                var tcs = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
-                _pendingCommands[commandId] = tcs;
-
-                using var registration = cancellationToken.Register(static state =>
-                {
-                    var source = (TaskCompletionSource<JsonElement>)state!;
-                    source.TrySetCanceled();
-                }, tcs);
-
-                var payload = JsonSerializer.SerializeToUtf8Bytes(new CdpCommand
-                {
-                    Id = commandId,
-                    Method = method,
-                    Params = parameters,
-                    SessionId = sessionId
-                }, s_jsonOptions);
-
-                await _webSocket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, cancellationToken).ConfigureAwait(false);
+                var pendingCommand = new PendingCommand<TResult>(parseResponse);
+                _pendingCommands[commandId] = pendingCommand;
 
                 try
                 {
-                    return await tcs.Task.ConfigureAwait(false);
+                    using var sendCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposeCts.Token);
+                    sendCts.CancelAfter(s_commandTimeout);
+
+                    using var registration = sendCts.Token.Register(static state =>
+                    {
+                        ((IPendingCommand)state!).SetCanceled();
+                    }, pendingCommand);
+
+                    var payload = BrowserLogsProtocol.CreateCommandFrame(commandId, method, sessionId, writeParameters);
+                    _logger.LogTrace("Tracked browser protocol -> {Frame}", BrowserLogsProtocol.DescribeFrame(payload));
+
+                    var lockHeld = false;
+                    try
+                    {
+                        await _sendLock.WaitAsync(sendCts.Token).ConfigureAwait(false);
+                        lockHeld = true;
+                        await _webSocket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, sendCts.Token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        if (lockHeld)
+                        {
+                            _sendLock.Release();
+                        }
+                    }
+
+                    return await pendingCommand.Task.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && !_disposeCts.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"Timed out waiting for a tracked browser protocol response to '{method}'.");
                 }
                 finally
                 {
@@ -1318,14 +1647,16 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             {
                 var buffer = new byte[16 * 1024];
                 using var messageBuffer = new MemoryStream();
+                Exception? terminalException = null;
 
                 try
                 {
-                    while (_webSocket.State is WebSocketState.Open or WebSocketState.CloseSent)
+                    while (!_disposeCts.IsCancellationRequested && _webSocket.State is WebSocketState.Open or WebSocketState.CloseSent)
                     {
-                        var result = await _webSocket.ReceiveAsync(buffer, CancellationToken.None).ConfigureAwait(false);
+                        var result = await _webSocket.ReceiveAsync(buffer, _disposeCts.Token).ConfigureAwait(false);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
+                            terminalException = CreateUnexpectedConnectionClosureException(result);
                             break;
                         }
 
@@ -1335,71 +1666,148 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                             continue;
                         }
 
-                        var message = messageBuffer.ToArray();
+                        var frame = messageBuffer.ToArray();
                         messageBuffer.SetLength(0);
 
-                        using var document = JsonDocument.Parse(message);
-                        var root = document.RootElement;
+                        _logger.LogTrace("Tracked browser protocol <- {Frame}", BrowserLogsProtocol.DescribeFrame(frame));
 
-                        if (root.TryGetProperty("id", out var idElement))
+                        try
                         {
-                            var commandId = idElement.GetInt64();
-                            if (_pendingCommands.TryGetValue(commandId, out var pendingCommand))
+                            var header = BrowserLogsProtocol.ParseMessageHeader(frame);
+                            if (header.Id is long commandId)
                             {
-                                if (root.TryGetProperty("error", out var error))
+                                if (_pendingCommands.TryGetValue(commandId, out var pendingCommand))
                                 {
-                                    var errorMessage = error.TryGetProperty("message", out var errorMessageElement)
-                                        ? errorMessageElement.GetString()
-                                        : "Unknown browser protocol error.";
-                                    pendingCommand.TrySetException(new InvalidOperationException(errorMessage));
+                                    pendingCommand.SetResult(frame);
                                 }
-                                else if (root.TryGetProperty("result", out var responseResult))
-                                {
-                                    pendingCommand.TrySetResult(responseResult.Clone());
-                                }
-                                else
-                                {
-                                    pendingCommand.TrySetResult(default);
-                                }
+
+                                continue;
+                            }
+
+                            if (header.Method is not null && BrowserLogsProtocol.ParseEvent(header, frame) is { } protocolEvent)
+                            {
+                                await _eventHandler(protocolEvent).ConfigureAwait(false);
                             }
                         }
-                        else if (root.TryGetProperty("method", out var methodElement))
+                        catch (Exception ex)
                         {
-                            var sessionId = root.TryGetProperty("sessionId", out var sessionIdElement)
-                                ? sessionIdElement.GetString()
-                                : null;
-                            var parameters = root.TryGetProperty("params", out var paramsElement)
-                                ? paramsElement.Clone()
-                                : default;
-
-                            await _eventHandler(new CdpEvent(methodElement.GetString() ?? string.Empty, sessionId, parameters)).ConfigureAwait(false);
+                            terminalException = new InvalidOperationException(
+                                $"Tracked browser protocol receive loop failed while processing frame {BrowserLogsProtocol.DescribeFrame(frame)}.",
+                                ex);
+                            break;
                         }
                     }
+                }
+                catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+                {
+                }
+                catch (Exception ex)
+                {
+                    terminalException = ex;
                 }
                 finally
                 {
-                    foreach (var (_, pendingCommand) in _pendingCommands)
+                    terminalException ??= new InvalidOperationException("Browser debug connection closed.");
+
+                    foreach (var pendingCommand in _pendingCommands.Values)
                     {
-                        pendingCommand.TrySetException(new InvalidOperationException("Browser debug connection closed."));
+                        pendingCommand.SetException(terminalException);
                     }
+                }
+
+                if (!_disposeCts.IsCancellationRequested)
+                {
+                    throw terminalException ?? new InvalidOperationException("Browser debug connection closed.");
                 }
             }
 
-            private sealed class CdpCommand
+            private static InvalidOperationException CreateUnexpectedConnectionClosureException(WebSocketReceiveResult result)
             {
-                [JsonPropertyName("id")]
-                public required long Id { get; init; }
+                if (result.CloseStatus is { } closeStatus)
+                {
+                    if (!string.IsNullOrWhiteSpace(result.CloseStatusDescription))
+                    {
+                        return new InvalidOperationException($"Browser debug connection closed by the remote endpoint with status '{closeStatus}' ({(int)closeStatus}): {result.CloseStatusDescription}");
+                    }
 
-                [JsonPropertyName("method")]
-                public required string Method { get; init; }
+                    return new InvalidOperationException($"Browser debug connection closed by the remote endpoint with status '{closeStatus}' ({(int)closeStatus}).");
+                }
 
-                [JsonPropertyName("params")]
-                public object? Params { get; init; }
+                return new InvalidOperationException("Browser debug connection closed by the remote endpoint without a close status.");
+            }
 
-                [JsonPropertyName("sessionId")]
-                public string? SessionId { get; init; }
+            private interface IPendingCommand
+            {
+                void SetCanceled();
+
+                void SetException(Exception exception);
+
+                void SetResult(ReadOnlyMemory<byte> framePayload);
+            }
+
+            private delegate TResult ResponseParser<TResult>(ReadOnlySpan<byte> framePayload);
+
+            private sealed class PendingCommand<TResult>(ResponseParser<TResult> parseResponse) : IPendingCommand
+            {
+                private readonly ResponseParser<TResult> _parseResponse = parseResponse;
+                private readonly TaskCompletionSource<TResult> _taskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                public Task<TResult> Task => _taskCompletionSource.Task;
+
+                public void SetCanceled()
+                {
+                    _taskCompletionSource.TrySetCanceled();
+                }
+
+                public void SetException(Exception exception)
+                {
+                    _taskCompletionSource.TrySetException(exception);
+                }
+
+                public void SetResult(ReadOnlyMemory<byte> framePayload)
+                {
+                    try
+                    {
+                        _taskCompletionSource.TrySetResult(_parseResponse(framePayload.Span));
+                    }
+                    catch (Exception ex)
+                    {
+                        _taskCompletionSource.TrySetException(ex);
+                    }
+                }
             }
         }
+    }
+
+    internal static Uri? TryParseBrowserDebugEndpoint(string activePortFileContents)
+    {
+        if (string.IsNullOrWhiteSpace(activePortFileContents))
+        {
+            return null;
+        }
+
+        using var reader = new StringReader(activePortFileContents);
+        var portLine = reader.ReadLine();
+        var browserPathLine = reader.ReadLine();
+
+        if (!int.TryParse(portLine, NumberStyles.None, CultureInfo.InvariantCulture, out var port) || port <= 0)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(browserPathLine))
+        {
+            return null;
+        }
+
+        if (!browserPathLine.StartsWith("/", StringComparison.Ordinal))
+        {
+            browserPathLine = $"/{browserPathLine}";
+        }
+
+        return Uri.TryCreate($"ws://127.0.0.1:{port}{browserPathLine}", UriKind.Absolute, out var browserEndpoint)
+            ? browserEndpoint
+            : null;
     }
 
     private sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory

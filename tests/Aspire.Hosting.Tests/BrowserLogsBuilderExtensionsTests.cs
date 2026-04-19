@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
+using System.Text;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -275,36 +275,48 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var eventLogger = new BrowserLogsSessionManager.BrowserEventLogger("session-0001", resourceLogger);
         var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-logs", () =>
         {
-            eventLogger.HandleEvent("Network.requestWillBeSent", ParseJsonElement("""
+            eventLogger.HandleEvent(ParseProtocolEvent("""
                 {
-                  "requestId": "request-1",
-                  "timestamp": 1.5,
-                  "type": "Fetch",
-                  "request": {
-                    "url": "https://example.test/api/todos",
-                    "method": "GET"
+                  "method": "Network.requestWillBeSent",
+                  "sessionId": "target-session-1",
+                  "params": {
+                    "requestId": "request-1",
+                    "timestamp": 1.5,
+                    "type": "Fetch",
+                    "request": {
+                      "url": "https://example.test/api/todos",
+                      "method": "GET"
+                    }
                   }
                 }
                 """));
-            eventLogger.HandleEvent("Network.responseReceived", ParseJsonElement("""
+            eventLogger.HandleEvent(ParseProtocolEvent("""
                 {
-                  "requestId": "request-1",
-                  "timestamp": 1.6,
-                  "type": "Fetch",
-                  "response": {
-                    "url": "https://example.test/api/todos",
-                    "status": 200,
-                    "statusText": "OK",
-                    "fromDiskCache": false,
-                    "fromServiceWorker": false
+                  "method": "Network.responseReceived",
+                  "sessionId": "target-session-1",
+                  "params": {
+                    "requestId": "request-1",
+                    "timestamp": 1.6,
+                    "type": "Fetch",
+                    "response": {
+                      "url": "https://example.test/api/todos",
+                      "status": 200,
+                      "statusText": "OK",
+                      "fromDiskCache": false,
+                      "fromServiceWorker": false
+                    }
                   }
                 }
                 """));
-            eventLogger.HandleEvent("Network.loadingFinished", ParseJsonElement("""
+            eventLogger.HandleEvent(ParseProtocolEvent("""
                 {
-                  "requestId": "request-1",
-                  "timestamp": 1.75,
-                  "encodedDataLength": 1024
+                  "method": "Network.loadingFinished",
+                  "sessionId": "target-session-1",
+                  "params": {
+                    "requestId": "request-1",
+                    "timestamp": 1.75,
+                    "encodedDataLength": 1024
+                  }
                 }
                 """));
         });
@@ -321,23 +333,31 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var eventLogger = new BrowserLogsSessionManager.BrowserEventLogger("session-0002", resourceLogger);
         var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-logs", () =>
         {
-            eventLogger.HandleEvent("Network.requestWillBeSent", ParseJsonElement("""
+            eventLogger.HandleEvent(ParseProtocolEvent("""
                 {
-                  "requestId": "request-2",
-                  "timestamp": 5.0,
-                  "type": "Document",
-                  "request": {
-                    "url": "https://127.0.0.1:1/browser-network-failure",
-                    "method": "GET"
+                  "method": "Network.requestWillBeSent",
+                  "sessionId": "target-session-2",
+                  "params": {
+                    "requestId": "request-2",
+                    "timestamp": 5.0,
+                    "type": "Document",
+                    "request": {
+                      "url": "https://127.0.0.1:1/browser-network-failure",
+                      "method": "GET"
+                    }
                   }
                 }
                 """));
-            eventLogger.HandleEvent("Network.loadingFailed", ParseJsonElement("""
+            eventLogger.HandleEvent(ParseProtocolEvent("""
                 {
-                  "requestId": "request-2",
-                  "timestamp": 5.15,
-                  "errorText": "net::ERR_CONNECTION_REFUSED",
-                  "canceled": false
+                  "method": "Network.loadingFailed",
+                  "sessionId": "target-session-2",
+                  "params": {
+                    "requestId": "request-2",
+                    "timestamp": 5.15,
+                    "errorText": "net::ERR_CONNECTION_REFUSED",
+                    "canceled": false
+                  }
                 }
                 """));
         });
@@ -351,10 +371,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     private static bool HasProperty(CustomResourceSnapshot snapshot, string name, object expectedValue) =>
         snapshot.Properties.Any(property => property.Name == name && Equals(property.Value, expectedValue));
 
-    private static JsonElement ParseJsonElement(string json)
+    private static BrowserLogsProtocolEvent ParseProtocolEvent(string json)
     {
-        using var document = JsonDocument.Parse(json);
-        return document.RootElement.Clone();
+        var payload = Encoding.UTF8.GetBytes(json);
+        return BrowserLogsProtocol.ParseEvent(BrowserLogsProtocol.ParseMessageHeader(payload), payload)
+            ?? throw new InvalidOperationException("Expected a browser protocol event frame.");
     }
 
     private static async Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService resourceLoggerService, string resourceName, Action writeLogs)

@@ -34,18 +34,22 @@ public static class BrowserLogsBuilderExtensions
     /// <c>"msedge"</c> and <c>"chrome"</c>, or an explicit browser executable path.
     /// </param>
     /// <returns>A reference to the original <see cref="IResourceBuilder{T}"/> for further chaining.</returns>
-    /// <remarks>
-    /// <para>
-    /// This method adds a child browser logs resource beneath the parent resource represented by <paramref name="builder"/>.
-    /// The child resource exposes a dashboard command that launches a Chromium-based browser in a tracked mode, attaches to
-    /// the browser's debugging protocol, and forwards browser console, error, and exception output to the child resource's
-    /// console log stream.
-    /// </para>
-    /// <para>
-    /// The parent resource must expose at least one HTTP or HTTPS endpoint. HTTPS endpoints are preferred over HTTP
-    /// endpoints when selecting the browser target URL.
-    /// </para>
-    /// </remarks>
+/// <remarks>
+/// <para>
+/// This method adds a child browser logs resource beneath the parent resource represented by <paramref name="builder"/>.
+/// The child resource exposes a dashboard command that launches a Chromium-based browser in a tracked mode, attaches to
+/// the browser's debugging protocol, and forwards browser console, error, and exception output to the child resource's
+/// console log stream.
+/// </para>
+/// <para>
+/// The tracked browser session uses the <a href="https://chromedevtools.github.io/devtools-protocol/">Chrome DevTools
+/// Protocol (CDP)</a> to subscribe to browser runtime, log, page, and network events.
+/// </para>
+/// <para>
+/// The parent resource must expose at least one HTTP or HTTPS endpoint. HTTPS endpoints are preferred over HTTP
+/// endpoints when selecting the browser target URL.
+/// </para>
+/// </remarks>
     /// <example>
     /// Add tracked browser logs for a web front end:
     /// <code>
