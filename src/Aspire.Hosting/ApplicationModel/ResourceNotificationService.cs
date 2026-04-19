@@ -850,7 +850,8 @@ public class ResourceNotificationService : IDisposable
         {
             HiddenBehavior.Always => true,
             HiddenBehavior.OnCompletion => IsCompletionState(previousState.State?.Text)
-                && (previousState.ExitCode is null || annotation.SuccessfulExitCodes.Contains(previousState.ExitCode.Value)),
+                && previousState.ExitCode is not null
+                && annotation.SuccessfulExitCodes.Contains(previousState.ExitCode.Value),
             _ => previousState.IsHidden
         };
 

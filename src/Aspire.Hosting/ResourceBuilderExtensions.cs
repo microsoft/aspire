@@ -3928,15 +3928,16 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Excludes the resource from the dashboard.
+    /// Hides the resource from default resource lists.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
-    /// Use this method to hide resources that are implementation details and should never be displayed in the dashboard.
+    /// Use this method to hide resources that are implementation details and should never be displayed by default.
+    /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
     /// </remarks>
-    [AspireExport(Description = "Excludes the resource from the dashboard")]
+    [AspireExport(Description = "Hides the resource from default resource lists")]
     public static IResourceBuilder<T> WithHidden<T>(this IResourceBuilder<T> builder) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -3945,7 +3946,7 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Excludes the resource from the dashboard after it completes successfully.
+    /// Hides the resource from default resource lists after it completes successfully.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
@@ -3954,8 +3955,9 @@ public static class ResourceBuilderExtensions
     /// <remarks>
     /// This method is useful for one-off resources such as setup scripts, migrations, or build steps that should remain visible while running
     /// and then be hidden after successful completion.
+    /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
     /// </remarks>
-    [AspireExport(Description = "Excludes the resource from the dashboard after successful completion")]
+    [AspireExport(Description = "Hides the resource from default resource lists after successful completion")]
     public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode = 0) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -3964,23 +3966,24 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Excludes the resource from the dashboard after it completes with one of the specified successful exit codes.
+    /// Hides the resource from default resource lists after it completes successfully.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="exitCodes">Completion exit codes to treat as successful. If no values are provided, <c>0</c> is used.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This method is useful for one-off resources such as setup scripts, migrations, or build steps that should remain visible while running
+    /// and then be hidden after successful completion.
+    /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Uses params array overload; use single-exit-code overload for ATS compatibility.")]
     public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, params int[] exitCodes) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(exitCodes);
 
-        var successfulExitCodes = exitCodes.Length == 0
-            ? ImmutableHashSet.Create(0)
-            : [.. exitCodes];
-
-        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = successfulExitCodes }, ResourceAnnotationMutationBehavior.Replace);
+        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = [.. exitCodes] }, ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
