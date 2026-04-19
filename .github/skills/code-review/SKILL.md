@@ -92,6 +92,16 @@ Group files by area to guide how deeply to review each:
 | Extension | `extension/**` | Localization, TypeScript usage |
 | Docs/Config | `docs/**`, `*.md`, `*.json` | Accuracy only |
 
+## Step 3.5: Cross-Path Analysis
+
+Before reviewing individual files, scan the diff for structural patterns that span multiple files or code paths:
+
+1. **Repeated blocks** — search for identical or near-identical code blocks (>3 lines) that appear two or more times within the diff. These are extraction candidates. Example: the same error-display logic copy-pasted into three command handlers.
+2. **Feature entry points** — identify all the paths that exercise the new feature (command-line flags, fallback prompts, background notifications, API methods). Verify each path has test coverage and handles edge cases consistently with the others.
+3. **Redundant defensive checks** — when a caller validates a condition and then passes to a callee that re-validates the same condition, flag the duplication. Example: `Environment.ProcessPath` null-checked at both the call site and inside the called method.
+
+This step catches problems that are invisible when reviewing files one at a time.
+
 ## Step 4: Review the Code
 
 Read the diff carefully. For each changed file, also read surrounding context to understand the impact of the change.
@@ -113,14 +123,16 @@ Only flag **actual problems**. Every comment must identify a concrete issue. Cat
 8. **Concurrency issues** — thread-unsafe collections in concurrent code, missing synchronization, deadlock risks.
 9. **Temporal coupling and initialization safety** — fields initialized to `null!` with a separate `Initialize()` method that must be called before use; DI registrations that depend on call ordering; any pattern where forgetting a call causes a runtime NRE with no compile-time safety.
 10. **Resource leaks** — `IDisposable` objects (e.g., `CancellationTokenSource`, `SemaphoreSlim`) that are created but never disposed, even if the pattern was moved from elsewhere.
-11. **Dead code and stale comments** — comments describing behavior the code no longer implements; unused variables; `ToList()` calls with comments like "materialize to check count" where the count is never checked.
+11. **Dead code and stale comments** — comments describing behavior the code no longer implements; unused variables; `ToList()` calls with comments like "materialize to check count" where the count is never checked. Apply this check to **test files as well as production code** — unused variables in test methods (e.g., `var x = SomeMethod()` where `x` is never referenced) are especially common after test refactoring.
 12. **Repository convention violations** — per the AGENTS.md rules:
     - Manual edits to `api/*.cs` files
     - Manual edits to `*.xlf` files
     - Changes to `NuGet.config` adding unapproved feeds
     - Changes to `global.json`
     - Using `== null` instead of `is null`
-13. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests.
+13. **Test problems** — flaky patterns per the test review guidelines: thread-unsafe test fakes, log-based readiness checks instead of `WaitForHealthyAsync()`, shared timeout budgets, hardcoded ports, `Directory.SetCurrentDirectory` usage, commented-out tests. Also flag: **missing test coverage for new conditional branches** — for each new `if`/`else`, `switch` case, or filtering expression in production code, check whether at least one test exercises that path. Pay special attention to exclusion logic (e.g., `!string.Equals(x, "pr")`) — negative filters are easy to miss in tests. When a feature has multiple entry points (CLI flag, post-update prompt, no-project fallback), each entry point's behavior should be tested.
+14. **Inconsistent parallel code paths** — when the same logical operation (displaying a message, checking a condition, formatting output) appears in multiple places within the PR, verify the implementations are consistent. Flag copy-pasted blocks that should be extracted to a shared helper, and flag cases where parallel code paths handle the same scenario differently without a documented reason. Example: three `catch` blocks that each format the error message slightly differently; a "disabled" check that shows a message in one code path but silently returns in another.
+15. **Localization gaps** — when a file uses localized resource strings (e.g., `UpdateCommandStrings.*`), flag any new user-facing strings in the same file that are hardcoded in English instead of going through the resource system. This includes prompts, error messages, and status text displayed to the user.
 
 ### What NOT to Flag
 
