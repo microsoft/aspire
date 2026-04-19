@@ -62,7 +62,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceNotificationService,
             timeProvider,
             logger,
-            new BrowserLogsRunningSessionFactory(fileSystemService, logger))
+            new BrowserLogsRunningSessionFactory(fileSystemService, logger, timeProvider))
     {
     }
 
@@ -844,6 +844,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         private readonly string _resourceName;
         private readonly string _sessionId;
         private readonly CancellationTokenSource _stopCts = new();
+        private readonly TimeProvider _timeProvider;
         private readonly Uri _url;
         private readonly TempDirectory _userDataDirectory;
 
@@ -865,7 +866,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             Uri url,
             TempDirectory userDataDirectory,
             ILogger resourceLogger,
-            ILogger<BrowserLogsSessionManager> logger)
+            ILogger<BrowserLogsSessionManager> logger,
+            TimeProvider timeProvider)
         {
             _eventLogger = new BrowserEventLogger(sessionId, resourceLogger);
             _connectionDiagnostics = new BrowserConnectionDiagnosticsLogger(sessionId, resourceLogger);
@@ -874,6 +876,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             _resourceLogger = resourceLogger;
             _resourceName = resourceName;
             _sessionId = sessionId;
+            _timeProvider = timeProvider;
             _url = url;
             _userDataDirectory = userDataDirectory;
         }
@@ -896,10 +899,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             IFileSystemService fileSystemService,
             ILogger resourceLogger,
             ILogger<BrowserLogsSessionManager> logger,
+            TimeProvider timeProvider,
             CancellationToken cancellationToken)
         {
             var userDataDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-browser-logs");
-            var session = new RunningSession(resource, resourceName, sessionId, url, userDataDirectory, resourceLogger, logger);
+            var session = new RunningSession(resource, resourceName, sessionId, url, userDataDirectory, resourceLogger, logger, timeProvider);
 
             try
             {
@@ -1018,7 +1022,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             var (browserProcessTask, browserProcessLifetime) = ProcessUtil.Run(processSpec);
             _browserProcessTask = browserProcessTask;
             _browserProcessLifetime = browserProcessLifetime;
-            StartedAt = DateTime.UtcNow;
+            StartedAt = _timeProvider.GetUtcNow().UtcDateTime;
 
             await processStarted.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -1177,11 +1181,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             _connectionDiagnostics.LogConnectionLost(connectionError);
             await DisposeConnectionAsync().ConfigureAwait(false);
 
-            var reconnectDeadline = TimeProvider.System.GetUtcNow() + s_connectionRecoveryTimeout;
+            var reconnectDeadline = _timeProvider.GetUtcNow() + s_connectionRecoveryTimeout;
             Exception? lastError = connectionError;
             var attempt = 0;
 
-            while (!_stopCts.IsCancellationRequested && TimeProvider.System.GetUtcNow() < reconnectDeadline)
+            while (!_stopCts.IsCancellationRequested && _timeProvider.GetUtcNow() < reconnectDeadline)
             {
                 if (_browserProcessTask?.IsCompleted == true)
                 {
@@ -1287,9 +1291,9 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         private async Task<Uri> WaitForBrowserEndpointAsync(CancellationToken cancellationToken)
         {
             var devToolsActivePortFilePath = GetDevToolsActivePortFilePath();
-            var timeoutAt = TimeProvider.System.GetUtcNow() + s_browserEndpointTimeout;
+            var timeoutAt = _timeProvider.GetUtcNow() + s_browserEndpointTimeout;
 
-            while (TimeProvider.System.GetUtcNow() < timeoutAt)
+            while (_timeProvider.GetUtcNow() < timeoutAt)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -1814,11 +1818,13 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     {
         private readonly IFileSystemService _fileSystemService;
         private readonly ILogger<BrowserLogsSessionManager> _logger;
+        private readonly TimeProvider _timeProvider;
 
-        public BrowserLogsRunningSessionFactory(IFileSystemService fileSystemService, ILogger<BrowserLogsSessionManager> logger)
+        public BrowserLogsRunningSessionFactory(IFileSystemService fileSystemService, ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
         {
             _fileSystemService = fileSystemService;
             _logger = logger;
+            _timeProvider = timeProvider;
         }
 
         public async Task<IBrowserLogsRunningSession> StartSessionAsync(
@@ -1837,6 +1843,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 _fileSystemService,
                 resourceLogger,
                 _logger,
+                _timeProvider,
                 cancellationToken).ConfigureAwait(false);
         }
     }
