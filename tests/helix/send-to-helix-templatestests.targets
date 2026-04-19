@@ -61,10 +61,8 @@
         <PreCommands>%(PreCommands) $(_ShellCommandSeparator) $(_EnvVarSetKeyword) &quot;TEST_NAME_SUFFIX=%(TestNameSuffix)&quot;</PreCommands>
 
         <!--
-          Using FullyQualifiedName~Aspire.Templates.Tests.StarterTemplateRunTests incorrectly matched
-          Aspire.Templates.Tests.StarterTemplateRunTests_PreviousTFM too.
-
-          To fix that, append '.' to the name so only the test class with exactly that name is run.
+          Template test class names can share prefixes, so append '.' to the class name filter so
+          only the exact class name is run.
         -->
         <PreCommands Condition="'$(OS)' == 'Windows_NT'">%(PreCommands) $(_ShellCommandSeparator) set &quot;TEST_ARGS=--filter-not-trait quarantined=true --filter-not-trait category=failing --filter-class %(Identity)&quot;</PreCommands>
         <PreCommands Condition="'$(OS)' != 'Windows_NT'">%(PreCommands) $(_ShellCommandSeparator) export &quot;TEST_ARGS=--filter-not-trait quarantined=true --filter-not-trait category=failing --filter-class %(Identity)&quot;</PreCommands>

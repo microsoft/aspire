@@ -18,6 +18,36 @@ public sealed class SmokeTests(ITestOutputHelper output)
 {
     [CaptureWorkspaceOnFailure]
     [Fact]
+    public async Task CreateAndRunAspireStarterProjectWithBundle()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.AspireNewAsync("BundleStarterApp", counter);
+
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    [Trait("azdo-template-coverage", "true")]
     public async Task CreateAndRunDefaultAspireStarterProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -139,6 +169,109 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await pendingRun;
     }
 
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task CreateAndRunEmptyAppHostProject()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.AspireNewAsync("AspireEmptyApp", counter, template: AspireTemplate.EmptyAppHost);
+
+        await auto.TypeAsync("cd AspireEmptyApp");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    [Trait("azdo-template-coverage", "true")]
+    public async Task CreateAndRunDotNetEmptyTemplateProject()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.EnableShowAllTemplatesAsync(counter);
+
+        await auto.AspireNewSubcommandAsync("aspire", "DotNetEmptyApp", counter, "--localhost-tld", "false");
+
+        await auto.TypeAsync("cd DotNetEmptyApp");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    [Trait("azdo-template-coverage", "true")]
+    public async Task CreateAndRunDotNetAppHostTemplateProject()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.EnableShowAllTemplatesAsync(counter);
+
+        await auto.AspireNewSubcommandAsync("aspire-apphost", "DotNetAppHost", counter, "--localhost-tld", "false");
+
+        await auto.TypeAsync("cd DotNetAppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.AspireStartAsync(counter);
+        await auto.AspireStopAsync(counter);
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
     /// <summary>
     /// Creates a starter project, starts it with <c>aspire start --format json</c>,
     /// validates machine-readable JSON contracts, and verifies the web frontend endpoint
@@ -195,171 +328,6 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.AssertUrlRespondsAsync(webUrl, "webfrontend", counter);
 
         await auto.AspireStopAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
-    }
-
-    [CaptureWorkspaceOnFailure]
-    [Fact]
-    public async Task CreateAndRunEmptyAppHostProject()
-    {
-        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
-        var workspace = TemporaryWorkspace.Create(output);
-
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        var counter = new SequenceCounter();
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliAsync(strategy, counter);
-
-        await auto.AspireNewAsync("AspireEmptyApp", counter, template: AspireTemplate.EmptyAppHost);
-
-        await auto.TypeAsync("cd AspireEmptyApp");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.AspireStartAsync(counter);
-        await auto.AspireStopAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
-    }
-
-    [CaptureWorkspaceOnFailure]
-    [Fact]
-    public async Task CreateAndRunTypeScriptStarterProject()
-    {
-        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
-        var workspace = TemporaryWorkspace.Create(output);
-
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        var counter = new SequenceCounter();
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliAsync(strategy, counter);
-
-        await auto.AspireNewAsync("TsStarterApp", counter, template: AspireTemplate.ExpressReact);
-
-        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "TsStarterApp");
-        GitIgnoreAssertions.AssertContainsEntry(projectRoot, ".aspire/");
-        var modulesDir = Path.Combine(projectRoot, ".modules");
-
-        if (!Directory.Exists(modulesDir))
-        {
-            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
-        }
-
-        var aspireModulePath = Path.Combine(modulesDir, "aspire.ts");
-        if (!File.Exists(aspireModulePath))
-        {
-            throw new InvalidOperationException($"Expected generated file not found: {aspireModulePath}");
-        }
-
-        await auto.TypeAsync("cd TsStarterApp");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
-
-        await auto.AspireStartAsync(counter);
-        await auto.AspireStopAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
-    }
-
-    [Fact]
-    [CaptureWorkspaceOnFailure]
-    public async Task CreateAndRunPythonReactProject()
-    {
-        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
-        var workspace = TemporaryWorkspace.Create(output);
-
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        var counter = new SequenceCounter();
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliAsync(strategy, counter);
-
-        await auto.AspireNewAsync("AspirePyReactApp", counter, template: AspireTemplate.PythonReact, useRedisCache: false);
-
-        GitIgnoreAssertions.AssertContainsEntry(
-            Path.Combine(workspace.WorkspaceRoot.FullName, "AspirePyReactApp"),
-            ".aspire/");
-
-        await auto.TypeAsync("cd AspirePyReactApp");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
-
-        await auto.AspireStartAsync(counter);
-        await auto.AspireStopAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
-    }
-
-    [CaptureWorkspaceOnFailure]
-    [Fact]
-    public async Task CreateAndRunAspireStarterProjectWithBundle()
-    {
-        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
-        var workspace = TemporaryWorkspace.Create(output);
-
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
-        var counter = new SequenceCounter();
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliAsync(strategy, counter);
-
-        await auto.AspireNewAsync("BundleStarterApp", counter, useRedisCache: false);
-
-        await auto.TypeAsync("aspire start --format json | tee /tmp/aspire-detach.json");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
-
-        await auto.TypeAsync("DASHBOARD_URL=$(sed -n 's/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https:\\/\\/localhost:[0-9]*\\).*/\\1/p' /tmp/aspire-detach.json | head -1)");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("curl -ksSL -o /dev/null -w 'dashboard-http-%{http_code}' \"$DASHBOARD_URL\" || echo 'dashboard-http-failed'");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("dashboard-http-200", timeout: TimeSpan.FromSeconds(15));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire stop");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();

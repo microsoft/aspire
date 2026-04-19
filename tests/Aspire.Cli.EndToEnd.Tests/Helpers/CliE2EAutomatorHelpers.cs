@@ -673,6 +673,49 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Enables the hidden dotnet-template entries for <c>aspire new</c>.
+    /// </summary>
+    internal static async Task EnableShowAllTemplatesAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:showAllTemplates true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Runs <c>aspire new &lt;template&gt;</c> non-interactively for a specific template subcommand.
+    /// </summary>
+    internal static async Task AspireNewSubcommandAsync(
+        this Hex1bTerminalAutomator auto,
+        string templateName,
+        string projectName,
+        SequenceCounter counter,
+        params string[] extraArgs)
+    {
+        var commandParts = new List<string>
+        {
+            "aspire",
+            "new",
+            templateName,
+            "--name",
+            QuoteBashArg(projectName),
+            "--output",
+            QuoteBashArg($"./{projectName}"),
+        };
+
+        foreach (var arg in extraArgs)
+        {
+            commandParts.Add(arg);
+        }
+
+        await auto.TypeAsync(string.Join(" ", commandParts));
+        await auto.EnterAsync();
+        await auto.DeclineAgentInitPromptAsync(counter);
+    }
+
+    /// <summary>
     /// Installs a specific GA version of the Aspire CLI using the install script.
     /// </summary>
     internal static async Task InstallAspireCliVersionAsync(

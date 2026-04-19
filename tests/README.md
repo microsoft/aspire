@@ -31,4 +31,4 @@ Individual test projects can be opted-out by setting appropriate MSBuild propert
 - Set `TestCaptureOutput=false` as an environment variable to see the output on the command line.
 - Use `-tl:false` to disable msbuild's terminal logger so live output can be seen.
 
-Example: `dotnet test --project tests/Aspire.Templates.Tests/Aspire.Templates.Tests.csproj --no-launch-profile -tl:false -- --filter-class "*.NewUpAndBuildStandaloneTemplateTests"`
+Example: `dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj -tl:false -- --filter-class "*.TemplateVariantSmokeTests"`

@@ -26,24 +26,6 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(BuildConfigurationsForTestData))]
-    [RequiresFeature(TestFeature.SSLCertificate), RequiresFeature(TestFeature.Playwright)]
-    [Trait("category", "basic-build")]
-    [OuterloopTest("playwright test")]
-    public async Task BuildAndRunAspireTemplate(string config)
-    {
-        string id = GetNewProjectId(prefix: $"aspire_{config}");
-        await using var project = await AspireProject.CreateNewTemplateProjectAsync(id, "aspire", _testOutput, buildEnvironment: BuildEnvironment.ForDefaultFramework);
-
-        await project.BuildAsync(extraBuildArgs: [$"-c {config}"]);
-        await project.StartAppHostAsync(extraArgs: [$"-c {config}"]);
-
-        await using var context = await CreateNewBrowserContextAsync();
-        var page = await project.OpenDashboardPageAsync(context);
-        await CheckDashboardHasResourcesAsync(page, [], logPath: project.LogPath);
-    }
-
     [Fact]
     public async Task BuildAndRunAspireTemplateWithCentralPackageManagement()
     {
@@ -159,24 +141,6 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
                     """));
             }
         }
-    }
-
-    [Theory]
-    [MemberData(nameof(BuildConfigurationsForTestData))]
-    [RequiresFeature(TestFeature.SSLCertificate), RequiresFeature(TestFeature.Playwright)]
-    [Trait("category", "basic-build")]
-    [OuterloopTest("playwright test")]
-    public async Task StarterTemplateNewAndRunWithoutExplicitBuild(string config)
-    {
-        var id = GetNewProjectId(prefix: $"aspire_starter_run_{config}");
-        await using var project = await AspireProject.CreateNewTemplateProjectAsync(
-            id,
-            "aspire-starter",
-            _testOutput,
-            buildEnvironment: BuildEnvironment.ForDefaultFramework);
-
-        await using var context = await CreateNewBrowserContextAsync();
-        await AssertStarterTemplateRunAsync(context, project, config, _testOutput);
     }
 
     [Fact]
