@@ -72,10 +72,10 @@ internal static partial class MarkdownToSpectreConverter
     }
 
     /// <summary>
-    /// Converts markdown to plain text suitable for redirected or non-interactive output.
+    /// Converts markdown to a lossy plain-text representation suitable for redirected or non-interactive output.
     /// </summary>
     /// <param name="markdown">The markdown text to convert.</param>
-    /// <returns>Markdown with links rewritten to plain text and image references removed.</returns>
+    /// <returns>Plain text with links rewritten to <c>text (url)</c>, image references removed, header markers stripped, and basic formatting markers for bold, italic, and strikethrough removed.</returns>
     public static string ConvertToPlainText(string markdown)
     {
         if (string.IsNullOrWhiteSpace(markdown))
