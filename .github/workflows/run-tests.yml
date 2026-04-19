@@ -13,13 +13,14 @@ on:
         # relative the repo root
         required: false
         type: string
-      # Base MTP diagnostic args (hangdump, crashdump, timeouts, etc.) — sourced from eng/Testing.props MtpBaseArgs.
-      # Timeouts are baked in per-project by MSBuild; the default here is a fallback for direct callers only.
+      # Base MTP diagnostic args (hangdump, crashdump, etc.) — sourced from eng/Testing.props MtpBaseArgs.
+      # Timeouts are baked in per-project by MSBuild; all callers should pass mtpBaseArgs from the matrix.
+      # This default is a safety fallback with diagnostic flags only (no timeouts).
       # See docs/ci/mtp-args-pipeline.md for details.
       mtpBaseArgs:
         required: false
         type: string
-        default: "--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none --hangdump-timeout 10m --timeout 20m"
+        default: "--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none"
       extraTestArgs:
         required: false
         type: string
