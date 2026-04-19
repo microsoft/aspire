@@ -1115,7 +1115,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>() as TestInteractionService;
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -1196,7 +1196,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update --apphost AppHost.csproj");
@@ -1249,7 +1249,7 @@ public class UpdateCommandDotNetToolTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update");
@@ -1298,7 +1298,7 @@ public class UpdateCommandScriptInstallTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>() as TestInteractionService;
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -1378,7 +1378,7 @@ public class UpdateCommandScriptInstallTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update --apphost AppHost.csproj");
@@ -1426,7 +1426,7 @@ public class UpdateCommandScriptInstallTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update");
@@ -1477,7 +1477,7 @@ public class UpdateCommandScriptInstallTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update --self --channel stable");
@@ -1507,7 +1507,7 @@ public class UpdateCommandScriptInstallTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>() as TestInteractionService;
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -1558,7 +1558,7 @@ public class UpdateCommandScriptInstallTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // No --channel specified
