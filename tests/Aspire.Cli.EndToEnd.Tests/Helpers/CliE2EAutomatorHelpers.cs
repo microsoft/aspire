@@ -801,6 +801,28 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Copies the latest Aspire CLI log matching a glob from the container into the mounted workspace.
+    /// </summary>
+    internal static async Task<string> CaptureLatestAspireLogAsync(
+        this Hex1bTerminalAutomator auto,
+        string logGlob,
+        TemporaryWorkspace workspace,
+        SequenceCounter counter,
+        string outputFileName)
+    {
+        var hostOutputPath = CliE2ETestHelpers.GetWorkspaceFilePath(workspace, outputFileName);
+        var containerOutputPath = CliE2ETestHelpers.ToContainerPath(hostOutputPath, workspace);
+
+        CliE2ETestHelpers.RegisterCaptureFile(outputFileName, hostOutputPath);
+
+        await auto.RunCommandAsync(
+            $"LOG=$(ls -t {logGlob} 2>/dev/null | head -1) && test -n \"$LOG\" && cp \"$LOG\" {QuoteBashArg(containerOutputPath)}",
+            counter);
+
+        return hostOutputPath;
+    }
+
+    /// <summary>
     /// Verifies a URL responds with HTTP 200 from inside the CLI test environment.
     /// </summary>
     internal static async Task AssertUrlRespondsAsync(
@@ -1033,13 +1055,16 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
-    /// Stops a running Aspire AppHost with <c>aspire stop</c>.
+    /// Stops running Aspire AppHosts with <c>aspire stop --all</c>.
+    /// In the isolated Docker E2E environment each test owns its own container, so stopping all
+    /// avoids interactive selection prompts when the CLI cannot correlate the current directory to
+    /// the running AppHost path.
     /// </summary>
     internal static async Task AspireStopAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
-        await auto.TypeAsync("aspire stop");
+        await auto.TypeAsync("aspire stop --all");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }

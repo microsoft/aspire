@@ -93,19 +93,19 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
 {
   "tests": [
     {
-      "name": "Templates-StarterTests",
-      "shortname": "Templates-StarterTests",
-      "testProjectPath": "tests/Aspire.Templates.Tests/...",
-      "supportedOSes": ["windows", "linux", "macos"],
+      "name": "Cli E2E / SmokeTests",
+      "shortname": "SmokeTests",
+      "testProjectPath": "tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj",
+      "supportedOSes": ["linux"],
       "properties": {
         "requiresNugets": true,
-        "requiresTestSdk": true,
-        "requiresCliArchive": false,
+        "requiresTestSdk": false,
+        "requiresCliArchive": true,
         "enablePlaywrightInstall": false
       },
-      "testSessionTimeout": "20m",
-      "testHangTimeout": "10m",
-      "extraTestArgs": "--filter-class \"...\""
+      "testSessionTimeout": "30m",
+      "testHangTimeout": "15m",
+      "extraTestArgs": "--filter-class \"Aspire.Cli.EndToEnd.Tests.SmokeTests\""
     },
     {
       "name": "Hosting-Docker",
@@ -395,7 +395,7 @@ To run enumeration locally and inspect the generated matrix:
 ./build.sh -test \
   /p:TestRunnerName=TestEnumerationRunsheetBuilder \
   /p:TestMatrixOutputPath=artifacts/canonical-test-matrix.json \
-  /p:IncludeTemplateTests=true \
+  /p:IncludeCliE2ETests=true \
   /p:GenerateCIPartitions=true
 ```
 

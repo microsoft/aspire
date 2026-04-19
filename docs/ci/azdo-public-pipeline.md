@@ -77,13 +77,12 @@ Which tests run here is controlled by the `RunOnAzdoCI` property (see [Test Rout
 
 ### How Tests Are Sent to Helix
 
-The entry point is `tests/helix/send-to-helix-ci.proj`, which defines **four test categories**:
+The entry point is `tests/helix/send-to-helix-ci.proj`, which defines **three test categories**:
 
 | Category            | Targets file                              | Runs on Windows | Runs on Linux | Description                                                       |
 |---------------------|-------------------------------------------|-----------------|---------------|-------------------------------------------------------------------|
 | `basictests`        | `send-to-helix-basictests.targets`        | ✅              | ✅            | Standard unit/integration tests                                   |
 | `endtoendtests`     | `send-to-helix-endtoendtests.targets`     | ❌              | ✅            | End-to-end scenario tests (needs Docker)                          |
-| `templatestests`    | `send-to-helix-templatestests.targets`    | ✅              | ✅            | Template creation/run tests                                       |
 | `buildonhelixtests` | `send-to-helix-buildonhelixtests.targets` | ❌              | ✅            | Tests that `dotnet build` + `dotnet test` on Helix (needs Docker) |
 
 The `send-to-helix-ci.proj` first runs `PrepareDependencies` sequentially, then dispatches all categories in parallel via MSBuild.
@@ -108,14 +107,6 @@ Each test category has its own strategy for splitting tests into Helix work item
 - Scenarios are hardcoded: `basicservices`, `cosmos`
 - Each work item filters tests by `--filter-trait "scenario=<scenario>"`
 - Tests run only on Linux (Docker required)
-
-#### `templatestests`
-
-- **One work item per test class** — test class names are extracted at build time
-- The `ExtractTestClassNames` target runs the test assembly with `--list-tests` to discover classes
-- Class names are written to `<TestProject>.tests.list`
-- Each class becomes a separate Helix work item with `--filter-class <ClassName>`
-- Correlation payloads include multiple SDK versions (`dotnet-8`, `dotnet-9`, `dotnet-10`)
 
 #### `buildonhelixtests`
 
@@ -187,7 +178,6 @@ This is also the easiest way to inspect locally what payload Helix agents will r
 2. **Archive directories** (defined in `tests/Directory.Build.props`):
    - `artifacts/helix/tests/` — basic tests
    - `artifacts/helix/e2e-tests/` — end-to-end tests
-   - `artifacts/helix/templates-tests/` — template tests
    - `artifacts/helix/build-on-helix-tests/` — build-on-helix tests
    - `artifacts/helix/cli-e2e-tests/` — CLI E2E tests
    - `artifacts/helix/deployment-e2e-tests/` — deployment E2E tests
@@ -197,11 +187,6 @@ This is also the easiest way to inspect locally what payload Helix agents will r
    - `Directory.Packages.Versions.props` — generated, with all package versions from the repo
    - `nuget.config` — configured to resolve built packages from artifacts
    - Shared test utilities
-
-4. **Test class extraction** (for `templatestests`):
-   - The `ExtractTestClassNames` target runs the test executable with `--list-tests`
-   - Extracts unique class names matching a prefix regex
-   - Writes them to `<ProjectName>.tests.list` alongside the zip
 
 ## Helix xUnit Configuration
 
@@ -387,7 +372,6 @@ This comment in a PR will trigger the `aspire-tests` pipeline, which runs both p
 | `tests/helix/send-to-helix-inner.proj` | Helix SDK project (work item builder) |
 | `tests/helix/send-to-helix-basictests.targets` | Basic test work items |
 | `tests/helix/send-to-helix-endtoendtests.targets` | E2E test work items (by scenario) |
-| `tests/helix/send-to-helix-templatestests.targets` | Template test work items (by class) |
 | `tests/helix/send-to-helix-buildonhelixtests.targets` | Build-on-Helix test work items |
 | `eng/Testing.props` | Default test runner properties |
 | `eng/Testing.targets` | Test skip/run logic per runner context |

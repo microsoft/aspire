@@ -90,7 +90,7 @@ public class BuildEnvironment
                         $"Could not find a SDK with the necessary components installed at {sdkFromArtifactsPath} computed from {nameof(RepoRoot)}={RepoRoot}." +
                         $" Build all the packages with '{buildCmd} -pack'." +
                         $" Then install the SDK with 'dotnet build {workloadsProjString}'." +
-                        " See https://github.com/microsoft/aspire/tree/main/tests/Aspire.Templates.Tests#readme for more details.");
+                        " See https://github.com/microsoft/aspire/tree/main/tests#install-sdk-from-artifacts for more details.");
                 }
             }
             else

@@ -616,7 +616,6 @@ jobs:
           path: |
             **/*.binlog
             testresults/**
-            artifacts/bin/Aspire.Templates.Tests/Debug/net8.0/logs/**
             artifacts/log/test-logs/**
 
       - name: Copy CLI E2E recordings for upload
