@@ -272,7 +272,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     {
         var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
         var resourceLogger = resourceLoggerService.GetLogger("web-browser-logs");
-        var eventLogger = new BrowserLogsSessionManager.BrowserEventLogger("session-0001", resourceLogger);
+        var eventLogger = new BrowserEventLogger("session-0001", resourceLogger);
         var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-logs", () =>
         {
             eventLogger.HandleEvent(ParseProtocolEvent("""
@@ -330,7 +330,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     {
         var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
         var resourceLogger = resourceLoggerService.GetLogger("web-browser-logs");
-        var eventLogger = new BrowserLogsSessionManager.BrowserEventLogger("session-0002", resourceLogger);
+        var eventLogger = new BrowserEventLogger("session-0002", resourceLogger);
         var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-logs", () =>
         {
             eventLogger.HandleEvent(ParseProtocolEvent("""

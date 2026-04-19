@@ -13,7 +13,7 @@ public class BrowserLogsSessionManagerTests
     [Fact]
     public void TryParseBrowserDebugEndpoint_ReturnsBrowserWebSocketUri()
     {
-        var endpoint = BrowserLogsSessionManager.TryParseBrowserDebugEndpoint("""
+        var endpoint = BrowserLogsDebugEndpointParser.TryParseBrowserDebugEndpoint("""
             51943
             /devtools/browser/4c8404fb-06f8-45f0-9d89-112233445566
             """);
@@ -28,7 +28,7 @@ public class BrowserLogsSessionManagerTests
     [InlineData("51943")]
     public void TryParseBrowserDebugEndpoint_ReturnsNullForInvalidMetadata(string metadata)
     {
-        var endpoint = BrowserLogsSessionManager.TryParseBrowserDebugEndpoint(metadata);
+        var endpoint = BrowserLogsDebugEndpointParser.TryParseBrowserDebugEndpoint(metadata);
 
         Assert.Null(endpoint);
     }
@@ -38,7 +38,7 @@ public class BrowserLogsSessionManagerTests
     {
         var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
         var resourceName = "web-browser-logs";
-        var diagnostics = new BrowserLogsSessionManager.BrowserConnectionDiagnosticsLogger("session-0001", resourceLoggerService.GetLogger(resourceName));
+        var diagnostics = new BrowserConnectionDiagnosticsLogger("session-0001", resourceLoggerService.GetLogger(resourceName));
 
         var logs = await CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount: 4, () =>
         {
