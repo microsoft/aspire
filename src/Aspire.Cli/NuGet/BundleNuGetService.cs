@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Microsoft.Extensions.Logging;
 
@@ -37,7 +38,7 @@ public interface INuGetService
 /// </summary>
 internal sealed class BundleNuGetService : INuGetService
 {
-    private readonly ILayoutDiscovery _layoutDiscovery;
+    private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly IFeatures _features;
     private readonly CliExecutionContext _executionContext;
@@ -45,13 +46,13 @@ internal sealed class BundleNuGetService : INuGetService
     private readonly string _cacheDirectory;
 
     public BundleNuGetService(
-        ILayoutDiscovery layoutDiscovery,
+        IBundleService bundleService,
         LayoutProcessRunner layoutProcessRunner,
         IFeatures features,
         CliExecutionContext executionContext,
         ILogger<BundleNuGetService> logger)
     {
-        _layoutDiscovery = layoutDiscovery;
+        _bundleService = bundleService;
         _layoutProcessRunner = layoutProcessRunner;
         _features = features;
         _executionContext = executionContext;
@@ -67,17 +68,11 @@ internal sealed class BundleNuGetService : INuGetService
         string? workingDirectory = null,
         CancellationToken ct = default)
     {
-        var layout = _layoutDiscovery.DiscoverLayout();
-        if (layout is null)
-        {
-            throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet restore in bundle mode.");
-        }
-
-        var managedPath = layout.GetManagedPath();
-        if (managedPath is null || !File.Exists(managedPath))
-        {
-            throw new InvalidOperationException("aspire-managed not found in layout.");
-        }
+        var managedPath = await BundleLayoutRepairHelper.EnsureManagedToolPathAsync(
+            _bundleService,
+            _logger,
+            "restoring integration packages in bundle mode",
+            ct).ConfigureAwait(false);
 
         var packageList = packages.ToList();
         if (packageList.Count == 0)
@@ -152,11 +147,16 @@ internal sealed class BundleNuGetService : INuGetService
         var environmentVariables = new Dictionary<string, string>();
         NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _executionContext);
 
-        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
+        var (managedToolPath, exitCode, output, error) = await BundleLayoutRepairHelper.RunManagedToolWithRepairAsync(
+            _bundleService,
+            _layoutProcessRunner,
+            _logger,
+            "restoring integration packages in bundle mode",
             restoreArgs,
             environmentVariables: environmentVariables,
-            ct: ct);
+            managedPath: managedPath,
+            cancellationToken: ct).ConfigureAwait(false);
+        managedPath = managedToolPath;
 
         // Log stderr at debug level for diagnostics
         if (!string.IsNullOrWhiteSpace(error))
@@ -169,6 +169,7 @@ internal sealed class BundleNuGetService : INuGetService
             _logger.LogError("Package restore failed with exit code {ExitCode}", exitCode);
             _logger.LogError("Package restore stderr: {Error}", error);
             _logger.LogError("Package restore stdout: {Output}", output);
+            _logger.LogError("Bundle state at package restore failure: {BundleState}", _bundleService.GetLayoutState().Describe());
             throw new InvalidOperationException($"Package restore failed: {error}");
         }
 
@@ -198,11 +199,15 @@ internal sealed class BundleNuGetService : INuGetService
         _logger.LogDebug("Creating layout from {AssetsPath}", assetsPath);
         _logger.LogDebug("NuGet layout args: {Args}", string.Join(" ", layoutArgs));
 
-        (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
+        (_, exitCode, output, error) = await BundleLayoutRepairHelper.RunManagedToolWithRepairAsync(
+            _bundleService,
+            _layoutProcessRunner,
+            _logger,
+            "creating the integration package layout in bundle mode",
             layoutArgs,
             environmentVariables: environmentVariables,
-            ct: ct);
+            managedPath: managedPath,
+            cancellationToken: ct).ConfigureAwait(false);
 
         // Log stderr at debug level for diagnostics
         if (!string.IsNullOrWhiteSpace(error))
@@ -215,6 +220,7 @@ internal sealed class BundleNuGetService : INuGetService
             _logger.LogError("Layout creation failed with exit code {ExitCode}", exitCode);
             _logger.LogError("Layout creation stderr: {Error}", error);
             _logger.LogError("Layout creation stdout: {Output}", output);
+            _logger.LogError("Bundle state at layout creation failure: {BundleState}", _bundleService.GetLayoutState().Describe());
             throw new InvalidOperationException($"Layout creation failed: {error}");
         }
 

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Bundles;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -182,29 +183,35 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
     private LayoutConfiguration? TryInferLayout(string layoutPath)
     {
-        // Check for essential directories
-        var managedPath = Path.Combine(layoutPath, BundleDiscovery.ManagedDirectoryName);
-        var dcpPath = Path.Combine(layoutPath, BundleDiscovery.DcpDirectoryName);
+        var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
+        var layoutState = BundleLayoutState.Inspect(layoutPath);
 
         _logger.LogDebug("TryInferLayout: Checking layout at {Path}", layoutPath);
-        _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.ManagedDirectoryName, Directory.Exists(managedPath) ? "exists" : "MISSING");
-        _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.DcpDirectoryName, Directory.Exists(dcpPath) ? "exists" : "MISSING");
+        _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.ManagedDirectoryName, layoutState.HasManagedDirectory ? "exists" : "MISSING");
+        _logger.LogDebug("  {Dir}/: {Exists}", BundleDiscovery.DcpDirectoryName, layoutState.HasDcpDirectory ? "exists" : "MISSING");
+        _logger.LogDebug("  {Marker}: {Exists}", BundleService.VersionMarkerFileName, layoutState.HasVersionMarker ? "exists" : "MISSING");
+        _logger.LogDebug("  {Marker}: {Exists}", BundleService.ExtractionInProgressMarkerFileName, layoutState.HasExtractionInProgressMarker ? "exists" : "MISSING");
+        _logger.LogDebug("  managed/{ManagedExe}: {Exists}", managedExeName, layoutState.HasManagedExecutable ? "exists" : "MISSING");
 
-        if (!Directory.Exists(managedPath) || !Directory.Exists(dcpPath))
+        if (!layoutState.HasRequiredLayoutStructure)
         {
-            _logger.LogDebug("TryInferLayout: Layout rejected - missing required directories");
+            _logger.LogDebug("TryInferLayout: Layout rejected - required bundle contents are missing");
             return null;
         }
 
-        // Check for aspire-managed executable
-        var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
-        var managedExePath = Path.Combine(managedPath, managedExeName);
-        _logger.LogDebug("  managed/{ManagedExe}: {Exists}", managedExeName, File.Exists(managedExePath) ? "exists" : "MISSING");
-
-        if (!File.Exists(managedExePath))
+        // A newer extractor explicitly marked this layout as incomplete. Even if some
+        // files are present, discovery must not treat it as a valid bundle.
+        if (layoutState.HasExtractionInProgressMarker)
         {
-            _logger.LogDebug("TryInferLayout: Layout rejected - aspire-managed not found");
+            _logger.LogDebug("TryInferLayout: Layout rejected - extraction still marked in progress");
             return null;
+        }
+
+        if (!layoutState.HasVersionMarker)
+        {
+            // Older CLIs never wrote markers, so a structurally valid layout with no
+            // markers is treated as a legacy complete install for compatibility.
+            _logger.LogDebug("TryInferLayout: Accepting legacy layout without a version marker");
         }
 
         _logger.LogDebug("TryInferLayout: Layout is valid");
@@ -216,6 +223,9 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             Components = new LayoutComponents()
         };
     }
+
+    internal static bool HasRequiredLayoutStructure(string layoutPath)
+        => BundleLayoutState.Inspect(layoutPath).HasRequiredLayoutStructure;
 
     private LayoutConfiguration LogEnvironmentOverrides(LayoutConfiguration config)
     {

@@ -530,7 +530,23 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         Assert.Equal("Testing", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
-    private static GuestAppHostProject CreateGuestAppHostProject()
+    [Fact]
+    public async Task FindAndStopRunningInstanceAsync_ReturnsNoRunningInstanceWhenServerFactoryFails()
+    {
+        var appHostFile = new FileInfo(Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// test");
+
+        var project = CreateGuestAppHostProject(new ThrowingAppHostServerProjectFactory());
+
+        var result = await project.FindAndStopRunningInstanceAsync(
+            appHostFile,
+            new DirectoryInfo(Path.GetTempPath()),
+            CancellationToken.None);
+
+        Assert.Equal(RunningInstanceResult.NoRunningInstance, result);
+    }
+
+    private static GuestAppHostProject CreateGuestAppHostProject(IAppHostServerProjectFactory? appHostServerProjectFactory = null)
     {
         var language = new LanguageInfo(
             LanguageId: "typescript/nodejs",
@@ -547,7 +563,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             language: language,
             interactionService: new TestInteractionService(),
             backchannel: new TestAppHostBackchannel(),
-            appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
+            appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
             packagingService: new TestPackagingService(),
@@ -556,5 +572,11 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             languageDiscovery: new TestLanguageDiscovery(),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
+    }
+
+    private sealed class ThrowingAppHostServerProjectFactory : IAppHostServerProjectFactory
+    {
+        public Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Simulated AppHost server failure.");
     }
 }

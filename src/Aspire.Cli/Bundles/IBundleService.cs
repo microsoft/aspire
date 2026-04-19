@@ -32,6 +32,21 @@ internal interface IBundleService
     Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Inspects the current bundle layout state.
+    /// </summary>
+    /// <param name="destinationPath">Optional directory to inspect. Defaults to the current bundle root.</param>
+    /// <returns>The current bundle layout state.</returns>
+    BundleLayoutState GetLayoutState(string? destinationPath = null);
+
+    /// <summary>
+    /// Forces a bundle re-extraction using the same default destination logic as normal extraction.
+    /// </summary>
+    /// <param name="destinationPath">Optional directory to repair. Defaults to the current bundle root.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The result of the repair attempt.</returns>
+    Task<BundleExtractResult> RepairAsync(string? destinationPath = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Ensures the bundle is extracted and returns the discovered layout.
     /// Combines <see cref="EnsureExtractedAsync"/> and layout discovery into a single call
     /// so callers cannot forget to extract before discovering the layout.

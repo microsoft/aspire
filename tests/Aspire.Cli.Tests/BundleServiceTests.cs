@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Tests;
 
@@ -45,6 +46,78 @@ public class BundleServiceTests
         {
             var readVersion = BundleService.ReadVersionMarker(tempDir.FullName);
             Assert.Null(readVersion);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ExtractionInProgressMarker_IsDetected()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            BundleService.WriteExtractionInProgressMarker(tempDir.FullName, "13.2.0-dev");
+
+            Assert.True(BundleService.HasExtractionInProgressMarker(tempDir.FullName));
+            Assert.False(BundleService.IsExtractionComplete(tempDir.FullName));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IsExtractionComplete_ReturnsTrue_WhenVersionMarkerExistsAndNoExtractionInProgressMarker()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            BundleService.WriteVersionMarker(tempDir.FullName, "13.2.0-dev");
+
+            Assert.True(BundleService.IsExtractionComplete(tempDir.FullName));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void IsUsableExtractedLayout_ReturnsTrue_ForLegacyLayoutWithoutMarkers()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            var managedDirectory = tempDir.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+            tempDir.CreateSubdirectory(BundleDiscovery.DcpDirectoryName);
+            File.WriteAllText(Path.Combine(managedDirectory.FullName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)), "test");
+
+            Assert.True(BundleService.IsUsableExtractedLayout(tempDir.FullName));
+            Assert.False(BundleService.IsExtractionComplete(tempDir.FullName));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CleanLayoutDirectories_RemovesExtractionMarkers()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            BundleService.WriteVersionMarker(tempDir.FullName, "13.2.0-dev");
+            BundleService.WriteExtractionInProgressMarker(tempDir.FullName, "13.2.0-dev");
+
+            BundleService.CleanLayoutDirectories(tempDir.FullName);
+
+            Assert.Null(BundleService.ReadVersionMarker(tempDir.FullName));
+            Assert.False(BundleService.HasExtractionInProgressMarker(tempDir.FullName));
         }
         finally
         {

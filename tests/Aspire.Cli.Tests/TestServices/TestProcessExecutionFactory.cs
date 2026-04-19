@@ -37,6 +37,12 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
     public Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout)>? AttemptCallback { get; set; }
 
     /// <summary>
+    /// Gets or sets a callback that is invoked for each execution attempt, receiving the attempt number (1-based)
+    /// and options, and returning the exit code, stdout, and stderr content.
+    /// </summary>
+    public Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout, string? Stderr)>? AttemptWithErrorCallback { get; set; }
+
+    /// <summary>
     /// When set, the execution will use this exit code when <see cref="IProcessExecution.WaitForExitAsync"/> is called.
     /// </summary>
     public int DefaultExitCode { get; set; }
@@ -65,7 +71,15 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
         }
 
         // Use AttemptCallback if provided, otherwise create a simple callback that returns the default exit code
-        var callback = AttemptCallback ?? ((_, _) => (DefaultExitCode, null));
+        var callback = AttemptWithErrorCallback is not null
+            ? new Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout, string? Stderr)>(AttemptWithErrorCallback)
+            : ((AttemptCallback is not null)
+                ? (attempt, options) =>
+                {
+                    var (exitCode, stdout) = AttemptCallback(attempt, options);
+                    return (exitCode, stdout, null);
+                }
+                : (_, _) => (DefaultExitCode, null, null));
         return new TestProcessExecution(fileName, args, env, options, callback, () => _attemptCount);
     }
 }
@@ -73,7 +87,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
 internal sealed class TestProcessExecution : IProcessExecution
 {
     private readonly ProcessInvocationOptions _options;
-    private readonly Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout)> _attemptCallback;
+    private readonly Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout, string? Stderr)> _attemptCallback;
     private readonly Func<int> _attemptCounter;
     private bool _started;
 
@@ -83,6 +97,27 @@ internal sealed class TestProcessExecution : IProcessExecution
         IDictionary<string, string>? env,
         ProcessInvocationOptions options,
         Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout)> attemptCallback,
+        Func<int> attemptCounter)
+        : this(
+            fileName,
+            args,
+            env,
+            options,
+            (attempt, invocationOptions) =>
+            {
+                var (exitCode, stdout) = attemptCallback(attempt, invocationOptions);
+                return (exitCode, stdout, null);
+            },
+            attemptCounter)
+    {
+    }
+
+    public TestProcessExecution(
+        string fileName,
+        string[] args,
+        IDictionary<string, string>? env,
+        ProcessInvocationOptions options,
+        Func<int, ProcessInvocationOptions, (int ExitCode, string? Stdout, string? Stderr)> attemptCallback,
         Func<int> attemptCounter)
     {
         FileName = fileName;
@@ -125,10 +160,14 @@ internal sealed class TestProcessExecution : IProcessExecution
         }
 
         var attempt = _attemptCounter();
-        var (exitCode, stdout) = _attemptCallback(attempt, _options);
+        var (exitCode, stdout, stderr) = _attemptCallback(attempt, _options);
         if (stdout is not null)
         {
             _options.StandardOutputCallback?.Invoke(stdout);
+        }
+        if (stderr is not null)
+        {
+            _options.StandardErrorCallback?.Invoke(stderr);
         }
         return Task.FromResult(exitCode);
     }

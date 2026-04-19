@@ -108,18 +108,11 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
-        // Ensure the bundle is extracted and get the layout in a single call
-        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
-        if (layout is null)
-        {
-            throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet search in bundle mode.");
-        }
-
-        var managedPath = layout.GetManagedPath();
-        if (managedPath is null || !File.Exists(managedPath))
-        {
-            throw new InvalidOperationException("aspire-managed not found in layout.");
-        }
+        var managedPath = await BundleLayoutRepairHelper.EnsureManagedToolPathAsync(
+            _bundleService,
+            _logger,
+            "searching NuGet packages in bundle mode",
+            cancellationToken).ConfigureAwait(false);
 
         // Build arguments for NuGet search command (via aspire-managed nuget subcommand)
         var args = new List<string>
@@ -158,11 +151,16 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         _logger.LogDebug("NuGet search args: {Args}", string.Join(" ", args));
         _logger.LogDebug("Working directory: {WorkingDir}", workingDirectory.FullName);
 
-        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
+        var (managedToolPath, exitCode, output, error) = await BundleLayoutRepairHelper.RunManagedToolWithRepairAsync(
+            _bundleService,
+            _layoutProcessRunner,
+            _logger,
+            "searching NuGet packages in bundle mode",
             args,
             workingDirectory: workingDirectory.FullName,
-            ct: cancellationToken).ConfigureAwait(false);
+            managedPath: managedPath,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        managedPath = managedToolPath;
 
         // Log stderr output (verbose info from NuGetHelper)
         if (!string.IsNullOrWhiteSpace(error))
@@ -175,6 +173,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             _logger.LogError("NuGet search failed with exit code {ExitCode}", exitCode);
             _logger.LogError("NuGet search stderr: {Error}", error);
             _logger.LogError("NuGet search stdout: {Output}", output);
+            _logger.LogError("Bundle state at NuGet search failure: {BundleState}", _bundleService.GetLayoutState().Describe());
             throw new NuGetPackageCacheException($"Package search failed: {error}");
         }
 
@@ -277,4 +276,3 @@ internal sealed partial class BundleSearchJsonContext : JsonSerializerContext
 }
 
 #endregion
-

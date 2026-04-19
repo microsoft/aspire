@@ -156,7 +156,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var nugetService = new BundleNuGetService(new NullBundleService(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
         var server = new PrebuiltAppHostServer(
             workspace.WorkspaceRoot.FullName,
             "test.sock",
@@ -210,7 +210,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             OnGetConfiguration = key => key == "channel" ? "pr-old" : null
         };
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var nugetService = new BundleNuGetService(new NullBundleService(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
         var server = new PrebuiltAppHostServer(
             workspace.WorkspaceRoot.FullName,
             "test.sock",

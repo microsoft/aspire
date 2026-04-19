@@ -640,6 +640,11 @@ internal sealed class NullBundleService : IBundleService
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(BundleExtractResult.NoPayload);
 
+    public BundleLayoutState GetLayoutState(string? destinationPath = null) => default;
+
+    public Task<BundleExtractResult> RepairAsync(string? destinationPath = null, CancellationToken cancellationToken = default)
+        => Task.FromResult(BundleExtractResult.NoPayload);
+
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<Layout.LayoutConfiguration?>(null);
 }
@@ -656,6 +661,12 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
     public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
+        => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
+
+    public BundleLayoutState GetLayoutState(string? destinationPath = null)
+        => BundleLayoutState.Inspect(destinationPath ?? Layout?.LayoutPath);
+
+    public Task<BundleExtractResult> RepairAsync(string? destinationPath = null, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)

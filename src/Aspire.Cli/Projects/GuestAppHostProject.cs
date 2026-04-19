@@ -1268,8 +1268,20 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return RunningInstanceResult.NoRunningInstance; // No directory, nothing to check
         }
 
-        var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
-        var genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
+        string genericAppHostPath;
+
+        try
+        {
+            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
+            genericAppHostPath = appHostServerProject.GetInstanceIdentifier();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IOException)
+        {
+            _logger.LogWarning(ex,
+                "Failed to resolve the guest AppHost server while checking for running instances at {AppHostFile}. Continuing without attempting to stop existing instances.",
+                appHostFile.FullName);
+            return RunningInstanceResult.NoRunningInstance;
+        }
 
         // Find matching sockets for this AppHost
         var matchingSockets = AppHostHelper.FindMatchingSockets(genericAppHostPath, homeDirectory.FullName);
