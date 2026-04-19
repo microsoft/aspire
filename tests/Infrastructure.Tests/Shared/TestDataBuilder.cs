@@ -25,8 +25,7 @@ public static class TestDataBuilder
         string projectName,
         string testProjectPath,
         string? shortName = null,
-        string? testSessionTimeout = null,
-        string? testHangTimeout = null,
+        string? mtpBaseArgs = null,
         bool requiresNugets = false,
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
@@ -41,8 +40,7 @@ public static class TestDataBuilder
             TestProjectPath = testProjectPath,
             ShortName = shortName ?? projectName,
             SplitTests = "false",
-            TestSessionTimeout = testSessionTimeout,
-            TestHangTimeout = testHangTimeout,
+            MtpBaseArgs = mtpBaseArgs,
             Properties = new Dictionary<string, bool>
             {
                 ["requiresNugets"] = requiresNugets,
@@ -73,10 +71,8 @@ public static class TestDataBuilder
         string projectName,
         string testProjectPath,
         string? shortName = null,
-        string? testSessionTimeout = null,
-        string? testHangTimeout = null,
-        string? uncollectedTestsSessionTimeout = null,
-        string? uncollectedTestsHangTimeout = null,
+        string? mtpBaseArgs = null,
+        string? uncollectedMtpBaseArgs = null,
         bool requiresNugets = false,
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
@@ -90,10 +86,8 @@ public static class TestDataBuilder
             TestProjectPath = testProjectPath,
             ShortName = shortName ?? projectName,
             SplitTests = "true",
-            TestSessionTimeout = testSessionTimeout,
-            TestHangTimeout = testHangTimeout,
-            UncollectedTestsSessionTimeout = uncollectedTestsSessionTimeout,
-            UncollectedTestsHangTimeout = uncollectedTestsHangTimeout,
+            MtpBaseArgs = mtpBaseArgs,
+            UncollectedMtpBaseArgs = uncollectedMtpBaseArgs,
             Properties = new Dictionary<string, bool>
             {
                 ["requiresNugets"] = requiresNugets,
@@ -194,8 +188,7 @@ public static class TestDataBuilder
         string? collection = null,
         string? classname = null,
         string? extraTestArgs = null,
-        string testSessionTimeout = "20m",
-        string testHangTimeout = "10m",
+        string mtpBaseArgs = "",
         bool requiresNugets = false,
         bool requiresTestSdk = false,
         bool requiresCliArchive = false,
@@ -214,8 +207,7 @@ public static class TestDataBuilder
             Collection = collection,
             Classname = classname,
             ExtraTestArgs = extraTestArgs ?? "",
-            TestSessionTimeout = testSessionTimeout,
-            TestHangTimeout = testHangTimeout,
+            MtpBaseArgs = mtpBaseArgs,
             Properties = new Dictionary<string, bool>
             {
                 ["requiresNugets"] = requiresNugets,
@@ -242,17 +234,11 @@ public static class TestDataBuilder
         [JsonPropertyName("splitTests")]
         public string SplitTests { get; set; } = "false";
 
-        [JsonPropertyName("testSessionTimeout")]
-        public string? TestSessionTimeout { get; set; }
+        [JsonPropertyName("mtpBaseArgs")]
+        public string? MtpBaseArgs { get; set; }
 
-        [JsonPropertyName("testHangTimeout")]
-        public string? TestHangTimeout { get; set; }
-
-        [JsonPropertyName("uncollectedTestsSessionTimeout")]
-        public string? UncollectedTestsSessionTimeout { get; set; }
-
-        [JsonPropertyName("uncollectedTestsHangTimeout")]
-        public string? UncollectedTestsHangTimeout { get; set; }
+        [JsonPropertyName("uncollectedMtpBaseArgs")]
+        public string? UncollectedMtpBaseArgs { get; set; }
 
         [JsonPropertyName("properties")]
         public Dictionary<string, bool> Properties { get; set; } = new();
@@ -315,11 +301,8 @@ public class CanonicalMatrixEntry
     [JsonPropertyName("extraTestArgs")]
     public string ExtraTestArgs { get; set; } = "";
 
-    [JsonPropertyName("testSessionTimeout")]
-    public string TestSessionTimeout { get; set; } = "20m";
-
-    [JsonPropertyName("testHangTimeout")]
-    public string TestHangTimeout { get; set; } = "10m";
+    [JsonPropertyName("mtpBaseArgs")]
+    public string MtpBaseArgs { get; set; } = "";
 
     [JsonPropertyName("properties")]
     public Dictionary<string, bool> Properties { get; set; } = new();

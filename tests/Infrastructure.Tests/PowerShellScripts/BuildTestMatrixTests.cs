@@ -165,7 +165,7 @@ public class BuildTestMatrixTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task AppliesDefaultTimeouts()
+    public async Task DefaultsMtpBaseArgsToEmptyWhenNotSpecified()
     {
         // Arrange
         var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
@@ -187,13 +187,12 @@ public class BuildTestMatrixTests : IDisposable
 
         var matrix = ParseCanonicalMatrix(outputFile);
         var entry = Assert.Single(matrix.Tests);
-        Assert.Equal("20m", entry.TestSessionTimeout);
-        Assert.Equal("10m", entry.TestHangTimeout);
+        Assert.Equal("", entry.MtpBaseArgs);
     }
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task PreservesCustomTimeouts()
+    public async Task PreservesCustomMtpBaseArgs()
     {
         // Arrange
         var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
@@ -203,8 +202,7 @@ public class BuildTestMatrixTests : IDisposable
             Path.Combine(artifactsDir, "CustomTimeouts.tests-metadata.json"),
             projectName: "CustomTimeouts",
             testProjectPath: "tests/CustomTimeouts/CustomTimeouts.csproj",
-            testSessionTimeout: "45m",
-            testHangTimeout: "15m");
+            mtpBaseArgs: "--hangdump-timeout 15m --timeout 45m");
 
         var outputFile = Path.Combine(_tempDir.Path, "matrix.json");
 
@@ -216,8 +214,7 @@ public class BuildTestMatrixTests : IDisposable
 
         var matrix = ParseCanonicalMatrix(outputFile);
         var entry = Assert.Single(matrix.Tests);
-        Assert.Equal("45m", entry.TestSessionTimeout);
-        Assert.Equal("15m", entry.TestHangTimeout);
+        Assert.Equal("--hangdump-timeout 15m --timeout 45m", entry.MtpBaseArgs);
     }
 
     [Fact]
@@ -306,7 +303,7 @@ public class BuildTestMatrixTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task UsesUncollectedTimeoutsForUncollectedEntry()
+    public async Task UsesUncollectedMtpBaseArgsForUncollectedEntry()
     {
         // Arrange
         var artifactsDir = Path.Combine(_tempDir.Path, "artifacts");
@@ -317,10 +314,8 @@ public class BuildTestMatrixTests : IDisposable
             projectName: "SplitProject",
             testProjectPath: "tests/SplitProject/SplitProject.csproj",
             shortName: "Split",
-            testSessionTimeout: "30m",
-            testHangTimeout: "15m",
-            uncollectedTestsSessionTimeout: "45m",
-            uncollectedTestsHangTimeout: "20m");
+            mtpBaseArgs: "--hangdump-timeout 15m --timeout 30m",
+            uncollectedMtpBaseArgs: "--hangdump-timeout 20m --timeout 45m");
 
         TestDataBuilder.CreateTestsPartitionsJson(
             Path.Combine(artifactsDir, "SplitProject.tests-partitions.json"),
@@ -336,17 +331,15 @@ public class BuildTestMatrixTests : IDisposable
 
         var matrix = ParseCanonicalMatrix(outputFile);
 
-        // The partitioned entry should have regular timeouts
+        // The partitioned entry should have regular mtpBaseArgs
         var partitionEntry = matrix.Tests.FirstOrDefault(e => e.Name == "Split-PartitionA");
         Assert.NotNull(partitionEntry);
-        Assert.Equal("30m", partitionEntry.TestSessionTimeout);
-        Assert.Equal("15m", partitionEntry.TestHangTimeout);
+        Assert.Equal("--hangdump-timeout 15m --timeout 30m", partitionEntry.MtpBaseArgs);
 
-        // The uncollected entry should have uncollected-specific timeouts
+        // The uncollected entry should have uncollected-specific mtpBaseArgs
         var uncollectedEntry = matrix.Tests.FirstOrDefault(e => e.Name == "Split");
         Assert.NotNull(uncollectedEntry);
-        Assert.Equal("45m", uncollectedEntry.TestSessionTimeout);
-        Assert.Equal("20m", uncollectedEntry.TestHangTimeout);
+        Assert.Equal("--hangdump-timeout 20m --timeout 45m", uncollectedEntry.MtpBaseArgs);
     }
 
     [Fact]
