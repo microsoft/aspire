@@ -655,6 +655,21 @@ func NewCSharpAppResource(handle *Handle, client *AspireClient) *CSharpAppResour
 	}
 }
 
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+func (s *CSharpAppResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if browser != nil {
+		reqArgs["browser"] = SerializeValue(browser)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithContainerRegistry configures a resource to use a container registry
 func (s *CSharpAppResource) WithContainerRegistry(registry *IResource) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -3978,6 +3993,21 @@ func NewContainerResource(handle *Handle, client *AspireClient) *ContainerResour
 	}
 }
 
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+func (s *ContainerResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if browser != nil {
+		reqArgs["browser"] = SerializeValue(browser)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithContainerRegistry configures a resource to use a container registry
 func (s *ContainerResource) WithContainerRegistry(registry *IResource) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -6191,6 +6221,21 @@ func NewDotnetToolResource(handle *Handle, client *AspireClient) *DotnetToolReso
 	return &DotnetToolResource{
 		ResourceBuilderBase: NewResourceBuilderBase(handle, client),
 	}
+}
+
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+func (s *DotnetToolResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if browser != nil {
+		reqArgs["browser"] = SerializeValue(browser)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithContainerRegistry configures a resource to use a container registry
@@ -8432,6 +8477,21 @@ func NewExecutableResource(handle *Handle, client *AspireClient) *ExecutableReso
 	return &ExecutableResource{
 		ResourceBuilderBase: NewResourceBuilderBase(handle, client),
 	}
+}
+
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+func (s *ExecutableResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if browser != nil {
+		reqArgs["browser"] = SerializeValue(browser)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithContainerRegistry configures a resource to use a container registry
@@ -13638,6 +13698,21 @@ func NewProjectResource(handle *Handle, client *AspireClient) *ProjectResource {
 	}
 }
 
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+func (s *ProjectResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if browser != nil {
+		reqArgs["browser"] = SerializeValue(browser)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithContainerRegistry configures a resource to use a container registry
 func (s *ProjectResource) WithContainerRegistry(registry *IResource) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -15692,6 +15767,21 @@ func NewTestDatabaseResource(handle *Handle, client *AspireClient) *TestDatabase
 	}
 }
 
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+func (s *TestDatabaseResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if browser != nil {
+		reqArgs["browser"] = SerializeValue(browser)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
+}
+
 // WithContainerRegistry configures a resource to use a container registry
 func (s *TestDatabaseResource) WithContainerRegistry(registry *IResource) (*IResource, error) {
 	reqArgs := map[string]any{
@@ -17481,6 +17571,21 @@ func NewTestRedisResource(handle *Handle, client *AspireClient) *TestRedisResour
 	return &TestRedisResource{
 		ResourceBuilderBase: NewResourceBuilderBase(handle, client),
 	}
+}
+
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+func (s *TestRedisResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if browser != nil {
+		reqArgs["browser"] = SerializeValue(browser)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithContainerRegistry configures a resource to use a container registry
@@ -19497,6 +19602,21 @@ func NewTestVaultResource(handle *Handle, client *AspireClient) *TestVaultResour
 	return &TestVaultResource{
 		ResourceBuilderBase: NewResourceBuilderBase(handle, client),
 	}
+}
+
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+func (s *TestVaultResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if browser != nil {
+		reqArgs["browser"] = SerializeValue(browser)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithContainerRegistry configures a resource to use a container registry

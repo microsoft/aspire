@@ -2,10 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 var builder = DistributedApplication.CreateBuilder(args);
+var browser = OperatingSystem.IsWindows() ? "msedge" : "chrome";
 
 builder.AddProject<Projects.BrowserTelemetry_Web>("web")
     .WithExternalHttpEndpoints()
-    .WithReplicas(2);
+    .WithBrowserLogs(browser);
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

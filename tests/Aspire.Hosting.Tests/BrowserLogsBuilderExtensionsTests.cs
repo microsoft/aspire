@@ -1,0 +1,455 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Text.Json;
+using Aspire.Hosting.Resources;
+using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
+using Aspire.Hosting.Eventing;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
+
+namespace Aspire.Hosting.Tests;
+
+[Trait("Partition", "2")]
+public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelper)
+{
+    [Fact]
+    public void WithBrowserLogs_CreatesChildResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var browserLogsResource = Assert.Single(appModel.Resources.OfType<BrowserLogsResource>());
+        Assert.Equal("web-browser-logs", browserLogsResource.Name);
+        Assert.Equal(web.Resource.Name, browserLogsResource.ParentResource.Name);
+        Assert.Equal("chrome", browserLogsResource.Browser);
+
+        Assert.True(browserLogsResource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        var parentRelationship = Assert.Single(relationships, relationship => relationship.Type == "Parent");
+        Assert.Equal(web.Resource.Name, parentRelationship.Resource.Name);
+
+        var command = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName);
+        Assert.Equal(CommandStrings.OpenTrackedBrowserName, command.DisplayName);
+        Assert.Equal(CommandStrings.OpenTrackedBrowserDescription, command.DisplayDescription);
+
+        var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
+        Assert.Equal(BrowserLogsBuilderExtensions.BrowserResourceType, snapshot.ResourceType);
+        Assert.NotNull(snapshot.CreationTimeStamp);
+        Assert.Contains(snapshot.Properties, property => property.Name == CustomResourceKnownProperties.Source && Equals(property.Value, "web"));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName && Equals(property.Value, 0));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.ActiveSessionsPropertyName && Equals(property.Value, "None"));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName && Equals(property.Value, 0));
+        Assert.Empty(snapshot.HealthReports);
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_CommandStartsTrackedSession()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionManager = new FakeBrowserLogsSessionManager();
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sessionManager);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+
+        Assert.True(result.Success);
+
+        var call = Assert.Single(sessionManager.Calls);
+        Assert.Same(browserLogsResource, call.Resource);
+        Assert.Equal(browserLogsResource.Name, call.ResourceName);
+        Assert.Equal(new Uri("http://localhost:8080", UriKind.Absolute), call.Url);
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_CommandFailsWhenEndpointIsMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionManager = new FakeBrowserLogsSessionManager();
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sessionManager);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs();
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Resource 'web' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.", result.Message);
+        Assert.Empty(sessionManager.Calls);
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_CommandBecomesEnabledWhenParentReady()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = KnownResourceStates.NotStarted,
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var initialEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent => resourceEvent.Snapshot.Commands.Any(command =>
+                command.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName &&
+                command.State == ResourceCommandState.Disabled)).DefaultTimeout();
+
+        Assert.Equal(ResourceCommandState.Disabled, initialEvent.Snapshot.Commands.Single(command => command.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).State);
+
+        await app.ResourceNotifications.PublishUpdateAsync(web.Resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+        await eventing.PublishAsync(new ResourceReadyEvent(web.Resource, app.Services)).DefaultTimeout();
+
+        var enabledEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent => resourceEvent.Snapshot.Commands.Any(command =>
+                command.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName &&
+                command.State == ResourceCommandState.Enabled)).DefaultTimeout();
+
+        Assert.Equal(ResourceCommandState.Enabled, enabledEvent.Snapshot.Commands.Single(command => command.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).State);
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_CommandTracksMultipleSessionsWithUniqueIds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
+
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
+            new BrowserLogsSessionManager(
+                sp.GetRequiredService<ResourceLoggerService>(),
+                sp.GetRequiredService<ResourceNotificationService>(),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
+                sessionFactory));
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+
+        var firstResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        Assert.True(firstResult.Success);
+
+        var firstSession = Assert.Single(sessionFactory.Sessions);
+        Assert.Equal("session-0001", firstSession.SessionId);
+
+        var firstRunningEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (PID 1001)") &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastSessionPropertyName, "session-0001") &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-1") &&
+                resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0001" && report.Status == HealthStatus.Healthy)).DefaultTimeout();
+
+        Assert.Single(firstRunningEvent.Snapshot.HealthReports);
+        Assert.Equal(0, firstSession.StopCallCount);
+
+        var secondResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        Assert.True(secondResult.Success);
+
+        Assert.Equal(2, sessionFactory.Sessions.Count);
+        var secondSession = sessionFactory.Sessions[1];
+        Assert.Equal("session-0002", secondSession.SessionId);
+
+        var secondRunningEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 2) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (PID 1001), session-0002 (PID 1002)") &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, 2) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastSessionPropertyName, "session-0002") &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, "/fake/browser-2") &&
+                resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0001" && report.Status == HealthStatus.Healthy) &&
+                resourceEvent.Snapshot.HealthReports.Any(report => report.Name == "session-0002" && report.Status == HealthStatus.Healthy)).DefaultTimeout();
+
+        Assert.Equal(2, secondRunningEvent.Snapshot.HealthReports.Length);
+        Assert.Equal(0, firstSession.StopCallCount);
+
+        await firstSession.CompleteAsync(exitCode: 0);
+
+        var firstCompletedEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0002 (PID 1002)") &&
+                resourceEvent.Snapshot.HealthReports.Length == 1 &&
+                resourceEvent.Snapshot.HealthReports[0].Name == "session-0002").DefaultTimeout();
+
+        Assert.Equal("session-0002", firstCompletedEvent.Snapshot.HealthReports[0].Name);
+
+        await secondSession.CompleteAsync(exitCode: 0);
+
+        var allCompletedEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.Finished &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "None") &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, 2) &&
+                resourceEvent.Snapshot.HealthReports.IsEmpty).DefaultTimeout();
+
+        Assert.Equal(KnownResourceStates.Finished, allCompletedEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task BrowserEventLogger_LogsSuccessfulNetworkRequests()
+    {
+        var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+        var resourceLogger = resourceLoggerService.GetLogger("web-browser-logs");
+        var eventLogger = new BrowserLogsSessionManager.BrowserEventLogger("session-0001", resourceLogger);
+        var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-logs", () =>
+        {
+            eventLogger.HandleEvent("Network.requestWillBeSent", ParseJsonElement("""
+                {
+                  "requestId": "request-1",
+                  "timestamp": 1.5,
+                  "type": "Fetch",
+                  "request": {
+                    "url": "https://example.test/api/todos",
+                    "method": "GET"
+                  }
+                }
+                """));
+            eventLogger.HandleEvent("Network.responseReceived", ParseJsonElement("""
+                {
+                  "requestId": "request-1",
+                  "timestamp": 1.6,
+                  "type": "Fetch",
+                  "response": {
+                    "url": "https://example.test/api/todos",
+                    "status": 200,
+                    "statusText": "OK",
+                    "fromDiskCache": false,
+                    "fromServiceWorker": false
+                  }
+                }
+                """));
+            eventLogger.HandleEvent("Network.loadingFinished", ParseJsonElement("""
+                {
+                  "requestId": "request-1",
+                  "timestamp": 1.75,
+                  "encodedDataLength": 1024
+                }
+                """));
+        });
+        var log = Assert.Single(logs);
+
+        Assert.Equal("2000-12-29T20:59:59.0000000Z [session-0001] [network.fetch] GET https://example.test/api/todos -> 200 OK (250 ms, 1024 B)", log.Content);
+    }
+
+    [Fact]
+    public async Task BrowserEventLogger_LogsFailedNetworkRequests()
+    {
+        var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();
+        var resourceLogger = resourceLoggerService.GetLogger("web-browser-logs");
+        var eventLogger = new BrowserLogsSessionManager.BrowserEventLogger("session-0002", resourceLogger);
+        var logs = await CaptureLogsAsync(resourceLoggerService, "web-browser-logs", () =>
+        {
+            eventLogger.HandleEvent("Network.requestWillBeSent", ParseJsonElement("""
+                {
+                  "requestId": "request-2",
+                  "timestamp": 5.0,
+                  "type": "Document",
+                  "request": {
+                    "url": "https://127.0.0.1:1/browser-network-failure",
+                    "method": "GET"
+                  }
+                }
+                """));
+            eventLogger.HandleEvent("Network.loadingFailed", ParseJsonElement("""
+                {
+                  "requestId": "request-2",
+                  "timestamp": 5.15,
+                  "errorText": "net::ERR_CONNECTION_REFUSED",
+                  "canceled": false
+                }
+                """));
+        });
+        var log = Assert.Single(logs);
+
+        Assert.Equal("2000-12-29T20:59:59.0000000Z [session-0002] [network.document] GET https://127.0.0.1:1/browser-network-failure failed: net::ERR_CONNECTION_REFUSED (150 ms)", log.Content);
+    }
+
+    private sealed class TestHttpResource(string name) : Resource(name), IResourceWithEndpoints;
+
+    private static bool HasProperty(CustomResourceSnapshot snapshot, string name, object expectedValue) =>
+        snapshot.Properties.Any(property => property.Name == name && Equals(property.Value, expectedValue));
+
+    private static JsonElement ParseJsonElement(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+
+    private static async Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService resourceLoggerService, string resourceName, Action writeLogs)
+    {
+        var subscribedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(resourceLoggerService.WatchAsync(resourceName), targetLogCount: 1);
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var subscriber in resourceLoggerService.WatchAnySubscribersAsync())
+            {
+                if (subscriber.Name == resourceName && subscriber.AnySubscribers)
+                {
+                    subscribedTcs.TrySetResult();
+                    return;
+                }
+            }
+        });
+
+        await subscribedTcs.Task.DefaultTimeout();
+        writeLogs();
+
+        return await watchTask.DefaultTimeout();
+    }
+
+    private sealed class FakeBrowserLogsSessionManager : IBrowserLogsSessionManager
+    {
+        public List<SessionStartCall> Calls { get; } = [];
+
+        public Task StartSessionAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
+        {
+            Calls.Add(new SessionStartCall(resource, resourceName, url));
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed record SessionStartCall(BrowserLogsResource Resource, string ResourceName, Uri Url);
+
+    private sealed class FakeBrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory
+    {
+        public List<FakeBrowserLogsRunningSession> Sessions { get; } = [];
+
+        public Task<IBrowserLogsRunningSession> StartSessionAsync(
+            BrowserLogsResource resource,
+            string resourceName,
+            Uri url,
+            string sessionId,
+            ILogger resourceLogger,
+            CancellationToken cancellationToken)
+        {
+            var session = new FakeBrowserLogsRunningSession(
+                sessionId,
+                $"/fake/browser-{Sessions.Count + 1}",
+                processId: 1001 + Sessions.Count,
+                startedAt: DateTime.UtcNow);
+
+            Sessions.Add(session);
+
+            return Task.FromResult<IBrowserLogsRunningSession>(session);
+        }
+    }
+
+    private sealed class FakeBrowserLogsRunningSession(
+        string sessionId,
+        string browserExecutable,
+        int processId,
+        DateTime startedAt) : IBrowserLogsRunningSession
+    {
+        private Func<int, Exception?, Task>? _onCompleted;
+
+        public string SessionId { get; } = sessionId;
+
+        public string BrowserExecutable { get; } = browserExecutable;
+
+        public int ProcessId { get; } = processId;
+
+        public DateTime StartedAt { get; } = startedAt;
+
+        public int StopCallCount { get; private set; }
+
+        public void StartCompletionObserver(Func<int, Exception?, Task> onCompleted)
+        {
+            _onCompleted = onCompleted;
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken)
+        {
+            StopCallCount++;
+            return Task.CompletedTask;
+        }
+
+        public Task CompleteAsync(int exitCode, Exception? error = null)
+        {
+            Assert.NotNull(_onCompleted);
+            return _onCompleted!(exitCode, error);
+        }
+    }
+}

@@ -1,4 +1,4 @@
-// ===== AddContainerOptions.java =====
+﻿// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1424,6 +1424,21 @@ import java.util.function.*;
 public class CSharpAppResource extends ResourceBuilderBase {
     CSharpAppResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    public CSharpAppResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public CSharpAppResource withBrowserLogs(String browser) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
     }
 
     /** Configures a resource to use a container registry */
@@ -5148,6 +5163,21 @@ public class ContainerResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    public ContainerResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ContainerResource withBrowserLogs(String browser) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public ContainerResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -7455,6 +7485,21 @@ public class DotnetToolResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    public DotnetToolResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public DotnetToolResource withBrowserLogs(String browser) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public DotnetToolResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -9539,6 +9584,21 @@ import java.util.function.*;
 public class ExecutableResource extends ResourceBuilderBase {
     ExecutableResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    public ExecutableResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ExecutableResource withBrowserLogs(String browser) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
     }
 
     /** Configures a resource to use a container registry */
@@ -15025,6 +15085,21 @@ public class ProjectResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    public ProjectResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ProjectResource withBrowserLogs(String browser) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public ProjectResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17432,6 +17507,21 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    public TestDatabaseResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestDatabaseResource withBrowserLogs(String browser) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public TestDatabaseResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -19324,6 +19414,21 @@ import java.util.function.*;
 public class TestRedisResource extends ResourceBuilderBase {
     TestRedisResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    public TestRedisResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestRedisResource withBrowserLogs(String browser) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
     }
 
     /** Configures a resource to use a container registry */
@@ -21371,6 +21476,21 @@ import java.util.function.*;
 public class TestVaultResource extends ResourceBuilderBase {
     TestVaultResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    public TestVaultResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestVaultResource withBrowserLogs(String browser) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
     }
 
     /** Configures a resource to use a container registry */
