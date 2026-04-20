@@ -230,6 +230,22 @@ namespace Projects%3B
     </ItemGroup>
   </Target>
 
+  <Target Name="SetTerminalHostDiscoveryAttributes" BeforeTargets="GetAssemblyAttributes" Condition=" '$(AspireTerminalHostDir)' != '' ">
+    <PropertyGroup>
+      <AspireTerminalHostDir>$([MSBuild]::EnsureTrailingSlash('$(AspireTerminalHostDir)'))</AspireTerminalHostDir>
+      <AspireTerminalHostPath Condition=" '$(AspireTerminalHostPath)' == '' ">$([MSBuild]::NormalizePath($(AspireTerminalHostDir), 'Aspire.TerminalHost'))</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition=" '$(OS)' == 'Windows_NT' and !$(AspireTerminalHostPath.EndsWith('.exe')) ">$(AspireTerminalHostPath).exe</AspireTerminalHostPath>
+      <AspireTerminalHostPath Condition="$([MSBuild]::IsOsPlatform('OSX')) and !$(AspireTerminalHostPath.EndsWith('.dll'))">$(AspireTerminalHostPath).dll</AspireTerminalHostPath>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadata">
+        <_Parameter1>aspireterminalhostpath</_Parameter1>
+        <_Parameter2>$(AspireTerminalHostPath)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
   <Target Name="EmbedAppHostIntermediateOutputPath" BeforeTargets="GetAssemblyAttributes" Condition=" '$(IsAspireHost)' == 'true' ">
     <ItemGroup>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">

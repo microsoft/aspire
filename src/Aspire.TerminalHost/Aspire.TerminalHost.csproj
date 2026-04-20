@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RollForward>Major</RollForward>
+    <!-- Disable strong name signing because Hex1b package is not signed -->
+    <NoWarn>$(NoWarn);CS8002;CA2007</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hex1b" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\Terminal\*.cs" Link="Terminal\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

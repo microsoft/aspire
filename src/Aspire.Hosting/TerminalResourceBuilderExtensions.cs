@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting;
 
@@ -123,7 +126,18 @@ public static class TerminalResourceBuilderExtensions
         var terminalHostName = $"{builder.Resource.Name}-terminal-host";
         var terminalHost = new TerminalHostResource(terminalHostName, builder.Resource);
 
+        // Generate a UDS path for this terminal session
+        var socketDir = Path.Combine(Path.GetTempPath(), "aspire-terminals");
+        Directory.CreateDirectory(socketDir);
+        var socketPath = Path.Combine(socketDir, $"{builder.Resource.Name}-{Environment.ProcessId}.sock");
+
+        // Store the socket path on the terminal annotation
+        var terminalAnnotation = builder.Resource.Annotations.OfType<TerminalAnnotation>().First();
+        terminalAnnotation.SocketPath = socketPath;
+
         var terminalHostBuilder = builder.ApplicationBuilder.AddResource(terminalHost);
+
+        var options = terminalAnnotation.Options;
 
         terminalHostBuilder
             .WithInitialState(new CustomResourceSnapshot
@@ -134,6 +148,104 @@ public static class TerminalResourceBuilderExtensions
                 IsHidden = true,
             })
             .ExcludeFromManifest();
+
+        // Set up the terminal host lifecycle: when the resource initializes,
+        // resolve the terminal host binary path and launch it via DCP.
+        terminalHostBuilder.OnInitializeResource(async (resource, @event, token) =>
+        {
+            var dcpOptions = @event.Services.GetService<IOptions<Dcp.DcpOptions>>();
+            var notification = @event.Notifications;
+            var log = @event.Logger;
+
+            var terminalHostPath = dcpOptions?.Value.TerminalHostPath;
+            if (string.IsNullOrEmpty(terminalHostPath))
+            {
+                log.LogWarning("Terminal host binary path not configured. Terminal will not be available for resource '{ResourceName}'.", resource.Parent.Name);
+                await notification.PublishUpdateAsync(resource, s => s with
+                {
+                    State = KnownResourceStates.FailedToStart
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            if (!File.Exists(terminalHostPath))
+            {
+                log.LogWarning("Terminal host binary not found at '{Path}'. Build Aspire.TerminalHost first.", terminalHostPath);
+                await notification.PublishUpdateAsync(resource, s => s with
+                {
+                    State = KnownResourceStates.FailedToStart
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            log.LogInformation("Starting terminal host for '{ResourceName}' at {SocketPath}", resource.Parent.Name, socketPath);
+
+            // Launch the terminal host process
+            var psi = new System.Diagnostics.ProcessStartInfo(terminalHostPath)
+            {
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                Environment =
+                {
+                    ["TERMINAL_SOCKET_PATH"] = socketPath,
+                    ["TERMINAL_COLUMNS"] = options.Columns.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["TERMINAL_ROWS"] = options.Rows.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                }
+            };
+
+            if (options.Shell is not null)
+            {
+                psi.Environment["TERMINAL_SHELL"] = options.Shell;
+            }
+
+            var process = System.Diagnostics.Process.Start(psi);
+            if (process is null)
+            {
+                log.LogError("Failed to start terminal host process");
+                await notification.PublishUpdateAsync(resource, s => s with
+                {
+                    State = KnownResourceStates.FailedToStart
+                }).ConfigureAwait(false);
+                return;
+            }
+
+            // Forward stderr to resource logs
+            _ = Task.Run(async () =>
+            {
+                while (!process.HasExited && !token.IsCancellationRequested)
+                {
+                    var line = await process.StandardError.ReadLineAsync(token).ConfigureAwait(false);
+                    if (line is not null)
+                    {
+                        log.LogInformation("{Line}", line);
+                    }
+                }
+            }, token);
+
+            await notification.PublishUpdateAsync(resource, s => s with
+            {
+                StartTimeStamp = DateTime.UtcNow,
+                State = KnownResourceStates.Running
+            }).ConfigureAwait(false);
+
+            try
+            {
+                await process.WaitForExitAsync(token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+
+            await notification.PublishUpdateAsync(resource, s => s with
+            {
+                State = KnownResourceStates.Exited,
+                ExitCode = process.ExitCode
+            }).ConfigureAwait(false);
+        });
 
         // The parent resource waits for the terminal host to be started so that
         // the PTY forwarding infrastructure is in place before the process begins.
