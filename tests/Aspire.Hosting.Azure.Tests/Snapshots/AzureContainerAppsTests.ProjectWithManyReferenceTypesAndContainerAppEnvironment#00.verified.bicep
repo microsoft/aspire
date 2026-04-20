@@ -5,10 +5,6 @@ param cae_outputs_azure_container_apps_environment_default_domain string
 
 param cae_outputs_azure_container_apps_environment_id string
 
-param cae_outputs_azure_container_registry_endpoint string
-
-param cae_outputs_azure_container_registry_managed_identity_id string
-
 param api_containerimage string
 
 param api_identity_outputs_id string
@@ -37,6 +33,10 @@ param value1_value string
 param cs_connectionstring string
 
 param api_identity_outputs_clientid string
+
+param cae_outputs_azure_container_registry_endpoint string
+
+param cae_outputs_azure_container_registry_managed_identity_id string
 
 resource pg_kv 'Microsoft.KeyVault/vaults@2024-11-01' existing = {
   name: pg_kv_outputs_name

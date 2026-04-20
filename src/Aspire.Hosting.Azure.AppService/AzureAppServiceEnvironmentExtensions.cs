@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is for evaluation purposes only.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppService;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.ApplicationInsights;
@@ -14,6 +17,7 @@ using Azure.Provisioning.Expressions;
 using Azure.Provisioning.OperationalInsights;
 using Azure.Provisioning.Roles;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Hosting;
 
@@ -24,14 +28,39 @@ public static partial class AzureAppServiceEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddAzureAppServiceInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        // ensure AzureProvisioning is added first so the AzureResourcePreparer lifecycle hook runs before AzureAppServiceInfrastructure
+        // ensure AzureProvisioning is added first so the AzureResourcePreparer pipeline step
+        // runs before the prepare-azure-app-service step (which depends on it).
         builder.AddAzureProvisioning();
 
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
 
-        builder.Services.TryAddEventingSubscriber<AzureAppServiceInfrastructure>();
+        builder.Services.TryAddSingleton<AzureAppServiceInfrastructure>();
+
+        // Register the pipeline step idempotently. AddAzureAppServiceInfrastructureCore can be
+        // called more than once; the marker singleton ensures the step is added only once.
+        if (builder.Services.All(d => d.ServiceType != typeof(AppServicePipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<AppServicePipelineStepMarker>();
+
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+            builder.Pipeline.AddStep(
+                name: AppServicePipelineStepMarker.StepName,
+                action: async ctx =>
+                {
+                    var infra = ctx.Services.GetRequiredService<AzureAppServiceInfrastructure>();
+                    await infra.PrepareDeploymentTargetsAsync(ctx.Model, ctx.Services, ctx.CancellationToken).ConfigureAwait(false);
+                },
+                dependsOn: AzureEnvironmentResource.PrepareResourcesStepName,
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+#pragma warning restore ASPIREPIPELINES001
+        }
 
         return builder;
+    }
+
+    private sealed class AppServicePipelineStepMarker
+    {
+        public const string StepName = "prepare-azure-app-service";
     }
 
     /// <summary>

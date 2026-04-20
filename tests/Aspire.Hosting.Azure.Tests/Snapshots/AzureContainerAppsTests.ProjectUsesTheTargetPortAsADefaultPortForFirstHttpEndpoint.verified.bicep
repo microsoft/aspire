@@ -5,13 +5,13 @@ param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_id string
 
-param env_outputs_azure_container_registry_endpoint string
-
-param env_outputs_azure_container_registry_managed_identity_id string
-
 param api_containerimage string
 
 param api_containerport string
+
+param env_outputs_azure_container_registry_endpoint string
+
+param env_outputs_azure_container_registry_managed_identity_id string
 
 resource api 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'api'

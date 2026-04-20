@@ -32,6 +32,12 @@ public sealed class AzureEnvironmentResource : Resource
     internal const string CreateProvisioningContextStepName = "create-provisioning-context";
 
     /// <summary>
+    /// The name of the step that prepares Azure resources (e.g. materializes role-assignment
+    /// resources) so that downstream steps can reference them.
+    /// </summary>
+    public const string PrepareResourcesStepName = "azure-prepare-resources";
+
+    /// <summary>
     /// The name of the step that provisions Azure infrastructure resources.
     /// </summary>
     public const string ProvisionInfrastructureStepName = "provision-azure-bicep-resources";
@@ -72,8 +78,8 @@ public sealed class AzureEnvironmentResource : Resource
         {
             var prepareResourcesStep = new PipelineStep
             {
-                Name = $"azure-prepare-resources",
-                Description = $"Prepares the Azure resources.",
+                Name = PrepareResourcesStepName,
+                Description = "Prepares the Azure resources.",
                 Action = async context =>
                 {
                     var preparer = context.Services.GetRequiredService<AzureResourcePreparer>();
@@ -84,7 +90,7 @@ public sealed class AzureEnvironmentResource : Resource
 
             var runModeProvisionStep = new PipelineStep
             {
-                Name = $"run-mode-azure-provision",
+                Name = "run-mode-azure-provision",
                 Description = $"Provisions the Azure resources for {Name}.",
                 Action = async context =>
                 {

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is for evaluation purposes only.
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -9,6 +10,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.ContainerRegistry;
@@ -17,6 +19,7 @@ using Azure.Provisioning.OperationalInsights;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using FileShare = Azure.Provisioning.Storage.FileShare;
 
 namespace Aspire.Hosting;
@@ -38,16 +41,42 @@ public static class AzureContainerAppExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        // ensure AzureProvisioning is added first so the AzureResourcePreparer lifecycle hook runs before AzureContainerAppsInfrastructure
+        // ensure AzureProvisioning is added first so the AzureResourcePreparer pipeline step
+        // runs before the prepare-azure-container-apps step (which depends on it).
         builder.AddAzureProvisioning();
 
         // AzureContainerAppsInfrastructure will handle adding role assignments,
         // so Azure resources don't need to add the default role assignments themselves
         builder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
 
-        builder.Services.TryAddEventingSubscriber<AzureContainerAppsInfrastructure>();
+        builder.Services.TryAddSingleton<AzureContainerAppsInfrastructure>();
+
+        // Register the pipeline step idempotently. AddAzureContainerAppsInfrastructureCore can be
+        // called more than once (e.g. when AddAzureContainerAppEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        if (builder.Services.All(d => d.ServiceType != typeof(ContainerAppsPipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<ContainerAppsPipelineStepMarker>();
+
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+            builder.Pipeline.AddStep(
+                name: ContainerAppsPipelineStepMarker.StepName,
+                action: async ctx =>
+                {
+                    var infra = ctx.Services.GetRequiredService<AzureContainerAppsInfrastructure>();
+                    await infra.PrepareDeploymentTargetsAsync(ctx.Model, ctx.Services, ctx.CancellationToken).ConfigureAwait(false);
+                },
+                dependsOn: AzureEnvironmentResource.PrepareResourcesStepName,
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+#pragma warning restore ASPIREPIPELINES001
+        }
 
         return builder;
+    }
+
+    private sealed class ContainerAppsPipelineStepMarker
+    {
+        public const string StepName = "prepare-azure-container-apps";
     }
 
     /// <summary>
