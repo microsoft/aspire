@@ -217,6 +217,9 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(capturedEnv);
         Assert.True(capturedEnv.ContainsKey("DASHBOARD__FRONTEND__BROWSERTOKEN"));
         Assert.False(string.IsNullOrEmpty(capturedEnv["DASHBOARD__FRONTEND__BROWSERTOKEN"]));
+        Assert.True(capturedEnv.ContainsKey("DASHBOARD__API__PRIMARYAPIKEY"));
+        Assert.False(string.IsNullOrEmpty(capturedEnv["DASHBOARD__API__PRIMARYAPIKEY"]));
+        Assert.Equal("ApiKey", capturedEnv["DASHBOARD__API__AUTHMODE"]);
     }
 
     [Fact]

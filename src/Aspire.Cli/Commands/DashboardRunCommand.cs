@@ -107,19 +107,25 @@ internal sealed class DashboardRunCommand : BaseCommand
         AddOptionArgs(parseResult, dashboardArgs, unmatchedTokens, ExecutionContext);
 
         // Set a browser token for frontend auth unless anonymous access is enabled.
-        // The token is passed via environment variable (not command-line arg) to
-        // avoid exposing it in process listings (e.g. ps, Task Manager).
+        // Tokens and keys are passed via environment variables (not command-line args)
+        // to avoid exposing them in process listings (e.g. ps, Task Manager).
         string? browserToken = null;
-        Dictionary<string, string>? environmentVariables = null;
+        var environmentVariables = new Dictionary<string, string>();
         if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, ExecutionContext, "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS"))
         {
             if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, "DASHBOARD__FRONTEND__BROWSERTOKEN"))
             {
                 browserToken = TokenGenerator.GenerateToken();
-                environmentVariables = new Dictionary<string, string>
-                {
-                    ["DASHBOARD__FRONTEND__BROWSERTOKEN"] = browserToken
-                };
+                environmentVariables["DASHBOARD__FRONTEND__BROWSERTOKEN"] = browserToken;
+            }
+
+            // Enable API key authentication for the telemetry API so that only
+            // callers who possess the key (or the browser token) can query it.
+            if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, "DASHBOARD__API__PRIMARYAPIKEY"))
+            {
+                var apiKey = TokenGenerator.GenerateToken();
+                environmentVariables["DASHBOARD__API__PRIMARYAPIKEY"] = apiKey;
+                environmentVariables["DASHBOARD__API__AUTHMODE"] = "ApiKey";
             }
         }
 
