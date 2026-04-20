@@ -23,6 +23,7 @@ using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Authentication;
@@ -508,8 +509,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
+        _app.UseWebSockets();
 
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
+        // Terminal WebSocket proxy
+        _app.MapTerminalWebSocket();
 
         // OTLP HTTP services.
         _app.MapHttpOtlpApi(dashboardOptions.Otlp);

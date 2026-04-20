@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
@@ -39,6 +40,27 @@ internal sealed class DashboardServiceData : IDisposable
         {
             static GenericResourceSnapshot CreateResourceSnapshot(IResource resource, string resourceId, DateTime creationTimestamp, CustomResourceSnapshot snapshot)
             {
+                // If the resource has a TerminalAnnotation, add a terminal property to the snapshot
+                // so the Dashboard can detect terminal-enabled resources.
+                var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+                if (terminalAnnotation is not null)
+                {
+                    snapshot = snapshot with
+                    {
+                        Properties = snapshot.Properties.Add(
+                            new ResourcePropertySnapshot(KnownProperties.Terminal.Enabled, "true") { IsSensitive = false })
+                    };
+
+                    if (terminalAnnotation.SocketPath is not null)
+                    {
+                        snapshot = snapshot with
+                        {
+                            Properties = snapshot.Properties.Add(
+                                new ResourcePropertySnapshot(KnownProperties.Terminal.SocketPath, terminalAnnotation.SocketPath) { IsSensitive = false })
+                        };
+                    }
+                }
+
                 return new GenericResourceSnapshot(snapshot)
                 {
                     Uid = resourceId,

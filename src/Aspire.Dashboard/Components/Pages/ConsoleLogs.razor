@@ -104,13 +104,20 @@
         </MobilePageTitleToolbarSection>
 
         <MainSection>
-            <LogViewer
-                @ref="_logViewerRef"
-                LogEntries="@_logEntries"
-                ShowTimestamp="@_showTimestamp"
-                IsTimestampUtc="@_isTimestampUtc"
-                NoWrapLogs="@_noWrapLogs"
-                ShowResourcePrefix="@_isSubscribedToAll"/>
+            @if (_selectedResourceHasTerminal && _terminalSocketPath is not null)
+            {
+                <TerminalView @ref="_terminalViewRef" SocketPath="@_terminalSocketPath" />
+            }
+            else
+            {
+                <LogViewer
+                    @ref="_logViewerRef"
+                    LogEntries="@_logEntries"
+                    ShowTimestamp="@_showTimestamp"
+                    IsTimestampUtc="@_isTimestampUtc"
+                    NoWrapLogs="@_noWrapLogs"
+                    ShowResourcePrefix="@_isSubscribedToAll"/>
+            }
         </MainSection>
     </AspirePageContentLayout>
 </div>

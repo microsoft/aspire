@@ -56,6 +56,12 @@ internal static class KnownProperties
         public const string LaunchProfile = "project.launchProfile";
     }
 
+    public static class Terminal
+    {
+        public const string Enabled = "terminal.enabled";
+        public const string SocketPath = "terminal.socketPath";
+    }
+
     public static class Parameter
     {
         public const string Value = "Value";
