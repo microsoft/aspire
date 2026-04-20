@@ -381,7 +381,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
     private WaitTargetResolutionResult ResolveWaitTarget(ResourceNotificationService notificationService, string requestedResourceName)
     {
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
         if (notificationService.TryGetCurrentState(requestedResourceName, out var resourceEvent))
         {
             return WaitTargetResolutionResult.Success(new WaitResourceTarget(
@@ -392,11 +392,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         // During startup the resource may not have published its first snapshot yet, so fall back to
         // the app model to resolve the requested logical name or resolved resource id.
-        if (appModel is null)
-        {
-            return WaitTargetResolutionResult.Success(new WaitResourceTarget(requestedResourceName, requestedResourceName, requestedResourceName));
-        }
-
         var matchingResource = appModel.Resources.SingleOrDefault(resource => string.Equals(resource.Name, requestedResourceName, StringComparisons.ResourceName));
         if (matchingResource is not null)
         {
@@ -426,13 +421,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
-    private static string ResolveDisplayName(DistributedApplicationModel? appModel, string requestedResourceName, string resolvedResourceName)
+    private static string ResolveDisplayName(DistributedApplicationModel appModel, string requestedResourceName, string resolvedResourceName)
     {
-        if (appModel is null)
-        {
-            return requestedResourceName;
-        }
-
         var matchingResource = appModel.Resources
             .Select(resource => new { Resource = resource, ResolvedResourceNames = resource.GetResolvedResourceNames() })
             .SingleOrDefault(match => match.ResolvedResourceNames.Any(resourceName => string.Equals(resourceName, resolvedResourceName, StringComparisons.ResourceName)));
