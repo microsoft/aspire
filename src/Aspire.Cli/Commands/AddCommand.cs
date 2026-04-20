@@ -28,7 +28,6 @@ internal sealed class AddCommand : BaseCommand
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IAppHostProjectFactory _projectFactory;
-    private readonly FallbackProjectParser _fallbackProjectParser;
 
     private static readonly Argument<string> s_integrationArgument = new("integration")
     {
@@ -45,7 +44,7 @@ internal sealed class AddCommand : BaseCommand
         Description = AddCommandStrings.SourceArgumentDescription
     };
 
-    public AddCommand(IPackagingService packagingService, IInteractionService interactionService, IProjectLocator projectLocator, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, FallbackProjectParser fallbackProjectParser)
+    public AddCommand(IPackagingService packagingService, IInteractionService interactionService, IProjectLocator projectLocator, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory)
         : base("add", AddCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _packagingService = packagingService;
@@ -54,7 +53,6 @@ internal sealed class AddCommand : BaseCommand
         _sdkInstaller = sdkInstaller;
         _hostEnvironment = hostEnvironment;
         _projectFactory = projectFactory;
-        _fallbackProjectParser = fallbackProjectParser;
 
         Arguments.Add(s_integrationArgument);
         Options.Add(s_appHostOption);
@@ -209,20 +207,6 @@ internal sealed class AddCommand : BaseCommand
                 _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
             };
 
-            // Add the package using the appropriate project handler
-            if (string.IsNullOrEmpty(source) && VersionHelper.IsPrChannel(selectedNuGetPackage.Channel.Name))
-            {
-                var nugetConfigPrompter = new NuGetConfigPrompter(InteractionService);
-                var scopedPackageIds = GetScopedPrHivePackageIds(
-                    effectiveAppHostProjectFile,
-                    selectedNuGetPackage.Package.Id,
-                    selectedNuGetPackage.Package.Version);
-                await nugetConfigPrompter.CreateOrUpdateWithoutPromptAsync(
-                    effectiveAppHostProjectFile.Directory!,
-                    selectedNuGetPackage.Channel.CreateScopedChannelForPackages(scopedPackageIds),
-                    cancellationToken);
-            }
-
             context = new AddPackageContext
             {
                 AppHostFile = effectiveAppHostProjectFile,
@@ -369,43 +353,6 @@ internal sealed class AddCommand : BaseCommand
         var friendlyName = packageId.Replace('.', '-').ToLowerInvariant();
 
         return (friendlyName, packageWithChannel.Package, packageWithChannel.Channel);
-    }
-
-    private IReadOnlyCollection<string> GetScopedPrHivePackageIds(FileInfo appHostProjectFile, string selectedPackageId, string selectedPackageVersion)
-    {
-        var packageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            selectedPackageId
-        };
-
-        if (!appHostProjectFile.Exists)
-        {
-            return packageIds;
-        }
-
-        try
-        {
-            using var projectDocument = _fallbackProjectParser.ParseProject(appHostProjectFile);
-            if (!projectDocument.RootElement.TryGetProperty("Properties", out var properties) ||
-                !properties.TryGetProperty("AspireHostingSDKVersion", out var sdkVersionElement))
-            {
-                return packageIds;
-            }
-
-            var sdkVersion = sdkVersionElement.GetString();
-            if (!string.Equals(sdkVersion, selectedPackageVersion, StringComparison.OrdinalIgnoreCase))
-            {
-                return packageIds;
-            }
-
-            packageIds.Add("Aspire.AppHost.Sdk");
-        }
-        catch (ProjectUpdaterException)
-        {
-            // Parsing the project file is best-effort; if it fails, just return the selected package.
-        }
-
-        return packageIds;
     }
 }
 
