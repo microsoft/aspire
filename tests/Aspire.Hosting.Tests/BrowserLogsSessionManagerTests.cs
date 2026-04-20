@@ -34,6 +34,59 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public void TryResolveBrowserUserDataDirectory_ReturnsExpectedPathForKnownBrowser()
+    {
+        var expectedPath = OperatingSystem.IsWindows()
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "User Data")
+            : OperatingSystem.IsMacOS()
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "Google", "Chrome")
+                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "google-chrome");
+
+        var browserExecutable = OperatingSystem.IsWindows()
+            ? "chrome.exe"
+            : OperatingSystem.IsMacOS()
+                ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                : "google-chrome";
+
+        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chrome", browserExecutable);
+
+        Assert.Equal(expectedPath, userDataDirectory);
+    }
+
+    [Fact]
+    public void TryResolveBrowserUserDataDirectory_ReturnsNullForUnknownBrowser()
+    {
+        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("custom-browser", "/opt/custom-browser");
+
+        Assert.Null(userDataDirectory);
+    }
+
+    [Fact]
+    public void TrySelectTrackedTargetId_PrefersUnattachedBlankPage()
+    {
+        var targetId = BrowserLogsRunningSession.TrySelectTrackedTargetId(
+        [
+            new BrowserLogsTargetInfo { TargetId = "restored-page", Type = "page", Url = "https://example.com", Attached = false },
+            new BrowserLogsTargetInfo { TargetId = "service-worker", Type = "service_worker", Url = "https://example.com/sw.js", Attached = false },
+            new BrowserLogsTargetInfo { TargetId = "launcher-page", Type = "page", Url = "about:blank", Attached = false }
+        ]);
+
+        Assert.Equal("launcher-page", targetId);
+    }
+
+    [Fact]
+    public void TrySelectTrackedTargetId_FallsBackToFirstUnattachedPage()
+    {
+        var targetId = BrowserLogsRunningSession.TrySelectTrackedTargetId(
+        [
+            new BrowserLogsTargetInfo { TargetId = "attached-page", Type = "page", Url = "about:blank", Attached = true },
+            new BrowserLogsTargetInfo { TargetId = "fallback-page", Type = "page", Url = "chrome://newtab/", Attached = false }
+        ]);
+
+        Assert.Equal("fallback-page", targetId);
+    }
+
+    [Fact]
     public async Task BrowserConnectionDiagnosticsLogger_LogsConnectionProblems()
     {
         var resourceLoggerService = ConsoleLoggingTestHelpers.GetResourceLoggerService();

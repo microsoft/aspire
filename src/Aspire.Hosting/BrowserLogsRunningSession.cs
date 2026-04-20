@@ -16,9 +16,13 @@ internal interface IBrowserLogsRunningSession
 
     string BrowserExecutable { get; }
 
+    Uri BrowserDebugEndpoint { get; }
+
     int ProcessId { get; }
 
     DateTime StartedAt { get; }
+
+    string TargetId { get; }
 
     Task StartCompletionObserver(Func<int, Exception?, Task> onCompleted);
 
@@ -28,7 +32,7 @@ internal interface IBrowserLogsRunningSession
 internal interface IBrowserLogsRunningSessionFactory
 {
     Task<IBrowserLogsRunningSession> StartSessionAsync(
-        BrowserLogsResource resource,
+        BrowserLogsSettings settings,
         string resourceName,
         Uri url,
         string sessionId,
@@ -50,7 +54,7 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
     }
 
     public async Task<IBrowserLogsRunningSession> StartSessionAsync(
-        BrowserLogsResource resource,
+        BrowserLogsSettings settings,
         string resourceName,
         Uri url,
         string sessionId,
@@ -58,7 +62,7 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
         CancellationToken cancellationToken)
     {
         return await BrowserLogsRunningSession.StartAsync(
-            resource,
+            settings,
             resourceName,
             sessionId,
             url,
@@ -81,15 +85,15 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private readonly BrowserEventLogger _eventLogger;
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
+    private readonly IFileSystemService _fileSystemService;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
-    private readonly BrowserLogsResource _resource;
     private readonly ILogger _resourceLogger;
     private readonly string _resourceName;
+    private readonly BrowserLogsSettings _settings;
     private readonly string _sessionId;
     private readonly CancellationTokenSource _stopCts = new();
     private readonly TimeProvider _timeProvider;
     private readonly Uri _url;
-    private readonly TempDirectory _userDataDirectory;
 
     private string? _browserExecutable;
     private Uri? _browserEndpoint;
@@ -101,41 +105,46 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private int? _processId;
     private string? _targetId;
     private string? _targetSessionId;
+    private BrowserLogsUserDataDirectory? _userDataDirectory;
 
     private BrowserLogsRunningSession(
-        BrowserLogsResource resource,
+        BrowserLogsSettings settings,
         string resourceName,
         string sessionId,
         Uri url,
-        TempDirectory userDataDirectory,
+        IFileSystemService fileSystemService,
         ILogger resourceLogger,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider)
     {
         _eventLogger = new BrowserEventLogger(sessionId, resourceLogger);
         _connectionDiagnostics = new BrowserConnectionDiagnosticsLogger(sessionId, resourceLogger);
+        _fileSystemService = fileSystemService;
         _logger = logger;
-        _resource = resource;
         _resourceLogger = resourceLogger;
         _resourceName = resourceName;
+        _settings = settings;
         _sessionId = sessionId;
         _timeProvider = timeProvider;
         _url = url;
-        _userDataDirectory = userDataDirectory;
     }
 
     public string SessionId => _sessionId;
 
     public string BrowserExecutable => _browserExecutable ?? throw new InvalidOperationException("Browser executable is not available before the session starts.");
 
+    public Uri BrowserDebugEndpoint => _browserEndpoint ?? throw new InvalidOperationException("Browser debugging endpoint is not available before the session starts.");
+
     public int ProcessId => _processId ?? throw new InvalidOperationException("Browser process has not started.");
 
     public DateTime StartedAt { get; private set; }
 
+    public string TargetId => _targetId ?? throw new InvalidOperationException("Browser target id is not available before the session starts.");
+
     private Task<BrowserSessionResult> Completion => _completion ?? throw new InvalidOperationException("Session has not been started.");
 
     public static async Task<BrowserLogsRunningSession> StartAsync(
-        BrowserLogsResource resource,
+        BrowserLogsSettings settings,
         string resourceName,
         string sessionId,
         Uri url,
@@ -145,8 +154,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var userDataDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-browser-logs");
-        var session = new BrowserLogsRunningSession(resource, resourceName, sessionId, url, userDataDirectory, resourceLogger, logger, timeProvider);
+        var session = new BrowserLogsRunningSession(settings, resourceName, sessionId, url, fileSystemService, resourceLogger, logger, timeProvider);
 
         try
         {
@@ -208,15 +216,20 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        _browserExecutable = ResolveBrowserExecutable(_resource.Browser);
+        _browserExecutable = ResolveBrowserExecutable(_settings.Browser);
         if (_browserExecutable is null)
         {
-            throw new InvalidOperationException($"Unable to locate browser '{_resource.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
+            throw new InvalidOperationException($"Unable to locate browser '{_settings.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
         }
 
+        _userDataDirectory = CreateUserDataDirectory(_settings.Browser, _browserExecutable, _settings.Profile);
         var devToolsActivePortFilePath = GetDevToolsActivePortFilePath();
         await StartBrowserProcessAsync(cancellationToken).ConfigureAwait(false);
         _resourceLogger.LogInformation("[{SessionId}] Started tracked browser process '{BrowserExecutable}'.", _sessionId, _browserExecutable);
+        if (_settings.Profile is not null)
+        {
+            _resourceLogger.LogInformation("[{SessionId}] Using tracked browser profile '{Profile}'.", _sessionId, _settings.Profile);
+        }
         _resourceLogger.LogInformation("[{SessionId}] Waiting for tracked browser debug endpoint metadata in '{DevToolsActivePortFilePath}'.", _sessionId, devToolsActivePortFilePath);
 
         try
@@ -272,16 +285,46 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private string BuildBrowserArguments()
     {
-        return BuildCommandLine(
+        var userDataDirectory = _userDataDirectory ?? throw new InvalidOperationException("Browser user data directory was not initialized.");
+        List<string> arguments =
         [
-            $"--user-data-dir={_userDataDirectory.Path}",
+            $"--user-data-dir={userDataDirectory.Path}",
             "--remote-debugging-port=0",
             "--no-first-run",
             "--no-default-browser-check",
             "--new-window",
-            "--allow-insecure-localhost",
-            "about:blank"
-        ]);
+            "--allow-insecure-localhost"
+        ];
+
+        if (_settings.Profile is not null)
+        {
+            arguments.Add($"--profile-directory={_settings.Profile}");
+        }
+
+        arguments.Add("about:blank");
+
+        return BuildCommandLine(arguments);
+    }
+
+    private async Task<string> GetOrCreateTrackedTargetAsync(CancellationToken cancellationToken)
+    {
+        var targets = await ExecuteConnectionStageAsync(
+            "Discovering the tracked browser target",
+            () => _connection!.GetTargetsAsync(cancellationToken)).ConfigureAwait(false);
+
+        if (TrySelectTrackedTargetId(targets.TargetInfos) is { } targetId)
+        {
+            _resourceLogger.LogInformation("[{SessionId}] Reusing tracked browser target '{TargetId}'.", _sessionId, targetId);
+            return targetId;
+        }
+
+        var createTargetResult = await ExecuteConnectionStageAsync(
+            "Creating the tracked browser target",
+            () => _connection!.CreateTargetAsync(cancellationToken)).ConfigureAwait(false);
+        targetId = createTargetResult.TargetId
+            ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
+        _resourceLogger.LogInformation("[{SessionId}] Created tracked browser target '{TargetId}'.", _sessionId, targetId);
+        return targetId;
     }
 
     private async Task ConnectAsync(bool createTarget, CancellationToken cancellationToken)
@@ -297,12 +340,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
         if (createTarget)
         {
-            var createTargetResult = await ExecuteConnectionStageAsync(
-                "Creating the tracked browser target",
-                () => _connection.CreateTargetAsync(cancellationToken)).ConfigureAwait(false);
-            _targetId = createTargetResult.TargetId
-                ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
-            _resourceLogger.LogInformation("[{SessionId}] Created tracked browser target '{TargetId}'.", _sessionId, _targetId);
+            _targetId = await GetOrCreateTrackedTargetAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (_targetId is null)
@@ -510,7 +548,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         await DisposeConnectionAsync().ConfigureAwait(false);
         await DisposeBrowserProcessAsync().ConfigureAwait(false);
         _stopCts.Dispose();
-        _userDataDirectory.Dispose();
+        _userDataDirectory?.Dispose();
     }
 
     private async Task DisposeBrowserProcessAsync()
@@ -572,7 +610,32 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private string GetDevToolsActivePortFilePath()
     {
-        return Path.Combine(_userDataDirectory.Path, "DevToolsActivePort");
+        var userDataDirectory = _userDataDirectory ?? throw new InvalidOperationException("Browser user data directory was not initialized.");
+        return Path.Combine(userDataDirectory.Path, "DevToolsActivePort");
+    }
+
+    private BrowserLogsUserDataDirectory CreateUserDataDirectory(string browser, string browserExecutable, string? profile)
+    {
+        if (profile is null)
+        {
+            return BrowserLogsUserDataDirectory.CreateTemporary(_fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-browser-logs"));
+        }
+
+        var userDataDirectory = TryResolveBrowserUserDataDirectory(browser, browserExecutable)
+            ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{browser}'. Specify a known browser such as 'msedge' or 'chrome' when using a browser profile.");
+
+        if (!Directory.Exists(userDataDirectory))
+        {
+            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{browser}'.");
+        }
+
+        var profileDirectory = Path.Combine(userDataDirectory, profile);
+        if (!Directory.Exists(profileDirectory))
+        {
+            throw new InvalidOperationException($"Browser profile '{profile}' was not found under '{userDataDirectory}'.");
+        }
+
+        return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory);
     }
 
     private static string? ResolveBrowserExecutable(string browser)
@@ -598,6 +661,45 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
 
         return PathLookupHelper.FindFullPathFromPath(browser);
+    }
+
+    internal static string? TryResolveBrowserUserDataDirectory(string browser, string browserExecutable)
+    {
+        var browserKind = GetBrowserKind(browser, browserExecutable);
+        if (browserKind == BrowserKind.Unknown)
+        {
+            return null;
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            return browserKind switch
+            {
+                BrowserKind.Edge => Path.Combine(home, "Library", "Application Support", "Microsoft Edge"),
+                BrowserKind.Chrome => Path.Combine(home, "Library", "Application Support", "Google", "Chrome"),
+                _ => null
+            };
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            return browserKind switch
+            {
+                BrowserKind.Edge => Path.Combine(localAppData, "Microsoft", "Edge", "User Data"),
+                BrowserKind.Chrome => Path.Combine(localAppData, "Google", "Chrome", "User Data"),
+                _ => null
+            };
+        }
+
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return browserKind switch
+        {
+            BrowserKind.Edge => Path.Combine(homeDirectory, ".config", "microsoft-edge"),
+            BrowserKind.Chrome => Path.Combine(homeDirectory, ".config", "google-chrome"),
+            _ => null
+        };
     }
 
     private static IEnumerable<string> GetBrowserCandidates(string browser)
@@ -650,6 +752,63 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             "chrome" or "google-chrome" => ["google-chrome", "google-chrome-stable", "chrome", "chromium-browser", "chromium"],
             _ => [browser]
         };
+    }
+
+    private static BrowserKind GetBrowserKind(string browser, string browserExecutable)
+    {
+        if (MatchesBrowser(browser, browserExecutable, "msedge", "edge", "microsoft-edge"))
+        {
+            return BrowserKind.Edge;
+        }
+
+        if (MatchesBrowser(browser, browserExecutable, "chrome", "google-chrome", "chromium", "chromium-browser"))
+        {
+            return BrowserKind.Chrome;
+        }
+
+        return BrowserKind.Unknown;
+    }
+
+    internal static string? TrySelectTrackedTargetId(IReadOnlyList<BrowserLogsTargetInfo>? targetInfos)
+    {
+        if (targetInfos is null)
+        {
+            return null;
+        }
+
+        var preferredTarget = targetInfos.FirstOrDefault(static targetInfo =>
+            string.Equals(targetInfo.Type, "page", StringComparison.Ordinal) &&
+            targetInfo.Attached != true &&
+            string.Equals(targetInfo.Url, "about:blank", StringComparison.Ordinal));
+
+        if (!string.IsNullOrWhiteSpace(preferredTarget?.TargetId))
+        {
+            return preferredTarget.TargetId;
+        }
+
+        return targetInfos.FirstOrDefault(static targetInfo =>
+            string.Equals(targetInfo.Type, "page", StringComparison.Ordinal) &&
+            targetInfo.Attached != true &&
+            !string.IsNullOrWhiteSpace(targetInfo.TargetId))
+            ?.TargetId;
+    }
+
+    private static bool MatchesBrowser(string browser, string browserExecutable, params string[] names)
+    {
+        var browserLower = browser.ToLowerInvariant();
+        var executableLower = browserExecutable.ToLowerInvariant();
+
+        foreach (var name in names)
+        {
+            if (browserLower == name ||
+                Path.GetFileNameWithoutExtension(browserLower) == name ||
+                executableLower.Contains(name, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string BuildCommandLine(IReadOnlyList<string> arguments)
@@ -725,6 +884,32 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     }
 
     private sealed record BrowserSessionResult(int ExitCode, Exception? Error);
+
+    private enum BrowserKind
+    {
+        Unknown,
+        Edge,
+        Chrome
+    }
+
+    private sealed class BrowserLogsUserDataDirectory : IDisposable
+    {
+        private readonly TempDirectory? _temporaryDirectory;
+
+        private BrowserLogsUserDataDirectory(string path, TempDirectory? temporaryDirectory)
+        {
+            Path = path;
+            _temporaryDirectory = temporaryDirectory;
+        }
+
+        public string Path { get; }
+
+        public static BrowserLogsUserDataDirectory CreatePersistent(string path) => new(path, temporaryDirectory: null);
+
+        public static BrowserLogsUserDataDirectory CreateTemporary(TempDirectory temporaryDirectory) => new(temporaryDirectory.Path, temporaryDirectory);
+
+        public void Dispose() => _temporaryDirectory?.Dispose();
+    }
 }
 
 internal static class BrowserLogsDebugEndpointParser

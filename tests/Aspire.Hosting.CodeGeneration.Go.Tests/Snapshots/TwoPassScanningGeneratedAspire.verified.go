@@ -656,12 +656,15 @@ func NewCSharpAppResource(handle *Handle, client *AspireClient) *CSharpAppResour
 }
 
 // WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-func (s *CSharpAppResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+func (s *CSharpAppResource) WithBrowserLogs(browser *string, profile *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if browser != nil {
 		reqArgs["browser"] = SerializeValue(browser)
+	}
+	if profile != nil {
+		reqArgs["profile"] = SerializeValue(profile)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
 	if err != nil {
@@ -3994,12 +3997,15 @@ func NewContainerResource(handle *Handle, client *AspireClient) *ContainerResour
 }
 
 // WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-func (s *ContainerResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+func (s *ContainerResource) WithBrowserLogs(browser *string, profile *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if browser != nil {
 		reqArgs["browser"] = SerializeValue(browser)
+	}
+	if profile != nil {
+		reqArgs["profile"] = SerializeValue(profile)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
 	if err != nil {
@@ -6224,12 +6230,15 @@ func NewDotnetToolResource(handle *Handle, client *AspireClient) *DotnetToolReso
 }
 
 // WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-func (s *DotnetToolResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+func (s *DotnetToolResource) WithBrowserLogs(browser *string, profile *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if browser != nil {
 		reqArgs["browser"] = SerializeValue(browser)
+	}
+	if profile != nil {
+		reqArgs["profile"] = SerializeValue(profile)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
 	if err != nil {
@@ -8480,12 +8489,15 @@ func NewExecutableResource(handle *Handle, client *AspireClient) *ExecutableReso
 }
 
 // WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-func (s *ExecutableResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+func (s *ExecutableResource) WithBrowserLogs(browser *string, profile *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if browser != nil {
 		reqArgs["browser"] = SerializeValue(browser)
+	}
+	if profile != nil {
+		reqArgs["profile"] = SerializeValue(profile)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
 	if err != nil {
@@ -13699,12 +13711,15 @@ func NewProjectResource(handle *Handle, client *AspireClient) *ProjectResource {
 }
 
 // WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-func (s *ProjectResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+func (s *ProjectResource) WithBrowserLogs(browser *string, profile *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if browser != nil {
 		reqArgs["browser"] = SerializeValue(browser)
+	}
+	if profile != nil {
+		reqArgs["profile"] = SerializeValue(profile)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
 	if err != nil {
@@ -15768,12 +15783,15 @@ func NewTestDatabaseResource(handle *Handle, client *AspireClient) *TestDatabase
 }
 
 // WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-func (s *TestDatabaseResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+func (s *TestDatabaseResource) WithBrowserLogs(browser *string, profile *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if browser != nil {
 		reqArgs["browser"] = SerializeValue(browser)
+	}
+	if profile != nil {
+		reqArgs["profile"] = SerializeValue(profile)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
 	if err != nil {
@@ -17574,12 +17592,15 @@ func NewTestRedisResource(handle *Handle, client *AspireClient) *TestRedisResour
 }
 
 // WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-func (s *TestRedisResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+func (s *TestRedisResource) WithBrowserLogs(browser *string, profile *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if browser != nil {
 		reqArgs["browser"] = SerializeValue(browser)
+	}
+	if profile != nil {
+		reqArgs["profile"] = SerializeValue(profile)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
 	if err != nil {
@@ -19605,12 +19626,15 @@ func NewTestVaultResource(handle *Handle, client *AspireClient) *TestVaultResour
 }
 
 // WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-func (s *TestVaultResource) WithBrowserLogs(browser *string) (*IResourceWithEndpoints, error) {
+func (s *TestVaultResource) WithBrowserLogs(browser *string, profile *string) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	if browser != nil {
 		reqArgs["browser"] = SerializeValue(browser)
+	}
+	if profile != nil {
+		reqArgs["profile"] = SerializeValue(profile)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs)
 	if err != nil {

@@ -5,6 +5,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
@@ -13,6 +14,8 @@ namespace Aspire.Hosting;
 
 internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IAsyncDisposable
 {
+    private static readonly JsonSerializerOptions s_browserSessionPropertyJsonOptions = new(JsonSerializerDefaults.Web);
+
     private readonly ResourceLoggerService _resourceLoggerService;
     private readonly ResourceNotificationService _resourceNotificationService;
     private readonly TimeProvider _timeProvider;
@@ -50,9 +53,10 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         _sessionFactory = sessionFactory;
     }
 
-    public async Task StartSessionAsync(BrowserLogsResource resource, string resourceName, Uri url, CancellationToken cancellationToken)
+    public async Task StartSessionAsync(BrowserLogsResource resource, BrowserLogsSettings settings, string resourceName, Uri url, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(settings.Browser);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
         ArgumentNullException.ThrowIfNull(url);
 
@@ -65,9 +69,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             var sessionId = $"session-{sessionSequence:0000}";
             resourceState.LastSessionId = sessionId;
             resourceState.LastTargetUrl = url.ToString();
+            resourceState.LastBrowser = settings.Browser;
+            resourceState.LastProfile = settings.Profile;
 
             var resourceLogger = _resourceLoggerService.GetLogger(resourceName);
-            resourceLogger.LogInformation("[{SessionId}] Opening tracked browser for '{Url}' using '{Browser}'.", sessionId, url, resource.Browser);
+            resourceLogger.LogInformation("[{SessionId}] Opening tracked browser for '{Url}' using '{Browser}'.", sessionId, url, settings.Browser);
 
             var launchStartedAt = _timeProvider.GetUtcNow().UtcDateTime;
             var pendingSession = new PendingBrowserSession(sessionId, launchStartedAt, url);
@@ -86,7 +92,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             try
             {
                 session = await _sessionFactory.StartSessionAsync(
-                    resource,
+                    settings,
                     resourceName,
                     url,
                     sessionId,
@@ -119,9 +125,13 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
             resourceState.ActiveSessions[session.SessionId] = new ActiveBrowserSession(
                 session.SessionId,
+                settings.Browser,
                 session.BrowserExecutable,
+                settings.Profile,
+                session.BrowserDebugEndpoint,
                 session.ProcessId,
                 session.StartedAt,
+                session.TargetId,
                 url,
                 session,
                 completionObserver);
@@ -247,7 +257,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             StopTimeStamp = resourceState.ActiveSessions.Count > 0 || pendingSession is not null ? null : stopTimeStamp,
             ExitCode = resourceState.ActiveSessions.Count > 0 || pendingSession is not null ? null : exitCode,
             State = new ResourceStateSnapshot(stateText, stateStyle),
-            Properties = snapshot.Properties.SetResourcePropertyRange(propertyUpdates),
+            Properties = UpdateProperties(snapshot.Properties, resourceState, propertyUpdates),
             HealthReports = healthReports
         });
     }
@@ -288,6 +298,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     {
         yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, resourceState.ActiveSessions.Count);
         yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, FormatActiveSessions(resourceState.ActiveSessions.Values));
+        yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserSessionsPropertyName, FormatBrowserSessions(resourceState.ActiveSessions.Values));
         yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.TotalSessionsLaunchedPropertyName, resourceState.TotalSessionsLaunched);
 
         if (resourceState.LastSessionId is not null)
@@ -304,6 +315,36 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         {
             yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable);
         }
+    }
+
+    private static ImmutableArray<ResourcePropertySnapshot> UpdateProperties(
+        ImmutableArray<ResourcePropertySnapshot> properties,
+        ResourceSessionState resourceState,
+        IEnumerable<ResourcePropertySnapshot> propertyUpdates)
+    {
+        if (resourceState.LastBrowser is not null)
+        {
+            properties = properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserPropertyName, resourceState.LastBrowser);
+        }
+
+        properties = resourceState.LastProfile is not null
+            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
+            : RemoveProperty(properties, BrowserLogsBuilderExtensions.ProfilePropertyName);
+
+        return properties.SetResourcePropertyRange(propertyUpdates);
+    }
+
+    private static ImmutableArray<ResourcePropertySnapshot> RemoveProperty(ImmutableArray<ResourcePropertySnapshot> properties, string name)
+    {
+        for (var i = 0; i < properties.Length; i++)
+        {
+            if (string.Equals(properties[i].Name, name, StringComparisons.ResourcePropertyName))
+            {
+                return properties.RemoveAt(i);
+            }
+        }
+
+        return properties;
     }
 
     private static DateTime? GetStartTimeStamp(ResourceSessionState resourceState, DateTime? fallbackStartTimeStamp)
@@ -328,6 +369,36 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             : "None";
     }
 
+    private static string FormatBrowserSessions(IEnumerable<ActiveBrowserSession> sessions)
+    {
+        var activeSessions = sessions
+            .OrderBy(static session => session.SessionId, StringComparer.Ordinal)
+            .Select(static session => new BrowserSessionPropertyValue(
+                session.SessionId,
+                session.Browser,
+                session.BrowserExecutable,
+                session.ProcessId,
+                session.Profile,
+                session.StartedAt,
+                session.TargetUrl.ToString(),
+                session.BrowserDebugEndpoint.ToString(),
+                GetPageDebugEndpoint(session.BrowserDebugEndpoint, session.TargetId),
+                session.TargetId))
+            .ToArray();
+
+        return JsonSerializer.Serialize(activeSessions, s_browserSessionPropertyJsonOptions);
+    }
+
+    private static string GetPageDebugEndpoint(Uri browserDebugEndpoint, string targetId)
+    {
+        var builder = new UriBuilder(browserDebugEndpoint)
+        {
+            Path = $"/devtools/page/{targetId}"
+        };
+
+        return builder.Uri.ToString();
+    }
+
     private sealed class ResourceSessionState
     {
         public SemaphoreSlim Lock { get; } = new(1, 1);
@@ -341,16 +412,36 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         public string? LastTargetUrl { get; set; }
 
         public string? LastBrowserExecutable { get; set; }
+
+        public string? LastBrowser { get; set; }
+
+        public string? LastProfile { get; set; }
     }
 
     private sealed record ActiveBrowserSession(
         string SessionId,
+        string Browser,
         string BrowserExecutable,
+        string? Profile,
+        Uri BrowserDebugEndpoint,
         int ProcessId,
         DateTime StartedAt,
+        string TargetId,
         Uri TargetUrl,
         IBrowserLogsRunningSession Session,
         Task CompletionObserver);
+
+    private sealed record BrowserSessionPropertyValue(
+        string SessionId,
+        string Browser,
+        string BrowserExecutable,
+        int ProcessId,
+        string? Profile,
+        DateTime StartedAt,
+        string TargetUrl,
+        string CdpEndpoint,
+        string PageCdpEndpoint,
+        string TargetId);
 
     private sealed record PendingBrowserSession(
         string SessionId,

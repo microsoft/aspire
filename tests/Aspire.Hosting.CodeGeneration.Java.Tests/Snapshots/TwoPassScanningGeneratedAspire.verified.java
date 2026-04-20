@@ -1426,16 +1426,26 @@ public class CSharpAppResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public CSharpAppResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
     public CSharpAppResource withBrowserLogs() {
         return withBrowserLogs(null);
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    public CSharpAppResource withBrowserLogs(String browser) {
+    private CSharpAppResource withBrowserLogsImpl(String browser, String profile) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
             reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -5163,16 +5173,26 @@ public class ContainerResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ContainerResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
     public ContainerResource withBrowserLogs() {
         return withBrowserLogs(null);
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    public ContainerResource withBrowserLogs(String browser) {
+    private ContainerResource withBrowserLogsImpl(String browser, String profile) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
             reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -7485,16 +7505,26 @@ public class DotnetToolResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public DotnetToolResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
     public DotnetToolResource withBrowserLogs() {
         return withBrowserLogs(null);
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    public DotnetToolResource withBrowserLogs(String browser) {
+    private DotnetToolResource withBrowserLogsImpl(String browser, String profile) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
             reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -9586,16 +9616,26 @@ public class ExecutableResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ExecutableResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
     public ExecutableResource withBrowserLogs() {
         return withBrowserLogs(null);
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    public ExecutableResource withBrowserLogs(String browser) {
+    private ExecutableResource withBrowserLogsImpl(String browser, String profile) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
             reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -15085,16 +15125,26 @@ public class ProjectResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ProjectResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
     public ProjectResource withBrowserLogs() {
         return withBrowserLogs(null);
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    public ProjectResource withBrowserLogs(String browser) {
+    private ProjectResource withBrowserLogsImpl(String browser, String profile) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
             reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -17507,16 +17557,26 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestDatabaseResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
     public TestDatabaseResource withBrowserLogs() {
         return withBrowserLogs(null);
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    public TestDatabaseResource withBrowserLogs(String browser) {
+    private TestDatabaseResource withBrowserLogsImpl(String browser, String profile) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
             reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -19416,16 +19476,26 @@ public class TestRedisResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestRedisResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
     public TestRedisResource withBrowserLogs() {
         return withBrowserLogs(null);
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    public TestRedisResource withBrowserLogs(String browser) {
+    private TestRedisResource withBrowserLogsImpl(String browser, String profile) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
             reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -21478,16 +21548,26 @@ public class TestVaultResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestVaultResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
     public TestVaultResource withBrowserLogs() {
         return withBrowserLogs(null);
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    public TestVaultResource withBrowserLogs(String browser) {
+    private TestVaultResource withBrowserLogsImpl(String browser, String profile) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
             reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -23338,6 +23418,33 @@ public interface WireValueEnum {
     String getValue();
 }
 
+// ===== WithBrowserLogsOptions.java =====
+// WithBrowserLogsOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithBrowserLogs. */
+public final class WithBrowserLogsOptions {
+    private String browser;
+    private String profile;
+
+    public String getBrowser() { return browser; }
+    public WithBrowserLogsOptions browser(String value) {
+        this.browser = value;
+        return this;
+    }
+
+    public String getProfile() { return profile; }
+    public WithBrowserLogsOptions profile(String value) {
+        this.profile = value;
+        return this;
+    }
+
+}
+
 // ===== WithContainerCertificatePathsOptions.java =====
 // WithContainerCertificatePathsOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -24159,6 +24266,7 @@ public final class WithVolumeOptions {
 .modules/UrlDisplayLocation.java
 .modules/WaitBehavior.java
 .modules/WireValueEnum.java
+.modules/WithBrowserLogsOptions.java
 .modules/WithContainerCertificatePathsOptions.java
 .modules/WithDataVolumeOptions.java
 .modules/WithDockerfileBaseImageOptions.java

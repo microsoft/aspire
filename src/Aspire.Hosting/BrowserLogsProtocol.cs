@@ -41,6 +41,7 @@ internal static class BrowserLogsProtocol
     internal const string RuntimeExceptionThrownMethod = "Runtime.exceptionThrown";
     internal const string TargetAttachToTargetMethod = "Target.attachToTarget";
     internal const string TargetCreateTargetMethod = "Target.createTarget";
+    internal const string TargetGetTargetsMethod = "Target.getTargets";
 
     internal static BrowserLogsProtocolMessageHeader ParseMessageHeader(ReadOnlySpan<byte> framePayload)
     {
@@ -156,6 +157,14 @@ internal static class BrowserLogsProtocol
         ThrowIfProtocolError(envelope.Error);
 
         return envelope.Result ?? throw new InvalidOperationException("Tracked browser target attachment did not return a result payload.");
+    }
+
+    internal static BrowserLogsGetTargetsResult ParseGetTargetsResponse(ReadOnlySpan<byte> framePayload)
+    {
+        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsGetTargetsResponseEnvelope);
+        ThrowIfProtocolError(envelope.Error);
+
+        return envelope.Result ?? throw new InvalidOperationException("Tracked browser target discovery did not return a result payload.");
     }
 
     internal static BrowserLogsCommandAck ParseCommandAckResponse(ReadOnlySpan<byte> framePayload)
@@ -343,6 +352,39 @@ internal sealed class BrowserLogsCreateTargetResult
 {
     [JsonPropertyName("targetId")]
     public string? TargetId { get; init; }
+}
+
+internal sealed class BrowserLogsGetTargetsResponseEnvelope
+{
+    [JsonPropertyName("error")]
+    public BrowserLogsProtocolError? Error { get; init; }
+
+    [JsonPropertyName("id")]
+    public long Id { get; init; }
+
+    [JsonPropertyName("result")]
+    public BrowserLogsGetTargetsResult? Result { get; init; }
+}
+
+internal sealed class BrowserLogsGetTargetsResult
+{
+    [JsonPropertyName("targetInfos")]
+    public BrowserLogsTargetInfo[]? TargetInfos { get; init; }
+}
+
+internal sealed class BrowserLogsTargetInfo
+{
+    [JsonPropertyName("attached")]
+    public bool? Attached { get; init; }
+
+    [JsonPropertyName("targetId")]
+    public string? TargetId { get; init; }
+
+    [JsonPropertyName("type")]
+    public string? Type { get; init; }
+
+    [JsonPropertyName("url")]
+    public string? Url { get; init; }
 }
 
 internal sealed class BrowserLogsExceptionDetails : BrowserLogsSourceLocation
@@ -706,6 +748,7 @@ internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<Brow
 [JsonSerializable(typeof(BrowserLogsCommandAckResponseEnvelope))]
 [JsonSerializable(typeof(BrowserLogsConsoleApiCalledEnvelope))]
 [JsonSerializable(typeof(BrowserLogsCreateTargetResponseEnvelope))]
+[JsonSerializable(typeof(BrowserLogsGetTargetsResponseEnvelope))]
 [JsonSerializable(typeof(BrowserLogsExceptionThrownEnvelope))]
 [JsonSerializable(typeof(BrowserLogsLoadingFailedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsLoadingFinishedEnvelope))]

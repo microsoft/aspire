@@ -55,6 +55,16 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
             cancellationToken);
     }
 
+    public Task<BrowserLogsGetTargetsResult> GetTargetsAsync(CancellationToken cancellationToken)
+    {
+        return SendCommandAsync(
+            BrowserLogsProtocol.TargetGetTargetsMethod,
+            sessionId: null,
+            writeParameters: null,
+            BrowserLogsProtocol.ParseGetTargetsResponse,
+            cancellationToken);
+    }
+
     public Task<BrowserLogsAttachToTargetResult> AttachToTargetAsync(string targetId, CancellationToken cancellationToken)
     {
         return SendCommandAsync(

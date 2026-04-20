@@ -389,6 +389,7 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal("withBrowserLogs", withBrowserLogs.MethodName);
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", withBrowserLogs.TargetTypeId);
         Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "browser" && p.Type?.TypeId == "string" && p.IsOptional);
+        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "profile" && p.Type?.TypeId == "string" && p.IsOptional);
         Assert.True(withBrowserLogs.ReturnsBuilder);
     }
 
