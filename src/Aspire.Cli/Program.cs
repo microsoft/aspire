@@ -463,6 +463,7 @@ public class Program
         builder.Services.AddTransient<PsCommand>();
         builder.Services.AddTransient<DescribeCommand>();
         builder.Services.AddTransient<LogsCommand>();
+        builder.Services.AddTransient<TerminalCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();

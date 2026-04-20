@@ -752,6 +752,33 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         return response;
     }
 
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV2)
+        {
+            return new GetTerminalInfoResponse { IsAvailable = false };
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger?.LogDebug("Getting terminal info for resource '{ResourceName}'", resourceName);
+
+        var request = new GetTerminalInfoRequest { ResourceName = resourceName };
+
+        var response = await rpc.InvokeWithCancellationAsync<GetTerminalInfoResponse>(
+            "GetTerminalInfoAsync",
+            [request],
+            cancellationToken).ConfigureAwait(false);
+
+        _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, socket={Socket}",
+            resourceName, response.IsAvailable, response.SocketPath);
+
+        return response;
+    }
+
     #endregion
 
     /// <summary>

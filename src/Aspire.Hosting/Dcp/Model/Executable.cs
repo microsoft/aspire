@@ -75,6 +75,14 @@ internal sealed class ExecutableSpec
     /// </summary>
     [JsonPropertyName("pemCertificates")]
     public ExecutablePemCertificates? PemCertificates { get; set; }
+
+    /// <summary>
+    /// Terminal configuration for interactive PTY access.
+    /// When set, DCP allocates a pseudo-terminal for the process and forwards
+    /// I/O over a Unix domain socket using the Aspire Terminal Protocol.
+    /// </summary>
+    [JsonPropertyName("terminal")]
+    public TerminalSpec? Terminal { get; set; }
 }
 
 internal sealed class AmbientEnvironment

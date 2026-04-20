@@ -105,6 +105,22 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
 
+        // Configure terminal spec if the resource has a TerminalAnnotation
+        if (er.ModelResource.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                spec.Terminal = new TerminalSpec
+                {
+                    Enabled = true,
+                    SocketPath = terminalAnnotation.SocketPath,
+                    Columns = terminalAnnotation.Options.Columns,
+                    Rows = terminalAnnotation.Options.Rows
+                };
+            }
+        }
+
         if (configuration.Exception is not null)
         {
             throw new FailedToApplyEnvironmentException();

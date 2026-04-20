@@ -1112,3 +1112,44 @@ internal sealed class ResourceLogLine
     /// </summary>
     public bool IsError { get; init; }
 }
+
+#region Terminal
+
+/// <summary>
+/// Request for getting terminal information for a resource.
+/// </summary>
+internal sealed class GetTerminalInfoRequest
+{
+    /// <summary>
+    /// Gets the resource name.
+    /// </summary>
+    public required string ResourceName { get; init; }
+}
+
+/// <summary>
+/// Response containing terminal information for a resource.
+/// </summary>
+internal sealed class GetTerminalInfoResponse
+{
+    /// <summary>
+    /// Gets whether terminal access is available for this resource.
+    /// </summary>
+    public required bool IsAvailable { get; init; }
+
+    /// <summary>
+    /// Gets the UDS socket path for terminal I/O, if available.
+    /// </summary>
+    public string? SocketPath { get; init; }
+
+    /// <summary>
+    /// Gets the current terminal width in columns.
+    /// </summary>
+    public int Columns { get; init; }
+
+    /// <summary>
+    /// Gets the current terminal height in rows.
+    /// </summary>
+    public int Rows { get; init; }
+}
+
+#endregion

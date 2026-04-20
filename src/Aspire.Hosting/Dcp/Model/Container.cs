@@ -95,6 +95,14 @@ internal sealed class ContainerSpec
     // List of public PEM certificates to be trusted by the container
     [JsonPropertyName("pemCertificates")]
     public ContainerPemCertificates? PemCertificates { get; set; }
+
+    /// <summary>
+    /// Terminal configuration for interactive PTY access.
+    /// When set, DCP allocates a pseudo-terminal for the container and forwards
+    /// I/O over a Unix domain socket using the Aspire Terminal Protocol.
+    /// </summary>
+    [JsonPropertyName("terminal")]
+    public TerminalSpec? Terminal { get; set; }
 }
 
 internal sealed class BuildContext

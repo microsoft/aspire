@@ -241,6 +241,37 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     }
 
     /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    public Task<GetTerminalInfoResponse> GetTerminalInfoAsync(GetTerminalInfoRequest request, CancellationToken cancellationToken = default)
+    {
+        _ = cancellationToken; // Required by RPC contract
+        ArgumentNullException.ThrowIfNull(request);
+
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
+        var resource = appModel.Resources.FirstOrDefault(r => string.Equals(r.Name, request.ResourceName, StringComparisons.ResourceName));
+
+        if (resource is null)
+        {
+            return Task.FromResult(new GetTerminalInfoResponse { IsAvailable = false });
+        }
+
+        var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
+        if (terminalAnnotation is null)
+        {
+            return Task.FromResult(new GetTerminalInfoResponse { IsAvailable = false });
+        }
+
+        return Task.FromResult(new GetTerminalInfoResponse
+        {
+            IsAvailable = !string.IsNullOrEmpty(terminalAnnotation.SocketPath),
+            SocketPath = terminalAnnotation.SocketPath,
+            Columns = terminalAnnotation.Options.Columns,
+            Rows = terminalAnnotation.Options.Rows
+        });
+    }
+
+    /// <summary>
     /// Waits for a resource to reach a target status.
     /// </summary>
     public async Task<WaitForResourceResponse> WaitForResourceAsync(WaitForResourceRequest request, CancellationToken cancellationToken = default)

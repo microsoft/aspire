@@ -130,4 +130,14 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
         string status,
         int timeoutSeconds,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets terminal information for a resource.
+    /// </summary>
+    /// <param name="resourceName">The resource name.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Terminal information for the resource.</returns>
+    Task<GetTerminalInfoResponse> GetTerminalInfoAsync(
+        string resourceName,
+        CancellationToken cancellationToken = default);
 }
