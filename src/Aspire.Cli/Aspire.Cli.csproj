@@ -32,12 +32,11 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>aspire</ToolCommandName>
     <PackageId>Aspire.Cli</PackageId>
-    <RollForward>Major</RollForward>
     <PackageTags>aspire cli</PackageTags>
     <Description>Command line tool for Aspire developers.</Description>
-    <!-- For 9.5 we want to keep the tool platform-independent, framework-dependent.
-         To do this we make sure it doesn't PublishAOT, and ensure that it doesn't publish for any RIDs at all. -->
-    <PublishAot>false</PublishAot>
+    <!-- The tool nupkg contains a NativeAOT binary. NativeAOT requires building on
+         the target platform, so the caller must pass -r <rid> at pack time.
+         Clear RuntimeIdentifiers to prevent multi-RID targeting. -->
     <RuntimeIdentifiers></RuntimeIdentifiers>
   </PropertyGroup>
 

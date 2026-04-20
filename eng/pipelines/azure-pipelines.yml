@@ -248,6 +248,31 @@ extends:
                   # validation (Homebrew cask audit, WinGet manifest) against published URLs.
                   targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
+              # Download CLI tool nupkgs produced by the per-RID native build stage
+              # (Linux + macOS). These are merged into the Shipping directory so Arcade's
+              # publish-using-pipelines publishes them alongside the Windows tool nupkgs.
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download CLI tool nupkgs from native builds
+                inputs:
+                  itemPattern: |
+                    **/Aspire.Cli.*.nupkg
+                  targetPath: '$(Pipeline.Workspace)/tool-nupkgs'
+
+              - pwsh: |
+                  $targetDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+                  $nupkgs = Get-ChildItem -Path "$(Pipeline.Workspace)/tool-nupkgs" -Filter "Aspire.Cli.*.nupkg" -Recurse
+                  if ($nupkgs.Count -eq 0) {
+                    Write-Error "No CLI tool nupkgs found in downloaded artifacts"
+                    exit 1
+                  }
+                  foreach ($pkg in $nupkgs) {
+                    Copy-Item $pkg.FullName -Destination $targetDir -Force
+                    Write-Host "Copied: $($pkg.Name)"
+                  }
+                  Write-Host "Total CLI tool nupkgs copied: $($nupkgs.Count)"
+                displayName: 🟣Copy CLI tool nupkgs to Shipping
+
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
                 inputs:

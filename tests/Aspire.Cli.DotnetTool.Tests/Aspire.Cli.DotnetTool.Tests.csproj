@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <SignAssembly>false</SignAssembly>
+
+    <!-- This test requires the built Aspire.Cli tool nupkg -->
+    <RequiresNugets>true</RequiresNugets>
+
+    <!-- Run on Linux and Windows; skip macOS, Helix, and AzDO CI -->
+    <RunOnGithubActionsWindows>true</RunOnGithubActionsWindows>
+    <RunOnGithubActionsMacOS>false</RunOnGithubActionsMacOS>
+    <RunOnGithubActionsLinux>true</RunOnGithubActionsLinux>
+    <RunOnAzdoHelixWindows>false</RunOnAzdoHelixWindows>
+    <RunOnAzdoHelixLinux>false</RunOnAzdoHelixLinux>
+
+    <TestSessionTimeout>15m</TestSessionTimeout>
+    <TestHangTimeout>5m</TestHangTimeout>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Make Aspire.TestUtilities.ProcessExtensions visible to the linked ToolCommand.cs -->
+    <Using Include="Aspire.TestUtilities" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ToolCommand.cs" Link="Common\ToolCommand.cs" />
+    <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\CommandResult.cs" Link="Common\CommandResult.cs" />
+    <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ToolCommandException.cs" Link="Common\ToolCommandException.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
+  </ItemGroup>
+
+</Project>

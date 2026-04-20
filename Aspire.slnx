@@ -420,6 +420,7 @@
     <Project Path="tests/QuarantineTools.Tests/QuarantineTools.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Cli/">
+    <Project Path="tests/Aspire.Cli.DotnetTool.Tests/Aspire.Cli.DotnetTool.Tests.csproj" />
     <Project Path="tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj" />
     <Project Path="tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj" />
     <Project Path="tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" />

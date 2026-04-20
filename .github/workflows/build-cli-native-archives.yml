@@ -38,14 +38,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      - name: Set platform scripts
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            echo "BUILD_SCRIPT=./build.cmd" >> "$GITHUB_ENV"
+            echo "DOTNET_SCRIPT=./dotnet.cmd" >> "$GITHUB_ENV"
+          else
+            echo "BUILD_SCRIPT=./build.sh" >> "$GITHUB_ENV"
+            echo "DOTNET_SCRIPT=./dotnet.sh" >> "$GITHUB_ENV"
+          fi
+
       # Build RID-specific NuGet packages (DCP + Dashboard) locally instead of
       # downloading them from the build_packages job. This allows the CLI archive
       # build to run in parallel with build_packages.
-      - name: Build RID-specific packages (Windows)
-        if: ${{ runner.os == 'Windows' }}
-        shell: pwsh
+      - name: Build RID-specific packages
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         run: >
-          .\build.cmd
+          ${{ env.BUILD_SCRIPT }}
           -ci
           -restore
           -build
@@ -56,37 +66,10 @@ jobs:
           /p:BuildBundleDepsOnly=true
           ${{ inputs.versionOverrideArg }}
 
-      - name: Build RID-specific packages (Unix)
-        if: ${{ runner.os != 'Windows' }}
-        shell: bash
+      - name: Build bundle payload archive
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         run: >
-          ./build.sh
-          --ci
-          --restore
-          --build
-          --pack
-          --configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog
-          /p:ContinuousIntegrationBuild=true
-          /p:BuildBundleDepsOnly=true
-          ${{ inputs.versionOverrideArg }}
-
-      # Upload DCP + Dashboard NuGets so test/polyglot jobs can download them
-      - name: Upload RID-specific NuGets
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: built-nugets-for-${{ matrix.targets.rids }}
-          path: |
-            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
-            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
-          if-no-files-found: error
-          retention-days: 15
-
-      - name: Build bundle payload archive (Windows)
-        if: ${{ runner.os == 'Windows' }}
-        shell: pwsh
-        run: >
-          .\dotnet.cmd
+          ${{ env.DOTNET_SCRIPT }}
           msbuild
           eng/Bundle.proj
           /restore
@@ -98,27 +81,10 @@ jobs:
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}
 
-      - name: Build bundle payload archive (Unix)
-        if: ${{ runner.os != 'Windows' }}
-        shell: bash
+      - name: Build CLI packages
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         run: >
-          ./dotnet.sh
-          msbuild
-          eng/Bundle.proj
-          /restore
-          /p:Configuration=${{ inputs.configuration }}
-          /p:TargetRid=${{ matrix.targets.rids }}
-          /p:BundleVersion=ci-bundlepayload
-          /p:SkipNativeBuild=true
-          /p:ContinuousIntegrationBuild=true
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
-          ${{ inputs.versionOverrideArg }}
-
-      - name: Build CLI packages (Windows)
-        if: ${{ runner.os == 'Windows' }}
-        shell: pwsh
-        run: >
-          .\build.cmd
+          ${{ env.BUILD_SCRIPT }}
           -ci
           -build
           -restore
@@ -130,21 +96,30 @@ jobs:
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
           ${{ inputs.versionOverrideArg }}
 
-      - name: Build CLI packages (Unix)
-        if: ${{ runner.os != 'Windows' }}
-        shell: bash
+      # Pack the CLI as a dotnet global tool nupkg. This produces a NativeAOT tool
+      # package for the current RID so `dotnet tool install Aspire.Cli` gets a native binary.
+      - name: Pack CLI dotnet-tool
+        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
         run: >
-          ./build.sh
-          --ci
-          --build
-          --restore
-          --configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildCli.binlog
+          ${{ env.DOTNET_SCRIPT }} pack src/Aspire.Cli/Aspire.Cli.Tool.csproj
+          -c ${{ inputs.configuration }}
+          -r ${{ matrix.targets.rids }}
           /p:ContinuousIntegrationBuild=true
-          /p:SkipManagedBuild=true
-          /p:TargetRids=${{ matrix.targets.rids }}
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
+          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/PackCliTool.binlog
           ${{ inputs.versionOverrideArg }}
+
+      # Upload DCP, Dashboard, and CLI tool NuGets so test/polyglot jobs can download them
+      - name: Upload RID-specific NuGets
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: built-nugets-for-${{ matrix.targets.rids }}
+          path: |
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
+          if-no-files-found: error
+          retention-days: 15
 
       - name: Upload CLI archives
         if: success()

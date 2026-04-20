@@ -51,7 +51,7 @@ internal class CliUpdateNotifier(
         if (newerVersion is not null)
         {
             var updateCommand = IsRunningAsDotNetTool()
-                ? "dotnet tool update -g Aspire.Cli"
+                ? "dotnet tool update Aspire.Cli"
                 : "aspire update";
 
             interactionService.DisplayVersionUpdateNotification(newerVersion.ToString(), updateCommand);
@@ -85,7 +85,7 @@ internal class CliUpdateNotifier(
     /// <remarks>
     /// This detection is used to determine which update command to display to users:
     /// <list type="bullet">
-    /// <item>.NET tool installation: "dotnet tool update -g Aspire.Cli"</item>
+    /// <item>.NET tool installation: "dotnet tool update Aspire.Cli"</item>
     /// <item>Native binary installation: "aspire update --self"</item>
     /// </list>
     /// The detection works by examining <see cref="Environment.ProcessPath"/>, which returns the full path to the current executable.

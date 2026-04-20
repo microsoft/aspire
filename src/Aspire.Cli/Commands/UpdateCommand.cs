@@ -118,7 +118,7 @@ internal sealed class UpdateCommand : BaseCommand
             if (IsRunningAsDotNetTool())
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                InteractionService.DisplayPlainText("  dotnet tool update -g Aspire.Cli");
+                InteractionService.DisplayPlainText("  dotnet tool update Aspire.Cli");
                 return 0;
             }
 

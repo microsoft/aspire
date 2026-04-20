@@ -92,6 +92,20 @@ steps:
               /p:BuildExtension=true
       displayName: 🟣Build
 
+    # Pack the CLI dotnet tool for each Windows RID. The NativeAOT binary
+    # is compiled per-RID so `dotnet tool install Aspire.Cli` gets a native binary.
+    - ${{ each targetRid in parameters.targetRids }}:
+      - script: ${{ parameters.dotnetScript }}
+                pack
+                $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
+                -c ${{ parameters.buildConfig }}
+                -r ${{ targetRid }}
+                /p:ContinuousIntegrationBuild=true
+                /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
+                $(_OfficialBuildIdArgs)
+                /bl:${{ parameters.repoLogPath }}/PackCliTool-${{ targetRid }}.binlog
+        displayName: 🟣Pack CLI dotnet-tool (${{ targetRid }})
+
     # Verify the signed win-x64 CLI archive works (version check + project creation)
     - pwsh: |
         $ErrorActionPreference = 'Stop'
@@ -163,7 +177,7 @@ steps:
           $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
           $manifestPath = Join-Path $vsixDir "$baseName.manifest"
           $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
-          
+
           if (-not (Test-Path $manifestPath)) {
             Write-Host "##[error]Manifest file not found: $manifestPath"
             exit 1
@@ -172,7 +186,7 @@ steps:
             Write-Host "##[error]Signature file not found: $signaturePath"
             exit 1
           }
-          
+
           # First verify the .signature.p7s is in PKCS#7 format (binary)
           $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
           if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
@@ -180,7 +194,7 @@ steps:
             Write-Host "##[error]$baseName.signature.p7s does NOT appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)"
             exit 1
           }
-          
+
           Write-Host "Verifying signature for $($vsix.Name)..."
           npx vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
           if ($LASTEXITCODE -ne 0) {
@@ -222,7 +236,7 @@ steps:
             $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
             $manifestPath = Join-Path $vsixDir "$baseName.manifest"
             $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
-            
+
             $publishArgs = @("vsce", "publish", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
             if ($preRelease -eq 'True') {
               $publishArgs += "--pre-release"
@@ -230,7 +244,7 @@ steps:
             } else {
               Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
             }
-            
+
             & npx @publishArgs
             if ($LASTEXITCODE -ne 0) {
               Write-Host "##[error]Failed to publish $($vsix.Name)"
@@ -254,6 +268,9 @@ steps:
     # stage can download them by name (matching the native_archives_<rid> pattern
     # used by build_sign_native for macOS/Linux).
     - ${{ if eq(parameters.isWindows, 'true') }}:
+      # Stage all archives first, then publish them together so 1ES compliance
+      # steps are injected once (between the last stage and the first publish)
+      # instead of between every stage/publish pair.
       - ${{ each targetRid in parameters.targetRids }}:
         - pwsh: |
             $ErrorActionPreference = 'Stop'
@@ -274,6 +291,8 @@ steps:
               Write-Host "Staged: $($f.Name)"
             }
           displayName: 🟣Stage CLI archives (${{ targetRid }})
+
+      - ${{ each targetRid in parameters.targetRids }}:
         - task: 1ES.PublishBuildArtifacts@1
           displayName: 🟣Publish native_archives_${{ replace(targetRid, '-', '_') }}
           inputs:
