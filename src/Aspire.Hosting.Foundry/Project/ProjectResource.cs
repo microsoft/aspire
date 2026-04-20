@@ -62,7 +62,8 @@ public class AzureCognitiveServicesProjectResource :
                     }
 
                     var encodedSubscriptionId = EncodeSubscriptionId(subscriptionId);
-                    var portalUrl = $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId},{resourceGroupName},,{Parent.Name},{Name}/home";
+                    // Commas are percent-encoded so terminal link detection doesn't truncate the URL.
+                    var portalUrl = $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId}%2C{Uri.EscapeDataString(resourceGroupName)}%2C%2C{Uri.EscapeDataString(Parent.Name)}%2C{Uri.EscapeDataString(Name)}/home";
 
                     await context.ReportingStep.CompleteAsync(portalUrl).ConfigureAwait(false);
 
