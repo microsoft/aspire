@@ -40,9 +40,7 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
                       // Expose the HTTP endpoint so ingress or explicit host port mapping can route browser traffic to the dashboard.
                       .WithEndpoint("http", e => e.IsExternal = true)
                       .WithHttpEndpoint(name: "otlp-grpc", targetPort: 18889)
-                      .WithHttpEndpoint(name: "otlp-http", targetPort: 18890)
-                      .WithEnvironment("DASHBOARD__FRONTEND__AUTHMODE", "Unsecured")
-                      .WithEnvironment("DASHBOARD__OTLP__AUTHMODE", "Unsecured");
+                      .WithHttpEndpoint(name: "otlp-http", targetPort: 18890);
     }
 
     /// <summary>

@@ -26,7 +26,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => testInteractionService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse(args);

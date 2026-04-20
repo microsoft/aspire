@@ -28,7 +28,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => testInteractionService;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run");
 
@@ -44,7 +44,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run --help");
@@ -65,7 +65,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"dashboard run {args}");
@@ -78,7 +78,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run --ASPNETCORE_URLS=http://localhost:9999");
@@ -138,7 +138,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
         executionFactory.AssertionCallback = (args, _, _, _) => { capturedArgs = args; };
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run");
 
@@ -158,7 +158,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
         executionFactory.AssertionCallback = (args, _, _, _) => { capturedArgs = args; };
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run");
 
@@ -188,7 +188,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
         executionFactory.AssertionCallback = (args, _, _, _) => { capturedArgs = args; };
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"dashboard run {cliArgs}");
 
@@ -208,7 +208,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
         executionFactory.AssertionCallback = (_, env, _, _) => { capturedEnv = env; };
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run");
 
@@ -229,7 +229,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
         executionFactory.AssertionCallback = (args, _, _, _) => { capturedArgs = args; };
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run --CUSTOM_SETTING=myvalue");
 
@@ -254,7 +254,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
         executionFactory.AssertionCallback = (args, _, _, _) => { capturedArgs = args; };
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run --frontend-url http://localhost:5000 --otlp-grpc-url http://localhost:9317 --otlp-http-url http://localhost:9318 --allow-anonymous --enable-api --config-file-path /my/config.json");
 
@@ -281,7 +281,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
         executionFactory.AttemptCallback = (_, _) => (1, null);
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run");
 
@@ -306,7 +306,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
                 StartReturnValue = false
             };
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("dashboard run");
 

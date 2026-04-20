@@ -161,7 +161,80 @@ public static class KubernetesEnvironmentExtensions
         return builder;
     }
 
-    private static void EnsureDefaultHelmEngine(IResourceBuilder<KubernetesEnvironmentResource> builder)
+    /// <summary>
+    /// Adds a named node pool to the Kubernetes environment.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="name">The name of the node pool. This value is used as the <c>nodeSelector</c> value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesNodePoolResource}"/> for the new node pool.</returns>
+    /// <remarks>
+    /// For vanilla Kubernetes, this creates a named reference to an existing node pool.
+    /// For managed Kubernetes services (e.g., AKS), the cloud-specific <c>AddNodePool</c> overload
+    /// provisions the pool with additional configuration such as VM size and autoscaling.
+    /// Use <see cref="WithNodePool{T}"/> to schedule workloads on the returned node pool.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var k8s = builder.AddKubernetesEnvironment("k8s");
+    /// var gpuPool = k8s.AddNodePool("gpu");
+    ///
+    /// builder.AddProject&lt;MyApi&gt;()
+    ///     .WithComputeEnvironment(k8s)
+    ///     .WithNodePool(gpuPool);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Adds a named node pool to a Kubernetes environment")]
+    public static IResourceBuilder<KubernetesNodePoolResource> AddNodePool(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        [ResourceName] string name)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        var nodePool = new KubernetesNodePoolResource(name, builder.Resource);
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder.ApplicationBuilder.CreateResourceBuilder(nodePool);
+        }
+
+        return builder.ApplicationBuilder.AddResource(nodePool)
+            .ExcludeFromManifest();
+    }
+
+    /// <summary>
+    /// Schedules a compute resource's workload on the specified Kubernetes node pool.
+    /// This translates to a Kubernetes <c>nodeSelector</c> in the pod specification
+    /// targeting the named node pool.
+    /// </summary>
+    /// <typeparam name="T">The type of the compute resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="nodePool">The node pool to schedule the workload on.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <example>
+    /// <code>
+    /// var k8s = builder.AddKubernetesEnvironment("k8s");
+    /// var gpuPool = k8s.AddNodePool("gpu");
+    ///
+    /// builder.AddProject&lt;MyApi&gt;()
+    ///     .WithComputeEnvironment(k8s)
+    ///     .WithNodePool(gpuPool);
+    /// </code>
+    /// </example>
+    [AspireExport("withKubernetesNodePool", Description = "Schedules a workload on a specific Kubernetes node pool")]
+    public static IResourceBuilder<T> WithNodePool<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<KubernetesNodePoolResource> nodePool)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(nodePool);
+
+        builder.WithAnnotation(new KubernetesNodePoolAnnotation(nodePool.Resource));
+        return builder;
+    }
+
+    internal static void EnsureDefaultHelmEngine(IResourceBuilder<KubernetesEnvironmentResource> builder)
     {
         builder.Resource.DeploymentEngineStepsFactory ??= HelmDeploymentEngine.CreateStepsAsync;
     }

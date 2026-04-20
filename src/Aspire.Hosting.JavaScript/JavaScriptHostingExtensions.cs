@@ -835,13 +835,17 @@ public static class JavaScriptHostingExtensions
                             {
                                 var runtimeImage = baseImageAnnotation?.RuntimeImage ?? GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services);
 
+                                // Match the ownership pattern from the official Next.js sample:
+                                // https://github.com/vercel/next.js/blob/canary/examples/with-docker/Dockerfile
                                 dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
                                     .Env("NODE_ENV", "production")
-                                    .CopyFrom("build", "/app/public", "./public")
-                                    .CopyFrom("build", "/app/.next/standalone", "./")
-                                    .CopyFrom("build", "/app/.next/static", "./.next/static")
+                                    .CopyFrom("build", "/app/public", "./public", "node:node")
+                                    .Run("mkdir .next")
+                                    .Run("chown node:node .next")
+                                    .CopyFrom("build", "/app/.next/standalone", "./", "node:node")
+                                    .CopyFrom("build", "/app/.next/static", "./.next/static", "node:node")
                                     .User("node")
                                     .Entrypoint(["node", "server.js"]);
                                 break;
@@ -1711,7 +1715,7 @@ public static class JavaScriptHostingExtensions
     private static string GetDefaultBaseImage(string appDirectory, string defaultSuffix, IServiceProvider serviceProvider)
     {
         var logger = serviceProvider.GetService<ILogger<JavaScriptAppResource>>() ?? NullLogger<JavaScriptAppResource>.Instance;
-        var nodeVersion = DetectNodeVersion(appDirectory, logger) ?? DefaultNodeVersion;
+        var nodeVersion = ResolveNodeVersion(appDirectory, logger);
         return $"node:{nodeVersion}-{defaultSuffix}";
     }
 
@@ -1827,13 +1831,31 @@ public static class JavaScriptHostingExtensions
     }
 
     /// <summary>
-    /// Detects the Node.js version to use for a project by checking common configuration files.
+    /// Resolves the Node.js version to use for a project by checking common configuration files.
     /// </summary>
     /// <param name="workingDirectory">The working directory of the Node.js project.</param>
     /// <param name="logger">The logger for diagnostic messages.</param>
-    /// <returns>The detected Node.js major version number as a string, or <c>null</c> if no version is detected.</returns>
-    private static string? DetectNodeVersion(string workingDirectory, ILogger logger)
+    /// <returns>The resolved Node.js major version number as a string.</returns>
+    private static string ResolveNodeVersion(string workingDirectory, ILogger logger)
     {
+        // Follow the same shape as Cloud Native Buildpacks-style tooling for Node selection:
+        // pinned toolchain files (.nvmrc, .node-version, .tool-versions) are treated as
+        // authoritative runtime intent, while package.json engines.node is compatibility
+        // metadata rather than a deployment image pin. If there is no explicit toolchain pin,
+        // generated Dockerfiles fall back to Aspire's preferred default Node major.
+        if (TryDetectPinnedNodeVersion(workingDirectory, logger, out var pinnedNodeVersion))
+        {
+            return pinnedNodeVersion;
+        }
+
+        logger.LogDebug("No Node.js version detected, using default version {DefaultVersion}", DefaultNodeVersion);
+        return DefaultNodeVersion;
+    }
+
+    private static bool TryDetectPinnedNodeVersion(string workingDirectory, ILogger logger, out string nodeVersion)
+    {
+        nodeVersion = string.Empty;
+
         // Check .nvmrc file
         var nvmrcPath = Path.Combine(workingDirectory, ".nvmrc");
         if (File.Exists(nvmrcPath))
@@ -1842,7 +1864,8 @@ public static class JavaScriptHostingExtensions
             if (TryParseNodeVersion(versionString, out var version))
             {
                 logger.LogDebug("Detected Node.js version {Version} from .nvmrc file", version);
-                return version;
+                nodeVersion = version;
+                return true;
             }
         }
 
@@ -1854,32 +1877,8 @@ public static class JavaScriptHostingExtensions
             if (TryParseNodeVersion(versionString, out var version))
             {
                 logger.LogDebug("Detected Node.js version {Version} from .node-version file", version);
-                return version;
-            }
-        }
-
-        // Check package.json for engines.node
-        var packageJsonPath = Path.Combine(workingDirectory, "package.json");
-        if (File.Exists(packageJsonPath))
-        {
-            try
-            {
-                using var stream = File.OpenRead(packageJsonPath);
-                using var packageJson = JsonDocument.Parse(stream);
-                if (packageJson.RootElement.TryGetProperty("engines", out var engines) &&
-                    engines.TryGetProperty("node", out var nodeVersion))
-                {
-                    var versionString = nodeVersion.GetString();
-                    if (!string.IsNullOrWhiteSpace(versionString) && TryParseNodeVersion(versionString, out var version))
-                    {
-                        logger.LogDebug("Detected Node.js version {Version} from package.json engines.node field", version);
-                        return version;
-                    }
-                }
-            }
-            catch
-            {
-                // If package.json parsing fails, continue to default
+                nodeVersion = version;
+                return true;
             }
         }
 
@@ -1891,22 +1890,22 @@ public static class JavaScriptHostingExtensions
             foreach (var line in lines)
             {
                 var trimmedLine = line.Trim();
-                if (trimmedLine.StartsWith("nodejs ", StringComparison.Ordinal) ||
-                    trimmedLine.StartsWith("node ", StringComparison.Ordinal))
+                var parts = trimmedLine.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 1 &&
+                    (string.Equals(parts[0], "nodejs", StringComparison.Ordinal) ||
+                     string.Equals(parts[0], "node", StringComparison.Ordinal)))
                 {
-                    var parts = trimmedLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length > 1 && TryParseNodeVersion(parts[1], out var version))
+                    if (TryParseNodeVersion(parts[1], out var version))
                     {
                         logger.LogDebug("Detected Node.js version {Version} from .tool-versions file", version);
-                        return version;
+                        nodeVersion = version;
+                        return true;
                     }
                 }
             }
         }
 
-        // Return null if no version is detected
-        logger.LogDebug("No Node.js version detected, using default version {DefaultVersion}", DefaultNodeVersion);
-        return null;
+        return false;
     }
 
     /// <summary>

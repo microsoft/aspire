@@ -6,7 +6,6 @@ using Aspire.Cli.Certificates;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -38,7 +37,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -92,11 +91,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true));
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(supportsInteractiveInput: true));
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -135,7 +134,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -190,11 +189,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var certificateToolRunner = serviceProvider.GetRequiredService<ICertificateToolRunner>();
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(supportsInteractiveInput: true));
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(supportsInteractiveInput: true));
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -230,7 +229,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         // If this does not throw then the code is behaving correctly.
@@ -278,11 +277,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
                 // Simulate a platform where non-interactive trust is NOT supported (e.g. macOS/Windows)
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => false);
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => false);
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -333,11 +332,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
                 // Simulate a platform where non-interactive trust is NOT supported (e.g. macOS/Windows)
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => false);
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => false);
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -388,11 +387,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
                 var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
                 // Simulate a platform where non-interactive trust IS supported (e.g. Linux)
-                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => true);
+                return new CertificateService(certificateToolRunner, interactiveService, telemetry, new global::Aspire.Cli.Tests.TestCliHostEnvironment(), isNonInteractiveTrustSupported: () => true);
             };
         });
 
-        var sp = services.BuildServiceProvider();
+        using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
         var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
@@ -443,12 +442,4 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             => new CertificateCleanResult { Success = true };
     }
 
-    private sealed class TestCliHostEnvironment(bool supportsInteractiveInput = false, bool supportsInteractiveOutput = false, bool supportsAnsi = true) : ICliHostEnvironment
-    {
-        public bool SupportsInteractiveInput => supportsInteractiveInput;
-
-        public bool SupportsInteractiveOutput => supportsInteractiveOutput;
-
-        public bool SupportsAnsi => supportsAnsi;
-    }
 }

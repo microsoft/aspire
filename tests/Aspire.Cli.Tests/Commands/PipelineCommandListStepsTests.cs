@@ -150,7 +150,7 @@ public partial class PipelineCommandListStepsTests(ITestOutputHelper outputHelpe
 
         var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
         services.AddSingleton<IAnsiConsole>(console);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         return (provider.GetRequiredService<DoCommand>(), writer);
     }
 }

@@ -19,7 +19,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --help");
@@ -121,7 +121,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"logs --tail {tailValue}");
@@ -141,7 +141,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // Use --help to avoid needing a running AppHost
@@ -158,7 +158,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // Without --follow and no running AppHost, should succeed (like Unix ps with no processes)
@@ -178,7 +178,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // Use --help to verify the option is parsed correctly
@@ -197,7 +197,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"logs --format {format} --help");
@@ -212,7 +212,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format invalid");
@@ -228,7 +228,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --follow --tail 50 --help");
@@ -243,7 +243,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs myresource --follow --tail 100 --format json --help");
@@ -258,7 +258,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // -f is short for --follow, -n is short for --tail
@@ -373,7 +373,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter);
+        using var provider = CreateLogsTestServices(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json");
@@ -403,7 +403,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs");
@@ -430,7 +430,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter);
+        using var provider = CreateLogsTestServices(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"logs {resourceName} --format json");
@@ -452,7 +452,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter);
+        using var provider = CreateLogsTestServices(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json --timestamps");
@@ -490,7 +490,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter);
+        using var provider = CreateLogsTestServices(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json");
@@ -529,7 +529,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --timestamps");
@@ -551,7 +551,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs");
@@ -570,11 +570,78 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LogsCommand_TextOutput_StripsAnsiControlSequences_WhenAnsiDisabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateLogsTestServices(
+            workspace,
+            outputWriter,
+            disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z \u001b[38;5;252mReady\u001b[0m to accept connections",
+                    IsError = false
+                }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var logLine = Assert.Single(outputWriter.Logs, l => l.StartsWith("[", StringComparison.Ordinal));
+        Assert.Equal("[redis] Ready to accept connections", logLine);
+        Assert.DoesNotContain("\u001b", logLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LogsCommand_JsonOutput_PreservesAnsiControlSequences()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateLogsTestServices(
+            workspace,
+            outputWriter,
+            disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine
+                {
+                    ResourceName = "redis",
+                    LineNumber = 1,
+                    Content = "2025-01-15T10:30:00Z \u001b[38;5;252mReady\u001b[0m to accept connections",
+                    IsError = false
+                }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.First(l => l.Contains("\"logs\"", StringComparison.Ordinal));
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+
+        Assert.NotNull(logsOutput);
+        var log = Assert.Single(logsOutput.Logs);
+        Assert.Equal("\u001b[38;5;252mReady\u001b[0m to accept connections", log.Content);
+    }
+
+    [Fact]
     public async Task LogsCommand_HiddenResources_AreExcludedByDefault()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+        using var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json");
@@ -599,7 +666,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+        using var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json --include-hidden");
@@ -624,7 +691,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
+        using var provider = CreateLogsTestServicesWithHidden(workspace, outputWriter);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs aspire-dashboard --format json");
@@ -710,7 +777,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
             options.DisableAnsi = false;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --format json");
 
@@ -819,7 +886,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
             options.DisableAnsi = true;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("logs --follow");
 
@@ -895,7 +962,8 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
         Action<Dictionary<string, string?>>? configureOptions = null,
-        bool disableAnsi = false)
+        bool disableAnsi = false,
+        IEnumerable<ResourceLogLine>? logLines = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -932,7 +1000,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
                     State = "Running"
                 }
             ],
-            LogLines =
+            LogLines = logLines is not null ? [.. logLines] :
             [
                 // Log lines are intentionally out of timestamp order to verify sorting
                 new ResourceLogLine

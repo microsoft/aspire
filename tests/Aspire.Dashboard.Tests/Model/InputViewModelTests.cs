@@ -5,7 +5,7 @@ using Aspire.Dashboard.Model.Interaction;
 using Aspire.DashboardService.Proto.V1;
 using Xunit;
 
-namespace Aspire.Dashboard.Components.Tests.Model;
+namespace Aspire.Dashboard.Tests.Model;
 
 public class InputViewModelTests
 {
@@ -177,5 +177,86 @@ public class InputViewModelTests
 
         // Assert - When AllowCustomChoice is true, value should not default
         Assert.True(string.IsNullOrEmpty(viewModel.Value));
+    }
+
+    [Fact]
+    public void ChoiceVersion_IncrementedWhenOptionsChange()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Choose",
+            InputType = InputType.Choice,
+            Placeholder = "Select"
+        };
+        input.Options.Add("a", "A");
+
+        var viewModel = new InputViewModel(input);
+        var initialVersion = viewModel.ChoiceVersion;
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Choose",
+            InputType = InputType.Choice,
+            Placeholder = "Select"
+        };
+        updatedInput.Options.Add("b", "B");
+        updatedInput.Options.Add("c", "C");
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.Equal(initialVersion + 1, viewModel.ChoiceVersion);
+    }
+
+    [Fact]
+    public void ChoiceVersion_NotIncrementedForNonChoiceInput()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Name",
+            InputType = InputType.Text
+        };
+
+        var viewModel = new InputViewModel(input);
+        var initialVersion = viewModel.ChoiceVersion;
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Name",
+            InputType = InputType.Text,
+            Value = "test"
+        };
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.Equal(initialVersion, viewModel.ChoiceVersion);
+    }
+
+    [Fact]
+    public void ChoiceVersion_NotIncrementedWhenOptionsUnchanged()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Choose",
+            InputType = InputType.Choice,
+            Placeholder = "Select"
+        };
+        input.Options.Add("a", "A");
+        input.Options.Add("b", "B");
+
+        var viewModel = new InputViewModel(input);
+        var initialVersion = viewModel.ChoiceVersion;
+
+        var sameInput = new InteractionInput
+        {
+            Label = "Choose",
+            InputType = InputType.Choice,
+            Placeholder = "Select"
+        };
+        sameInput.Options.Add("a", "A");
+        sameInput.Options.Add("b", "B");
+
+        viewModel.SetInput(sameInput);
+
+        Assert.Equal(initialVersion, viewModel.ChoiceVersion);
     }
 }
