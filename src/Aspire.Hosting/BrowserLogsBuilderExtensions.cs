@@ -38,8 +38,9 @@ public static class BrowserLogsBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="browser">
     /// The browser to launch. When not specified, the tracked browser uses the configured value from
-    /// <c>Aspire:Hosting:BrowserLogs</c> and falls back to <c>"chrome"</c>. Supported values include logical browser
-    /// names such as <c>"msedge"</c> and <c>"chrome"</c>, or an explicit browser executable path.
+    /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise prefers an installed <c>"chrome"</c> browser, then an installed
+    /// <c>"msedge"</c> browser, before finally falling back to <c>"chrome"</c>. Supported values include logical
+    /// browser names such as <c>"msedge"</c> and <c>"chrome"</c>, or an explicit browser executable path.
     /// </param>
     /// <param name="profile">
     /// Optional Chromium profile directory name to use. When not specified, the tracked browser uses the configured
@@ -240,5 +241,20 @@ public static class BrowserLogsBuilderExtensions
         return new BrowserLogsSettings(resolvedBrowser, resolvedProfile);
     }
 
-    private static string GetDefaultBrowser() => "chrome";
+    internal static string GetDefaultBrowser(Func<string, string?> resolveBrowserExecutable)
+    {
+        if (resolveBrowserExecutable("chrome") is not null)
+        {
+            return "chrome";
+        }
+
+        if (resolveBrowserExecutable("msedge") is not null)
+        {
+            return "msedge";
+        }
+
+        return "chrome";
+    }
+
+    private static string GetDefaultBrowser() => GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable);
 }

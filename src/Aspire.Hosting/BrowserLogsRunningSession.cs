@@ -216,7 +216,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        _browserExecutable = ResolveBrowserExecutable(_settings.Browser);
+        _browserExecutable = TryResolveBrowserExecutable(_settings.Browser);
         if (_browserExecutable is null)
         {
             throw new InvalidOperationException($"Unable to locate browser '{_settings.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
@@ -638,7 +638,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory);
     }
 
-    private static string? ResolveBrowserExecutable(string browser)
+    internal static string? TryResolveBrowserExecutable(string browser)
     {
         if (Path.IsPathRooted(browser) && File.Exists(browser))
         {

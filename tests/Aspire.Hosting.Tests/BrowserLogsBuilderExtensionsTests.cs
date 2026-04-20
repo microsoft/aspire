@@ -97,7 +97,42 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public void WithBrowserLogs_UsesPlatformDefaultBrowserWhenConfigurationIsMissing()
+    public void GetDefaultBrowser_PrefersChromeWhenInstalled()
+    {
+        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(browser =>
+            browser switch
+            {
+                "chrome" => "/resolved/chrome",
+                "msedge" => "/resolved/edge",
+                _ => null
+            });
+
+        Assert.Equal("chrome", browser);
+    }
+
+    [Fact]
+    public void GetDefaultBrowser_FallsBackToEdgeWhenChromeIsMissing()
+    {
+        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(browser =>
+            browser switch
+            {
+                "msedge" => "/resolved/edge",
+                _ => null
+            });
+
+        Assert.Equal("msedge", browser);
+    }
+
+    [Fact]
+    public void GetDefaultBrowser_FallsBackToChromeWhenKnownBrowsersAreMissing()
+    {
+        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(static _ => null);
+
+        Assert.Equal("chrome", browser);
+    }
+
+    [Fact]
+    public void WithBrowserLogs_UsesDetectedDefaultBrowserWhenConfigurationIsMissing()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
@@ -116,7 +151,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal("chrome", browserLogsResource.Browser);
+        Assert.Equal(BrowserLogsBuilderExtensions.GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable), browserLogsResource.Browser);
         Assert.Null(browserLogsResource.Profile);
     }
 
