@@ -128,7 +128,6 @@ public class ConsoleInteractionServiceTests
     [Fact]
     public void DisplayMarkdown_WithBasicMarkdown_ConvertsToSpectreMarkup()
     {
-        // Arrange
         var output = new StringBuilder();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -140,15 +139,12 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console);
         var markdown = "# Header\nThis is **bold** and *italic* text with `code`.";
 
-        // Act
         var exception = Record.Exception(() => interactionService.DisplayMarkdown(markdown));
 
-        // Assert
         Assert.Null(exception);
         var outputString = output.ToString();
-        // Should contain converted markup, but due to Ansi = No, the actual markup tags won't appear in output
-        // Just verify it doesn't throw and produces some output
-        Assert.NotEmpty(outputString.Trim());
+        Assert.Contains("Header", outputString);
+        Assert.Contains("This is bold and italic text with code.", outputString);
     }
 
     [Fact]
@@ -191,6 +187,38 @@ public class ConsoleInteractionServiceTests
         interactionService.DisplayMarkdown("Visit [GitHub](https://github.com) for more info.");
 
         Assert.Contains("Visit GitHub (https://github.com) for more info.", output.ToString());
+    }
+
+    [Fact]
+    public void DisplayMarkdown_WithTable_RendersReadableInteractiveOutput()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext);
+        var markdown = """
+            | Setting | Environment variable | Purpose |
+            | ------- | -------------------- | ------- |
+            | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
+            """;
+
+        interactionService.DisplayMarkdown(markdown);
+
+        var outputString = output.ToString().Replace("\r\n", "\n");
+
+        Assert.Contains("Setting", outputString);
+        Assert.Contains("Environment variable", outputString);
+        Assert.Contains("Purpose", outputString);
+        Assert.Contains("Azure:SubscriptionId", outputString);
+        Assert.Contains("Azure__SubscriptionId", outputString);
+        Assert.Contains("Target Azure subscription", outputString);
+        Assert.True(outputString.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length >= 3);
     }
 
     [Fact]

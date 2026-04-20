@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Utils;
+using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -142,6 +144,266 @@ public class MarkdownToSpectreConverterTests
         var result = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
 
         Assert.Equal("Heading\nThis is bold, italic, and deleted.", result);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_WithTable_RendersReadableRows()
+    {
+        var markdown = """
+            | Setting | Environment variable | Purpose |
+            | :------ | :------------------- | ------: |
+            | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
+            """;
+
+        var result = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
+
+        var lines = result.Replace("\r\n", "\n").Split('\n');
+
+        Assert.Equal(3, lines.Length);
+        Assert.StartsWith("| Setting", lines[0]);
+        Assert.Contains("Environment variable", lines[0]);
+        Assert.Contains("Purpose", lines[0]);
+        Assert.Contains(":---", lines[1]);
+        Assert.EndsWith(": |", lines[1]);
+        Assert.Contains("Azure:SubscriptionId", lines[2]);
+        Assert.Contains("Azure__SubscriptionId", lines[2]);
+        Assert.Contains("Target Azure subscription", lines[2]);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithTable_ReturnsSpectreTable()
+    {
+        var markdown = """
+            | Setting | Environment variable | Purpose |
+            | ------- | -------------------- | ------- |
+            | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
+            """;
+
+        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
+
+        var table = Assert.IsType<Table>(renderable);
+        Assert.Equal(3, table.Columns.Count);
+        Assert.Single(table.Rows);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithMixedMarkdown_RendersReadableOutput()
+    {
+        var markdown = """
+            # Header
+
+            > quoted line
+
+            1. First item
+            2. Second item
+
+            ```bash
+            aspire docs get redis-integration
+            ```
+
+            Visit [GitHub](https://github.com) for more info.
+            """;
+
+        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
+
+        Assert.IsType<Rows>(renderable);
+
+        var output = RenderToPlainConsole(renderable);
+
+        Assert.Contains("Header", output);
+        Assert.Contains("quoted line", output);
+        Assert.Contains("1. First item", output);
+        Assert.Contains("2. Second item", output);
+        Assert.Contains("aspire docs get redis-integration", output);
+        Assert.Contains("Visit GitHub for more info.", output);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithQuotedLinkAndCode_PreservesInteractiveFormatting()
+    {
+        var markdown = "> Learn how to configure HTTPS endpoints with the [Aspire CLI](https://aspire.dev/get-started/install-cli/) and `aspire run`.";
+
+        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
+
+        var output = RenderToPlainConsole(renderable);
+
+        Assert.Contains("Learn how to configure HTTPS endpoints with the Aspire CLI and aspire run.", output);
+        Assert.DoesNotContain("https://aspire.dev/get-started/install-cli/", output);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithQuotedStructuredContent_RendersReadableOutput()
+    {
+        var markdown = """
+            > Steps:
+            >
+            > * First item
+            > * Second item
+            >
+            > ```bash
+            > aspire docs get redis-integration
+            > ```
+            """;
+
+        var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        Assert.Contains("Steps:", output);
+        Assert.Contains("* First item", output);
+        Assert.Contains("* Second item", output);
+        Assert.Contains("aspire docs get redis-integration", output);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithNestedListItemBlocks_RendersReadableOutput()
+    {
+        var markdown = """
+            1. First paragraph
+
+               Continued explanation.
+
+               * Nested item
+               * Nested item 2
+            """;
+
+        var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        Assert.Contains("""
+            1. First paragraph
+               Continued explanation.
+               * Nested item
+               * Nested item 2
+            """.Replace("\r\n", "\n"), output);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_WithNestedListItemBlocks_PreservesIndentation()
+    {
+        var markdown = """
+            1. First paragraph
+
+               Continued explanation.
+
+               * Nested item
+               * Nested item 2
+            """;
+
+        var output = MarkdownToSpectreConverter.ConvertToPlainText(markdown).Replace("\r\n", "\n");
+
+        Assert.Contains("""
+            1. First paragraph
+               Continued explanation.
+               * Nested item
+               * Nested item 2
+            """.Replace("\r\n", "\n"), output);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_WithNestedListOnlyItem_StartsNestedListOnContinuationLine()
+    {
+        var markdown = """
+            1.
+               * Nested item
+               * Nested item 2
+            """;
+
+        var output = MarkdownToSpectreConverter.ConvertToPlainText(markdown).Replace("\r\n", "\n");
+
+        Assert.Contains("""
+            1.
+               * Nested item
+               * Nested item 2
+            """.Replace("\r\n", "\n"), output);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithAlignedTable_PreservesColumnAlignment()
+    {
+        var markdown = """
+            | Left | Center | Right |
+            | :--- | :----: | ----: |
+            | alpha | beta | gamma |
+            """;
+
+        var table = Assert.IsType<Table>(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        Assert.Equal(Justify.Left, table.Columns[0].Alignment);
+        Assert.Equal(Justify.Center, table.Columns[1].Alignment);
+        Assert.Equal(Justify.Right, table.Columns[2].Alignment);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_WithAlignedTable_PreservesAlignmentMarkers()
+    {
+        var markdown = """
+            | Left | Center | Right |
+            | :--- | :----: | ----: |
+            | alpha | beta | gamma |
+            """;
+
+        var lines = MarkdownToSpectreConverter.ConvertToPlainText(markdown).Replace("\r\n", "\n").Split('\n');
+
+        Assert.Equal("| Left  | Center | Right |", lines[0]);
+        Assert.Equal("| :---- | :----: | ----: |", lines[1]);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithSparseTable_PadsMissingCells()
+    {
+        var markdown = """
+            | Col A | Col B | Col C |
+            | ----- | ----- | ----- |
+            | first | second |
+            | | middle | last |
+            """;
+
+        var table = Assert.IsType<Table>(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+        var output = RenderToPlainConsole(table);
+
+        Assert.Equal(3, table.Columns.Count);
+        Assert.Equal(2, table.Rows.Count);
+        Assert.Contains("first", output);
+        Assert.Contains("second", output);
+        Assert.Contains("middle", output);
+        Assert.Contains("last", output);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithFormattedTableCells_RendersReadableCellContent()
+    {
+        var markdown = """
+            | Setting | Example | Docs |
+            | ------- | ------- | ---- |
+            | **Name** | `redis` | [Guide](https://example.com/guide) |
+            """;
+
+        var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        Assert.Contains("Name", output);
+        Assert.Contains("redis", output);
+        Assert.Contains("Guide", output);
+        Assert.DoesNotContain("https://example.com/guide", output);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_WithAutolinks_ConvertsCorrectly()
+    {
+        var markdown = "Visit https://example.com or <https://aspire.dev> for more info.";
+
+        var result = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
+
+        Assert.Equal("Visit https://example.com or https://aspire.dev for more info.", result);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithAutolinks_RendersReadableUrls()
+    {
+        var markdown = "Visit https://example.com or <https://aspire.dev> for more info.";
+
+        var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        Assert.Contains("https://example.com", output);
+        Assert.Contains("https://aspire.dev", output);
+        Assert.DoesNotContain("<https://aspire.dev>", output);
     }
 
     [Fact]
@@ -374,6 +636,25 @@ Some [strikethrough]strikethrough[/] text with [grey]inline code block[/].
 
         // Assert
         Assert.Equal(expected, result);
+    }
+
+    private static string RenderToPlainConsole(IRenderable renderable)
+    {
+        var writer = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(writer)
+        });
+
+        console.Profile.Width = int.MaxValue;
+        console.Profile.Capabilities.Links = false;
+
+        console.Write(renderable);
+        console.WriteLine();
+
+        return writer.ToString().Replace("\r\n", "\n");
     }
 
     [Theory]

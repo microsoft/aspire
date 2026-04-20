@@ -380,8 +380,9 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
-        var spectreMarkup = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
-        target.MarkupLine(spectreMarkup);
+        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
+        target.Write(renderable);
+        target.WriteLine();
     }
 
     private bool ShouldDisplayMarkdownAsPlainText(ConsoleOutput effectiveConsole)

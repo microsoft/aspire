@@ -1,7 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.RegularExpressions;
+using Markdig;
+using Markdig.Extensions.Tables;
+using Markdig.Syntax;
+using Markdig.Syntax.Inlines;
+using Spectre.Console;
+using Spectre.Console.Rendering;
+using SpectreTable = Spectre.Console.Table;
+using MarkdigTable = Markdig.Extensions.Tables.Table;
+using MarkdigTableCell = Markdig.Extensions.Tables.TableCell;
+using MarkdigTableRow = Markdig.Extensions.Tables.TableRow;
 
 namespace Aspire.Cli.Utils;
 
@@ -10,6 +21,33 @@ namespace Aspire.Cli.Utils;
 /// </summary>
 internal static partial class MarkdownToSpectreConverter
 {
+    private static readonly MarkdownPipeline s_markdownPipeline = new MarkdownPipelineBuilder()
+        .UsePipeTables()
+        .UseAutoLinks()
+        .UseEmphasisExtras()
+        .Build();
+
+    /// <summary>
+    /// Converts markdown text to a Spectre.Console renderable tree for CLI display.
+    /// </summary>
+    /// <param name="markdown">The markdown text to convert.</param>
+    /// <returns>The converted Spectre.Console renderable.</returns>
+    public static IRenderable ConvertToRenderable(string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(markdown))
+        {
+            return Text.Empty;
+        }
+
+        var renderables = RenderBlocksToRenderables(ParseMarkdown(markdown));
+        return renderables.Count switch
+        {
+            0 => Text.Empty,
+            1 => renderables[0],
+            _ => new Rows(renderables)
+        };
+    }
+
     /// <summary>
     /// Converts markdown text to Spectre.Console markup.
     /// Supports basic markdown elements: headers, bold, italic, links, and inline code.
@@ -83,22 +121,543 @@ internal static partial class MarkdownToSpectreConverter
             return markdown;
         }
 
-        var result = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
-        result = ConvertImages(result);
-        result = ConvertLinksToPlainText(result);
-        result = HeaderLevel6Regex().Replace(result, "$1");
-        result = HeaderLevel5Regex().Replace(result, "$1");
-        result = HeaderLevel4Regex().Replace(result, "$1");
-        result = HeaderLevel3Regex().Replace(result, "$1");
-        result = HeaderLevel2Regex().Replace(result, "$1");
-        result = HeaderLevel1Regex().Replace(result, "$1");
-        result = BoldDoubleAsterisksRegex().Replace(result, "$1");
-        result = BoldDoubleUnderscoresRegex().Replace(result, "$1");
-        result = ItalicSingleAsteriskRegex().Replace(result, "$1");
-        result = ItalicSingleUnderscoreRegex().Replace(result, "$1");
-        result = StrikethroughRegex().Replace(result, "$1");
+        return RenderBlocksToPlainText(ParseMarkdown(markdown));
+    }
 
-        return result;
+    private static MarkdownDocument ParseMarkdown(string markdown)
+    {
+        var normalizedMarkdown = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
+        return Markdig.Markdown.Parse(normalizedMarkdown, s_markdownPipeline);
+    }
+
+    private static List<IRenderable> RenderBlocksToRenderables(ContainerBlock container)
+    {
+        var renderables = new List<IRenderable>();
+
+        foreach (var block in container)
+        {
+            var renderable = RenderBlockToRenderable(block);
+            if (renderable is not null)
+            {
+                renderables.Add(renderable);
+            }
+        }
+
+        return renderables;
+    }
+
+    private static IRenderable? RenderBlockToRenderable(Block block) => block switch
+    {
+        MarkdigTable table => RenderTableToRenderable(table),
+        _ => CreateMarkupRenderable(RenderBlockToMarkup(block))
+    };
+
+    private static IRenderable? CreateMarkupRenderable(string markup)
+    {
+        return string.IsNullOrEmpty(markup)
+            ? null
+            : new Markup(markup);
+    }
+
+    private static string RenderBlocksToPlainText(ContainerBlock container)
+    {
+        var blocks = new List<string>();
+
+        foreach (var block in container)
+        {
+            var text = RenderBlockToPlainText(block);
+            if (!string.IsNullOrEmpty(text))
+            {
+                blocks.Add(text);
+            }
+        }
+
+        return string.Join("\n", blocks);
+    }
+
+    private static string RenderBlockToPlainText(Block block) => block switch
+    {
+        ParagraphBlock paragraph => RenderInlinesToPlainText(paragraph.Inline),
+        HeadingBlock heading => RenderInlinesToPlainText(heading.Inline),
+        QuoteBlock quote => RenderBlocksToPlainText(quote),
+        ListBlock list => RenderListToPlainText(list),
+        CodeBlock codeBlock => GetRawCodeText(codeBlock).TrimEnd('\r', '\n'),
+        MarkdigTable table => RenderTableToPlainText(table),
+        _ => string.Empty
+    };
+
+    private static string RenderBlockToMarkup(Block block) => block switch
+    {
+        ParagraphBlock paragraph => RenderInlinesToMarkup(paragraph.Inline),
+        HeadingBlock heading => ApplyHeadingStyle(heading.Level, RenderInlinesToMarkup(heading.Inline)),
+        QuoteBlock quote => RenderQuoteToMarkup(quote),
+        ListBlock list => RenderListToMarkup(list),
+        CodeBlock codeBlock => $"[grey]{GetRawCodeText(codeBlock).TrimEnd('\r', '\n').EscapeMarkup()}[/]",
+        MarkdigTable table => RenderTableToPlainText(table).EscapeMarkup(),
+        _ => string.Empty
+    };
+
+    private static string RenderQuoteToMarkup(QuoteBlock quote)
+    {
+        var quoteMarkup = RenderBlocksToMarkup(quote);
+        if (string.IsNullOrEmpty(quoteMarkup))
+        {
+            return "[italic grey][/]";
+        }
+
+        var builder = new StringBuilder();
+        var lines = quoteMarkup.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append('\n');
+            }
+
+            builder.Append("[italic grey]");
+            builder.Append(lines[i]);
+            builder.Append("[/]");
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderListToMarkup(ListBlock list)
+    {
+        var builder = new StringBuilder();
+        var index = int.TryParse(list.OrderedStart, out var orderedStart) ? orderedStart : 1;
+
+        foreach (var item in list.OfType<ListItemBlock>())
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append('\n');
+            }
+
+            var prefix = list.IsOrdered ? $"{index++}. " : "* ";
+            builder.Append(RenderListItem(item, prefix.EscapeMarkup(), prefix.Length, RenderBlockToMarkup));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderListToPlainText(ListBlock list)
+    {
+        var builder = new StringBuilder();
+        var index = int.TryParse(list.OrderedStart, out var orderedStart) ? orderedStart : 1;
+
+        foreach (var item in list.OfType<ListItemBlock>())
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append('\n');
+            }
+
+            var prefix = list.IsOrdered ? $"{index++}. " : "* ";
+            builder.Append(RenderListItem(item, prefix, prefix.Length, RenderBlockToPlainText));
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderListItem(ListItemBlock item, string prefix, int continuationIndent, Func<Block, string> blockRenderer)
+    {
+        var renderedBlocks = new List<(Block Block, string Content)>();
+
+        foreach (var block in item)
+        {
+            var content = blockRenderer(block);
+            if (!string.IsNullOrEmpty(content))
+            {
+                renderedBlocks.Add((block, content));
+            }
+        }
+
+        if (renderedBlocks.Count == 0)
+        {
+            return prefix.TrimEnd();
+        }
+
+        var builder = new StringBuilder();
+        var continuationPrefix = new string(' ', continuationIndent);
+
+        if (renderedBlocks[0].Block is ParagraphBlock)
+        {
+            builder.Append(prefix);
+            AppendWithHangingIndent(builder, renderedBlocks[0].Content, continuationPrefix);
+        }
+        else
+        {
+            builder.Append(prefix.TrimEnd());
+            builder.Append('\n');
+            builder.Append(IndentBlock(renderedBlocks[0].Content, continuationPrefix));
+        }
+
+        for (var i = 1; i < renderedBlocks.Count; i++)
+        {
+            builder.Append('\n');
+            builder.Append(IndentBlock(renderedBlocks[i].Content, continuationPrefix));
+        }
+
+        return builder.ToString();
+    }
+
+    private static void AppendWithHangingIndent(StringBuilder builder, string content, string continuationPrefix)
+    {
+        var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Split('\n');
+
+        builder.Append(lines[0]);
+
+        for (var i = 1; i < lines.Length; i++)
+        {
+            builder.Append('\n');
+
+            if (!string.IsNullOrEmpty(lines[i]))
+            {
+                builder.Append(continuationPrefix);
+            }
+
+            builder.Append(lines[i]);
+        }
+    }
+
+    private static string IndentBlock(string content, string prefix)
+    {
+        var builder = new StringBuilder();
+        var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Split('\n');
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append('\n');
+            }
+
+            if (!string.IsNullOrEmpty(lines[i]))
+            {
+                builder.Append(prefix);
+            }
+
+            builder.Append(lines[i]);
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderInlinesToMarkup(ContainerInline? inline)
+    {
+        if (inline is null)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        var current = inline.FirstChild;
+
+        while (current is not null)
+        {
+            builder.Append(RenderInlineToMarkup(current));
+            current = current.NextSibling;
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderInlineToMarkup(Inline inline) => inline switch
+    {
+        LiteralInline literal => literal.Content.ToString().EscapeMarkup(),
+        CodeInline code => $"[grey][bold]{code.Content.EscapeMarkup()}[/][/]",
+        LinkInline { IsImage: true } => string.Empty,
+        LinkInline link => RenderLinkToMarkup(RenderInlinesToMarkup(link), link.Url),
+        AutolinkInline autolink => RenderLinkToMarkup(autolink.Url.EscapeMarkup(), autolink.Url),
+        EmphasisInline emphasis => RenderEmphasisToMarkup(emphasis),
+        LineBreakInline => "\n",
+        ContainerInline container => RenderInlinesToMarkup(container),
+        _ => string.Empty
+    };
+
+    private static string RenderEmphasisToMarkup(EmphasisInline emphasis)
+    {
+        var content = RenderInlinesToMarkup(emphasis);
+        return emphasis.DelimiterChar switch
+        {
+            '~' => $"[strikethrough]{content}[/]",
+            '*' or '_' when emphasis.DelimiterCount >= 2 => $"[bold]{content}[/]",
+            '*' or '_' => $"[italic]{content}[/]",
+            _ => content
+        };
+    }
+
+    private static string RenderLinkToMarkup(string text, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return text;
+        }
+
+        var linkText = string.IsNullOrEmpty(text) ? url.EscapeMarkup() : text;
+        return $"[cyan][link={url}]{linkText}[/][/]";
+    }
+
+    private static string RenderInlinesToPlainText(ContainerInline? inline)
+    {
+        if (inline is null)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        var current = inline.FirstChild;
+
+        while (current is not null)
+        {
+            builder.Append(RenderInlineToPlainText(current));
+            current = current.NextSibling;
+        }
+
+        return builder.ToString();
+    }
+
+    private static string RenderInlineToPlainText(Inline inline) => inline switch
+    {
+        LiteralInline literal => literal.Content.ToString(),
+        CodeInline code => code.Content,
+        LinkInline { IsImage: true } => string.Empty,
+        LinkInline link => RenderLinkToPlainText(RenderInlinesToPlainText(link), link.Url),
+        AutolinkInline autolink => autolink.Url,
+        EmphasisInline emphasis => RenderInlinesToPlainText(emphasis),
+        LineBreakInline => "\n",
+        ContainerInline container => RenderInlinesToPlainText(container),
+        _ => string.Empty
+    };
+
+    private static string RenderLinkToPlainText(string text, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return text;
+        }
+
+        return string.IsNullOrEmpty(text) || string.Equals(text, url, StringComparison.Ordinal)
+            ? url
+            : $"{text} ({url})";
+    }
+
+    private static string ApplyHeadingStyle(int level, string content)
+    {
+        return level switch
+        {
+            1 => $"[bold green]{content}[/]",
+            2 => $"[bold blue]{content}[/]",
+            3 => $"[bold yellow]{content}[/]",
+            _ => $"[bold]{content}[/]"
+        };
+    }
+
+    private static IRenderable RenderTableToRenderable(MarkdigTable markdownTable)
+    {
+        var rows = markdownTable.OfType<MarkdigTableRow>().ToList();
+        if (rows.Count == 0)
+        {
+            return Text.Empty;
+        }
+
+        var columnCount = rows.Max(static row => row.Count);
+        var headerRow = rows.FirstOrDefault(static row => row.IsHeader);
+        var spectreTable = new SpectreTable();
+
+        for (var i = 0; i < columnCount; i++)
+        {
+            var headerCell = headerRow is not null && i < headerRow.Count
+                ? (MarkdigTableCell)headerRow[i]
+                : null;
+
+            var headerMarkup = headerCell is not null
+                ? RenderTableCellToMarkup(headerCell)
+                : string.Empty;
+
+            var column = new TableColumn(string.IsNullOrEmpty(headerMarkup) ? Text.Empty : new Markup(headerMarkup));
+
+            if (markdownTable.ColumnDefinitions is { Count: > 0 } && i < markdownTable.ColumnDefinitions.Count)
+            {
+                var alignment = markdownTable.ColumnDefinitions[i].Alignment;
+                if (alignment is not null)
+                {
+                    column.Alignment = alignment switch
+                    {
+                        TableColumnAlign.Left => Justify.Left,
+                        TableColumnAlign.Center => Justify.Center,
+                        TableColumnAlign.Right => Justify.Right,
+                        _ => column.Alignment
+                    };
+                }
+            }
+
+            spectreTable.AddColumn(column);
+        }
+
+        foreach (var row in rows)
+        {
+            if (row.IsHeader)
+            {
+                continue;
+            }
+
+            var cells = new IRenderable[columnCount];
+            for (var i = 0; i < columnCount; i++)
+            {
+                if (i < row.Count)
+                {
+                    var markup = RenderTableCellToMarkup((MarkdigTableCell)row[i]);
+                    cells[i] = string.IsNullOrEmpty(markup)
+                        ? Text.Empty
+                        : new Markup(markup);
+                }
+                else
+                {
+                    cells[i] = Text.Empty;
+                }
+            }
+
+            spectreTable.AddRow(cells);
+        }
+
+        return spectreTable;
+    }
+
+    private static string RenderTableToPlainText(MarkdigTable markdownTable)
+    {
+        var rows = markdownTable.OfType<MarkdigTableRow>().ToList();
+        if (rows.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var values = rows
+            .Select(row => row
+                .OfType<MarkdigTableCell>()
+                .Select(RenderTableCellToPlainText)
+                .ToList())
+            .ToList();
+
+        var columnCount = values.Max(static row => row.Count);
+        var widths = new int[columnCount];
+
+        foreach (var row in values)
+        {
+            for (var i = 0; i < columnCount; i++)
+            {
+                var value = i < row.Count ? row[i] : string.Empty;
+                widths[i] = Math.Max(widths[i], value.Length);
+            }
+        }
+
+        var builder = new StringBuilder();
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            if (builder.Length > 0)
+            {
+                builder.Append('\n');
+            }
+
+            AppendTableRow(builder, values[rowIndex], widths);
+
+            if (rows[rowIndex].IsHeader)
+            {
+                builder.Append('\n');
+                AppendTableSeparator(builder, widths, markdownTable.ColumnDefinitions);
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static void AppendTableRow(StringBuilder builder, IReadOnlyList<string> row, IReadOnlyList<int> widths)
+    {
+        builder.Append('|');
+        for (var i = 0; i < widths.Count; i++)
+        {
+            var value = i < row.Count ? row[i] : string.Empty;
+            builder.Append(' ');
+            builder.Append(value.PadRight(widths[i]));
+            builder.Append(' ');
+            builder.Append('|');
+        }
+    }
+
+    private static void AppendTableSeparator(StringBuilder builder, IReadOnlyList<int> widths, IReadOnlyList<TableColumnDefinition>? definitions)
+    {
+        builder.Append('|');
+        for (var i = 0; i < widths.Count; i++)
+        {
+            var width = Math.Max(widths[i], 3);
+            var separator = definitions is { Count: > 0 } && i < definitions.Count
+                ? definitions[i].Alignment switch
+                {
+                    TableColumnAlign.Left => ":" + new string('-', Math.Max(width - 1, 2)),
+                    TableColumnAlign.Center => ":" + new string('-', Math.Max(width - 2, 1)) + ":",
+                    TableColumnAlign.Right => new string('-', Math.Max(width - 1, 2)) + ":",
+                    _ => new string('-', width)
+                }
+                : new string('-', width);
+
+            builder.Append(' ');
+            builder.Append(separator);
+            builder.Append(' ');
+            builder.Append('|');
+        }
+    }
+
+    private static string RenderTableCellToMarkup(MarkdigTableCell cell)
+    {
+        return RenderBlocksToMarkup(cell);
+    }
+
+    private static string RenderTableCellToPlainText(MarkdigTableCell cell)
+    {
+        var text = RenderBlocksToPlainText(cell);
+        return string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private static string RenderBlocksToMarkup(ContainerBlock container)
+    {
+        var blocks = new List<string>();
+
+        foreach (var block in container)
+        {
+            var markup = RenderBlockToMarkup(block);
+            if (!string.IsNullOrEmpty(markup))
+            {
+                blocks.Add(markup);
+            }
+        }
+
+        return string.Join("\n", blocks);
+    }
+
+    private static string GetRawCodeText(CodeBlock codeBlock)
+    {
+        var builder = new StringBuilder();
+        var slices = codeBlock.Lines.Lines;
+        if (slices is null)
+        {
+            return string.Empty;
+        }
+
+        for (var i = 0; i < slices.Length; i++)
+        {
+            ref var slice = ref slices[i].Slice;
+            if (slice.Text is null)
+            {
+                break;
+            }
+
+            builder.Append(slice.AsSpan());
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
     }
 
     private static string ConvertHeaders(string text)
