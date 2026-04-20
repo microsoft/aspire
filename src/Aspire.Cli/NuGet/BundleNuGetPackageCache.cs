@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Caching;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -19,17 +22,20 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
 {
     private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
+    private readonly IDiskCache _diskCache;
     private readonly ILogger<BundleNuGetPackageCache> _logger;
     private readonly IFeatures _features;
 
     public BundleNuGetPackageCache(
         IBundleService bundleService,
         LayoutProcessRunner layoutProcessRunner,
+        IDiskCache diskCache,
         ILogger<BundleNuGetPackageCache> logger,
         IFeatures features)
     {
         _bundleService = bundleService;
         _layoutProcessRunner = layoutProcessRunner;
+        _diskCache = diskCache;
         _logger = logger;
         _features = features;
     }
@@ -45,6 +51,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             "Aspire.ProjectTemplates",
             prerelease,
             nugetConfigFile,
+            useCache: true,
             cancellationToken).ConfigureAwait(false);
 
         return packages.Where(p => p.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
@@ -61,6 +68,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             "Aspire.Hosting",
             prerelease,
             nugetConfigFile,
+            useCache: true,
             cancellationToken).ConfigureAwait(false);
 
         return FilterPackages(packages, filter: null);
@@ -77,6 +85,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             "Aspire.Cli",
             prerelease,
             nugetConfigFile,
+            useCache: false,
             cancellationToken).ConfigureAwait(false);
 
         return packages.Where(p => p.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
@@ -96,6 +105,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             packageId,
             prerelease,
             nugetConfigFile,
+            useCache,
             cancellationToken).ConfigureAwait(false);
 
         return FilterPackages(packages, filter);
@@ -106,8 +116,54 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         string query,
         bool prerelease,
         FileInfo? nugetConfigFile,
+        bool useCache,
         CancellationToken cancellationToken)
     {
+        // Attempt to serve from disk cache when caching is enabled
+        string? cacheKey = null;
+        var cacheEnabled = useCache;
+
+        if (cacheEnabled)
+        {
+            try
+            {
+                var nugetConfigHash = nugetConfigFile is not null && nugetConfigFile.Exists
+                    ? await ComputeFileHashAsync(nugetConfigFile, cancellationToken).ConfigureAwait(false)
+                    : string.Empty;
+
+                var cliVersion = VersionHelper.GetDefaultTemplateVersion();
+                cacheKey = $"bundle|query={query}|prerelease={prerelease}|nugetConfigHash={nugetConfigHash}|cliVersion={cliVersion}";
+
+                var cached = await _diskCache.GetAsync(cacheKey, cancellationToken).ConfigureAwait(false);
+                if (cached is not null)
+                {
+                    try
+                    {
+                        var cachedResult = JsonSerializer.Deserialize(cached, BundleSearchJsonContext.Default.BundleSearchResult);
+                        if (cachedResult?.Packages is not null)
+                        {
+                            _logger.LogDebug("Returning cached NuGet search results for query: {Query}", query);
+                            return cachedResult.Packages.Select(p => new NuGetPackage
+                            {
+                                Id = p.Id,
+                                Version = p.Version,
+                                Source = p.Source ?? string.Empty
+                            }).ToList();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to parse cached bundle search JSON; performing live search.");
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            {
+                _logger.LogDebug(ex, "Failed to probe package search disk cache; proceeding without cache.");
+                cacheEnabled = false;
+            }
+        }
+
         // Ensure the bundle is extracted and get the layout in a single call
         var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
         if (layout is null)
@@ -194,6 +250,12 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
                 return [];
             }
 
+            // Persist the raw JSON to disk cache for future lookups
+            if (cacheEnabled && cacheKey is not null)
+            {
+                await _diskCache.SetAsync(cacheKey, output, cancellationToken).ConfigureAwait(false);
+            }
+
             // Convert to NuGetPackage format
             return result.Packages.Select(p => new NuGetPackage
             {
@@ -207,6 +269,13 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             _logger.LogError(ex, "Failed to parse search results");
             throw new NuGetPackageCacheException($"Failed to parse search results: {ex.Message}");
         }
+    }
+
+    private static async Task<string> ComputeFileHashAsync(FileInfo file, CancellationToken cancellationToken)
+    {
+        using var stream = file.OpenRead();
+        var hashBytes = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+        return Convert.ToHexString(hashBytes);
     }
 
     private IEnumerable<NuGetPackage> FilterPackages(IEnumerable<NuGetPackage> packages, Func<string, bool>? filter)
