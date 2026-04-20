@@ -117,6 +117,49 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(nugetConfigPath, GetArgumentValue(invocations[0], "--nuget-config"));
     }
 
+    [Fact]
+    public async Task RestorePackagesAsync_SharesRestoreCacheAcrossAppHostsInSameWorkspace()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var firstAppHost = workspace.CreateDirectory(Path.Combine("apps", "api"));
+        var secondAppHost = workspace.CreateDirectory(Path.Combine("apps", "web"));
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var executionFactory = new TestProcessExecutionFactory();
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "packages", "restore");
+
+        // Same packages + sources across two apphosts in one workspace should share the cache.
+        var sharedLibsFirst = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: firstAppHost.FullName);
+        var sharedLibsSecond = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: secondAppHost.FullName);
+
+        Assert.StartsWith(restoreRoot, sharedLibsFirst, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(restoreRoot, sharedLibsSecond, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(sharedLibsFirst, sharedLibsSecond);
+
+        // Different package sets must NOT collide even when workspace is shared.
+        var divergedLibs = await service.RestorePackagesAsync(
+            [("Aspire.Hosting.Python", "9.4.0")],
+            workingDirectory: secondAppHost.FullName);
+
+        Assert.StartsWith(restoreRoot, divergedLibs, StringComparison.OrdinalIgnoreCase);
+        Assert.NotEqual(sharedLibsSecond, divergedLibs);
+    }
+
     private static string GetArgumentValue(string[] arguments, string optionName)
     {
         var optionIndex = Array.IndexOf(arguments, optionName);
