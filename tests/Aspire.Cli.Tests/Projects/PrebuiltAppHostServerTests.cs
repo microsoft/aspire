@@ -194,6 +194,57 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Constructor_UsesDistinctWorkingDirectoriesForMultipleAppHostsInSameWorkspace()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var firstAppHost = workspace.CreateDirectory(Path.Combine("apps", "api"));
+        var secondAppHost = workspace.CreateDirectory(Path.Combine("apps", "web"));
+
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+
+        PrebuiltAppHostServer CreateServer(string appHostDirectory) => new(
+            appHostDirectory,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            new Aspire.Cli.Tests.Mcp.MockPackagingService(),
+            new TestConfigurationService(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        var firstServer = CreateServer(firstAppHost.FullName);
+        var secondServer = CreateServer(secondAppHost.FullName);
+
+        var workingDirectoryField = typeof(PrebuiltAppHostServer)
+            .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var firstWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(firstServer));
+        var secondWorkingDirectory = Assert.IsType<string>(workingDirectoryField.GetValue(secondServer));
+
+        var bundleHostsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bundle-hosts");
+
+        try
+        {
+            Assert.StartsWith(bundleHostsRoot, firstWorkingDirectory, StringComparison.OrdinalIgnoreCase);
+            Assert.StartsWith(bundleHostsRoot, secondWorkingDirectory, StringComparison.OrdinalIgnoreCase);
+            Assert.NotEqual(firstWorkingDirectory, secondWorkingDirectory);
+        }
+        finally
+        {
+            foreach (var dir in new[] { firstWorkingDirectory, secondWorkingDirectory })
+            {
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, recursive: true);
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task ResolveChannelNameAsync_UsesProjectLocalAspireConfig_NotGlobalChannel()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
