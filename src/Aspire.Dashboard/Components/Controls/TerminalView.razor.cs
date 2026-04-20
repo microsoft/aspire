@@ -15,7 +15,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 {
     private ElementReference _terminalElement;
     private IJSObjectReference? _jsModule;
-    private IJSObjectReference? _terminalInstance;
+    private int _terminalId;
 
     [Parameter]
     public string? SocketPath { get; set; }
@@ -47,7 +47,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             var wsScheme = baseUri.Scheme == "https" ? "wss" : "ws";
             var wsUrl = $"{wsScheme}://{baseUri.Host}:{baseUri.Port}/api/terminal?socketPath={Uri.EscapeDataString(SocketPath!)}";
 
-            _terminalInstance = await _jsModule.InvokeAsync<IJSObjectReference>(
+            _terminalId = await _jsModule.InvokeAsync<int>(
                 "initTerminal", _terminalElement, wsUrl);
         }
         catch (JSDisconnectedException)
@@ -61,7 +61,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// </summary>
     public async Task ReconnectAsync(string? newSocketPath)
     {
-        if (_jsModule is null || _terminalInstance is null)
+        if (_jsModule is null || _terminalId == 0)
         {
             SocketPath = newSocketPath;
             if (newSocketPath is not null)
@@ -73,8 +73,8 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
         if (newSocketPath is null)
         {
-            await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalInstance);
-            _terminalInstance = null;
+            await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
+            _terminalId = 0;
             return;
         }
 
@@ -83,14 +83,21 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         var wsScheme = baseUri.Scheme == "https" ? "wss" : "ws";
         var wsUrl = $"{wsScheme}://{baseUri.Host}:{baseUri.Port}/api/terminal?socketPath={Uri.EscapeDataString(newSocketPath)}";
 
-        await _jsModule.InvokeVoidAsync("reconnectTerminal", _terminalInstance, wsUrl);
+        await _jsModule.InvokeVoidAsync("reconnectTerminal", _terminalId, wsUrl);
     }
 
     public async ValueTask DisposeAsync()
     {
-        if (_terminalInstance is not null)
+        if (_jsModule is not null && _terminalId != 0)
         {
-            await JSInteropHelpers.SafeDisposeAsync(_terminalInstance);
+            try
+            {
+                await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Expected during shutdown
+            }
         }
         if (_jsModule is not null)
         {

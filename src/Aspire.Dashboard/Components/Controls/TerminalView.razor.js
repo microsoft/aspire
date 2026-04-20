@@ -2,30 +2,49 @@
 // Connects to the Dashboard's WebSocket proxy which bridges to the
 // resource's UDS using the Aspire Terminal Protocol.
 
-let Terminal, FitAddon;
+// xterm.js is loaded via script tags (not ES module import) because
+// the minified bundle uses UMD format, not ESM exports.
 
-async function loadXterm() {
-    if (!Terminal) {
-        const xtermModule = await import('/js/xterm/xterm.min.js');
-        Terminal = xtermModule.Terminal;
-        const fitModule = await import('/js/xterm/addon-fit.min.js');
-        FitAddon = fitModule.FitAddon;
+const terminals = new Map();
+let nextId = 1;
 
-        // Inject xterm.css if not already present
+function ensureXtermLoaded() {
+    return new Promise((resolve, reject) => {
+        if (window.Terminal) {
+            resolve();
+            return;
+        }
+
+        // Load CSS
         if (!document.querySelector('link[href*="xterm.min.css"]')) {
             const link = document.createElement('link');
             link.rel = 'stylesheet';
             link.href = '/js/xterm/xterm.min.css';
             document.head.appendChild(link);
         }
-    }
+
+        // Load xterm.js
+        const xtermScript = document.createElement('script');
+        xtermScript.src = '/js/xterm/xterm.min.js';
+        xtermScript.onload = () => {
+            // Load fit addon
+            const fitScript = document.createElement('script');
+            fitScript.src = '/js/xterm/addon-fit.min.js';
+            fitScript.onload = () => resolve();
+            fitScript.onerror = (e) => reject(new Error('Failed to load xterm fit addon'));
+            document.head.appendChild(fitScript);
+        };
+        xtermScript.onerror = (e) => reject(new Error('Failed to load xterm.js'));
+        document.head.appendChild(xtermScript);
+    });
 }
 
 export async function initTerminal(element, wsUrl) {
-    await loadXterm();
+    await ensureXtermLoaded();
 
+    const FitAddon = window.FitAddon.FitAddon;
     const fitAddon = new FitAddon();
-    const term = new Terminal({
+    const term = new window.Terminal({
         cursorBlink: true,
         fontSize: 14,
         fontFamily: '"Cascadia Code", "Cascadia Mono", Menlo, Monaco, "Courier New", monospace',
@@ -34,26 +53,29 @@ export async function initTerminal(element, wsUrl) {
             foreground: '#d4d4d4',
             cursor: '#d4d4d4',
         },
-        allowProposedApi: true,
     });
 
     term.loadAddon(fitAddon);
     term.open(element);
+
+    // Small delay to let the DOM settle before fitting
+    await new Promise(r => setTimeout(r, 50));
     fitAddon.fit();
 
+    const id = nextId++;
+    const state = { id, ws: null, term, fitAddon, element };
+
     // Connect WebSocket
-    const state = { ws: null, term, fitAddon, element };
     connectWebSocket(state, wsUrl);
 
     // Handle terminal resize
     const resizeObserver = new ResizeObserver(() => {
-        fitAddon.fit();
+        try { fitAddon.fit(); } catch { /* ignore */ }
     });
     resizeObserver.observe(element);
 
     term.onResize(({ cols, rows }) => {
         if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-            // Send resize as JSON message (the proxy translates to protocol RESIZE frame)
             state.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
         }
     });
@@ -65,19 +87,9 @@ export async function initTerminal(element, wsUrl) {
         }
     });
 
-    // Handle binary input
-    term.onBinary((data) => {
-        if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-            const buffer = new Uint8Array(data.length);
-            for (let i = 0; i < data.length; i++) {
-                buffer[i] = data.charCodeAt(i);
-            }
-            state.ws.send(buffer);
-        }
-    });
-
     state._resizeObserver = resizeObserver;
-    return state;
+    terminals.set(id, state);
+    return id;
 }
 
 function connectWebSocket(state, wsUrl) {
@@ -85,7 +97,6 @@ function connectWebSocket(state, wsUrl) {
     ws.binaryType = 'arraybuffer';
 
     ws.onopen = () => {
-        state.term.clear();
         state.fitAddon.fit();
     };
 
@@ -108,16 +119,22 @@ function connectWebSocket(state, wsUrl) {
     state.ws = ws;
 }
 
-export function reconnectTerminal(state, wsUrl) {
+export function reconnectTerminal(id, wsUrl) {
+    const state = terminals.get(id);
+    if (!state) return;
+
     if (state.ws) {
-        state.ws.onclose = null; // prevent disconnect message
+        state.ws.onclose = null;
         state.ws.close();
     }
     state.term.clear();
     connectWebSocket(state, wsUrl);
 }
 
-export function disposeTerminal(state) {
+export function disposeTerminal(id) {
+    const state = terminals.get(id);
+    if (!state) return;
+
     if (state._resizeObserver) {
         state._resizeObserver.disconnect();
     }
@@ -128,4 +145,5 @@ export function disposeTerminal(state) {
     if (state.term) {
         state.term.dispose();
     }
+    terminals.delete(id);
 }
