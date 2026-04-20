@@ -79,7 +79,7 @@ jobs:
               /p:EnforceCodeStyleInBuild=false
               ${{ parameters.extraBuildArgs }}
               /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
-            displayName: 🟣Publish aspire-managed
+            displayName: 🟣Prepare aspire-managed
 
           # On macOS, ad-hoc codesign aspire-managed with JIT entitlements BEFORE Arcade signing.
           # MicroBuild (MacDeveloperHardenWithNotarization) preserves entitlements from the prior
