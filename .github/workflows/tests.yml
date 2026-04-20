@@ -407,8 +407,8 @@ jobs:
                      needs.tests_requires_nugets_linux.result == 'skipped') ||
                     (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows).include[0] != null &&
                      needs.tests_requires_nugets_windows.result == 'skipped') ||
-                   (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                    needs.tests_requires_nugets_macos.result == 'skipped') ||
+                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
+                     needs.tests_requires_nugets_macos.result == 'skipped') ||
                     (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
                      needs.tests_requires_cli_archive.result == 'skipped') ||
                   needs.polyglot_validation.result == 'skipped')) ||
@@ -423,8 +423,8 @@ jobs:
                      needs.tests_requires_nugets_linux.result == 'skipped') ||
                     (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows).include[0] != null &&
                      needs.tests_requires_nugets_windows.result == 'skipped') ||
-                   (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                    needs.tests_requires_nugets_macos.result == 'skipped') ||
+                    (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
+                     needs.tests_requires_nugets_macos.result == 'skipped') ||
                     (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null &&
                      needs.tests_requires_cli_archive.result == 'skipped') ||
                   needs.polyglot_validation.result == 'skipped'))) }}
