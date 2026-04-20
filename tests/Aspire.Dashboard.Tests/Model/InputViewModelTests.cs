@@ -5,7 +5,7 @@ using Aspire.Dashboard.Model.Interaction;
 using Aspire.DashboardService.Proto.V1;
 using Xunit;
 
-namespace Aspire.Dashboard.Components.Tests.Model;
+namespace Aspire.Dashboard.Tests.Model;
 
 public class InputViewModelTests
 {
