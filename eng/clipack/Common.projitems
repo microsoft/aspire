@@ -107,33 +107,5 @@
            vs regex: $(FileSignatureRegex)" />
   </Target>
 
-  <!--
-    Pack the CLI as a dotnet global tool nupkg.
-    Runs after the archive so the NativeAOT publish of Aspire.Cli.csproj and its
-    shared dependencies (Aspire.TypeSystem, etc.) are already built; the Pack of
-    Aspire.Cli.Tool.csproj can reuse those cached outputs without racing.
-  -->
-  <Target Name="PackCliTool" AfterTargets="Build" Condition="'$(PublishNativeAot)' == 'true'">
-    <ItemGroup>
-      <_ToolPackProperties Include="RuntimeIdentifier=$(CliRuntime)" />
-      <_ToolPackProperties Include="SelfContained=true" />
-      <_ToolPackProperties Include="Configuration=Release" />
-      <_ToolPackProperties Condition="'$(BundlePayloadPath)' != ''" Include="BundlePayloadPath=$(BundlePayloadPath)" />
-      <_ToolPackProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
-      <_ToolPackProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
-    </ItemGroup>
-
-    <MSBuild
-        Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
-        Targets="Restore"
-        Properties="@(_ToolPackProperties)"
-        RemoveProperties="OutputPath;TargetFramework" />
-
-    <MSBuild
-        Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
-        Targets="Pack"
-        Properties="@(_ToolPackProperties)"
-        RemoveProperties="OutputPath;TargetFramework" />
-  </Target>
 
 </Project>

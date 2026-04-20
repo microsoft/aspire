@@ -127,6 +127,20 @@ steps:
         ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
         DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
+    # Verify CLI tool nupkgs (size, binary presence, PE header) for each Windows RID
+    - ${{ each targetRid in parameters.targetRids }}:
+      - pwsh: |
+          $ErrorActionPreference = 'Stop'
+          & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" `
+            -PackagesDir "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}" `
+            -Rid "${{ targetRid }}"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "##[error]CLI tool nupkg verification failed for ${{ targetRid }}"
+            exit 1
+          }
+        displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
+        condition: succeeded()
+
     # Log MicroBuild environment for debugging
     # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml
     # which is installed via the Arcade SDK's install-microbuild.yml template that runs before our build steps.
