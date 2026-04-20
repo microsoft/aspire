@@ -157,6 +157,11 @@
         <target state="translated">インストール ディレクトリ '{0}' に書き込めません。管理者権限で更新を実行してください (例: Linux/macOS で sudo を使用)。</target>
         <note />
       </trans-unit>
+      <trans-unit id="PackageNotFoundInChannelWarningFormat">
+        <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
+        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">パッケージ参照に ID がありません。</target>

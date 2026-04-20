@@ -157,6 +157,11 @@
         <target state="translated">Nelze zapisovat do instalačního adresáře {0}. Spusťte prosím aktualizaci se zvýšenými oprávněními (např. pomocí sudo v Linuxu nebo macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="PackageNotFoundInChannelWarningFormat">
+        <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
+        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">Odkaz na balíček nemá identitu.</target>
