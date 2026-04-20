@@ -13,6 +13,7 @@ using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -423,6 +424,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             """);
 
         var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
+        var testSink = new TestSink();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
         {
             config.DotNetCliRunnerFactory = (sp) =>
@@ -485,6 +487,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
+        services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
         using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
@@ -508,6 +511,14 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 Assert.Equal(appHostProjectFile.FullName, item.ProjectFile.FullName);
             }
         );
+
+        // A warning should have been logged for the missing package.
+        Assert.Contains(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning
+                && w.Message is not null
+                && w.Message.Contains("Aspire.Hosting.ThirdParty")
+                && w.Message.Contains("daily"));
     }
 
     [Fact]
