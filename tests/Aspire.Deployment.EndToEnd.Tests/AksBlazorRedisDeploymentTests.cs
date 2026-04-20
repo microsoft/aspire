@@ -172,9 +172,9 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 12: Discover the namespace used by the Helm deployment
+            // Step 12: Discover the namespace where webfrontend is deployed
             output.WriteLine("Step 12: Discovering deployment namespace...");
-            await auto.TypeAsync("NS=$(kubectl get svc --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{\"\\n\"}{end}' | grep -v kube-system | grep -v default | sort -u | head -1) && echo \"Namespace: $NS\"");
+            await auto.TypeAsync("NS=$(kubectl get svc --all-namespaces -o jsonpath='{range .items[?(@.metadata.name==\"webfrontend-service\")]}{.metadata.namespace}{end}') && echo \"Namespace: $NS\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -182,7 +182,8 @@ builder.Build().Run();
             output.WriteLine("Step 13: Verifying webfrontend /weather endpoint...");
             await auto.TypeAsync("kubectl port-forward svc/webfrontend-service 18081:8080 -n $NS &");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
+            // Wait briefly for port-forward to establish (background job output + prompt)
+            await auto.WaitAsync(3000);
 
             // Verify root page
             await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/ -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
