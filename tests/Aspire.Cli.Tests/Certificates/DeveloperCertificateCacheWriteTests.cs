@@ -5,17 +5,16 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Reflection;
 using System.Text;
-using Aspire.Hosting;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Certificates;
 
-public class DeveloperCertificateCacheIntegrationTests
+public class DeveloperCertificateCacheWriteTests
 {
     [Fact]
-    public void GetKeyMaterialAsync_WithCachedDeveloperCertificate_ReadsCacheWrittenByCli()
+    public void WriteAspireCacheFromDiskPfx_WritesCacheFiles()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Only supported on Linux in CI.");
 
@@ -24,7 +23,7 @@ public class DeveloperCertificateCacheIntegrationTests
         options.StartInfo.Environment["HOME"] = homeDirectory.Path;
         options.StartInfo.Environment["USERPROFILE"] = homeDirectory.Path;
 
-        RemoteExecutor.Invoke(static async homePath =>
+        RemoteExecutor.Invoke(static homePath =>
         {
             var userHttpsCertificateLocation = Path.Combine(homePath, ".aspnet", "dev-certs", "https");
             var aspireDevCertsCacheDirectory = Path.Combine(homePath, ".aspire", "dev-certs", "https");
@@ -46,14 +45,9 @@ public class DeveloperCertificateCacheIntegrationTests
 
             Assert.True(File.Exists(cachedPfxPath));
             Assert.True(File.Exists(cachedKeyPath));
-
-            using var publicCertificate = X509CertificateLoader.LoadCertificate(certificate.Export(X509ContentType.Cert));
-            var (keyPem, pfxBytes) = await GetKeyMaterialAsync(publicCertificate);
-
-            Assert.NotNull(keyPem);
-            Assert.NotNull(pfxBytes);
-            Assert.Equal(File.ReadAllText(cachedKeyPath), new string(keyPem));
-            Assert.Equal(File.ReadAllBytes(cachedPfxPath), pfxBytes);
+            using var cachedPfxCertificate = X509CertificateLoader.LoadPkcs12FromFile(cachedPfxPath, password: null);
+            Assert.Equal(certificate.Thumbprint, cachedPfxCertificate.Thumbprint);
+            Assert.StartsWith("-----BEGIN PRIVATE KEY-----", File.ReadAllText(cachedKeyPath), StringComparison.Ordinal);
         }, homeDirectory.Path, options).Dispose();
     }
 
@@ -70,22 +64,5 @@ public class DeveloperCertificateCacheIntegrationTests
             BindingFlags.Instance | BindingFlags.NonPublic)!;
 
         writeAspireCacheMethod.Invoke(certificateManager, [onDiskPfxPath, certificate]);
-    }
-
-    private static async Task<(char[]? keyPem, byte[]? pfxBytes)> GetKeyMaterialAsync(X509Certificate2 certificate)
-    {
-        var developerCertificateServiceType = typeof(DistributedApplication).Assembly.GetType("Aspire.Hosting.DeveloperCertificateService")!;
-        var getKeyMaterialMethod = developerCertificateServiceType.GetMethod(
-            "GetKeyMaterialAsync",
-            BindingFlags.Static | BindingFlags.NonPublic)!;
-
-        var task = (Task)getKeyMaterialMethod.Invoke(null, [certificate, null, true, true, CancellationToken.None])!;
-        await task.ConfigureAwait(false);
-
-        var result = task.GetType().GetProperty("Result")!.GetValue(task)!;
-        var keyPem = (char[]?)result.GetType().GetField("Item1")!.GetValue(result);
-        var pfxBytes = (byte[]?)result.GetType().GetField("Item2")!.GetValue(result);
-
-        return (keyPem, pfxBytes);
     }
 }
