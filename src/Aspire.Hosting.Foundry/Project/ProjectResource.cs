@@ -6,10 +6,9 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
+using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -48,13 +47,20 @@ public class AzureCognitiveServicesProjectResource :
                 Name = $"compute-endpoints-{name}",
                 Action = async (context) =>
                 {
-                    var configuration = context.Services.GetRequiredService<IConfiguration>();
-                    var subscriptionId = configuration["Azure:SubscriptionId"];
-                    var resourceGroupName = configuration["Azure:ResourceGroup"];
+                    var parentId = await Parent.Id.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(parentId))
+                    {
+                        return;
+                    }
+
+                    var resourceId = new ResourceIdentifier(parentId);
+                    var subscriptionId = resourceId.SubscriptionId;
+                    var resourceGroupName = resourceId.ResourceGroupName;
                     if (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroupName))
                     {
                         return;
                     }
+
                     var encodedSubscriptionId = EncodeSubscriptionId(subscriptionId);
                     var portalUrl = $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId},{resourceGroupName},,{Parent.Name},{Name}/home";
 
