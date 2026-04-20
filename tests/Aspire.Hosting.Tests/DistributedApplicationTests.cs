@@ -417,14 +417,13 @@ public class DistributedApplicationTests
         const string testName = "runasync-cancelled-by-caller-during-startup";
         using var testProgram = CreateTestProgram(testName, randomizePorts: false, includeIntegrationServices: false);
         using var cts = new CancellationTokenSource();
-
-        testProgram.AppBuilder.Eventing.Subscribe<BeforeStartEvent>((_, cancellationToken) =>
-        {
-            cts.Cancel();
-            return Task.CompletedTask;
-        });
-
         using var app = testProgram.Build();
+
+        // Cancel before calling RunAsync so the token is already cancelled when _host.RunAsync()
+        // is reached. This ensures the OperationCanceledException originates from _host.RunAsync()
+        // (not from ExecuteBeforeStartHooksAsync) and exercises the 'when' guard that checks
+        // lifetime.ApplicationStopping.IsCancellationRequested.
+        cts.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
