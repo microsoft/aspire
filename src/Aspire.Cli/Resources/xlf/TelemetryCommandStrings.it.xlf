@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotEnabled">
-        <source>The dashboard at '{0}' does not have the telemetry API enabled. Start the dashboard with 'aspire dashboard run --enable-api' or set Dashboard:Api:Enabled to true.</source>
-        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Start the dashboard with 'aspire dashboard run --enable-api' or set Dashboard:Api:Enabled to true.</target>
+        <source>The dashboard at '{0}' does not have the telemetry API enabled. Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</source>
+        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailed">

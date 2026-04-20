@@ -202,7 +202,7 @@
     <value>The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</value>
   </data>
   <data name="DashboardApiNotEnabled" xml:space="preserve">
-    <value>The dashboard at '{0}' does not have the telemetry API enabled. Start the dashboard with 'aspire dashboard run --enable-api' or set Dashboard:Api:Enabled to true.</value>
+    <value>The dashboard at '{0}' does not have the telemetry API enabled. Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</value>
   </data>
   <data name="DashboardConnectionFailed" xml:space="preserve">
     <value>Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</value>
