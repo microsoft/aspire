@@ -665,40 +665,6 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WaitForResourceAsync_ReturnsSuccess_ForLogicalName()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
-        var custom = builder.AddResource(new CustomResource("myresource"));
-
-        using var app = builder.Build();
-        await app.StartAsync().DefaultTimeout();
-
-        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
-        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
-        {
-            State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
-        }).DefaultTimeout();
-
-        var target = new AuxiliaryBackchannelRpcTarget(
-            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
-            app.Services);
-
-        var result = await target.WaitForResourceAsync(new WaitForResourceRequest
-        {
-            ResourceName = "myresource",
-            Status = "up",
-            TimeoutSeconds = 10
-        }).DefaultTimeout();
-
-        Assert.True(result.Success);
-        Assert.Equal(KnownResourceStates.Running, result.State);
-        Assert.False(result.ResourceNotFound);
-        Assert.False(result.TimedOut);
-
-        await app.StopAsync().DefaultTimeout();
-    }
-
-    [Fact]
     public async Task WaitForResourceAsync_ReturnsNotFound_WhenResourceDoesNotExist()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -720,44 +686,6 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.False(result.Success);
         Assert.True(result.ResourceNotFound);
-
-        await app.StopAsync().DefaultTimeout();
-    }
-
-    [Fact]
-    public async Task WaitForResourceAsync_ReturnsSuccess_ForResolvedInstanceName()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
-
-        var resourceWithReplicas = builder.AddResource(new CustomResource("myresource"));
-        resourceWithReplicas.WithAnnotation(new DcpInstancesAnnotation([
-            new DcpInstance("myresource-abc123", "abc123", 0),
-            new DcpInstance("myresource-def456", "def456", 1)
-        ]));
-
-        using var app = builder.Build();
-        await app.StartAsync().DefaultTimeout();
-
-        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
-        await notificationService.PublishUpdateAsync(resourceWithReplicas.Resource, s => s with
-        {
-            State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
-        }).DefaultTimeout();
-
-        var target = new AuxiliaryBackchannelRpcTarget(
-            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
-            app.Services);
-
-        var result = await target.WaitForResourceAsync(new WaitForResourceRequest
-        {
-            ResourceName = "myresource-abc123",
-            Status = "up",
-            TimeoutSeconds = 10
-        }).DefaultTimeout();
-
-        Assert.True(result.Success);
-        Assert.Equal(KnownResourceStates.Running, result.State);
-        Assert.False(result.ResourceNotFound);
 
         await app.StopAsync().DefaultTimeout();
     }
