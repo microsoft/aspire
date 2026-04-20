@@ -70,3 +70,4 @@ internal static class VersionHelper
         return version;
     }
 }
+
