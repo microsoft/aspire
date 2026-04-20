@@ -1,13 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Terminal;
 using Aspire.TerminalHost;
 using Hex1b;
 
 // The Aspire Terminal Host bridges a PTY process to the Aspire Terminal Protocol
 // over a Unix domain socket. It is launched by the AppHost orchestrator for resources
 // with .WithTerminal() and serves as the terminal state manager using Hex1b.
+//
+// Architecture:
+//   - Hex1b runs the shell in headless mode (manages internal terminal state)
+//   - A presentation filter intercepts all output and broadcasts to UDS clients
+//   - Clients can disconnect and reconnect; current screen state is replayed
 //
 // Environment variables:
 //   TERMINAL_SOCKET_PATH  — UDS path for client connections (required)
@@ -36,7 +40,8 @@ var shellArgs = !string.IsNullOrEmpty(shellArgsStr)
 
 Console.Error.WriteLine($"[Aspire.TerminalHost] shell={shell}, size={columns}x{rows}, socket={socketPath}");
 
-var adapter = new UnixDomainSocketPresentationAdapter(socketPath, columns, rows);
+// Create the socket server (presentation filter)
+await using var server = new TerminalSocketServer(socketPath, columns, rows);
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) =>
@@ -47,20 +52,23 @@ Console.CancelKeyPress += (_, e) =>
 
 try
 {
-    // Wait for client connection before starting the shell
-    await adapter.WaitForClientAsync(cts.Token);
-
-    // Build the Hex1b terminal: PTY process + UDS presentation
+    // Build the terminal: headless presentation + PTY process + our filter for UDS broadcasting
     await using var terminal = Hex1bTerminal.CreateBuilder()
-        .WithPresentation(adapter)
+        .WithHeadless()
         .WithPtyProcess(shell, shellArgs)
         .WithDimensions(columns, rows)
+        .AddPresentationFilter(server)
         .Build();
 
+    // Give the server access to the terminal for snapshots and input forwarding
+    server.SetTerminal(terminal);
+
+    // Start accepting client connections
+    await server.StartListeningAsync(cts.Token);
+
+    // Run the terminal (blocks until shell exits or cancellation)
     var exitCode = await terminal.RunAsync(cts.Token);
     Console.Error.WriteLine($"[Aspire.TerminalHost] Shell exited with code {exitCode}");
-
-    await adapter.SendExitAsync(exitCode, TerminalProtocol.ExitReason.Exited, CancellationToken.None);
     return exitCode;
 }
 catch (OperationCanceledException)
