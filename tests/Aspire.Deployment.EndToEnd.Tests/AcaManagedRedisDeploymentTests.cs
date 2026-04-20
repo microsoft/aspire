@@ -14,9 +14,9 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// </summary>
 public sealed class AcaManagedRedisDeploymentTests(ITestOutputHelper output)
 {
-    // Azure Managed Redis typically provisions in ~5 minutes.
-    // Set timeout to 30 minutes to allow for provisioning plus app deployment.
-    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(30);
+    // Azure Managed Redis typically provisions in ~5 minutes but can take longer under load.
+    // Set timeout to 40 minutes to allow for provisioning plus app deployment.
+    private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
     public async Task DeployStarterWithManagedRedisToAzureContainerApps()
@@ -170,7 +170,7 @@ builder.Build().Run();
             output.WriteLine("Step 12: Starting Azure Container Apps deployment...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitForPipelineSuccessAsync(TimeSpan.FromMinutes(30));
+            await auto.WaitForPipelineSuccessAsync(TimeSpan.FromMinutes(35));
             output.WriteLine("Pipeline completed, checking result...");
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 

@@ -141,7 +141,7 @@ builder.Build().Run();
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             // Wait for pipeline to complete successfully (App Service can take longer)
-            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(35));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 10: Extract deployment URLs and verify endpoints with retry

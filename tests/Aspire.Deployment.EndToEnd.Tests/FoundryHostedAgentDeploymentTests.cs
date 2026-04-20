@@ -121,7 +121,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     <PackageReference Include="Azure.AI.AgentServer.AgentFramework" Version="1.0.0-beta.11" />
                     <PackageReference Include="Azure.AI.Projects" Version="1.2.0-beta.4" />
                     <PackageReference Include="Azure.AI.OpenAI" Version="2.5.0-beta.1" />
-                    <PackageReference Include="Azure.Identity" Version="1.13.2" />
+                    <PackageReference Include="Azure.Identity" Version="1.18.0" />
                     <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.1.0" />
                     <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.0" />
                     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.0" />
