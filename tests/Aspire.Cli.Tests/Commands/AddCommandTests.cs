@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.IO.Compression;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -888,120 +887,14 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.False(promptedForVersion);
         Assert.Equal(cliVersion, selectedPackageVersion);
-    }
 
-    [Fact]
-    public async Task AddCommand_WithPrHive_CreatesNuGetConfigAndDoesNotForceSingleSource()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
-        hivesDir.Create();
-        var prHiveDir = hivesDir.CreateSubdirectory("pr-12345");
-        var packagesDir = prHiveDir.CreateSubdirectory("packages");
-
-        var cliVersion = VersionHelper.GetDefaultSdkVersion();
-        var expectedSource = Path.Combine(prHiveDir.FullName, "packages").Replace('\\', '/');
-        string? addUsedSource = null;
-        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost"));
-        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
-        File.WriteAllText(appHostFile.FullName, $$"""<Project Sdk="Aspire.AppHost.Sdk/{{cliVersion}}"></Project>""");
-        CreatePackage(packagesDir.FullName, "Aspire.Hosting.Redis", cliVersion, "Aspire.Hosting");
-        CreatePackage(packagesDir.FullName, "Aspire.Hosting", cliVersion);
-        CreatePackage(packagesDir.FullName, "Aspire.AppHost.Sdk", cliVersion);
-        CreatePackage(packagesDir.FullName, "Aspire.Hosting.AppHost", cliVersion);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.ProjectLocatorFactory = _ => new TestProjectLocator
-            {
-                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(appHostFile)
-            };
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
-                {
-                    var implicitPackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "implicit",
-                        Version = "13.2.2"
-                    };
-
-                    var prHivePackage = new NuGetPackage
-                    {
-                        Id = "Aspire.Hosting.Redis",
-                        Source = "pr-hive",
-                        Version = cliVersion
-                    };
-
-                    return nugetSource is null
-                        ? (0, new[] { implicitPackage })
-                        : (0, new[] { prHivePackage });
-                };
-
-                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
-                {
-                    addUsedSource = nugetSource;
-                    return 0;
-                };
-
-                return runner;
-            };
-        });
-
-        var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<AddCommand>();
-        var result = command.Parse("add redis");
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(0, exitCode);
-        Assert.Null(addUsedSource);
-
-        var nuGetConfigPath = Path.Combine(appHostDirectory.FullName, "nuget.config");
-        Assert.True(File.Exists(nuGetConfigPath));
+        // Verify that a NuGet config was created with the Aspire* wildcard mapping
+        // (not scoped to individual packages) so transitive deps including RID-specific
+        // packages can resolve from the PR hive.
+        var nuGetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nuGetConfigPath), "Expected nuget.config to be created for PR channel package installation.");
         var nuGetConfigContents = File.ReadAllText(nuGetConfigPath);
-        Assert.Contains(expectedSource, nuGetConfigContents, StringComparison.Ordinal);
-        Assert.Contains("""<package pattern="Aspire.Hosting.Redis" />""", nuGetConfigContents, StringComparison.Ordinal);
-        Assert.Contains("""<package pattern="Aspire.Hosting" />""", nuGetConfigContents, StringComparison.Ordinal);
-        Assert.Contains("""<package pattern="Aspire.AppHost.Sdk" />""", nuGetConfigContents, StringComparison.Ordinal);
-        Assert.DoesNotContain("""<package pattern="Aspire.Hosting.AppHost" />""", nuGetConfigContents, StringComparison.Ordinal);
-        Assert.DoesNotContain("""<package pattern="Aspire*" />""", nuGetConfigContents, StringComparison.Ordinal);
-    }
-
-    private static void CreatePackage(string directory, string packageId, string version, params string[] dependencies)
-    {
-        var packagePath = Path.Combine(directory, $"{packageId}.{version}.nupkg");
-        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
-        var nuspecEntry = archive.CreateEntry($"{packageId}.nuspec");
-        using var writer = new StreamWriter(nuspecEntry.Open());
-
-        writer.Write($$"""
-            <?xml version="1.0" encoding="utf-8"?>
-            <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
-              <metadata>
-                <id>{{packageId}}</id>
-                <version>{{version}}</version>
-                <dependencies>
-            """);
-
-        foreach (var dependency in dependencies)
-        {
-            writer.Write($$"""
-                    <group targetFramework="net10.0">
-                      <dependency id="{{dependency}}" version="[{{version}}]" />
-                    </group>
-                """);
-        }
-
-        writer.Write("""
-                </dependencies>
-              </metadata>
-            </package>
-            """);
+        Assert.Contains("Aspire*", nuGetConfigContents, StringComparison.Ordinal);
     }
 }
 

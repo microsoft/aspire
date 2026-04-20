@@ -207,6 +207,19 @@ internal sealed class AddCommand : BaseCommand
                 _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
             };
 
+            // When installing from a PR channel, create/update a NuGet.config so that
+            // `dotnet add package` can resolve the PR-version package from the hive.
+            // Use the original (unscoped) channel so the Aspire* wildcard mapping
+            // covers all transitive dependencies including RID-specific packages.
+            if (string.IsNullOrEmpty(source) && VersionHelper.IsPrChannel(selectedNuGetPackage.Channel.Name))
+            {
+                var nugetConfigPrompter = new NuGetConfigPrompter(InteractionService);
+                await nugetConfigPrompter.CreateOrUpdateWithoutPromptAsync(
+                    effectiveAppHostProjectFile.Directory!,
+                    selectedNuGetPackage.Channel,
+                    cancellationToken);
+            }
+
             context = new AddPackageContext
             {
                 AppHostFile = effectiveAppHostProjectFile,
