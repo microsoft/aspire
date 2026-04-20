@@ -52,7 +52,7 @@ public static class TerminalDemoExtensions
                     new("terminal.socketPath", socketPath)
                 ]
             })
-            .WithTerminal();
+            .WithTerminal(_ => Task.FromResult(socketPath));
 
         // Use OnInitializeResource to launch the terminal host process and manage its lifecycle.
         // This replaces what DCP would normally do (PTY allocation + UDS forwarding).
