@@ -74,12 +74,8 @@ public sealed class AksBlazorRedisDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            // Step 2: Set up CLI environment
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create Blazor starter project with Redis enabled (interactive prompts)
             output.WriteLine("Step 3: Creating Blazor starter project with Redis...");
@@ -96,14 +92,8 @@ public sealed class AksBlazorRedisDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Kubernetes");
             await auto.EnterAsync();
 
-            // In CI, aspire add shows a version selection prompt
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync(); // select first version (PR build)
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            // aspire add may show a version selection prompt
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 6: Modify AppHost.cs to add Azure Kubernetes Environment
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
