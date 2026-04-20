@@ -62,6 +62,21 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public void TryResolveBrowserUserDataDirectory_UsesChromiumPathOnLinux()
+    {
+        if (!OperatingSystem.IsLinux())
+        {
+            return;
+        }
+
+        var expectedPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "chromium");
+
+        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chrome", "/usr/bin/chromium");
+
+        Assert.Equal(expectedPath, userDataDirectory);
+    }
+
+    [Fact]
     public void TrySelectTrackedTargetId_PrefersUnattachedBlankPage()
     {
         var targetId = BrowserLogsRunningSession.TrySelectTrackedTargetId(

@@ -70,6 +70,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceState.LastSessionId = sessionId;
             resourceState.LastTargetUrl = url.ToString();
             resourceState.LastBrowser = settings.Browser;
+            resourceState.LastBrowserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(settings.Browser);
             resourceState.LastProfile = settings.Profile;
 
             var resourceLogger = _resourceLoggerService.GetLogger(resourceName);
@@ -322,10 +323,13 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         ResourceSessionState resourceState,
         IEnumerable<ResourcePropertySnapshot> propertyUpdates)
     {
-        if (resourceState.LastBrowser is not null)
-        {
-            properties = properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserPropertyName, resourceState.LastBrowser);
-        }
+        properties = resourceState.LastBrowser is not null
+            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserPropertyName, resourceState.LastBrowser)
+            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserPropertyName);
+
+        properties = resourceState.LastBrowserExecutable is not null
+            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable)
+            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName);
 
         properties = resourceState.LastProfile is not null
             ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)

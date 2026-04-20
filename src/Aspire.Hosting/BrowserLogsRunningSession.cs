@@ -697,7 +697,10 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         return browserKind switch
         {
             BrowserKind.Edge => Path.Combine(homeDirectory, ".config", "microsoft-edge"),
-            BrowserKind.Chrome => Path.Combine(homeDirectory, ".config", "google-chrome"),
+            BrowserKind.Chrome => Path.Combine(
+                homeDirectory,
+                ".config",
+                MatchesBrowser(browser, browserExecutable, "chromium", "chromium-browser") ? "chromium" : "google-chrome"),
             _ => null
         };
     }
