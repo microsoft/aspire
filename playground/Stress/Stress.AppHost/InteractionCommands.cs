@@ -712,7 +712,7 @@ internal static class InteractionCommands
                                 };
                                 context.Input.Options = [KeyValuePair.Create(existingLocation, existingLocation)];
                                 context.Input.Value = existingLocation;
-                                //context.Input.Disabled = true;
+                                context.Input.Disabled = true;
                                 return;
                             }
 
