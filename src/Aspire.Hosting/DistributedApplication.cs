@@ -546,21 +546,14 @@ public class DistributedApplication : IHost, IAsyncDisposable
                 await subscriber.SubscribeAsync(eventing, execContext, cancellationToken).ConfigureAwait(false);
             }
 
-            var beforeStartEvent = new BeforeStartEvent(_host.Services, _host.Services.GetRequiredService<DistributedApplicationModel>());
-            await eventing.PublishAsync(beforeStartEvent, cancellationToken).ConfigureAwait(false);
-
-#pragma warning disable CS0618 // Hooks are obsolete, but still need to be supported until fully removed.
-            var lifecycleHooks = _host.Services.GetServices<IDistributedApplicationLifecycleHook>();
-#pragma warning restore CS0618 // Hooks are obsolete, but still need to be supported until fully removed.
             var appModel = _host.Services.GetRequiredService<DistributedApplicationModel>();
 
-            foreach (var lifecycleHook in lifecycleHooks)
-            {
-                await lifecycleHook.BeforeStartAsync(appModel, cancellationToken).ConfigureAwait(false);
-            }
-
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
-            // Execute the before-start pipeline step
+            // Execute the before-start pipeline step first so that pipeline-defined infrastructure
+            // (e.g. azure-prepare-resources, which materializes role-assignment resources) runs
+            // before BeforeStartEvent subscribers and lifecycle hooks observe the model. Subscribers
+            // such as the Azure Container Apps and App Service infrastructures still rely on the
+            // BeforeStartEvent and need the pipeline-produced resources to be present when they run.
             var pipeline = _host.Services.GetRequiredService<IDistributedApplicationPipeline>();
             var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
 
@@ -577,6 +570,18 @@ public class DistributedApplication : IHost, IAsyncDisposable
                 await pipelineImpl.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
             }
 #pragma warning restore ASPIREPIPELINES001
+
+            var beforeStartEvent = new BeforeStartEvent(_host.Services, _host.Services.GetRequiredService<DistributedApplicationModel>());
+            await eventing.PublishAsync(beforeStartEvent, cancellationToken).ConfigureAwait(false);
+
+#pragma warning disable CS0618 // Hooks are obsolete, but still need to be supported until fully removed.
+            var lifecycleHooks = _host.Services.GetServices<IDistributedApplicationLifecycleHook>();
+#pragma warning restore CS0618 // Hooks are obsolete, but still need to be supported until fully removed.
+
+            foreach (var lifecycleHook in lifecycleHooks)
+            {
+                await lifecycleHook.BeforeStartAsync(appModel, cancellationToken).ConfigureAwait(false);
+            }
         }
         finally
         {

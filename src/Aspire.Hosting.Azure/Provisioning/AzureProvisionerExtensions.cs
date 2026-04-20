@@ -4,7 +4,6 @@
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
-//using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -29,7 +28,6 @@ public static class AzureProvisionerExtensions
         builder.AddAzureEnvironment();
 #pragma warning restore ASPIREAZURE001
 
-        // Register services
         builder.Services.TryAddSingleton<AzureResourcePreparer>();
         builder.Services.TryAddSingleton<AzureProvisioner>();
 
