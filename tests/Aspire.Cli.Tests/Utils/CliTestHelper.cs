@@ -521,7 +521,7 @@ internal sealed class CliServiceCollectionTestOptions
         var nuGetPackageCache = serviceProvider.GetRequiredService<INuGetPackageCache>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        return new PackagingService(executionContext, nuGetPackageCache, features, configuration);
+        return new PackagingService(executionContext, nuGetPackageCache, features, configuration, NullLogger<PackagingService>.Instance);
     };
 
     public Func<IServiceProvider, IDiskCache> DiskCacheFactory { get; set; } = (IServiceProvider serviceProvider) => new NullDiskCache();

@@ -383,20 +383,28 @@ internal sealed class AddCommand : BaseCommand
             return packageIds;
         }
 
-        using var projectDocument = _fallbackProjectParser.ParseProject(appHostProjectFile);
-        if (!projectDocument.RootElement.TryGetProperty("Properties", out var properties) ||
-            !properties.TryGetProperty("AspireHostingSDKVersion", out var sdkVersionElement))
+        try
         {
-            return packageIds;
+            using var projectDocument = _fallbackProjectParser.ParseProject(appHostProjectFile);
+            if (!projectDocument.RootElement.TryGetProperty("Properties", out var properties) ||
+                !properties.TryGetProperty("AspireHostingSDKVersion", out var sdkVersionElement))
+            {
+                return packageIds;
+            }
+
+            var sdkVersion = sdkVersionElement.GetString();
+            if (!string.Equals(sdkVersion, selectedPackageVersion, StringComparison.OrdinalIgnoreCase))
+            {
+                return packageIds;
+            }
+
+            packageIds.Add("Aspire.AppHost.Sdk");
+        }
+        catch (ProjectUpdaterException)
+        {
+            // Parsing the project file is best-effort; if it fails, just return the selected package.
         }
 
-        var sdkVersion = sdkVersionElement.GetString();
-        if (!string.Equals(sdkVersion, selectedPackageVersion, StringComparison.OrdinalIgnoreCase))
-        {
-            return packageIds;
-        }
-
-        packageIds.Add("Aspire.AppHost.Sdk");
         return packageIds;
     }
 }

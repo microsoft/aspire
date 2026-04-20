@@ -6,12 +6,13 @@ using System.Xml.Linq;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
 {
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
@@ -141,7 +142,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             tasks.Add(nuGetPackageCache.GetPackagesAsync(
                 workingDirectory: workingDirectory,
                 packageId: packageId,
-                filter: id => id.Equals(packageId, StringComparison.OrdinalIgnoreCase),
+                filter: id => id.Equals(packageId, StringComparisons.NuGetPackageId),
                 prerelease: false,
                 nugetConfigFile: tempNuGetConfig?.ConfigFile,
                 useCache: true, // Enable caching for package channel resolution
@@ -153,7 +154,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             tasks.Add(nuGetPackageCache.GetPackagesAsync(
                 workingDirectory: workingDirectory,
                 packageId: packageId,
-                filter: id => id.Equals(packageId, StringComparison.OrdinalIgnoreCase),
+                filter: id => id.Equals(packageId, StringComparisons.NuGetPackageId),
                 prerelease: true,
                 nugetConfigFile: tempNuGetConfig?.ConfigFile,
                 useCache: true, // Enable caching for package channel resolution
@@ -174,7 +175,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             packages = await nuGetPackageCache.GetPackagesAsync(
                 workingDirectory: workingDirectory,
                 packageId: packageId,
-                filter: id => id.Equals(packageId, StringComparison.OrdinalIgnoreCase),
+                filter: id => id.Equals(packageId, StringComparisons.NuGetPackageId),
                 prerelease: true,
                 nugetConfigFile: tempNuGetConfig?.ConfigFile,
                 useCache: true, // Enable caching for package channel resolution
@@ -207,7 +208,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var requestedPackageIds = packageIds
             .Where(packageId => !string.IsNullOrWhiteSpace(packageId))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(StringComparers.NuGetPackageId)
             .ToArray();
 
         if (requestedPackageIds.Length == 0)
@@ -222,13 +223,13 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
 
         var scopedMappings = mappings
-            .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds))
+            .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds, logger))
             .ToArray();
 
-        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion);
+        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger);
     }
 
-    private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds)
+    private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger? logger)
     {
         if (!IsScopedAspireMapping(mapping))
         {
@@ -236,7 +237,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             yield break;
         }
 
-        var scopedPackageIds = GetScopedPackageIds(mapping.Source, packageIds);
+        var scopedPackageIds = GetScopedPackageIds(mapping.Source, packageIds, logger);
 
         foreach (var scopedPackageId in scopedPackageIds)
         {
@@ -244,9 +245,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
     }
 
-    private static HashSet<string> GetScopedPackageIds(string source, IEnumerable<string> packageIds)
+    private static HashSet<string> GetScopedPackageIds(string source, IEnumerable<string> packageIds, ILogger? logger)
     {
-        var resolvedPackageIds = new HashSet<string>(packageIds, StringComparer.OrdinalIgnoreCase);
+        var resolvedPackageIds = new HashSet<string>(packageIds, StringComparers.NuGetPackageId);
 
         if (!Directory.Exists(source))
         {
@@ -256,11 +257,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         var packageFiles = Directory.EnumerateFiles(source, "*.nupkg", SearchOption.TopDirectoryOnly)
             .Select(GetPackageFileMetadata)
             .OfType<PackageFileMetadata>()
-            .GroupBy(metadata => metadata.PackageId, StringComparer.OrdinalIgnoreCase)
+            .GroupBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
             .ToDictionary(
                 group => group.Key,
                 group => group.OrderByDescending(metadata => metadata.Version, SemVersion.PrecedenceComparer).First(),
-                StringComparer.OrdinalIgnoreCase);
+                StringComparers.NuGetPackageId);
 
         var packagesToProcess = new Queue<string>(resolvedPackageIds);
 
@@ -272,7 +273,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                 continue;
             }
 
-            foreach (var dependencyPackageId in GetDependencyPackageIds(metadata.PackageFilePath))
+            foreach (var dependencyPackageId in GetDependencyPackageIds(metadata.PackageFilePath, logger))
             {
                 if (packageFiles.ContainsKey(dependencyPackageId) && resolvedPackageIds.Add(dependencyPackageId))
                 {
@@ -295,7 +296,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return new PackageFileMetadata(packageIdentity.Value.PackageId, packageIdentity.Value.Version, packageFile);
     }
 
-    private static IEnumerable<string> GetDependencyPackageIds(string packageFile)
+    private static IEnumerable<string> GetDependencyPackageIds(string packageFile, ILogger? logger)
     {
         try
         {
@@ -313,20 +314,23 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                 .Where(element => element.Name.LocalName == "dependency")
                 .Select(element => element.Attribute("id")?.Value)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Distinct(StringComparers.NuGetPackageId)
                 .Cast<string>()
                 .ToArray();
         }
-        catch (IOException)
+        catch (IOException ex)
         {
+            logger?.LogDebug(ex, "Failed to read package file '{PackageFile}' while resolving dependencies.", packageFile);
             return [];
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException ex)
         {
+            logger?.LogDebug(ex, "Package file '{PackageFile}' contains invalid data.", packageFile);
             return [];
         }
-        catch (System.Xml.XmlException)
+        catch (System.Xml.XmlException ex)
         {
+            logger?.LogDebug(ex, "Failed to parse nuspec in package file '{PackageFile}'.", packageFile);
             return [];
         }
     }
@@ -362,18 +366,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal);
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger);
     }
 
-    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache)
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, ILogger? logger = null)
     {
         // The reason that PackageChannelQuality.Both is because there are situations like
         // in community toolkit where there is a newer beta version available for a package
         // in the case of implicit feeds we want to be able to show that, along side the stable
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
-        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache);
+        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, logger: logger);
     }
 }
