@@ -94,8 +94,8 @@ public static class DashboardEndpointsBuilder
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
     {
-        // Check if API is enabled (defaults to disabled if not specified)
-        if (!dashboardOptions.Api.Enabled.GetValueOrDefault())
+        // Check if API is disabled
+        if (dashboardOptions.Api.Disabled.GetValueOrDefault())
         {
             endpoints.MapGetNotFound("/api/telemetry/{*path}").SkipStatusCodePages();
             endpoints.MapPostNotFound("/api/telemetry/{*path}").SkipStatusCodePages();

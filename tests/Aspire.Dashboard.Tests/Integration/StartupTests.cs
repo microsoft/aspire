@@ -487,12 +487,16 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             {
                 data.Remove(DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey);
                 data.Remove(DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey);
+                data.Remove(DashboardConfigNames.DashboardApiAuthModeName.ConfigKey);
+                data.Remove(DashboardConfigNames.DashboardApiPrimaryApiKeyName.ConfigKey);
             });
 
         // Assert
         Assert.Equal(FrontendAuthMode.BrowserToken, app.DashboardOptionsMonitor.CurrentValue.Frontend.AuthMode);
         Assert.Equal(16, Convert.FromHexString(app.DashboardOptionsMonitor.CurrentValue.Frontend.BrowserToken!).Length);
         Assert.Equal(OtlpAuthMode.Unsecured, app.DashboardOptionsMonitor.CurrentValue.Otlp.AuthMode);
+        Assert.Equal(ApiAuthMode.ApiKey, app.DashboardOptionsMonitor.CurrentValue.Api.AuthMode);
+        Assert.False(string.IsNullOrEmpty(app.DashboardOptionsMonitor.CurrentValue.Api.PrimaryApiKey), "A primary API key should be auto-generated.");
         Assert.Empty(app.ValidationFailures);
     }
 
@@ -691,10 +695,13 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(null, HttpStatusCode.NotFound)]
-    [InlineData(true, HttpStatusCode.OK)]
-    [InlineData(false, HttpStatusCode.NotFound)]
-    public async Task ApiEnabled_ReturnsExpectedStatusAndWarning(bool? enabled, HttpStatusCode expectedStatusCode)
+    [InlineData("Dashboard:Api:Enabled", null, HttpStatusCode.OK, true)]
+    [InlineData("Dashboard:Api:Enabled", true, HttpStatusCode.OK, true)]
+    [InlineData("Dashboard:Api:Enabled", false, HttpStatusCode.NotFound, false)]
+    [InlineData("Dashboard:Api:Disabled", null, HttpStatusCode.OK, true)]
+    [InlineData("Dashboard:Api:Disabled", true, HttpStatusCode.NotFound, false)]
+    [InlineData("Dashboard:Api:Disabled", false, HttpStatusCode.OK, true)]
+    public async Task ApiEnabledDisabled_ReturnsExpectedStatusAndWarning(string configKey, bool? value, HttpStatusCode expectedStatusCode, bool expectWarning)
     {
         const string ApiUnsecuredWarning = "Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.";
 
@@ -703,13 +710,13 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
             additionalConfiguration: config =>
             {
-                if (enabled is not null)
+                if (value is not null)
                 {
-                    config[DashboardConfigNames.DashboardApiEnabledName.ConfigKey] = enabled.Value.ToString();
+                    config[configKey] = value.Value.ToString();
                 }
                 else
                 {
-                    config.Remove(DashboardConfigNames.DashboardApiEnabledName.ConfigKey);
+                    config.Remove(configKey);
                 }
             },
             testSink: testSink);
@@ -727,7 +734,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
             .Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Warning)
             .ToList();
 
-        if (enabled == true)
+        if (expectWarning)
         {
             Assert.Contains(warnings, w => LogTestHelpers.GetValue(w, "{OriginalFormat}")?.ToString() == ApiUnsecuredWarning);
         }
