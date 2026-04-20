@@ -129,4 +129,42 @@ public class WithTerminalTests
 
         Assert.Throws<ArgumentNullException>(() => builder.WithTerminal());
     }
+
+    [Fact]
+    public void WithTerminalCustomSocketPathDoesNotCreateTerminalHostResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+
+        resource.WithTerminal(_ => Task.FromResult("/tmp/my-socket.sock"));
+
+        var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Custom socket path provider should NOT create a hidden terminal host
+        var terminalHost = model.Resources.OfType<TerminalHostResource>().SingleOrDefault();
+        Assert.Null(terminalHost);
+
+        // But the annotation should be present with the provider
+        var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.NotNull(annotation.SocketPathProvider);
+    }
+
+    [Fact]
+    public async Task WithTerminalCustomSocketPathProviderReturnsPath()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+        var expectedPath = "/tmp/custom-terminal.sock";
+
+        resource.WithTerminal(_ => Task.FromResult(expectedPath));
+
+        var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.NotNull(annotation.SocketPathProvider);
+
+        var actualPath = await annotation.SocketPathProvider(CancellationToken.None);
+        Assert.Equal(expectedPath, actualPath);
+    }
 }

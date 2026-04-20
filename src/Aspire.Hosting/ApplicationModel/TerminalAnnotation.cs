@@ -19,10 +19,21 @@ public sealed class TerminalAnnotation : IResourceAnnotation
     /// Gets or sets the path to the Unix domain socket used for terminal I/O.
     /// </summary>
     /// <remarks>
-    /// This path is set by the orchestrator when the terminal host is started.
+    /// This path is set by the orchestrator when the terminal host is started,
+    /// or resolved from <see cref="SocketPathProvider"/> for custom terminal resources.
     /// Clients connect to this socket to interact with the resource's terminal session.
     /// </remarks>
     public string? SocketPath { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional callback that provides the UDS socket path.
+    /// </summary>
+    /// <remarks>
+    /// Used by custom terminal resources that manage their own terminal server.
+    /// When set, the orchestrator calls this during resource initialization to obtain the socket path
+    /// instead of creating a hidden terminal host resource.
+    /// </remarks>
+    public Func<CancellationToken, Task<string>>? SocketPathProvider { get; set; }
 
     /// <summary>
     /// Gets the terminal options for this annotation.

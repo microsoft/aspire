@@ -67,6 +67,56 @@ public static class TerminalResourceBuilderExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Configures a resource with a custom terminal socket path provider.
+    /// </summary>
+    /// <typeparam name="T">The type of the resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="socketPathProvider">
+    /// A callback that returns the UDS path for the terminal session. This is called during resource
+    /// initialization. Use this overload for resources that manage their own terminal host process
+    /// (e.g., remote resources, SSH sessions, or custom terminal bridges).
+    /// </param>
+    /// <param name="configure">An optional callback to configure the terminal options.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <remarks>
+    /// Unlike the parameterless <see cref="WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/> overload,
+    /// this method does not create a hidden terminal host resource. The caller is responsible for ensuring
+    /// a terminal server is listening on the provided socket path and speaking the Aspire Terminal Protocol.
+    /// </remarks>
+    /// <example>
+    /// Add terminal support with a custom socket path:
+    /// <code>
+    /// var agent = builder.AddResource(new MyCustomResource("agent"))
+    ///     .WithTerminal(ct => Task.FromResult("/tmp/my-terminal.sock"));
+    /// </code>
+    /// </example>
+    [AspireExportIgnore(Reason = "Func delegate parameter is not ATS-compatible.")]
+    public static IResourceBuilder<T> WithTerminal<T>(
+        this IResourceBuilder<T> builder,
+        Func<CancellationToken, Task<string>> socketPathProvider,
+        Action<TerminalOptions>? configure = null)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(socketPathProvider);
+
+        var options = new TerminalOptions();
+        configure?.Invoke(options);
+
+        var annotation = new TerminalAnnotation
+        {
+            Options = options,
+            SocketPathProvider = socketPathProvider
+        };
+
+        builder.WithAnnotation(annotation);
+
+        // No hidden terminal host resource — the caller manages the terminal server.
+
+        return builder;
+    }
+
     private static void AddTerminalHostResource<T>(IResourceBuilder<T> builder)
         where T : IResource
     {
