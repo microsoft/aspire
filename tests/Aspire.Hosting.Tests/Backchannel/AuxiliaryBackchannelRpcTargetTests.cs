@@ -191,7 +191,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         ]));
 
         using var app = builder.Build();
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -208,13 +208,13 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await notificationService.PublishUpdateAsync(resourceWithReplicas.Resource, "myresource-abc123", s => s with
         {
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
-        });
+        }).DefaultTimeout();
 
-        var response = await waitTask.WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        var response = await waitTask.DefaultTimeout();
 
         Assert.True(response.Success);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -228,7 +228,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         ]));
 
         using var app = builder.Build();
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -245,13 +245,13 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await notificationService.PublishUpdateAsync(resourceWithReplicas.Resource, "myresource-abc123", s => s with
         {
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
-        });
+        }).DefaultTimeout();
 
-        var response = await waitTask.WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
+        var response = await waitTask.DefaultTimeout();
 
         Assert.True(response.Success);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         ]));
 
         using var app = builder.Build();
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -283,7 +283,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("Resource 'myresource' failed to become healthy before the operation was cancelled.", exception.Message);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -298,7 +298,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         ]));
 
         using var app = builder.Build();
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -316,7 +316,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("Resource 'myresource-abc123' failed to become healthy before the operation was cancelled.", exception.Message);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -331,7 +331,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         ]));
 
         using var app = builder.Build();
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -342,13 +342,13 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             ResourceName = "myresource",
             Status = "up",
             TimeoutSeconds = 5
-        });
+        }).DefaultTimeout();
 
         Assert.False(response.Success);
         Assert.False(response.ResourceNotFound);
         Assert.Equal("Resource 'myresource' is ambiguous because it has multiple replicas. Specify the exact instance name.", response.ErrorMessage);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     private sealed class CustomResource(string name) : Resource(name)
