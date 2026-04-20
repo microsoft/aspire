@@ -125,7 +125,11 @@ internal sealed class DashboardRunCommand : BaseCommand
             {
                 var apiKey = TokenGenerator.GenerateToken();
                 environmentVariables[DashboardConfigNames.DashboardApiPrimaryApiKeyName.EnvVarName] = apiKey;
-                environmentVariables[DashboardConfigNames.DashboardApiAuthModeName.EnvVarName] = "ApiKey";
+
+                if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardApiAuthModeName.EnvVarName))
+                {
+                    environmentVariables[DashboardConfigNames.DashboardApiAuthModeName.EnvVarName] = "ApiKey";
+                }
             }
         }
 

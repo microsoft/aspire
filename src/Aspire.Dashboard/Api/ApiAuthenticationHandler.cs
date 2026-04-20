@@ -10,12 +10,10 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Dashboard.Api;
 
 /// <summary>
-/// Authentication handler for the Dashboard API that supports API key auth
-/// and falls back to frontend auth (browser token, OIDC, or unsecured based on configuration).
+/// Authentication handler for the Dashboard API that supports API key authentication.
 /// </summary>
 /// <remarks>
-/// When Api.AuthMode is ApiKey, the API key is required for programmatic access.
-/// Browser-based access can still use frontend auth (browser token, OIDC).
+/// When Api.AuthMode is ApiKey, all requests must include a valid API key via the x-api-key header.
 /// When Api.AuthMode is Unsecured, no authentication is required.
 /// </remarks>
 public sealed class ApiAuthenticationHandler(
