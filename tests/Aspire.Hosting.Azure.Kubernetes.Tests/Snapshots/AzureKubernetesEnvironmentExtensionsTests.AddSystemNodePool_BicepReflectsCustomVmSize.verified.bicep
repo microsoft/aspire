@@ -1,4 +1,4 @@
-﻿@description('The location for the resource(s) to be deployed.')
+@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 resource aks 'Microsoft.ContainerService/managedClusters@2025-03-01' = {

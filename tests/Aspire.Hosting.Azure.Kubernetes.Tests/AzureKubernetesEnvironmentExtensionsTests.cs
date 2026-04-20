@@ -379,6 +379,15 @@ public class AzureKubernetesEnvironmentExtensionsTests
     }
 
     [Fact]
+    public void AddSystemNodePool_RejectsZeroMinCount()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        Assert.Throws<ArgumentOutOfRangeException>(() => aks.AddSystemNodePool("Standard_B2s", minCount: 0));
+    }
+
+    [Fact]
     public async Task AddSystemNodePool_BicepReflectsCustomVmSize()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

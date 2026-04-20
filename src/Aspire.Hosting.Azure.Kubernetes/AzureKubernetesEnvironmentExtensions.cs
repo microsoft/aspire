@@ -220,8 +220,8 @@ public static class AzureKubernetesEnvironmentExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(vmSize);
-        ArgumentOutOfRangeException.ThrowIfNegative(minCount);
-        ArgumentOutOfRangeException.ThrowIfNegative(maxCount);
+        ArgumentOutOfRangeException.ThrowIfLessThan(minCount, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(minCount, maxCount);
 
         // Remove existing system pool(s) and replace with the new configuration
