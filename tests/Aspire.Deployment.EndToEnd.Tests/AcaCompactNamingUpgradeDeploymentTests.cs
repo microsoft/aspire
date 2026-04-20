@@ -92,7 +92,7 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
             output.WriteLine("Step 2: Backing up dev CLI and installing GA Aspire CLI...");
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.TypeAsync("cp ~/.aspire/bin/aspire /tmp/aspire-dev-backup && cp -r ~/.aspire/hives /tmp/aspire-hives-backup 2>/dev/null; echo 'dev CLI backed up'");
+                await auto.TypeAsync("cp ~/.aspire/bin/aspire /tmp/aspire-dev-backup && cp -r ~/.aspire/hives /tmp/aspire-hives-backup 2>/dev/null && cp -r ~/.aspire/managed /tmp/aspire-managed-backup 2>/dev/null && cp -r ~/.aspire/dcp /tmp/aspire-dcp-backup 2>/dev/null; echo 'dev CLI backed up'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
             }
@@ -267,7 +267,7 @@ builder.Build().Run();
             {
                 output.WriteLine("Step 11: Restoring dev CLI from backup...");
                 // Restore the dev CLI and hive that we backed up before GA install
-                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null; echo 'dev CLI restored'");
+                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null && cp -rf /tmp/aspire-managed-backup/* ~/.aspire/managed/ 2>/dev/null && cp -rf /tmp/aspire-dcp-backup/* ~/.aspire/dcp/ 2>/dev/null; echo 'dev CLI restored'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
 

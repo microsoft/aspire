@@ -19,6 +19,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/16330")]
     public async Task DeployFoundryHostedAgentToAzure()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
