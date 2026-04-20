@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Mcp.Tools;
@@ -167,6 +168,8 @@ internal static class TelemetryCommandHelpers
     /// </summary>
     /// <param name="connectionResolver">The connection resolver for AppHost discovery.</param>
     /// <param name="interactionService">The interaction service for displaying messages.</param>
+    /// <param name="httpClientFactory">The HTTP client factory for making API calls.</param>
+    /// <param name="logger">The logger for diagnostic messages.</param>
     /// <param name="projectFile">The optional AppHost project file.</param>
     /// <param name="dashboardUrl">The optional direct dashboard URL (mutually exclusive with <paramref name="projectFile"/>).</param>
     /// <param name="apiKey">The optional API key for dashboard authentication.</param>
@@ -179,6 +182,8 @@ internal static class TelemetryCommandHelpers
     public static async Task<DashboardApiResult> GetDashboardApiAsync(
         AppHostConnectionResolver connectionResolver,
         IInteractionService interactionService,
+        IHttpClientFactory httpClientFactory,
+        ILogger logger,
         FileInfo? projectFile,
         string? dashboardUrl,
         string? apiKey,
@@ -195,6 +200,9 @@ internal static class TelemetryCommandHelpers
         // Direct dashboard URL mode — bypass AppHost discovery
         if (dashboardUrl is not null)
         {
+            // Extract login token before normalizing the URL
+            var loginToken = McpToolHelpers.ExtractLoginToken(dashboardUrl);
+
             // Normalize login URLs (e.g., http://localhost:18888/login?t=abc) to base URL
             dashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
 
@@ -202,6 +210,13 @@ internal static class TelemetryCommandHelpers
             {
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl));
                 return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+            }
+
+            // If no explicit --api-key was provided but a login token was found in the URL,
+            // exchange the login token for an API key via the dashboard.
+            if (apiKey is null && loginToken is not null)
+            {
+                apiKey = await ExchangeLoginTokenForApiKeyAsync(httpClientFactory, dashboardUrl, loginToken, logger, cancellationToken).ConfigureAwait(false);
             }
 
             var token = apiKey ?? string.Empty;
@@ -327,6 +342,47 @@ internal static class TelemetryCommandHelpers
         }
 
         return string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry, ex.Message);
+    }
+
+    /// <summary>
+    /// Exchanges a frontend login token for an API key by calling the dashboard's
+    /// <c>POST /api/telemetry/validateToken</c> endpoint.
+    /// </summary>
+    /// <returns>The API key, or <c>null</c> if the exchange failed or the API is unsecured.</returns>
+    internal static async Task<string?> ExchangeLoginTokenForApiKeyAsync(
+        IHttpClientFactory httpClientFactory,
+        string dashboardBaseUrl,
+        string loginToken,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = httpClientFactory.CreateClient();
+            var url = DashboardUrls.TelemetryApiKeyUrl(dashboardBaseUrl);
+
+            var content = new StringContent(
+                JsonValue.Create(loginToken).ToJsonString(),
+                System.Text.Encoding.UTF8,
+                "application/json");
+
+            var response = await client.PostAsync(url, content, cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogDebug("Login token exchange failed with status {StatusCode}", response.StatusCode);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var node = JsonNode.Parse(json);
+            return node?["apiKey"]?.GetValue<string>();
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to exchange login token for API key at {Url}", dashboardBaseUrl);
+            return null;
+        }
     }
 
     public static bool TryResolveResourceNames(

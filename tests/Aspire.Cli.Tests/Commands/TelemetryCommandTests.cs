@@ -13,6 +13,7 @@ using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -305,5 +306,115 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
             attrs.Add(new() { Key = "service.instance.id", Value = new OtlpAnyValueJson { StringValue = instanceId } });
         }
         return new OtlpResourceJson { Attributes = [.. attrs] };
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsApiKey_WhenResponseContainsKey()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"apiKey":"test-api-key-123"}""", System.Text.Encoding.UTF8, "application/json")
+        };
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal("test-api-key-123", result);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNull_WhenApiKeyIsNull()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"apiKey":null}""", System.Text.Encoding.UTF8, "application/json")
+        };
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNull_WhenUnauthorized()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "wrong-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNull_WhenNotFound()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.NotFound);
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNull_WhenConnectionFails()
+    {
+        using var handler = new MockHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_SendsTokenAsJsonBody()
+    {
+        string? capturedBody = null;
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"apiKey":"key"}""", System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+        var factory = new MockHttpClientFactory(handler);
+
+        await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "my-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal("\"my-token\"", capturedBody);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_CallsCorrectUrl()
+    {
+        string? capturedUrl = null;
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"apiKey":"key"}""", System.Text.Encoding.UTF8, "application/json")
+        };
+        using var handler = new MockHttpMessageHandler(response, request =>
+        {
+            capturedUrl = request.RequestUri?.ToString();
+        });
+        var factory = new MockHttpClientFactory(handler);
+
+        await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "my-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal("http://localhost:18888/api/telemetry/validateToken", capturedUrl);
     }
 }

@@ -51,11 +51,6 @@ internal sealed class DashboardRunCommand : BaseCommand
         Description = DashboardCommandStrings.AllowAnonymousOptionDescription
     };
 
-    private static readonly Option<bool> s_enableApiOption = new("--enable-api")
-    {
-        Description = DashboardCommandStrings.EnableApiOptionDescription
-    };
-
     private static readonly Option<string?> s_configFilePathOption = new("--config-file-path")
     {
         Description = DashboardCommandStrings.ConfigFilePathOptionDescription
@@ -83,7 +78,6 @@ internal sealed class DashboardRunCommand : BaseCommand
         Options.Add(s_otlpGrpcUrlOption);
         Options.Add(s_otlpHttpUrlOption);
         Options.Add(s_allowAnonymousOption);
-        Options.Add(s_enableApiOption);
         Options.Add(s_configFilePathOption);
         TreatUnmatchedTokensAsErrors = false;
     }
@@ -143,7 +137,13 @@ internal sealed class DashboardRunCommand : BaseCommand
         AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpGrpcUrlOption, "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", defaultValue: "http://localhost:4317");
         AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpHttpUrlOption, "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL", defaultValue: "http://localhost:4318");
         AddBoolOptionArg(parseResult, args, unmatchedTokens, executionContext, s_allowAnonymousOption, "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS");
-        AddBoolOptionArg(parseResult, args, unmatchedTokens, executionContext, s_enableApiOption, "ASPIRE_DASHBOARD_API_ENABLED");
+
+        // Always enable the telemetry API so CLI commands (e.g. aspire otel) can query the dashboard.
+        if (!ConfigSettingHasValue(unmatchedTokens, executionContext, "ASPIRE_DASHBOARD_API_ENABLED"))
+        {
+            args.Add("--ASPIRE_DASHBOARD_API_ENABLED=true");
+        }
+
         AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_configFilePathOption, "ASPIRE_DASHBOARD_CONFIG_FILE_PATH", defaultValue: null);
     }
 
@@ -166,7 +166,7 @@ internal sealed class DashboardRunCommand : BaseCommand
     }
 
     private static void AddBoolOptionArg(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens,
-        CliExecutionContext executionContext, Option<bool> option, string envVarName)
+        CliExecutionContext executionContext, Option<bool> option, string envVarName, bool? defaultValue = null)
     {
         if (ConfigSettingHasValue(unmatchedTokens, executionContext, envVarName))
         {
@@ -175,14 +175,18 @@ internal sealed class DashboardRunCommand : BaseCommand
 
         var result = parseResult.GetResult(option);
 
-        // Skip when the result comes from the option's default value rather than
-        // explicit user input. Without the Implicit check, Option<bool> defaults
-        // (e.g. false) would always emit "--ALLOW_ANONYMOUS=false" even when the
-        // user never specified --allow-anonymous.
+        // When the user explicitly specified the option, use their value.
+        // When a defaultValue is provided and the user did not specify the option, use the default.
+        // Without a defaultValue, skip when the result comes from the option's default value rather
+        // than explicit user input, to avoid always emitting e.g. "--ALLOW_ANONYMOUS=false".
         if (result is not null && !result.Implicit)
         {
             var value = parseResult.GetValue(option);
             args.Add($"--{envVarName}={value.ToString().ToLowerInvariant()}");
+        }
+        else if (defaultValue is not null)
+        {
+            args.Add($"--{envVarName}={defaultValue.Value.ToString().ToLowerInvariant()}");
         }
     }
 
