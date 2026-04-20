@@ -565,7 +565,6 @@ internal class DotNetTemplateFactory(
                 return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
             }
 
-            // Trust certificates (result not used since we're not launching an AppHost)
             _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
             // For explicit channels, optionally create or update a NuGet.config. If none exists in the current

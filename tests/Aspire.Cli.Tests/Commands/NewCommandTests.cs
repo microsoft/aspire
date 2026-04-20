@@ -713,11 +713,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             throw new CertificateServiceException("Failed to trust certificates");
         }
-
-        public Task<TrustCertificateResult> TrustCertificateAsync(CancellationToken cancellationToken)
-        {
-            throw new CertificateServiceException("Failed to trust certificates");
-        }
     }
 
     [Fact]

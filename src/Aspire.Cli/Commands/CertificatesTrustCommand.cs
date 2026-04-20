@@ -29,7 +29,9 @@ internal sealed class CertificatesTrustCommand : BaseCommand
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var result = await _certificateService.TrustCertificateAsync(cancellationToken);
+        InteractionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.TrustProgress);
+
+        var result = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
         if (result.Success)
         {
@@ -39,7 +41,6 @@ internal sealed class CertificatesTrustCommand : BaseCommand
 
         if (result.WasCancelled)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustCancelled);
             return ExitCodeConstants.FailedToTrustCertificates;
         }
 

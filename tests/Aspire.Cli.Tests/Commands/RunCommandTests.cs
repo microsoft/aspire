@@ -215,11 +215,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         {
             throw new Aspire.Cli.Certificates.CertificateServiceException("Failed to trust certificates");
         }
-
-        public Task<Aspire.Cli.Certificates.TrustCertificateResult> TrustCertificateAsync(CancellationToken cancellationToken)
-        {
-            throw new Aspire.Cli.Certificates.CertificateServiceException("Failed to trust certificates");
-        }
     }
 
     private sealed class NoProjectFileProjectLocator : IProjectLocator
