@@ -204,15 +204,15 @@ public static class AzureKubernetesEnvironmentExtensions
     /// <example>
     /// <code>
     /// var aks = builder.AddAzureKubernetesEnvironment("aks")
-    ///     .AddSystemNodePool("Standard_B2s");
+    ///     .WithSystemNodePool("Standard_B2s");
     ///
     /// // With explicit scaling
     /// var aks2 = builder.AddAzureKubernetesEnvironment("aks2")
-    ///     .AddSystemNodePool("Standard_B2s", minCount: 2, maxCount: 5);
+    ///     .WithSystemNodePool("Standard_B2s", minCount: 2, maxCount: 5);
     /// </code>
     /// </example>
     [AspireExport(Description = "Replaces the default system node pool with a customized configuration")]
-    public static IResourceBuilder<AzureKubernetesEnvironmentResource> AddSystemNodePool(
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSystemNodePool(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
         string vmSize = "Standard_D2s_v5",
         int minCount = 1,
