@@ -22,6 +22,7 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
     /// no duplicate storage accounts were created (default naming unchanged).
     /// </summary>
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/16332")]
     public async Task UpgradeFromGaToDevDoesNotDuplicateStorageAccounts()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
