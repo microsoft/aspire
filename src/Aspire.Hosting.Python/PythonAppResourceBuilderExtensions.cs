@@ -1324,8 +1324,7 @@ public static class PythonAppResourceBuilderExtensions
             var installerBuilder = builder.ApplicationBuilder.AddResource(installer)
                 .WithParentRelationship(builder.Resource)
                 .ExcludeFromManifest()
-                .WithCertificateTrustScope(CertificateTrustScope.None)
-                .WithHiddenOnCompletion();
+                .WithCertificateTrustScope(CertificateTrustScope.None);
 
             if (!install)
             {
