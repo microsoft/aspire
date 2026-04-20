@@ -278,4 +278,52 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             };
         });
     }
+
+    /// <summary>
+    /// Adds a Grounding with Bing Search connection to a Microsoft Foundry project.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The Bing Search resource (<c>Microsoft.Bing/accounts</c>) cannot be provisioned through Aspire
+    /// or Bicep. It must be created manually in the
+    /// <a href="https://portal.azure.com">Azure portal</a>.
+    /// </para>
+    /// <para>
+    /// Once the Bing resource exists, pass its resource ID to this method. The connection is
+    /// created in the Foundry project using API key authentication with
+    /// <c>category: "GroundingWithBingSearch"</c>.
+    /// </para>
+    /// </remarks>
+    /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
+    /// <param name="name">The name of the connection resource.</param>
+    /// <param name="bingResourceId">
+    /// The full Azure resource ID of the Bing Search resource
+    /// (e.g., <c>/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}</c>).
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
+    [AspireExport(Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project.")]
+    public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddBingGroundingConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        string name,
+        string bingResourceId)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentException.ThrowIfNullOrEmpty(bingResourceId);
+
+        return builder.AddConnection(name, (infra) =>
+        {
+            return new BingGroundingConnectionProperties()
+            {
+                Target = "https://api.bing.microsoft.com/",
+                IsSharedToAll = false,
+                Metadata =
+                {
+                    { "type", "bing_grounding" },
+                    { "ApiType", "Azure" },
+                    { "ResourceId", bingResourceId }
+                }
+            };
+        });
+    }
 }

@@ -74,3 +74,18 @@ internal class AzureStorageAccountConnectionProperties : AadAuthTypeConnectionPr
         DefineProperty<string>("category", ["category"], defaultValue: "AzureStorageAccount");
     }
 }
+
+/// <summary>
+/// Connection properties for a Grounding with Bing Search connection.
+/// Overrides the category to "GroundingWithBingSearch", which is not available as an
+/// enum variant in <c>CognitiveServicesConnectionCategory</c>.
+/// </summary>
+internal class BingGroundingConnectionProperties : ApiKeyAuthConnectionProperties
+{
+    /// <inheritdoc/>
+    protected override void DefineProvisionableProperties()
+    {
+        base.DefineProvisionableProperties();
+        DefineProperty<string>("category", ["category"], defaultValue: "GroundingWithBingSearch");
+    }
+}

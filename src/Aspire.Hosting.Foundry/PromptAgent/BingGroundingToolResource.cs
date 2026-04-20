@@ -13,9 +13,20 @@ namespace Aspire.Hosting.Foundry;
 /// A Foundry tool resource that grounds an agent's responses using Bing Search.
 /// </summary>
 /// <remarks>
-/// This tool requires a Bing Search connection configured in the Foundry project.
-/// The Bing connection is provisioned through Foundry infrastructure, not as a
-/// standalone Aspire resource.
+/// <para>
+/// The Bing Search resource (<c>Microsoft.Bing/accounts</c>) must be created manually in
+/// the <a href="https://portal.azure.com">Azure portal</a> before using this tool.
+/// </para>
+/// <para>
+/// After creating the tool with <see cref="PromptAgentBuilderExtensions.AddBingGroundingTool"/>,
+/// link it using one of the <c>WithReference</c> overloads:
+/// <list type="bullet">
+/// <item><see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{BingGroundingToolResource}, IResourceBuilder{AzureCognitiveServicesProjectConnectionResource})"/>
+/// to use an existing project connection.</item>
+/// <item><see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{BingGroundingToolResource}, string)"/>
+/// to auto-create a connection from a Bing resource ID.</item>
+/// </list>
+/// </para>
 /// </remarks>
 public class BingGroundingToolResource : FoundryToolResource
 {

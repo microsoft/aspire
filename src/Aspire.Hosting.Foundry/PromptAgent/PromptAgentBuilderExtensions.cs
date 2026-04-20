@@ -5,7 +5,6 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
-using Azure.Provisioning.Search;
 
 namespace Aspire.Hosting;
 
@@ -245,10 +244,8 @@ public static class PromptAgentBuilderExtensions
         // Find the project builder to create the connection
         var projectBuilder = tool.ApplicationBuilder.CreateResourceBuilder(tool.Resource.Project);
 
+        // AddConnection(IResourceBuilder<AzureSearchResource>) already handles role assignments
         var connection = projectBuilder.AddConnection(search);
-        projectBuilder.WithRoleAssignments(search,
-            SearchBuiltInRole.SearchIndexDataReader,
-            SearchBuiltInRole.SearchServiceContributor);
 
         tool.Resource.Connection = connection.Resource;
         tool.Resource.SearchResource = search.Resource;
@@ -285,7 +282,7 @@ public static class PromptAgentBuilderExtensions
     /// <param name="tool">The Bing Grounding tool resource builder.</param>
     /// <param name="bingConnection">The Foundry project connection for the Bing Search service.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Links a Bing Grounding tool to a Bing Search connection.")]
+    [AspireExport("withBingConnectionReference", Description = "Links a Bing Grounding tool to a Bing Search connection.")]
     public static IResourceBuilder<BingGroundingToolResource> WithReference(
         this IResourceBuilder<BingGroundingToolResource> tool,
         IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> bingConnection)
@@ -300,6 +297,48 @@ public static class PromptAgentBuilderExtensions
         }
 
         tool.Resource.Connection = bingConnection.Resource;
+        return tool;
+    }
+
+    /// <summary>
+    /// Links a Bing Grounding tool to a Bing Search resource using its Azure resource ID,
+    /// automatically creating the Foundry project connection with the correct authentication
+    /// and metadata.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The Bing Search resource (<c>Microsoft.Bing/accounts</c>) must be created manually in
+    /// the <a href="https://portal.azure.com">Azure portal</a> before using this method.
+    /// </para>
+    /// <para>
+    /// This overload creates a Foundry project connection with <c>ApiKey</c> authentication
+    /// and <c>category: "GroundingWithBingSearch"</c>, matching the connection structure
+    /// that Azure Foundry expects for Bing grounding.
+    /// </para>
+    /// </remarks>
+    /// <param name="tool">The Bing Grounding tool resource builder.</param>
+    /// <param name="bingResourceId">
+    /// The full Azure resource ID of the Bing Search resource
+    /// (e.g., <c>/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}</c>).
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport("withBingResourceIdReference", Description = "Links a Bing Grounding tool to a Bing Search resource by resource ID.")]
+    public static IResourceBuilder<BingGroundingToolResource> WithReference(
+        this IResourceBuilder<BingGroundingToolResource> tool,
+        string bingResourceId)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        ArgumentException.ThrowIfNullOrEmpty(bingResourceId);
+
+        if (tool.Resource.Connection is not null)
+        {
+            throw new InvalidOperationException(
+                $"Bing Grounding tool '{tool.Resource.Name}' already has a connection configured.");
+        }
+
+        var projectBuilder = tool.ApplicationBuilder.CreateResourceBuilder(tool.Resource.Project);
+        var connection = projectBuilder.AddBingGroundingConnection($"{tool.Resource.Name}-conn", bingResourceId);
+        tool.Resource.Connection = connection.Resource;
         return tool;
     }
 

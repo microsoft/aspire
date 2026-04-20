@@ -240,6 +240,46 @@ public class PromptAgentTests
     }
 
     [Fact]
+    public void AddBingGroundingTool_WithResourceId_CreatesConnection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var bingResourceId = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing-test";
+        var tool = project.AddBingGroundingTool("bing").WithReference(bingResourceId);
+
+        Assert.NotNull(tool.Resource.Connection);
+    }
+
+    [Fact]
+    public void AddBingGroundingTool_WithResourceId_Twice_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var bingResourceId = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing-test";
+        var tool = project.AddBingGroundingTool("bing").WithReference(bingResourceId);
+
+        Assert.Throws<InvalidOperationException>(() => tool.WithReference(bingResourceId));
+    }
+
+    [Fact]
+    public void AddBingGroundingConnection_CreatesConnection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var bingResourceId = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing-test";
+        var connection = project.AddBingGroundingConnection("bing-conn", bingResourceId);
+
+        Assert.NotNull(connection);
+        Assert.IsType<AzureCognitiveServicesProjectConnectionResource>(connection.Resource);
+    }
+
+    [Fact]
     public void AddSharePointTool_CreatesResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

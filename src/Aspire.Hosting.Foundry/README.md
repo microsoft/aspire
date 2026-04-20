@@ -219,16 +219,25 @@ var agent = project.AddPromptAgent(chat, "research-agent",
 
 ### Bing Grounding tool example
 
-> **Note:** The Bing Grounding resource (Grounding with Bing Search) cannot be provisioned via Bicep or ARM templates.
-> You must create it manually in the [Azure portal](https://portal.azure.com) and then create a Foundry project connection
-> that references it. Pass that connection to the tool via `.WithReference()`.
+> **Note:** The Bing Search resource (`Microsoft.Bing/accounts`) cannot be provisioned via Bicep or ARM templates.
+> You must create it manually in the [Azure portal](https://portal.azure.com). Once created, Aspire can
+> automatically provision the Foundry project connection for you.
+
+The simplest approach is to pass the Bing resource ID directly — Aspire will create the connection with the correct authentication and metadata:
 
 ```csharp
-var bingConnection = project.AddConnection("bing-conn", infra => /* configure Bing connection */);
-var bing = project.AddBingGroundingTool("bing-tool").WithReference(bingConnection);
+var bingResourceId = "/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}";
+var bing = project.AddBingGroundingTool("bing-tool").WithReference(bingResourceId);
 
 var agent = project.AddPromptAgent(chat, "news-agent",
     tools: [bing]);
+```
+
+Alternatively, you can create the connection yourself for full control:
+
+```csharp
+var bingConnection = project.AddBingGroundingConnection("bing-conn", bingResourceId);
+var bing = project.AddBingGroundingTool("bing-tool").WithReference(bingConnection);
 ```
 
 ### Tool reuse across agents
