@@ -487,6 +487,7 @@ public class Program
         builder.Services.AddTransient<IntegrationCommand>();
         builder.Services.AddTransient<IntegrationListCommand>();
         builder.Services.AddTransient<IntegrationSearchCommand>();
+        builder.Services.AddTransient<TerminalCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
