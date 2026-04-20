@@ -192,6 +192,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
         if (_browserProcessTask is { IsCompleted: false } browserProcessTask)
         {
+            OperationCanceledException? waitCanceledException = null;
             using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             waitCts.CancelAfter(s_browserShutdownTimeout);
 
@@ -199,9 +200,19 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             {
                 await browserProcessTask.WaitAsync(waitCts.Token).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException ex)
+            {
+                waitCanceledException = ex;
+            }
+
+            if (!browserProcessTask.IsCompleted)
             {
                 await DisposeBrowserProcessAsync().ConfigureAwait(false);
+            }
+
+            if (waitCanceledException is not null && cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(waitCanceledException.Message, waitCanceledException, cancellationToken);
             }
         }
 

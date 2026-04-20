@@ -1,10 +1,35 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.InternalTesting;
+
 namespace Aspire.Hosting.Tests.Utils;
 
 internal static class ConsoleLoggingTestHelpers
 {
+    public static async Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService service, string resourceName, int targetLogCount, Action writeLogs)
+    {
+        var subscribedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var watchTask = WatchForLogsAsync(service.WatchAsync(resourceName), targetLogCount);
+
+        _ = Task.Run(async () =>
+        {
+            await foreach (var subscriber in service.WatchAnySubscribersAsync())
+            {
+                if (subscriber.Name == resourceName && subscriber.AnySubscribers)
+                {
+                    subscribedTcs.TrySetResult();
+                    return;
+                }
+            }
+        });
+
+        await subscribedTcs.Task.DefaultTimeout();
+        writeLogs();
+
+        return await watchTask.DefaultTimeout();
+    }
+
     public static Task<IReadOnlyList<LogLine>> WatchForLogsAsync(ResourceLoggerService service, int targetLogCount, IResource resource)
     {
         var watchEnumerable = service.WatchAsync(resource);

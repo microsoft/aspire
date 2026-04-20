@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.Resources;
@@ -801,28 +803,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             ?? throw new InvalidOperationException("Expected a browser protocol event frame.");
     }
 
-    private static async Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService resourceLoggerService, string resourceName, Action writeLogs)
-    {
-        var subscribedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var watchTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(resourceLoggerService.WatchAsync(resourceName), targetLogCount: 1);
-
-        _ = Task.Run(async () =>
-        {
-            await foreach (var subscriber in resourceLoggerService.WatchAnySubscribersAsync())
-            {
-                if (subscriber.Name == resourceName && subscriber.AnySubscribers)
-                {
-                    subscribedTcs.TrySetResult();
-                    return;
-                }
-            }
-        });
-
-        await subscribedTcs.Task.DefaultTimeout();
-        writeLogs();
-
-        return await watchTask.DefaultTimeout();
-    }
+    private static Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService resourceLoggerService, string resourceName, Action writeLogs) =>
+        ConsoleLoggingTestHelpers.CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount: 1, writeLogs);
 
     private sealed class FakeBrowserLogsSessionManager : IBrowserLogsSessionManager
     {
@@ -959,3 +941,5 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         string PageCdpEndpoint,
         string TargetId);
 }
+
+#pragma warning restore ASPIREBROWSERLOGS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

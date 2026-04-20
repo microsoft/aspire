@@ -3,7 +3,6 @@
 
 using System.Net.WebSockets;
 using Aspire.Hosting.Tests.Utils;
-using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
@@ -138,26 +137,6 @@ public class BrowserLogsSessionManagerTests
                 log.Content));
     }
 
-    private static async Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService resourceLoggerService, string resourceName, int targetLogCount, Action writeLogs)
-    {
-        var subscribedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var watchTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(resourceLoggerService.WatchAsync(resourceName), targetLogCount);
-
-        _ = Task.Run(async () =>
-        {
-            await foreach (var subscriber in resourceLoggerService.WatchAnySubscribersAsync())
-            {
-                if (subscriber.Name == resourceName && subscriber.AnySubscribers)
-                {
-                    subscribedTcs.TrySetResult();
-                    return;
-                }
-            }
-        });
-
-        await subscribedTcs.Task.DefaultTimeout();
-        writeLogs();
-
-        return await watchTask.DefaultTimeout();
-    }
+    private static Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService resourceLoggerService, string resourceName, int targetLogCount, Action writeLogs) =>
+        ConsoleLoggingTestHelpers.CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount, writeLogs);
 }

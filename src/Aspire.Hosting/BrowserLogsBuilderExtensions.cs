@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Resources;
@@ -79,6 +80,7 @@ public static class BrowserLogsBuilderExtensions
     ///     .WithBrowserLogs();
     /// </code>
     /// </example>
+    [Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.")]
     public static IResourceBuilder<T> WithBrowserLogs<T>(this IResourceBuilder<T> builder, string? browser = null, string? profile = null)
         where T : IResourceWithEndpoints
