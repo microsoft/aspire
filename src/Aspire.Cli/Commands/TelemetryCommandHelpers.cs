@@ -226,14 +226,19 @@ internal static class TelemetryCommandHelpers
 
                 if (!exchangeResult.Success)
                 {
-                    var errorInfo = exchangeResult.ConnectionFailed
-                        ? new TelemetryErrorInfo(
+                    var errorInfo = exchangeResult.FailureKind switch
+                    {
+                        TokenExchangeFailureKind.ConnectionError => new TelemetryErrorInfo(
                             string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardUrl),
-                            TelemetryCommandStrings.DashboardConnectionFailedHint)
-                        : new TelemetryErrorInfo(
+                            TelemetryCommandStrings.DashboardConnectionFailedHint),
+                        TokenExchangeFailureKind.ApiNotEnabled => new TelemetryErrorInfo(
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardUrl),
+                            TelemetryCommandStrings.DashboardApiNotEnabledHint),
+                        _ => new TelemetryErrorInfo(
                             TelemetryCommandStrings.DashboardLoginTokenFailed,
                             TelemetryCommandStrings.DashboardLoginTokenFailedHint,
-                            TelemetryCommandStrings.DashboardLoginTokenFailedAnonymousHint);
+                            TelemetryCommandStrings.DashboardLoginTokenFailedAnonymousHint),
+                    };
                     DisplayTelemetryError(interactionService, errorInfo, logFilePath);
                     return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
                 }
@@ -435,7 +440,7 @@ internal static class TelemetryCommandHelpers
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogDebug("Login token exchange failed with status {StatusCode}", response.StatusCode);
-                return TokenExchangeResult.Failed;
+                return TokenExchangeResult.FromStatusCode(response.StatusCode);
             }
 
             var result = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryValidateTokenResponse, cancellationToken).ConfigureAwait(false);
@@ -674,22 +679,49 @@ internal sealed record DashboardApiResult(
 }
 
 /// <summary>
+/// Describes the kind of failure that occurred during a login token exchange.
+/// </summary>
+internal enum TokenExchangeFailureKind
+{
+    /// <summary>No failure (exchange succeeded).</summary>
+    None,
+    /// <summary>The token was invalid or rejected by the dashboard (401).</summary>
+    TokenRejected,
+    /// <summary>The telemetry API is not enabled on the dashboard (404).</summary>
+    ApiNotEnabled,
+    /// <summary>The dashboard was not reachable (connection error).</summary>
+    ConnectionError,
+    /// <summary>An unexpected HTTP status code was returned.</summary>
+    Other,
+}
+
+/// <summary>
 /// Result of exchanging a frontend login token for an API key via the dashboard.
 /// </summary>
 /// <param name="Success">Whether the exchange succeeded. When <c>false</c>, the token was invalid or the endpoint was unreachable.</param>
 /// <param name="ApiKey">The API key returned by the dashboard, or <c>null</c> if the dashboard API is unsecured.</param>
-/// <param name="ConnectionFailed">When <c>true</c>, the failure was due to a connection error (dashboard not reachable) rather than a bad token.</param>
-internal sealed record TokenExchangeResult(bool Success, string? ApiKey, bool ConnectionFailed = false)
+/// <param name="FailureKind">The kind of failure when <paramref name="Success"/> is <c>false</c>.</param>
+internal sealed record TokenExchangeResult(bool Success, string? ApiKey, TokenExchangeFailureKind FailureKind = TokenExchangeFailureKind.None)
 {
     /// <summary>
     /// A failed token exchange result due to an invalid or rejected token.
     /// </summary>
-    public static readonly TokenExchangeResult Failed = new(false, null);
+    public static readonly TokenExchangeResult Failed = new(false, null, TokenExchangeFailureKind.TokenRejected);
 
     /// <summary>
     /// A failed token exchange result due to a connection error.
     /// </summary>
-    public static readonly TokenExchangeResult ConnectionError = new(false, null, ConnectionFailed: true);
+    public static readonly TokenExchangeResult ConnectionError = new(false, null, TokenExchangeFailureKind.ConnectionError);
+
+    /// <summary>
+    /// Creates a failed result from an HTTP status code.
+    /// </summary>
+    public static TokenExchangeResult FromStatusCode(HttpStatusCode statusCode) => statusCode switch
+    {
+        HttpStatusCode.NotFound => new(false, null, TokenExchangeFailureKind.ApiNotEnabled),
+        HttpStatusCode.Unauthorized => new(false, null, TokenExchangeFailureKind.TokenRejected),
+        _ => new(false, null, TokenExchangeFailureKind.Other),
+    };
 }
 
 /// <summary>

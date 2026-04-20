@@ -359,6 +359,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
             factory, "http://localhost:18888", "wrong-token", NullLogger.Instance, CancellationToken.None);
 
         Assert.False(result.Success);
+        Assert.Equal(TokenExchangeFailureKind.TokenRejected, result.FailureKind);
     }
 
     [Fact]
@@ -372,6 +373,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
             factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
 
         Assert.False(result.Success);
+        Assert.Equal(TokenExchangeFailureKind.ApiNotEnabled, result.FailureKind);
     }
 
     [Fact]
@@ -384,7 +386,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
             factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
 
         Assert.False(result.Success);
-        Assert.True(result.ConnectionFailed);
+        Assert.Equal(TokenExchangeFailureKind.ConnectionError, result.FailureKind);
     }
 
     [Fact]

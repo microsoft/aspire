@@ -28,7 +28,7 @@ public sealed class ApiAuthenticationHandler(
     /// </summary>
     public const string ApiKeyHeaderName = "x-api-key";
 
-    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var currentOptions = dashboardOptions.CurrentValue;
         var apiAuthMode = currentOptions.Api.AuthMode;
@@ -37,7 +37,7 @@ public sealed class ApiAuthenticationHandler(
         if (apiAuthMode is ApiAuthMode.Unsecured)
         {
             var id = new ClaimsIdentity([new Claim(ClaimName, bool.TrueString)], AuthenticationScheme);
-            return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name));
+            return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name)));
         }
 
         // If API auth requires API key
@@ -46,10 +46,9 @@ public sealed class ApiAuthenticationHandler(
             var apiKeyBytes = currentOptions.Api.GetPrimaryApiKeyBytesOrNull();
 
             // If ApiKey mode is set but no key is configured, fail authentication
-            // rather than silently falling through to frontend auth
             if (apiKeyBytes is null)
             {
-                return AuthenticateResult.Fail("API key authentication is enabled but no API key is configured.");
+                return Task.FromResult(AuthenticateResult.Fail("API key authentication is enabled but no API key is configured."));
             }
 
             if (Context.Request.Headers.TryGetValue(ApiKeyHeaderName, out var apiKeyHeader))
@@ -57,20 +56,20 @@ public sealed class ApiAuthenticationHandler(
                 // There must be exactly one header with the API key.
                 if (apiKeyHeader.Count != 1)
                 {
-                    return AuthenticateResult.Fail("Invalid API key header.");
+                    return Task.FromResult(AuthenticateResult.Fail("Invalid API key header."));
                 }
 
                 var providedApiKey = apiKeyHeader.ToString();
                 if (string.IsNullOrEmpty(providedApiKey))
                 {
-                    return AuthenticateResult.Fail("Invalid API key header.");
+                    return Task.FromResult(AuthenticateResult.Fail("Invalid API key header."));
                 }
 
                 // Check primary key
                 if (CompareHelpers.CompareKey(apiKeyBytes, providedApiKey))
                 {
                     var id = new ClaimsIdentity([new Claim(ClaimName, bool.TrueString)], AuthenticationScheme);
-                    return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name));
+                    return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name)));
                 }
 
                 // Check secondary key (for key rotation)
@@ -78,18 +77,18 @@ public sealed class ApiAuthenticationHandler(
                     CompareHelpers.CompareKey(secondaryBytes, providedApiKey))
                 {
                     var id = new ClaimsIdentity([new Claim(ClaimName, bool.TrueString)], AuthenticationScheme);
-                    return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name));
+                    return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(id), Scheme.Name)));
                 }
 
-                return AuthenticateResult.Fail("Authentication failed.");
+                return Task.FromResult(AuthenticateResult.Fail("Authentication failed."));
             }
             else
             {
-                return AuthenticateResult.Fail($"API key from '{ApiKeyHeaderName}' header is missing.");
+                return Task.FromResult(AuthenticateResult.Fail($"API key from '{ApiKeyHeaderName}' header is missing."));
             }
         }
 
-        return AuthenticateResult.NoResult();
+        return Task.FromResult(AuthenticateResult.NoResult());
     }
 
     public const string AuthenticationScheme = "Api";

@@ -148,8 +148,10 @@ internal sealed class DashboardRunCommand : BaseCommand
         AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpHttpUrlOption, KnownConfigNames.DashboardOtlpHttpEndpointUrl, defaultValue: "http://localhost:4318");
         AddBoolOptionArg(parseResult, args, unmatchedTokens, executionContext, s_allowAnonymousOption, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
 
-        // Always enable the telemetry API so CLI commands (e.g. aspire otel) can query the dashboard.
-        if (!ConfigSettingHasValue(unmatchedTokens, executionContext, KnownConfigNames.DashboardApiEnabled))
+        // Always enable the telemetry API so CLI commands (e.g. aspire otel) can query the dashboard,
+        // unless the user has explicitly configured either the enabled or disabled setting.
+        if (!ConfigSettingHasValue(unmatchedTokens, executionContext, KnownConfigNames.DashboardApiEnabled) &&
+            !ConfigSettingHasValue(unmatchedTokens, executionContext, KnownConfigNames.DashboardApiDisabled))
         {
             args.Add($"--{KnownConfigNames.DashboardApiEnabled}=true");
         }
