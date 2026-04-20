@@ -280,6 +280,33 @@ public class PromptAgentTests
     }
 
     [Fact]
+    public void AddBingGroundingTool_WithParameterReference_SetsConnection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var bingResourceId = builder.AddParameter("bingResourceId");
+        var tool = project.AddBingGroundingTool("bing").WithReference(bingResourceId);
+
+        Assert.NotNull(tool.Resource.Connection);
+    }
+
+    [Fact]
+    public void AddBingGroundingConnection_WithParameter_CreatesConnection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var bingResourceId = builder.AddParameter("bingResourceId");
+        var connection = project.AddBingGroundingConnection("bing-conn", bingResourceId);
+
+        Assert.NotNull(connection);
+        Assert.IsType<AzureCognitiveServicesProjectConnectionResource>(connection.Resource);
+    }
+
+    [Fact]
     public void AddSharePointTool_CreatesResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

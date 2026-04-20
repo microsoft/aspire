@@ -326,4 +326,47 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             };
         });
     }
+
+    /// <summary>
+    /// Adds a Grounding with Bing Search connection to a Microsoft Foundry project using a
+    /// parameter resource for the Bing resource ID.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This overload allows the Bing resource ID to be supplied as a parameter (e.g., from user secrets
+    /// or configuration) rather than a hardcoded string. The parameter value is resolved at deployment time
+    /// and embedded in the Bicep template.
+    /// </para>
+    /// </remarks>
+    /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
+    /// <param name="name">The name of the connection resource.</param>
+    /// <param name="bingResourceId">
+    /// A parameter resource containing the full Azure resource ID of the Bing Search resource.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
+    [AspireExport("addBingGroundingConnectionFromParameter", Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project using a parameter.")]
+    public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddBingGroundingConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        string name,
+        IResourceBuilder<ParameterResource> bingResourceId)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(bingResourceId);
+
+        return builder.AddConnection(name, (infra) =>
+        {
+            return new BingGroundingConnectionProperties()
+            {
+                Target = "https://api.bing.microsoft.com/",
+                IsSharedToAll = false,
+                Metadata =
+                {
+                    { "type", "bing_grounding" },
+                    { "ApiType", "Azure" },
+                    { "ResourceId", bingResourceId.AsProvisioningParameter(infra) }
+                }
+            };
+        });
+    }
 }

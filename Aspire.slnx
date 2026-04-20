@@ -234,6 +234,10 @@
     <Project Path="playground/FoundryHostedAgents/DotNetHostedAgent/DotNetHostedAgent.csproj" />
     <Project Path="playground/FoundryHostedAgents/FoundryHostedAgents.AppHost/FoundryHostedAgents.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/FoundryPromptAgents/">
+    <Project Path="playground/FoundryPromptAgents/FoundryPromptAgents.AppHost/FoundryPromptAgents.AppHost.csproj" />
+    <Project Path="playground/FoundryPromptAgents/PromptAgentChat/PromptAgentChat.csproj" />
+  </Folder>
   <Folder Name="/playground/GitHubModelsEndToEnd/">
     <Project Path="playground/GitHubModelsEndToEnd/GitHubModelsEndToEnd.AppHost/GitHubModelsEndToEnd.AppHost.csproj" />
     <Project Path="playground/GitHubModelsEndToEnd/GitHubModelsEndToEnd.WebStory/GitHubModelsEndToEnd.WebStory.csproj" />

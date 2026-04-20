@@ -342,6 +342,48 @@ public static class PromptAgentBuilderExtensions
         return tool;
     }
 
+    /// <summary>
+    /// Links a Bing Grounding tool to a Bing Search resource using a parameter for the Azure
+    /// resource ID, automatically creating the Foundry project connection with the correct
+    /// authentication and metadata.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This overload allows the Bing resource ID to be supplied as a parameter (e.g., from user
+    /// secrets or configuration). The parameter value is resolved at deployment time.
+    /// </para>
+    /// <para>
+    /// The Bing Search resource (<c>Microsoft.Bing/accounts</c>) must be created manually in
+    /// the <a href="https://portal.azure.com">Azure portal</a> before using this method.
+    /// Store the resource ID in user secrets:
+    /// <c>dotnet user-secrets set "Parameters:bingResourceId" "/subscriptions/{sub}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}"</c>
+    /// </para>
+    /// </remarks>
+    /// <param name="tool">The Bing Grounding tool resource builder.</param>
+    /// <param name="bingResourceId">
+    /// A parameter resource containing the full Azure resource ID of the Bing Search resource.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport("withBingParameterReference", Description = "Links a Bing Grounding tool to a Bing Search resource by parameter resource ID.")]
+    public static IResourceBuilder<BingGroundingToolResource> WithReference(
+        this IResourceBuilder<BingGroundingToolResource> tool,
+        IResourceBuilder<ParameterResource> bingResourceId)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        ArgumentNullException.ThrowIfNull(bingResourceId);
+
+        if (tool.Resource.Connection is not null)
+        {
+            throw new InvalidOperationException(
+                $"Bing Grounding tool '{tool.Resource.Name}' already has a connection configured.");
+        }
+
+        var projectBuilder = tool.ApplicationBuilder.CreateResourceBuilder(tool.Resource.Project);
+        var connection = projectBuilder.AddBingGroundingConnection($"{tool.Resource.Name}-conn", bingResourceId);
+        tool.Resource.Connection = connection.Resource;
+        return tool;
+    }
+
     // ──────────────────────────────────────────────────────────────
     // Configuration-only tools
     // ──────────────────────────────────────────────────────────────
