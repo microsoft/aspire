@@ -251,7 +251,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             {
                 env[kvp.Key] = kvp.Value;
             }
-
         }
         catch
         {
