@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
@@ -34,6 +35,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var service = new BundleNuGetService(
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
             NullLogger<BundleNuGetService>.Instance);
 
         var libsPath = await service.RestorePackagesAsync(
@@ -67,6 +70,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var service = new BundleNuGetService(
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
             NullLogger<BundleNuGetService>.Instance);
 
         var libsPathA = await service.RestorePackagesAsync(
@@ -107,6 +112,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var service = new BundleNuGetService(
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
             NullLogger<BundleNuGetService>.Instance);
 
         await service.RestorePackagesAsync(
@@ -135,6 +142,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
         var service = new BundleNuGetService(
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
             NullLogger<BundleNuGetService>.Instance);
 
         var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "packages", "restore");

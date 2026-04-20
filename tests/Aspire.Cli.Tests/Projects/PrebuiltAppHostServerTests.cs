@@ -203,6 +203,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var nugetService = new BundleNuGetService(
             new NullLayoutDiscovery(),
             new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
 
         PrebuiltAppHostServer CreateServer(string appHostDirectory) => new(
@@ -212,7 +214,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
-            new Aspire.Cli.Tests.Mcp.MockPackagingService(),
+            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             new TestConfigurationService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
