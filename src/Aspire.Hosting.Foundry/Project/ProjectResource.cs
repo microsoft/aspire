@@ -63,6 +63,7 @@ public class AzureCognitiveServicesProjectResource :
                     context.Summary.Add(Name, new MarkdownString($"[{portalUrl}]({portalUrl})"));
                 },
                 Resource = this,
+                Tags = ["print-summary"],
                 DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy]
             };
