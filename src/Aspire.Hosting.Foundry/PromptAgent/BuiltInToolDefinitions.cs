@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.Pipelines;
 using OpenAI.Responses;
 
@@ -60,5 +61,68 @@ public sealed class WebSearchToolDefinition : IFoundryTool
     public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(ResponseTool.CreateWebSearchTool());
+    }
+}
+
+/// <summary>
+/// A built-in Foundry tool that enables an agent to generate and edit images.
+/// </summary>
+/// <remarks>
+/// This is an experimental feature and may change in future releases.
+/// </remarks>
+[Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class ImageGenerationToolDefinition : IFoundryTool
+{
+    /// <inheritdoc/>
+    public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<ResponseTool>(new ImageGenerationTool());
+    }
+}
+
+/// <summary>
+/// A built-in Foundry tool that enables an agent to interact with a computer desktop
+/// by taking screenshots, moving the mouse, clicking, and typing.
+/// </summary>
+/// <remarks>
+/// This is an experimental feature and may change in future releases.
+/// The computer tool requires specifying the display dimensions and environment.
+/// </remarks>
+[Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class ComputerToolDefinition : IFoundryTool
+{
+    /// <summary>
+    /// Creates a new instance of the <see cref="ComputerToolDefinition"/> class.
+    /// </summary>
+    /// <param name="displayWidth">The width of the display in pixels.</param>
+    /// <param name="displayHeight">The height of the display in pixels.</param>
+    /// <param name="environment">The environment identifier (e.g., "browser").</param>
+    public ComputerToolDefinition(int displayWidth, int displayHeight, string environment = "browser")
+    {
+        DisplayWidth = displayWidth;
+        DisplayHeight = displayHeight;
+        Environment = environment;
+    }
+
+    /// <summary>
+    /// Gets the width of the display in pixels.
+    /// </summary>
+    public int DisplayWidth { get; }
+
+    /// <summary>
+    /// Gets the height of the display in pixels.
+    /// </summary>
+    public int DisplayHeight { get; }
+
+    /// <summary>
+    /// Gets the environment identifier.
+    /// </summary>
+    public string Environment { get; }
+
+    /// <inheritdoc/>
+    public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<ResponseTool>(
+            new ComputerTool(new ComputerToolEnvironment(Environment), DisplayWidth, DisplayHeight));
     }
 }

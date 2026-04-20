@@ -165,6 +165,62 @@ builder.AddPythonApp("agent", "./app", "main:app")
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
 
+## Prompt agent usage
+
+Prompt agents are declarative agents defined by a model, instructions, and tools. They are always deployed to Azure Foundry — even during local development (`aspire run`) — and local services communicate with the cloud-provisioned agent.
+
+```csharp
+var foundry = builder.AddFoundry("foundry");
+var project = foundry.AddProject("my-project");
+var chat = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+var agent = project.AddPromptAgent("joker-agent", chat,
+    instructions: "You are good at telling jokes.")
+    .WithWebSearch()
+    .WithCodeInterpreter();
+
+builder.AddPythonApp("app", "./app", "main:app")
+       .WithReference(agent);
+```
+
+### Available tools
+
+Prompt agents support several tool types:
+
+| Tool | Extension Method | Description |
+|------|-----------------|-------------|
+| Code Interpreter | `.WithCodeInterpreter()` | Runs Python code in a sandbox |
+| File Search | `.WithFileSearch(vectorStoreIds)` | Searches uploaded documents via vector search |
+| Web Search | `.WithWebSearch()` | Retrieves real-time web information |
+| Azure AI Search | `.WithTool(searchTool)` | Grounds responses using Azure AI Search indexes |
+| Bing Grounding | `.WithTool(bingTool)` | Grounds responses using Bing Search |
+| SharePoint | `.WithSharePoint(connectionIds)` | Searches SharePoint data |
+| Microsoft Fabric | `.WithFabric(connectionIds)` | Queries data through Fabric data agents |
+| Azure Functions | `.WithAzureFunction(...)` | Invokes serverless Azure Functions |
+| Function Calling | `.WithFunction(name, params)` | Calls application-defined functions |
+| Image Generation | `.WithImageGeneration()` | Generates and edits images (preview) |
+| Computer Use | `.WithComputerUse(w, h)` | Interacts with a computer desktop (preview) |
+
+### Azure AI Search tool example
+
+```csharp
+var search = builder.AddAzureSearch("search");
+var searchTool = project.AddAzureAISearchTool("search-tool", search);
+
+var agent = project.AddPromptAgent("research-agent", chat)
+    .WithTool(searchTool);
+```
+
+### Bing Grounding tool example
+
+```csharp
+var bingConnection = project.AddConnection("bing-conn", infra => /* configure Bing connection */);
+var bingTool = project.AddBingGroundingTool("bing-tool", bingConnection);
+
+var agent = project.AddPromptAgent("news-agent", chat)
+    .WithTool(bingTool);
+```
+
 ## Additional documentation
 
 * https://learn.microsoft.com/azure/ai-foundry/what-is-azure-ai-foundry

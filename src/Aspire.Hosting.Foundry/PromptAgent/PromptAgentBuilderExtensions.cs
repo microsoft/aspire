@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
@@ -148,6 +149,39 @@ public static class PromptAgentBuilderExtensions
     }
 
     /// <summary>
+    /// Adds the Image Generation tool to a prompt agent, enabling it to generate and edit images.
+    /// </summary>
+    /// <param name="builder">The prompt agent resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport(Description = "Adds the Image Generation tool to a prompt agent.")]
+    public static IResourceBuilder<AzurePromptAgentResource> WithImageGeneration(
+        this IResourceBuilder<AzurePromptAgentResource> builder)
+    {
+        return builder.WithTool(new ImageGenerationToolDefinition());
+    }
+
+    /// <summary>
+    /// Adds the Computer Use tool to a prompt agent, enabling it to interact with a computer
+    /// desktop by taking screenshots, moving the mouse, clicking, and typing.
+    /// </summary>
+    /// <param name="builder">The prompt agent resource builder.</param>
+    /// <param name="displayWidth">The width of the display in pixels.</param>
+    /// <param name="displayHeight">The height of the display in pixels.</param>
+    /// <param name="environment">The environment identifier. Defaults to "browser".</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport(Description = "Adds the Computer Use tool to a prompt agent.")]
+    public static IResourceBuilder<AzurePromptAgentResource> WithComputerUse(
+        this IResourceBuilder<AzurePromptAgentResource> builder,
+        int displayWidth = 1024,
+        int displayHeight = 768,
+        string environment = "browser")
+    {
+        return builder.WithTool(new ComputerToolDefinition(displayWidth, displayHeight, environment));
+    }
+
+    /// <summary>
     /// Adds an Azure AI Search tool to a Microsoft Foundry project, creating the necessary
     /// project connection to the search resource.
     /// </summary>
@@ -185,5 +219,136 @@ public static class PromptAgentBuilderExtensions
 
         return project.ApplicationBuilder.AddResource(toolResource)
             .WithReferenceRelationship(project);
+    }
+
+    /// <summary>
+    /// Adds a Bing Grounding tool to a Microsoft Foundry project, using an existing Foundry
+    /// project connection for the Bing Search service.
+    /// </summary>
+    /// <remarks>
+    /// The Bing Search connection must be added to the Foundry project before this tool
+    /// can be used. Use <c>AddConnection</c> on the project to create the Bing connection.
+    /// </remarks>
+    /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="bingConnection">The Foundry project connection for the Bing Search service.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
+    [AspireExport(Description = "Adds a Bing Grounding tool to a Microsoft Foundry project.")]
+    public static IResourceBuilder<BingGroundingToolResource> AddBingGroundingTool(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        string name,
+        IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> bingConnection)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(bingConnection);
+
+        var toolResource = new BingGroundingToolResource(name, project.Resource)
+        {
+            Connection = bingConnection.Resource
+        };
+
+        return project.ApplicationBuilder.AddResource(toolResource)
+            .WithReferenceRelationship(project);
+    }
+
+    /// <summary>
+    /// Adds the Bing Grounding tool resource to a prompt agent.
+    /// </summary>
+    /// <param name="builder">The prompt agent resource builder.</param>
+    /// <param name="tool">The Bing Grounding tool resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport("withBingGroundingTool", Description = "Adds a Bing Grounding tool to a prompt agent.")]
+    public static IResourceBuilder<AzurePromptAgentResource> WithTool(
+        this IResourceBuilder<AzurePromptAgentResource> builder,
+        IResourceBuilder<BingGroundingToolResource> tool)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(tool);
+
+        builder.Resource.AddTool(tool.Resource);
+        builder.WithReferenceRelationship(tool);
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds the SharePoint grounding tool to a prompt agent, enabling it to search data
+    /// from SharePoint sites configured as Foundry project connections.
+    /// </summary>
+    /// <param name="builder">The prompt agent resource builder.</param>
+    /// <param name="projectConnectionIds">The Foundry project connection IDs for the SharePoint sites.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport(Description = "Adds the SharePoint grounding tool to a prompt agent.")]
+    public static IResourceBuilder<AzurePromptAgentResource> WithSharePoint(
+        this IResourceBuilder<AzurePromptAgentResource> builder,
+        params string[] projectConnectionIds)
+    {
+        return builder.WithTool(new SharePointToolDefinition(projectConnectionIds));
+    }
+
+    /// <summary>
+    /// Adds the Microsoft Fabric data agent tool to a prompt agent, enabling it to query
+    /// data through Fabric data agents configured as Foundry project connections.
+    /// </summary>
+    /// <param name="builder">The prompt agent resource builder.</param>
+    /// <param name="projectConnectionIds">The Foundry project connection IDs for the Fabric data agents.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport(Description = "Adds the Microsoft Fabric data agent tool to a prompt agent.")]
+    public static IResourceBuilder<AzurePromptAgentResource> WithFabric(
+        this IResourceBuilder<AzurePromptAgentResource> builder,
+        params string[] projectConnectionIds)
+    {
+        return builder.WithTool(new FabricToolDefinition(projectConnectionIds));
+    }
+
+    /// <summary>
+    /// Adds an Azure Function tool definition to a prompt agent, enabling it to invoke
+    /// a serverless Azure Function as a tool with queue-based input/output bindings.
+    /// </summary>
+    /// <param name="builder">The prompt agent resource builder.</param>
+    /// <param name="functionName">The name of the Azure Function.</param>
+    /// <param name="description">A description of what the function does (used by the agent to decide when to call it).</param>
+    /// <param name="parameters">The JSON schema defining the function parameters.</param>
+    /// <param name="inputQueueEndpoint">The Azure Storage Queue endpoint for input binding.</param>
+    /// <param name="inputQueueName">The queue name for input binding.</param>
+    /// <param name="outputQueueEndpoint">The Azure Storage Queue endpoint for output binding.</param>
+    /// <param name="outputQueueName">The queue name for output binding.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible.")]
+    public static IResourceBuilder<AzurePromptAgentResource> WithAzureFunction(
+        this IResourceBuilder<AzurePromptAgentResource> builder,
+        string functionName,
+        string description,
+        BinaryData parameters,
+        string inputQueueEndpoint,
+        string inputQueueName,
+        string outputQueueEndpoint,
+        string outputQueueName)
+    {
+        return builder.WithTool(new AzureFunctionToolDefinition(
+            functionName, description, parameters,
+            inputQueueEndpoint, inputQueueName,
+            outputQueueEndpoint, outputQueueName));
+    }
+
+    /// <summary>
+    /// Adds a function calling tool to a prompt agent, enabling the agent to call
+    /// application-defined functions with structured parameters.
+    /// </summary>
+    /// <param name="builder">The prompt agent resource builder.</param>
+    /// <param name="functionName">The name of the function.</param>
+    /// <param name="parameters">The JSON schema defining the function parameters.</param>
+    /// <param name="description">A description of what the function does (used by the agent to decide when to call it).</param>
+    /// <param name="strictModeEnabled">Whether to enable strict mode for parameter validation.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible.")]
+    public static IResourceBuilder<AzurePromptAgentResource> WithFunction(
+        this IResourceBuilder<AzurePromptAgentResource> builder,
+        string functionName,
+        BinaryData parameters,
+        string? description = null,
+        bool? strictModeEnabled = null)
+    {
+        return builder.WithTool(new FunctionToolDefinition(functionName, parameters, description, strictModeEnabled));
     }
 }
