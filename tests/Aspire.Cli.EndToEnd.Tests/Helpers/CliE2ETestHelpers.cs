@@ -16,6 +16,7 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal static class CliE2ETestHelpers
 {
     internal const string CliArchiveWorkflowRunIdEnvironmentVariableName = CliInstallStrategy.CliArchiveWorkflowRunIdEnvironmentVariableName;
+    private static readonly TimeSpan[] s_dockerBuildRetryDelays = [TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10)];
 
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
@@ -210,7 +211,7 @@ internal static class CliE2ETestHelpers
                 strategy.ConfigureContainer(c);
             });
 
-        return builder.Build();
+        return ExecuteWithDockerBuildRetry(builder.Build, output, $"create Docker test terminal for {testName}");
     }
 
     /// <summary>
@@ -305,22 +306,7 @@ internal static class CliE2ETestHelpers
             startInfo.ArgumentList.Add(PolyglotBaseImageName);
             startInfo.ArgumentList.Add(repoRoot);
 
-            using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start docker build process.");
-            var standardOutput = process.StandardOutput.ReadToEnd();
-            var standardError = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException(
-                    $"Failed to build shared polyglot Docker base image.{Environment.NewLine}" +
-                    $"{standardOutput}{Environment.NewLine}{standardError}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(standardOutput))
-            {
-                output.WriteLine(standardOutput.Trim());
-            }
+            BuildDockerImage(startInfo, output, "shared polyglot Docker base image");
 
             s_polyglotBaseImageBuilt = true;
         }
@@ -354,22 +340,7 @@ internal static class CliE2ETestHelpers
             startInfo.ArgumentList.Add(PodmanBaseImageName);
             startInfo.ArgumentList.Add(repoRoot);
 
-            using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start docker build process.");
-            var standardOutput = process.StandardOutput.ReadToEnd();
-            var standardError = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-            {
-                throw new InvalidOperationException(
-                    $"Failed to build shared Podman Docker base image.{Environment.NewLine}" +
-                    $"{standardOutput}{Environment.NewLine}{standardError}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(standardOutput))
-            {
-                output.WriteLine(standardOutput.Trim());
-            }
+            BuildDockerImage(startInfo, output, "shared Podman Docker base image");
 
             s_podmanBaseImageBuilt = true;
         }
@@ -432,6 +403,99 @@ internal static class CliE2ETestHelpers
     private static string GenerateDockerContainerName()
     {
         return $"hex1b-test-{Guid.NewGuid():N}".Substring(0, 32);
+    }
+
+    private static void BuildDockerImage(ProcessStartInfo startInfo, ITestOutputHelper output, string imageDescription)
+    {
+        ExecuteWithDockerBuildRetry(
+            () =>
+            {
+                using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start docker build process.");
+                var standardOutput = process.StandardOutput.ReadToEnd();
+                var standardError = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+
+                if (process.ExitCode != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Failed to build {imageDescription}.{Environment.NewLine}" +
+                        $"{standardOutput}{Environment.NewLine}{standardError}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(standardOutput))
+                {
+                    output.WriteLine(standardOutput.Trim());
+                }
+            },
+            output,
+            $"build {imageDescription}");
+    }
+
+    internal static void ExecuteWithDockerBuildRetry(Action action, ITestOutputHelper output, string description, IReadOnlyList<TimeSpan>? retryDelays = null)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+
+        _ = ExecuteWithDockerBuildRetry(
+            () =>
+            {
+                action();
+                return true;
+            },
+            output,
+            description,
+            retryDelays);
+    }
+
+    internal static T ExecuteWithDockerBuildRetry<T>(Func<T> action, ITestOutputHelper output, string description, IReadOnlyList<TimeSpan>? retryDelays = null)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        ArgumentNullException.ThrowIfNull(output);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
+        retryDelays ??= s_dockerBuildRetryDelays;
+
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return action();
+            }
+            catch (Exception ex) when (attempt < retryDelays.Count && IsTransientDockerBuildFailure(ex))
+            {
+                var delay = retryDelays[attempt];
+                output.WriteLine(
+                    $"Transient Docker build failure while attempting to {description} (attempt {attempt + 1} of {retryDelays.Count + 1}). Retrying in {delay.TotalSeconds:0}s.");
+                output.WriteLine(ex.Message);
+
+                if (delay > TimeSpan.Zero)
+                {
+                    Thread.Sleep(delay);
+                }
+            }
+        }
+    }
+
+    internal static bool IsTransientDockerBuildFailure(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (IsTransientDockerBuildFailureMessage(current.Message))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsTransientDockerBuildFailureMessage(string message)
+    {
+        return message.Contains("failed to resolve source metadata for mcr.microsoft.com/", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("unexpected status from HEAD request to https://mcr.microsoft.com/", StringComparison.OrdinalIgnoreCase)
+            || (message.Contains("failed to do request: Head", StringComparison.OrdinalIgnoreCase)
+                && message.Contains("mcr.microsoft.com", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
