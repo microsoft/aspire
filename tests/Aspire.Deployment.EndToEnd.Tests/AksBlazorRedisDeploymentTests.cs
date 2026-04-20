@@ -154,34 +154,59 @@ builder.Build().Run();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Step 10: Verify deployed endpoints
-            // Use kubectl to port-forward and verify services are running
-            output.WriteLine("Step 10: Verifying deployed endpoints...");
-
-            // Get kubectl credentials for the provisioned AKS cluster
-            await auto.TypeAsync($"az aks list -g {resourceGroupName} --query '[0].name' -o tsv");
+            // Step 10: Get AKS credentials for the provisioned cluster
+            output.WriteLine("Step 10: Getting AKS credentials...");
+            await auto.TypeAsync($"AKS_NAME=$(az aks list -g {resourceGroupName} --query '[0].name' -o tsv) && " +
+                  $"az aks get-credentials -g {resourceGroupName} -n $AKS_NAME --overwrite-existing");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            await auto.TypeAsync($"az aks get-credentials -g {resourceGroupName} -n $(az aks list -g {resourceGroupName} --query '[0].name' -o tsv) --overwrite-existing");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-
-            // Wait for all pods to be ready
+            // Step 11: Wait for all pods to be ready
+            output.WriteLine("Step 11: Waiting for pods to be ready...");
             await auto.TypeAsync("kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=300s 2>/dev/null || true");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
-            // Show pod status for debugging
-            await auto.TypeAsync("kubectl get pods --all-namespaces");
+            // Show pod and service status for debugging
+            await auto.TypeAsync("kubectl get pods --all-namespaces && kubectl get svc --all-namespaces");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 11: Clean up using aspire destroy
-            output.WriteLine("Step 11: Destroying deployment...");
+            // Step 12: Discover the namespace used by the Helm deployment
+            output.WriteLine("Step 12: Discovering deployment namespace...");
+            await auto.TypeAsync("NS=$(kubectl get svc --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}{\"\\n\"}{end}' | grep -v kube-system | grep -v default | sort -u | head -1) && echo \"Namespace: $NS\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+            // Step 13: Verify webfrontend via port-forward
+            output.WriteLine("Step 13: Verifying webfrontend /weather endpoint...");
+            await auto.TypeAsync("kubectl port-forward svc/webfrontend-service 18081:8080 -n $NS &");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
+
+            // Verify root page
+            await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/ -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            // Verify /weather page (exercises webfrontend -> apiservice -> Redis pipeline)
+            // The /weather page uses Blazor SSR streaming rendering which keeps the HTTP connection open.
+            // We use -m 5 (max-time) to avoid curl hanging, and capture the status code in a variable
+            // because --max-time causes curl to exit non-zero (code 28) even on HTTP 200.
+            await auto.TypeAsync("for i in $(seq 1 10); do sleep 3; S=$(curl -so /dev/null -w '%{http_code}' -m 5 http://localhost:18081/weather); [ \"$S\" = \"200\" ] && echo \"$S OK\" && break; done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
+
+            // Clean up port-forward
+            await auto.TypeAsync("kill %1 2>/dev/null; true");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
+
+            // Step 14: Clean up using aspire destroy
+            output.WriteLine("Step 14: Destroying deployment...");
             await auto.AspireDestroyAsync(counter);
 
-            // Step 12: Exit terminal
+            // Step 15: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 
