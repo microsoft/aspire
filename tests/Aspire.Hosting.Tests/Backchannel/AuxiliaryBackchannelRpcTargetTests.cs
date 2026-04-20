@@ -24,7 +24,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
             serviceProvider);
 
-        var result = await target.GetResourceSnapshotsAsync();
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
         Assert.Empty(result);
     }
@@ -44,23 +44,23 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         ]));
 
         using var app = builder.Build();
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
         await notificationService.PublishUpdateAsync(resourceWithReplicas.Resource, "myresource-abc123", s => s with
         {
             State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success)
-        });
+        }).DefaultTimeout();
         await notificationService.PublishUpdateAsync(resourceWithReplicas.Resource, "myresource-def456", s => s with
         {
             State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success)
-        });
+        }).DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
             app.Services);
 
-        var result = await target.GetResourceSnapshotsAsync();
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
         // Dashboard resource should now be included
         Assert.Contains(result, r => r.Name == KnownResourceNames.AspireDashboard);
@@ -75,7 +75,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Contains(result, r => r.Name == "myresource-def456");
         Assert.All(result.Where(r => r.Name.StartsWith("myresource-")), r => Assert.Equal("myresource", r.DisplayName));
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var custom = builder.AddResource(new CustomResource("myresource"));
 
         using var app = builder.Build();
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var createdAt = DateTime.UtcNow.AddMinutes(-5);
         var startedAt = DateTime.UtcNow.AddMinutes(-4);
@@ -127,13 +127,13 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                 new ResourcePropertySnapshot(CustomResourceKnownProperties.Source, "normal-value"),
                 new ResourcePropertySnapshot("ConnectionString", "secret-value") { IsSensitive = true }
             ]
-        });
+        }).DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
             app.Services);
 
-        var result = await target.GetResourceSnapshotsAsync();
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
         var snapshot = Assert.Single(result);
 
@@ -194,7 +194,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.True(snapshot.Properties.TryGetValue("ConnectionString", out var sensitiveValue));
         Assert.Null(sensitiveValue);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -392,7 +392,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
         resourceLoggerService.TimeProvider = new FixedTimeProvider();
 
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var logger = resourceLoggerService.GetLogger("myresource");
         logger.LogInformation("Hello from myresource");
@@ -414,7 +414,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, log.LineNumber);
         Assert.False(log.IsError);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -424,7 +424,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         builder.AddResource(new CustomResource("myresource"));
 
         using var app = builder.Build();
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -438,7 +438,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.Empty(logs);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -455,7 +455,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
         resourceLoggerService.TimeProvider = new FixedTimeProvider();
 
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var logger1 = resourceLoggerService.GetLogger("resource1");
         logger1.LogInformation("Log from resource1");
@@ -483,7 +483,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var log2 = Assert.Single(logs, l => l.ResourceName == "resource2");
         Assert.Equal($"{TestTimestamp} Log from resource2", log2.Content);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -497,12 +497,17 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             new DcpInstance("myresource-def456", "def456", 1)
         ]));
 
+        var otherResource = builder.AddResource(new CustomResource("otherresource"));
+        otherResource.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("otherresource-xyz789", "xyz789", 0)
+        ]));
+
         using var app = builder.Build();
 
         var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
         resourceLoggerService.TimeProvider = new FixedTimeProvider();
 
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var logger1 = resourceLoggerService.GetLogger("myresource-abc123");
         logger1.LogInformation("Log from replica 1");
@@ -511,6 +516,10 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var logger2 = resourceLoggerService.GetLogger("myresource-def456");
         logger2.LogInformation("Log from replica 2");
         resourceLoggerService.Complete("myresource-def456");
+
+        var otherLogger = resourceLoggerService.GetLogger("otherresource-xyz789");
+        otherLogger.LogInformation("Log from other resource");
+        resourceLoggerService.Complete("otherresource-xyz789");
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -530,7 +539,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var replica2 = Assert.Single(logs, l => l.ResourceName == "myresource-def456");
         Assert.Equal($"{TestTimestamp} Log from replica 2", replica2.Content);
 
-        await app.StopAsync();
+        Assert.DoesNotContain(logs, l => l.ResourceName == "otherresource-xyz789");
+
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -549,7 +560,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
         resourceLoggerService.TimeProvider = new FixedTimeProvider();
 
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var logger1 = resourceLoggerService.GetLogger("myresource-abc123");
         logger1.LogInformation("Log from replica 1");
@@ -573,7 +584,15 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("myresource-def456", log.ResourceName);
         Assert.Equal($"{TestTimestamp} Log from replica 2", log.Content);
 
-        await app.StopAsync();
+        var badLogs = new List<ResourceLogLine>();
+        await foreach (var logLine in target.GetResourceLogsAsync("myresource-nonexistent", follow: false))
+        {
+            badLogs.Add(logLine);
+        }
+
+        Assert.Empty(badLogs);
+
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -587,7 +606,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
         resourceLoggerService.TimeProvider = new FixedTimeProvider();
 
-        await app.StartAsync();
+        await app.StartAsync().DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -613,7 +632,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         logger.LogInformation("First log");
         logger.LogInformation("Second log");
 
-        await collectTask.WaitAsync(TimeSpan.FromSeconds(10));
+        await collectTask.DefaultTimeout();
 
         Assert.Equal(2, logs.Count);
 
@@ -623,7 +642,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("myresource", logs[1].ResourceName);
         Assert.Equal($"{TestTimestamp} Second log", logs[1].Content);
 
-        await app.StopAsync();
+        await app.StopAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -649,7 +668,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         {
             State = KnownResourceStates.Running,
             ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
-        });
+        }).DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,

@@ -763,42 +763,14 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
 
         // Step 1: Calculate the resource names
-        var resourcesToLog = new List<string>();
+        var resourcesToLog = resourceName is not null
+            ? ResolveResourceIds(appModel, resourceName)
+            : ResolveAllResourceIds(appModel);
 
-        if (resourceName is not null)
+        if (resourceName is not null && resourcesToLog.Count == 0)
         {
-            // Match by logical name (stream all instances) or resolved instance name like
-            // "apiservice-abc123" (stream just that one) — MCP advertises the resolved form.
-            foreach (var resource in appModel.Resources)
-            {
-                var resolvedNames = resource.GetResolvedResourceNames();
-
-                if (string.Equals(resource.Name, resourceName, StringComparisons.ResourceName))
-                {
-                    resourcesToLog.AddRange(resolvedNames);
-                    break;
-                }
-
-                var matchedInstance = resolvedNames.FirstOrDefault(n => string.Equals(n, resourceName, StringComparisons.ResourceName));
-                if (matchedInstance is not null)
-                {
-                    resourcesToLog.Add(matchedInstance);
-                    break;
-                }
-            }
-
-            if (resourcesToLog.Count == 0)
-            {
-                logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
-                yield break;
-            }
-        }
-        else
-        {
-            foreach (var resource in appModel.Resources)
-            {
-                resourcesToLog.AddRange(resource.GetResolvedResourceNames());
-            }
+            logger.LogWarning("Resource '{ResourceName}' not found. No logs will be returned.", resourceName);
+            yield break;
         }
 
         if (resourcesToLog.Count == 0)
@@ -1071,5 +1043,44 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         // Fall back to double for floating point
         return element.GetDouble();
+    }
+
+    /// <summary>
+    /// Resolves a resource name (logical or resolved instance name) to the list of matching resource IDs.
+    /// Matches by logical name first (returning all instances), then falls back to matching a specific
+    /// resolved instance name like "apiservice-abc123".
+    /// </summary>
+    private static List<string> ResolveResourceIds(DistributedApplicationModel appModel, string resourceName)
+    {
+        foreach (var resource in appModel.Resources)
+        {
+            var resolvedNames = resource.GetResolvedResourceNames();
+
+            if (string.Equals(resource.Name, resourceName, StringComparisons.ResourceName))
+            {
+                return [.. resolvedNames];
+            }
+
+            var matchedInstance = resolvedNames.FirstOrDefault(n => string.Equals(n, resourceName, StringComparisons.ResourceName));
+            if (matchedInstance is not null)
+            {
+                return [matchedInstance];
+            }
+        }
+
+        return [];
+    }
+
+    /// <summary>
+    /// Returns the resolved resource IDs for all resources in the application model.
+    /// </summary>
+    private static List<string> ResolveAllResourceIds(DistributedApplicationModel appModel)
+    {
+        var result = new List<string>();
+        foreach (var resource in appModel.Resources)
+        {
+            result.AddRange(resource.GetResolvedResourceNames());
+        }
+        return result;
     }
 }
