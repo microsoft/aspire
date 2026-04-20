@@ -391,24 +391,29 @@ internal sealed class MacOSCertificateManager : CertificateManager
     /// <summary>
     /// Writes Aspire hosting cache entries (PFX and PEM key) by loading the certificate from the
     /// on-disk PFX at <paramref name="onDiskPfxPath"/> to avoid triggering a macOS Keychain
-    /// access prompt. This is a best-effort operation; failures are silently ignored so the
-    /// app host can fall back to caching at startup.
+    /// access prompt. If the on-disk PFX does not yet exist (for example, when correcting the
+    /// state of a pre-.NET 7 keychain-only certificate), it is exported first so the Aspire
+    /// cache can always be warmed alongside it. This is a best-effort operation; failures are
+    /// silently ignored so the app host can fall back to caching at startup.
     /// </summary>
     private void WriteAspireCacheFromDiskPfx(string onDiskPfxPath, X509Certificate2 certificate)
     {
-        if (!File.Exists(onDiskPfxPath))
-        {
-            return;
-        }
-
         try
         {
+            if (!File.Exists(onDiskPfxPath))
+            {
+                // The .aspnet PFX is the preferred source because loading from it avoids a
+                // second keychain prompt. If it's missing, export it first (this is a
+                // private-key export from the keychain, so it may prompt once) so both the
+                // .aspnet and Aspire caches are populated together.
+                ExportCertificate(certificate, onDiskPfxPath, includePrivateKey: true, password: null, CertificateKeyExportFormat.Pfx);
+            }
+
             using var diskCert = X509CertificateLoader.LoadPkcs12FromFile(onDiskPfxPath, password: null, X509KeyStorageFlags.Exportable);
             var aspireLookup = GetAspireCertificateHash(certificate);
 
             CreateDirectoryWithPermissions(s_aspireDevCertsCacheDirectory);
 
-            // Write PFX cache
             ExportCertificate(diskCert, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
 
             // Write PEM key cache — must match the format produced by DeveloperCertificateService.ExportKeyPemFromRsa
