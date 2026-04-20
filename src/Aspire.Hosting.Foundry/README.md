@@ -219,6 +219,10 @@ var agent = project.AddPromptAgent(chat, "research-agent",
 
 ### Bing Grounding tool example
 
+> **Note:** The Bing Grounding resource (Grounding with Bing Search) cannot be provisioned via Bicep or ARM templates.
+> You must create it manually in the [Azure portal](https://portal.azure.com) and then create a Foundry project connection
+> that references it. Pass that connection to the tool via `.WithReference()`.
+
 ```csharp
 var bingConnection = project.AddConnection("bing-conn", infra => /* configure Bing connection */);
 var bing = project.AddBingGroundingTool("bing-tool").WithReference(bingConnection);
