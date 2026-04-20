@@ -21,16 +21,16 @@ public interface INuGetService
     /// <param name="targetFramework">The target framework.</param>
     /// <param name="runtimeIdentifier">The runtime identifier used to prefer runtime-specific assets in the generated layout.</param>
     /// <param name="sources">Additional NuGet sources.</param>
-    /// <param name="workingDirectory">Working directory for nuget.config discovery.</param>
+    /// <param name="workingDirectory">Working directory for nuget.config discovery and for resolving the workspace-local restore cache. Required.</param>
     /// <param name="nugetConfigPath">An explicit NuGet.config file to use during restore.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Path to the restored libs directory.</returns>
     Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
+        string workingDirectory,
         string targetFramework = "net10.0",
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
-        string? workingDirectory = null,
         string? nugetConfigPath = null,
         CancellationToken ct = default);
 }
@@ -62,13 +62,15 @@ internal sealed class BundleNuGetService : INuGetService
 
     public async Task<string> RestorePackagesAsync(
         IEnumerable<(string Id, string Version)> packages,
+        string workingDirectory,
         string targetFramework = "net10.0",
         string? runtimeIdentifier = null,
         IEnumerable<string>? sources = null,
-        string? workingDirectory = null,
         string? nugetConfigPath = null,
         CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
+
         var layout = _layoutDiscovery.DiscoverLayout();
         if (layout is null)
         {
@@ -135,12 +137,9 @@ internal sealed class BundleNuGetService : INuGetService
             }
         }
 
-        // Pass working directory for nuget.config discovery
-        if (!string.IsNullOrEmpty(workingDirectory))
-        {
-            restoreArgs.Add("--working-dir");
-            restoreArgs.Add(workingDirectory);
-        }
+        // Pass working directory for nuget.config discovery.
+        restoreArgs.Add("--working-dir");
+        restoreArgs.Add(workingDirectory);
 
         if (!string.IsNullOrEmpty(nugetConfigPath))
         {
@@ -283,15 +282,10 @@ internal sealed class BundleNuGetService : INuGetService
         }
     }
 
-    private static string GetPackagesDirectory(string? workingDirectory)
+    private static string GetPackagesDirectory(string workingDirectory)
     {
-        if (!string.IsNullOrWhiteSpace(workingDirectory))
-        {
-            var workspaceAspireDirectory = ConfigurationHelper.GetWorkspaceAspireDirectory(
-                new DirectoryInfo(Path.GetFullPath(workingDirectory)));
-            return Path.Combine(workspaceAspireDirectory.FullName, "packages");
-        }
-
-        return Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "packages");
+        var workspaceAspireDirectory = ConfigurationHelper.GetWorkspaceAspireDirectory(
+            new DirectoryInfo(Path.GetFullPath(workingDirectory)));
+        return Path.Combine(workspaceAspireDirectory.FullName, "packages");
     }
 }
