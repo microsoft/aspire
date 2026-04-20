@@ -395,7 +395,7 @@ var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSubnet(defaultSubnet);
 
 // Per-pool subnet override
-var gpuPool = aks.AddNodePool("gpu", AksNodeVmSizes.GpuAccelerated.StandardNC6sV3, 0, 5)
+var gpuPool = aks.AddNodePool("gpu", AksNodeVmSizes.StandardNCSv3.StandardNC6sV3, 0, 5)
     .WithSubnet(gpuSubnet);
 ```
 
@@ -557,7 +557,7 @@ var aks = builder.AddAzureKubernetesService("aks")
 - ✅ `AksNodePoolResource` extends base with VM size, scaling, mode config
 - ✅ `AddNodePool()` on both K8s and AKS environments
 - ✅ `WithNodePool()` schedules workloads via `nodeSelector` on pod spec
-- ✅ `AksNodeVmSizes` constants class (GeneralPurpose, ComputeOptimized, MemoryOptimized, GpuAccelerated, StorageOptimized, Burstable, Arm)
+- ✅ `AksNodeVmSizes` constants class (organized by Azure SKU family names)
 - ✅ `GenVmSizes.cs` tool + `update-azure-vm-sizes.yml` monthly workflow
 - ✅ Default "workload" user pool auto-created if none configured
 

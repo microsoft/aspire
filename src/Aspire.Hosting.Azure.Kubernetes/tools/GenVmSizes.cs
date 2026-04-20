@@ -154,7 +154,9 @@ if (allSkus.Count == 0)
 // - VM sizes with fewer than 2 vCPUs are restricted
 // - VM sizes with fewer than 2 GB RAM are restricted for user node pools
 // - Basic tier VMs are not supported
-// - Av1 series VMs are not recommended (deprecated)
+//
+// Note: Av1 series VMs are "not recommended" by AKS docs but are not explicitly
+// restricted, so they are included in the generated output.
 //
 // The unfiltered API returns one entry per (SKU, location) pair, so there are
 // many duplicates by name. We sort by location before grouping to ensure stable

@@ -232,7 +232,7 @@ public static class AzureKubernetesEnvironmentExtensions
     /// var aks = builder.AddAzureKubernetesEnvironment("aks")
     ///     .WithSubnet(defaultSubnet);
     ///
-    /// var gpuPool = aks.AddNodePool("gpu", AksNodeVmSizes.GpuAccelerated.StandardNC6sV3, 0, 5)
+    /// var gpuPool = aks.AddNodePool("gpu", AksNodeVmSizes.StandardNCSv3.StandardNC6sV3, 0, 5)
     ///     .WithSubnet(gpuSubnet);
     /// </code>
     /// </example>
