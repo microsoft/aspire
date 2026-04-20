@@ -80,6 +80,11 @@
     <_TargetRidItem Include="$(TargetRids.Split(':'))" />
     <_NativeProjectToBuild Include="@(_TargetRidItem -> '$(RepoRoot)eng\clipack\Aspire.Cli.%(Identity).csproj')" />
     <ProjectToBuild Include="@(_NativeProjectToBuild->Exists())" />
+
+    <!-- Pack the CLI as a dotnet global tool nupkg containing the NativeAOT binary.
+         This produces a per-RID tool package so `dotnet tool install Aspire.Cli` gets a native binary. -->
+    <_NativeToolPackProject Include="@(_TargetRidItem -> '$(RepoRoot)eng\clitoolpack\Aspire.Cli.Tool.%(Identity).csproj')" />
+    <ProjectToBuild Include="@(_NativeToolPackProject->Exists())" />
   </ItemGroup>
 
   <!-- Override ProjectToBuild items if specified -->
