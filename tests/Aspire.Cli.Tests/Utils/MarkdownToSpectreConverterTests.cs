@@ -125,6 +125,26 @@ public class MarkdownToSpectreConverterTests
     }
 
     [Fact]
+    public void ConvertToPlainText_WithLinksAndImages_ConvertsCorrectly()
+    {
+        var markdown = "Visit [GitHub](https://github.com) and remove ![diagram](https://example.com/diagram.png).";
+
+        var result = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
+
+        Assert.Equal("Visit GitHub (https://github.com) and remove .", result);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_StripsSimpleMarkdownFormatting()
+    {
+        var markdown = "## Heading\nThis is **bold**, *italic*, and ~~deleted~~.";
+
+        var result = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
+
+        Assert.Equal("Heading\nThis is bold, italic, and deleted.", result);
+    }
+
+    [Fact]
     public void ConvertToSpectre_WithComplexMarkdown_ConvertsAllElements()
     {
         // Arrange
