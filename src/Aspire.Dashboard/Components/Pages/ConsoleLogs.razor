@@ -32,7 +32,7 @@
                                   OnPausedChanged="@OnPausedChanged"
                                   SelectedResource="@PageViewModel.SelectedResource" />
 
-            @if (GetSelectedResource() is { } selectedResource && PageViewModel.SelectedResource is not null && !IsAllSelected())
+            @if (GetSelectedResource() is { } selectedResource && !IsAllSelected())
             {
                 if (ViewportInformation.IsDesktop && (_highlightedCommands.Count > 0 || _resourceMenuItems.Count > 0))
                 {
