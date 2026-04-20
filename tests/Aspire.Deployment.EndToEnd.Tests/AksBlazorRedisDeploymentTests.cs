@@ -179,11 +179,17 @@ builder.Build().Run();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
             // Step 13: Verify webfrontend via port-forward
+            // Redirect port-forward output to /dev/null to prevent "Handling connection for..."
+            // and "Forwarding from..." messages from interfering with prompt detection.
             output.WriteLine("Step 13: Verifying webfrontend /weather endpoint...");
-            await auto.TypeAsync("kubectl port-forward svc/webfrontend-service 18081:8080 -n $NS &");
+            await auto.TypeAsync("kubectl port-forward svc/webfrontend-service 18081:8080 -n $NS > /dev/null 2>&1 &");
             await auto.EnterAsync();
-            // Wait briefly for port-forward to establish (background job output + prompt)
-            await auto.WaitAsync(3000);
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
+
+            // Wait for port-forward to establish
+            await auto.TypeAsync("sleep 3");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
             // Verify root page
             await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/ -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
