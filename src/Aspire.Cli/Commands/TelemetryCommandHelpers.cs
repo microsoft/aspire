@@ -195,6 +195,9 @@ internal static class TelemetryCommandHelpers
         // Direct dashboard URL mode — bypass AppHost discovery
         if (dashboardUrl is not null)
         {
+            // Normalize login URLs (e.g., http://localhost:18888/login?t=abc) to base URL
+            dashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl));

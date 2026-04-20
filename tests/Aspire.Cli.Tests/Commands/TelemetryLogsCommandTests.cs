@@ -441,4 +441,94 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, "http://localhost:18888"), errorMessage);
     }
+
+    [Fact]
+    public async Task TelemetryLogsCommand_WithDashboardUrl_ResourcesEndpoint404_DisplaysApiNotEnabledMessage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/"))
+            {
+                // All telemetry API endpoints return 404 when API is not enabled
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+            // Base URL probe returns OK (dashboard is running, just no API)
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("<html></html>", System.Text.Encoding.UTF8, "text/html")
+            };
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel logs --dashboard-url http://localhost:18888");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, "http://localhost:18888"), errorMessage);
+    }
+
+    [Fact]
+    public async Task TelemetryLogsCommand_WithLoginUrl_NormalizesToBaseUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        string? capturedBaseUrl = null;
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            capturedBaseUrl ??= request.RequestUri!.GetLeftPart(UriPartial.Authority);
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/resources"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            if (url.Contains("/api/telemetry/logs"))
+            {
+                var json = BuildLogsJson(("redis", null, 9, "Information", "Ready", s_testTime));
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        // Pass a login URL — should be normalized to base URL
+        var result = command.Parse("otel logs --dashboard-url http://localhost:18888/login?t=abc123");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        // Verify the request went to the base URL (without /login path)
+        Assert.NotNull(capturedBaseUrl);
+        Assert.DoesNotContain("/login", capturedBaseUrl);
+    }
 }

@@ -13,8 +13,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardApiNotEnabled">
-        <source>The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</source>
-        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</target>
+        <source>The dashboard at '{0}' does not have the telemetry API enabled. Start the dashboard with 'aspire dashboard run --enable-api' or set Dashboard:Api:Enabled to true.</source>
+        <target state="new">The dashboard at '{0}' does not have the telemetry API enabled. Start the dashboard with 'aspire dashboard run --enable-api' or set Dashboard:Api:Enabled to true.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailed">
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlOptionDescription">
-        <source>URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</source>
-        <target state="new">URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</target>
+        <source>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized</source>
+        <target state="new">Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
