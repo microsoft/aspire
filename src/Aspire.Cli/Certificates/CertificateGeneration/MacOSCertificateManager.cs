@@ -89,6 +89,10 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
     protected override TrustLevel TrustCertificateCore(X509Certificate2 publicCertificate)
     {
+        // Populate the Aspire cache even when the certificate is already trusted so
+        // `aspire certs trust` can prewarm the cache without reapplying trust.
+        WriteAspireCacheFromDiskPfx(GetCertificateFilePath(publicCertificate), publicCertificate);
+
         var oldTrustLevel = GetTrustLevel(publicCertificate);
         if (oldTrustLevel != TrustLevel.None)
         {
@@ -102,10 +106,6 @@ internal sealed class MacOSCertificateManager : CertificateManager
         {
             // We can't guarantee that the temp file is in a directory with sensible permissions, but we're not exporting the private key
             ExportCertificate(publicCertificate, tmpFile, includePrivateKey: false, password: null, CertificateKeyExportFormat.Pfx);
-
-            // Write to the Aspire cache before trust so the app host can find the
-            // key material without a separate Keychain access prompt later.
-            WriteAspireCacheFromDiskPfx(GetCertificateFilePath(publicCertificate), publicCertificate);
 
             if (Log.IsEnabled())
             {
