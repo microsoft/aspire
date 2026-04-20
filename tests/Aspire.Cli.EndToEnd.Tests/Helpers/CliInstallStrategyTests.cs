@@ -15,7 +15,7 @@ public class CliInstallStrategyTests
         using var environment = new EnvironmentVariableScope(
             (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, null));
 
-        Assert.Equal("123", CliE2EAutomatorHelpers.GetPullRequestInstallArgs(123));
+        Assert.Equal("123", AspireCliShellCommandHelpers.GetPullRequestInstallArgs(123));
     }
 
     [Fact]
@@ -24,7 +24,7 @@ public class CliInstallStrategyTests
         using var environment = new EnvironmentVariableScope(
             (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, "987654321"));
 
-        Assert.Equal("123 --run-id 987654321", CliE2EAutomatorHelpers.GetPullRequestInstallArgs(123));
+        Assert.Equal("123 --run-id 987654321", AspireCliShellCommandHelpers.GetPullRequestInstallArgs(123));
     }
 
     [Fact]

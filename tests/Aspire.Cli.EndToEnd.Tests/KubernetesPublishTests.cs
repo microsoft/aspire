@@ -133,7 +133,7 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
             // Pass the package name directly as an argument to avoid interactive selection
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
             await auto.EnterAsync();
-            await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
             // Step 4: Modify AppHost's main file to add Kubernetes environment
             // Note: Aspire templates use AppHost.cs as the main entry point, not Program.cs

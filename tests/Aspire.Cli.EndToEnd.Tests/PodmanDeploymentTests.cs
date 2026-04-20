@@ -64,7 +64,7 @@ public sealed class PodmanDeploymentTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
         await auto.EnterAsync();
 
-        await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromSeconds(180));
+        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
         // Step 5: Modify AppHost's main file to add Docker Compose environment
         {
