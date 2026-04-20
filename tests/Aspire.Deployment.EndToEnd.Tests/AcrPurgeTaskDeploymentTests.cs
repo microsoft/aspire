@@ -18,6 +18,7 @@ public sealed class AcrPurgeTaskDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(30);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/16229")]
     public async Task DeployPythonStarterWithPurgeTask()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);

@@ -18,6 +18,7 @@ public sealed class AppServicePythonDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/16229")]
     public async Task DeployPythonFastApiTemplateToAzureAppService()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
