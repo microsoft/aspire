@@ -342,8 +342,13 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         var existingEntries = ReadGitIgnoreEntries(existingContent).ToHashSet(StringComparer.Ordinal);
+        var existingNormalized = existingEntries
+            .Select(NormalizeGitIgnoreEntry)
+            .ToHashSet(StringComparer.Ordinal);
+
         var missingEntries = ReadGitIgnoreEntries(scaffoldContent)
-            .Where(entry => !HasEquivalentGitIgnoreEntry(existingEntries, entry))
+            .Where(entry => !existingEntries.Contains(entry)
+                && !existingNormalized.Contains(NormalizeGitIgnoreEntry(entry)))
             .ToArray();
 
         if (missingEntries.Length == 0)
@@ -381,18 +386,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
     }
 
-    private static bool HasEquivalentGitIgnoreEntry(HashSet<string> existingEntries, string entry)
-    {
-        if (existingEntries.Contains(entry))
-        {
-            return true;
-        }
-
-        return entry switch
-        {
-            "/.aspire/" => existingEntries.Contains(".aspire/"),
-            ".aspire/" => existingEntries.Contains("/.aspire/"),
-            _ => false
-        };
-    }
+    // Normalizes a .gitignore entry so rooted (`/foo/`) and unrooted (`foo/`) forms
+    // are treated as equivalent when deciding whether to append a scaffold entry.
+    private static string NormalizeGitIgnoreEntry(string entry)
+        => entry.StartsWith('/') ? entry[1..] : entry;
 }

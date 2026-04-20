@@ -21,14 +21,29 @@ internal sealed class TemporaryNuGetConfig : IDisposable
     public static async Task<TemporaryNuGetConfig> CreateAsync(PackageMapping[] mappings, bool configureGlobalPackagesFolder = false)
     {
         var tempDirectory = Directory.CreateTempSubdirectory("aspire-nuget-config").FullName;
-        var tempFilePath = Path.Combine(tempDirectory, "nuget.config");
-        var configFile = new FileInfo(tempFilePath);
-        await GenerateNuGetConfigAsync(mappings, configFile);
-        if (configureGlobalPackagesFolder)
+        try
         {
-            await AddGlobalPackagesFolderToConfigAsync(configFile);
+            var tempFilePath = Path.Combine(tempDirectory, "nuget.config");
+            var configFile = new FileInfo(tempFilePath);
+            await GenerateNuGetConfigAsync(mappings, configFile);
+            if (configureGlobalPackagesFolder)
+            {
+                await AddGlobalPackagesFolderToConfigAsync(configFile);
+            }
+            return new TemporaryNuGetConfig(configFile);
         }
-        return new TemporaryNuGetConfig(configFile);
+        catch
+        {
+            try
+            {
+                Directory.Delete(tempDirectory, recursive: true);
+            }
+            catch
+            {
+                // Ignore cleanup failures; surface the original exception instead.
+            }
+            throw;
+        }
     }
 
     /// <summary>

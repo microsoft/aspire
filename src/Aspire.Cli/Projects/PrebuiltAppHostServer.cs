@@ -176,10 +176,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         return await _nugetService.RestorePackagesAsync(
             packages,
-            DotNetBasedAppHostServerProject.TargetFramework,
+            workingDirectory: _appDirectoryPath,
+            targetFramework: DotNetBasedAppHostServerProject.TargetFramework,
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
-            workingDirectory: _appDirectoryPath,
             nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
             ct: cancellationToken);
     }
@@ -410,26 +410,22 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             return null;
         }
 
-        try
-        {
-            var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-            var channel = channels.FirstOrDefault(c =>
-                c.Type == PackageChannelType.Explicit &&
-                c.Mappings is { Length: > 0 } &&
-                string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
+        var channel = channels.FirstOrDefault(c =>
+            c.Type == PackageChannelType.Explicit &&
+            c.Mappings is { Length: > 0 } &&
+            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
-            if (channel?.Mappings is null)
-            {
-                return null;
-            }
-
-            return await TemporaryNuGetConfig.CreateAsync(channel.Mappings, channel.ConfigureGlobalPackagesFolder);
-        }
-        catch (Exception ex)
+        if (channel?.Mappings is null)
         {
-            _logger.LogWarning(ex, "Failed to create a temporary NuGet config for channel '{Channel}'", channelName);
             return null;
         }
+
+        // Materializing the temp config is required for explicit channels so that
+        // restore honors the channel's package source mappings. Let IO/XML failures
+        // surface instead of silently falling back to the caller's unmapped sources,
+        // which could otherwise restore from an unintended feed.
+        return await TemporaryNuGetConfig.CreateAsync(channel.Mappings, channel.ConfigureGlobalPackagesFolder);
     }
 
     /// <inheritdoc />
