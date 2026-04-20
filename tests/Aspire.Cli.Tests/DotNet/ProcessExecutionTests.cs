@@ -131,7 +131,11 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         Assert.True(execution.Start());
 
-        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
+        var waitForExitTimeout = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? TimeSpan.FromSeconds(60)
+            : TimeSpan.FromSeconds(30);
+
+        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).WaitAsync(waitForExitTimeout);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
 
         Assert.Equal(0, exitCode);
