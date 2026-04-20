@@ -6,7 +6,9 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
 using Azure.Provisioning;
 using Azure.Provisioning.CognitiveServices;
+using Azure.Provisioning.Expressions;
 using Azure.Provisioning.KeyVault;
+using Azure.Provisioning.Search;
 using Azure.Provisioning.Storage;
 
 namespace Aspire.Hosting;
@@ -192,6 +194,49 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         IResourceBuilder<AzureContainerRegistryResource> registry)
     {
         return builder.AddConnection(registry.Resource);
+    }
+
+    /// <summary>
+    /// Adds an Azure AI Search connection to a Microsoft Foundry project.
+    /// </summary>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the resource-builder overload instead.</remarks>
+    [AspireExportIgnore(Reason = "Raw AzureSearchResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
+    public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        AzureSearchResource search)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(search);
+
+        return builder.AddConnection($"connection-{Guid.NewGuid():N}", (infra) =>
+        {
+            var searchService = (SearchService)search.AddAsExistingResource(infra);
+            return new AadAuthTypeConnectionProperties()
+            {
+                Category = CognitiveServicesConnectionCategory.CognitiveSearch,
+                Target = BicepFunction.Interpolate($"https://{searchService.Name}.search.windows.net"),
+                Metadata =
+                {
+                    { "ApiType", "Azure" },
+                    { "ResourceId", searchService.Id },
+                    { "location", searchService.Location }
+                }
+            };
+        });
+    }
+
+    /// <summary>
+    /// Adds an Azure AI Search connection to a Microsoft Foundry project.
+    /// </summary>
+    [AspireExport("addSearchConnection", Description = "Adds an Azure AI Search connection to a Microsoft Foundry project.")]
+    public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        IResourceBuilder<AzureSearchResource> search)
+    {
+        builder.WithRoleAssignments(search,
+            SearchBuiltInRole.SearchIndexDataReader,
+            SearchBuiltInRole.SearchServiceContributor);
+        return builder.AddConnection(search.Resource);
     }
 
     /// <summary>
