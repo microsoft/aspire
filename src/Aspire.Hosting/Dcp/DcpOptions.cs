@@ -35,6 +35,11 @@ internal sealed class DcpOptions
     public string? DashboardPath { get; set; }
 
     /// <summary>
+    /// Optional path to the Aspire Terminal Host binary.
+    /// </summary>
+    public string? TerminalHostPath { get; set; }
+
+    /// <summary>
     /// Optional container runtime to override default runtime for DCP containers.
     /// </summary>
     /// <example>
@@ -139,6 +144,7 @@ internal class ConfigureDefaultDcpOptions(
     private const string DcpCliPathMetadataKey = "DcpCliPath";
     private const string DcpExtensionsPathMetadataKey = "DcpExtensionsPath";
     private const string DashboardPathMetadataKey = "aspiredashboardpath";
+    private const string TerminalHostPathMetadataKey = "aspireterminalhostpath";
 
     public static string DcpPublisher = nameof(DcpPublisher);
 
@@ -188,6 +194,21 @@ internal class ConfigureDefaultDcpOptions(
         {
             // Resolve via assembly metadata attributes (NuGet packages)
             options.DashboardPath = GetMetadataValue(assemblyMetadata, DashboardPathMetadataKey);
+        }
+
+        // Terminal Host path resolution (same pattern as Dashboard)
+        var configTerminalHostPath = configuration["ASPIRE_TERMINAL_HOST_PATH"];
+        if (!string.IsNullOrEmpty(configTerminalHostPath))
+        {
+            options.TerminalHostPath = configTerminalHostPath;
+        }
+        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.TerminalHostPath)]))
+        {
+            options.TerminalHostPath = dcpPublisherConfiguration[nameof(options.TerminalHostPath)];
+        }
+        else
+        {
+            options.TerminalHostPath = GetMetadataValue(assemblyMetadata, TerminalHostPathMetadataKey);
         }
 
         if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.ContainerRuntime)]))
