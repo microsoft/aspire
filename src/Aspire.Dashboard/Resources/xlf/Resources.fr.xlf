@@ -57,10 +57,45 @@
         <target state="new">"{0}" failed</target>
         <note>{0} is the display name of the command.</note>
       </trans-unit>
+      <trans-unit id="ResourceCommandRestartDescription">
+        <source>Restart resource</source>
+        <target state="new">Restart resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceCommandRestartName">
+        <source>Restart</source>
+        <target state="new">Restart</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceCommandRestartProjectDescription">
+        <source>Restart resource. Source code is not recompiled.</source>
+        <target state="new">Restart resource. Source code is not recompiled.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceCommandStartDescription">
+        <source>Start resource</source>
+        <target state="new">Start resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceCommandStartName">
+        <source>Start</source>
+        <target state="new">Start</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceCommandStarting">
         <source>"{0}" starting</source>
         <target state="new">"{0}" starting</target>
         <note>{0} is the display name of the command.</note>
+      </trans-unit>
+      <trans-unit id="ResourceCommandStopDescription">
+        <source>Stop resource</source>
+        <target state="new">Stop resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceCommandStopName">
+        <source>Stop</source>
+        <target state="new">Stop</target>
+        <note />
       </trans-unit>
       <trans-unit id="ResourceCommandSuccess">
         <source>"{0}" succeeded</source>

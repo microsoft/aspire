@@ -337,8 +337,8 @@ public sealed class ResourceMenuBuilder
 
             return new MenuButtonItem
             {
-                Text = command.GetDisplayName(),
-                Tooltip = command.GetDisplayDescription(),
+                Text = command.GetLocalizedDisplayName(_loc),
+                Tooltip = command.GetLocalizedDisplayDescription(resource, _loc),
                 Icon = icon,
                 OnClick = () => commandSelected.InvokeAsync(command),
                 IsDisabled = command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)

@@ -96,7 +96,8 @@ public sealed class DashboardCommandExecutor(
             }
         }
 
-        var messageBarStartingTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandStarting)], command.GetDisplayName());
+        var localizedDisplayName = command.GetLocalizedDisplayName(loc);
+        var messageBarStartingTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandStarting)], localizedDisplayName);
         var toastStartingTitle = $"{getResourceName(resource)} {messageBarStartingTitle}";
 
         // Add a notification to the notification center for the in-progress command.
@@ -157,7 +158,7 @@ public sealed class DashboardCommandExecutor(
         // Update toast and notification with the result.
         if (response.Kind == ResourceCommandResponseKind.Succeeded)
         {
-            var successTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandSuccess)], command.GetDisplayName());
+            var successTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandSuccess)], localizedDisplayName);
             toastParameters.Title = $"{getResourceName(resource)} {successTitle}";
             toastParameters.Intent = ToastIntent.Success;
             toastParameters.Icon = GetIntentIcon(ToastIntent.Success);
@@ -195,7 +196,7 @@ public sealed class DashboardCommandExecutor(
         }
         else
         {
-            var failedTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandFailed)], command.GetDisplayName());
+            var failedTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandFailed)], localizedDisplayName);
             toastParameters.Title = $"{getResourceName(resource)} {failedTitle}";
             toastParameters.Intent = ToastIntent.Error;
             toastParameters.Icon = GetIntentIcon(ToastIntent.Error);
@@ -282,7 +283,7 @@ public sealed class DashboardCommandExecutor(
         await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
         {
             DialogService = dialogService,
-            ValueDescription = command.GetDisplayName(),
+            ValueDescription = command.GetLocalizedDisplayName(loc),
             Value = response.Result.Value,
             FixedFormat = fixedFormat
         }).ConfigureAwait(false);

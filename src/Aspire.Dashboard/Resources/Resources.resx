@@ -244,6 +244,27 @@
     <value>"{0}" starting</value>
     <comment>{0} is the display name of the command.</comment>
   </data>
+  <data name="ResourceCommandStartName" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="ResourceCommandStartDescription" xml:space="preserve">
+    <value>Start resource</value>
+  </data>
+  <data name="ResourceCommandStopName" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="ResourceCommandStopDescription" xml:space="preserve">
+    <value>Stop resource</value>
+  </data>
+  <data name="ResourceCommandRestartName" xml:space="preserve">
+    <value>Restart</value>
+  </data>
+  <data name="ResourceCommandRestartDescription" xml:space="preserve">
+    <value>Restart resource</value>
+  </data>
+  <data name="ResourceCommandRestartProjectDescription" xml:space="preserve">
+    <value>Restart resource. Source code is not recompiled.</value>
+  </data>
   <data name="ResourceActionTracesText" xml:space="preserve">
     <value>Traces</value>
   </data>

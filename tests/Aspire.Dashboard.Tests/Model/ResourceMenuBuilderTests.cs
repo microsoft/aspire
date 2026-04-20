@@ -13,6 +13,7 @@ using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 
@@ -248,6 +249,53 @@ public sealed class ResourceMenuBuilderTests
             e => Assert.Equal("Localized:ActionViewDetailsText", e.Text),
             e => Assert.Equal("Localized:ResourceActionConsoleLogsText", e.Text),
             e => Assert.Equal("Localized:ExportJson", e.Text));
+    }
+
+    [Theory]
+    [InlineData(KnownResourceTypes.Container, CommandViewModel.StartCommand, "Localized:ResourceCommandStartName", "Localized:ResourceCommandStartDescription")]
+    [InlineData(KnownResourceTypes.Container, CommandViewModel.StopCommand, "Localized:ResourceCommandStopName", "Localized:ResourceCommandStopDescription")]
+    [InlineData(KnownResourceTypes.Container, CommandViewModel.RestartCommand, "Localized:ResourceCommandRestartName", "Localized:ResourceCommandRestartDescription")]
+    [InlineData(KnownResourceTypes.Project, CommandViewModel.RestartCommand, "Localized:ResourceCommandRestartName", "Localized:ResourceCommandRestartProjectDescription")]
+    public void AddMenuItems_KnownLifecycleCommands_UsesDashboardLocalization(string resourceType, string commandName, string expectedText, string expectedTooltip)
+    {
+        // Arrange
+        var command = new CommandViewModel(
+            commandName,
+            CommandViewModelState.Enabled,
+            displayName: "German label",
+            displayDescription: "German tooltip",
+            confirmationMessage: "",
+            parameter: null,
+            isHighlighted: false,
+            iconName: "",
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(resourceType: resourceType, commands: [command]);
+        var repository = TelemetryTestHelpers.CreateRepository();
+        var aiContextProvider = new TestAIContextProvider();
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+
+        // Act
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        // Assert
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ExportJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal(expectedText, e.Text);
+                Assert.Equal(expectedTooltip, e.Tooltip);
+            });
     }
 
     private sealed class TestNavigationManager : NavigationManager

@@ -32,7 +32,7 @@
                                   OnPausedChanged="@OnPausedChanged"
                                   SelectedResource="@PageViewModel.SelectedResource" />
 
-            @if (PageViewModel.SelectedResource is { } selectedResource && !IsAllSelected())
+            @if (GetSelectedResource() is { } selectedResource && PageViewModel.SelectedResource is not null && !IsAllSelected())
             {
                 if (ViewportInformation.IsDesktop && (_highlightedCommands.Count > 0 || _resourceMenuItems.Count > 0))
                 {
@@ -41,8 +41,11 @@
 
                 @foreach (var command in _highlightedCommands)
                 {
+                    var commandText = command.GetLocalizedDisplayName(ResourcesLoc);
+                    var commandDescription = command.GetLocalizedDisplayDescription(selectedResource, ResourcesLoc);
+
                     <FluentButton Appearance="Appearance.Lightweight"
-                                  Title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
+                                  Title="@(!string.IsNullOrEmpty(commandDescription) ? commandDescription : commandText)"
                                   Disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                                   OnClick="@(() => ExecuteResourceCommandAsync(command))"
                                   Class="highlighted-command">
@@ -52,7 +55,7 @@
                         }
                         else
                         {
-                            @command.GetDisplayName()
+                            @commandText
                         }
                     </FluentButton>
                 }

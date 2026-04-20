@@ -267,9 +267,33 @@ public sealed class CommandViewModel
         return DisplayName;
     }
 
+    internal string GetLocalizedDisplayName(IStringLocalizer<Resources.Resources> loc)
+    {
+        return Name switch
+        {
+            StartCommand => loc[nameof(Resources.Resources.ResourceCommandStartName)],
+            StopCommand => loc[nameof(Resources.Resources.ResourceCommandStopName)],
+            RestartCommand => loc[nameof(Resources.Resources.ResourceCommandRestartName)],
+            _ => DisplayName
+        };
+    }
+
     public string? GetDisplayDescription()
     {
         return DisplayDescription is { Length: > 0 } ? DisplayDescription : null;
+    }
+
+    internal string? GetLocalizedDisplayDescription(ResourceViewModel resource, IStringLocalizer<Resources.Resources> loc)
+    {
+        return Name switch
+        {
+            StartCommand => loc[nameof(Resources.Resources.ResourceCommandStartDescription)],
+            StopCommand => loc[nameof(Resources.Resources.ResourceCommandStopDescription)],
+            RestartCommand => loc[resource.IsProject()
+                ? nameof(Resources.Resources.ResourceCommandRestartProjectDescription)
+                : nameof(Resources.Resources.ResourceCommandRestartDescription)],
+            _ => GetDisplayDescription()
+        };
     }
 }
 

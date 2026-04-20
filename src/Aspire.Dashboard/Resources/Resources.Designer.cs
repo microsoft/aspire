@@ -142,6 +142,69 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Restart resource.
+        /// </summary>
+        public static string ResourceCommandRestartDescription {
+            get {
+                return ResourceManager.GetString("ResourceCommandRestartDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Restart.
+        /// </summary>
+        public static string ResourceCommandRestartName {
+            get {
+                return ResourceManager.GetString("ResourceCommandRestartName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Restart resource. Source code is not recompiled..
+        /// </summary>
+        public static string ResourceCommandRestartProjectDescription {
+            get {
+                return ResourceManager.GetString("ResourceCommandRestartProjectDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Start resource.
+        /// </summary>
+        public static string ResourceCommandStartDescription {
+            get {
+                return ResourceManager.GetString("ResourceCommandStartDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Start.
+        /// </summary>
+        public static string ResourceCommandStartName {
+            get {
+                return ResourceManager.GetString("ResourceCommandStartName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Stop resource.
+        /// </summary>
+        public static string ResourceCommandStopDescription {
+            get {
+                return ResourceManager.GetString("ResourceCommandStopDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Stop.
+        /// </summary>
+        public static string ResourceCommandStopName {
+            get {
+                return ResourceManager.GetString("ResourceCommandStopName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to &quot;{0}&quot; succeeded.
         /// </summary>
         public static string ResourceCommandSuccess {
