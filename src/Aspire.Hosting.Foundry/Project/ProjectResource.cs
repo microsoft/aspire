@@ -56,9 +56,11 @@ public class AzureCognitiveServicesProjectResource :
                         return;
                     }
                     var encodedSubscriptionId = EncodeSubscriptionId(subscriptionId);
-                    // Print dashboard URL
-                    await context.ReportingStep.CompleteAsync(
-                        $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId},{resourceGroupName},,{Parent.Name},{Name}/home").ConfigureAwait(false);
+                    var portalUrl = $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId},{resourceGroupName},,{Parent.Name},{Name}/home";
+
+                    await context.ReportingStep.CompleteAsync(portalUrl).ConfigureAwait(false);
+
+                    context.Summary.Add(Name, new MarkdownString($"[{portalUrl}]({portalUrl})"));
                 },
                 Resource = this,
                 DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
