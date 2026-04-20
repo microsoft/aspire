@@ -13,9 +13,10 @@ namespace Aspire.Hosting.Foundry;
 /// A Foundry tool resource that grounds an agent's responses using data from an Azure AI Search index.
 /// </summary>
 /// <remarks>
-/// This tool requires an existing <see cref="AzureSearchResource"/> and creates a Foundry project
-/// connection to it during provisioning. The connection identifier is resolved at deploy time
-/// when the agent definition is created.
+/// After creating this tool with <see cref="PromptAgentBuilderExtensions.AddAISearchTool"/>,
+/// link it to an <see cref="AzureSearchResource"/> using
+/// <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>.
+/// The connection identifier is resolved at deploy time when the agent definition is created.
 /// </remarks>
 public class AzureAISearchToolResource : FoundryToolResource
 {
@@ -24,25 +25,22 @@ public class AzureAISearchToolResource : FoundryToolResource
     /// </summary>
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="project">The parent Foundry project resource.</param>
-    /// <param name="searchResource">The Azure AI Search resource to use for grounding.</param>
     public AzureAISearchToolResource(
         [ResourceName] string name,
-        AzureCognitiveServicesProjectResource project,
-        AzureSearchResource searchResource)
+        AzureCognitiveServicesProjectResource project)
         : base(name, project)
     {
-        ArgumentNullException.ThrowIfNull(searchResource);
-        SearchResource = searchResource;
     }
 
     /// <summary>
-    /// Gets the Azure AI Search resource backing this tool.
+    /// Gets or sets the Azure AI Search resource backing this tool.
+    /// Set by <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>.
     /// </summary>
-    public AzureSearchResource SearchResource { get; }
+    public AzureSearchResource? SearchResource { get; internal set; }
 
     /// <summary>
     /// Gets or sets the Foundry project connection resource for this search tool.
-    /// This is set during <see cref="PromptAgentBuilderExtensions.AddAzureAISearchTool"/>.
+    /// Set by <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>.
     /// </summary>
     internal AzureCognitiveServicesProjectConnectionResource? Connection { get; set; }
 
@@ -52,8 +50,8 @@ public class AzureAISearchToolResource : FoundryToolResource
         if (Connection is null)
         {
             throw new InvalidOperationException(
-                $"Azure AI Search tool '{Name}' does not have a project connection. " +
-                "Ensure the tool was added using AddAzureAISearchTool().");
+                $"Azure AI Search tool '{Name}' does not have a backing resource configured. " +
+                "Call .WithReference(searchResource) to link it to an Azure AI Search resource.");
         }
 
         // The connection name output is resolved after infrastructure provisioning

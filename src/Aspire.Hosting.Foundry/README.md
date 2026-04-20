@@ -169,15 +169,21 @@ In run mode, the agent runs locally with health check endpoints and OpenTelemetr
 
 Prompt agents are declarative agents defined by a model, instructions, and tools. They are always deployed to Azure Foundry — even during local development (`aspire run`) — and local services communicate with the cloud-provisioned agent.
 
+Tools are project-level resources that can be reused across multiple agents:
+
 ```csharp
 var foundry = builder.AddFoundry("foundry");
 var project = foundry.AddProject("my-project");
 var chat = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-var agent = project.AddPromptAgent("joker-agent", chat,
-    instructions: "You are good at telling jokes.")
-    .WithWebSearch()
-    .WithCodeInterpreter();
+// Create tools at the project level
+var codeInterp = project.AddCodeInterpreterTool("code-interp");
+var webSearch = project.AddWebSearchTool("web-search");
+
+// Add agent with tools
+var agent = project.AddPromptAgent(chat, "joker-agent",
+    instructions: "You are good at telling jokes.",
+    tools: [codeInterp, webSearch]);
 
 builder.AddPythonApp("app", "./app", "main:app")
        .WithReference(agent);
@@ -185,40 +191,52 @@ builder.AddPythonApp("app", "./app", "main:app")
 
 ### Available tools
 
-Prompt agents support several tool types:
+Prompt agents support several tool types, all created as project-level resources:
 
 | Tool | Extension Method | Description |
 |------|-----------------|-------------|
-| Code Interpreter | `.WithCodeInterpreter()` | Runs Python code in a sandbox |
-| File Search | `.WithFileSearch(vectorStoreIds)` | Searches uploaded documents via vector search |
-| Web Search | `.WithWebSearch()` | Retrieves real-time web information |
-| Azure AI Search | `.WithTool(searchTool)` | Grounds responses using Azure AI Search indexes |
-| Bing Grounding | `.WithTool(bingTool)` | Grounds responses using Bing Search |
-| SharePoint | `.WithSharePoint(connectionIds)` | Searches SharePoint data |
-| Microsoft Fabric | `.WithFabric(connectionIds)` | Queries data through Fabric data agents |
-| Azure Functions | `.WithAzureFunction(...)` | Invokes serverless Azure Functions |
-| Function Calling | `.WithFunction(name, params)` | Calls application-defined functions |
-| Image Generation | `.WithImageGeneration()` | Generates and edits images (preview) |
-| Computer Use | `.WithComputerUse(w, h)` | Interacts with a computer desktop (preview) |
+| Code Interpreter | `project.AddCodeInterpreterTool(name)` | Runs Python code in a sandbox |
+| File Search | `project.AddFileSearchTool(name, vectorStoreIds)` | Searches uploaded documents via vector search |
+| Web Search | `project.AddWebSearchTool(name)` | Retrieves real-time web information |
+| Azure AI Search | `project.AddAISearchTool(name).WithReference(search)` | Grounds responses using Azure AI Search indexes |
+| Bing Grounding | `project.AddBingGroundingTool(name).WithReference(conn)` | Grounds responses using Bing Search |
+| SharePoint | `project.AddSharePointTool(name, connectionIds)` | Searches SharePoint data |
+| Microsoft Fabric | `project.AddFabricTool(name, connectionIds)` | Queries data through Fabric data agents |
+| Azure Functions | `project.AddAzureFunctionTool(name, ...)` | Invokes serverless Azure Functions |
+| Function Calling | `project.AddFunctionTool(name, funcName, params)` | Calls application-defined functions |
+| Image Generation | `project.AddImageGenerationTool(name)` | Generates and edits images (preview) |
+| Computer Use | `project.AddComputerUseTool(name, w, h)` | Interacts with a computer desktop (preview) |
 
 ### Azure AI Search tool example
 
 ```csharp
 var search = builder.AddAzureSearch("search");
-var searchTool = project.AddAzureAISearchTool("search-tool", search);
+var aiSearch = project.AddAISearchTool("search-tool").WithReference(search);
 
-var agent = project.AddPromptAgent("research-agent", chat)
-    .WithTool(searchTool);
+var agent = project.AddPromptAgent(chat, "research-agent",
+    tools: [aiSearch]);
 ```
 
 ### Bing Grounding tool example
 
 ```csharp
 var bingConnection = project.AddConnection("bing-conn", infra => /* configure Bing connection */);
-var bingTool = project.AddBingGroundingTool("bing-tool", bingConnection);
+var bing = project.AddBingGroundingTool("bing-tool").WithReference(bingConnection);
 
-var agent = project.AddPromptAgent("news-agent", chat)
-    .WithTool(bingTool);
+var agent = project.AddPromptAgent(chat, "news-agent",
+    tools: [bing]);
+```
+
+### Tool reuse across agents
+
+Tools are project-level resources, so they can be shared across multiple agents:
+
+```csharp
+var codeInterp = project.AddCodeInterpreterTool("code-interp");
+var webSearch = project.AddWebSearchTool("web-search");
+
+var agent1 = project.AddPromptAgent(chat, "agent-1", tools: [codeInterp, webSearch]);
+var agent2 = project.AddPromptAgent(chat, "agent-2", tools: [codeInterp]);
 ```
 
 ## Additional documentation

@@ -20,7 +20,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
 
         Assert.NotNull(agent);
         Assert.NotNull(agent.Resource);
@@ -36,7 +36,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
 
         Assert.Equal("gpt41", agent.Resource.Model);
         Assert.Equal("You tell jokes.", agent.Resource.Instructions);
@@ -50,7 +50,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent("my-agent", model);
+        var agent = project.AddPromptAgent(model, "my-agent");
 
         Assert.Same(project.Resource, agent.Resource.Project);
     }
@@ -63,7 +63,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        Assert.Throws<ArgumentException>(() => project.AddPromptAgent("", model));
+        Assert.Throws<ArgumentException>(() => project.AddPromptAgent(model, ""));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        Assert.Throws<ArgumentNullException>(() => project.AddPromptAgent("my-agent", null!));
+        Assert.Throws<ArgumentNullException>(() => project.AddPromptAgent(null!, "my-agent"));
     }
 
     [Fact]
@@ -84,121 +84,287 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent("my-agent", model);
+        var agent = project.AddPromptAgent(model, "my-agent");
 
         Assert.Null(agent.Resource.Instructions);
     }
 
     [Fact]
-    public void WithCodeInterpreter_AddsToolToAgent()
+    public void AddPromptAgent_WithTools_AddToolsToAgent()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithCodeInterpreter();
+        var codeInterp = project.AddCodeInterpreterTool("ci");
+        var webSearch = project.AddWebSearchTool("ws");
 
-        Assert.Single(agent.Resource.Tools);
-        Assert.IsType<CodeInterpreterToolDefinition>(agent.Resource.Tools[0]);
+        var agent = project.AddPromptAgent(model, "my-agent",
+            instructions: "You tell jokes.",
+            tools: [codeInterp, webSearch]);
+
+        Assert.Equal(2, agent.Resource.Tools.Count);
+        Assert.IsType<CodeInterpreterToolResource>(agent.Resource.Tools[0]);
+        Assert.IsType<WebSearchToolResource>(agent.Resource.Tools[1]);
     }
 
     [Fact]
-    public void WithFileSearch_AddsToolToAgent()
+    public void AddCodeInterpreterTool_CreatesResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithFileSearch("store-1", "store-2");
-
-        Assert.Single(agent.Resource.Tools);
-        var fsTool = Assert.IsType<FileSearchToolDefinition>(agent.Resource.Tools[0]);
-        Assert.Equal(["store-1", "store-2"], fsTool.VectorStoreIds);
-    }
-
-    [Fact]
-    public void WithWebSearch_AddsToolToAgent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithWebSearch();
-
-        Assert.Single(agent.Resource.Tools);
-        Assert.IsType<WebSearchToolDefinition>(agent.Resource.Tools[0]);
-    }
-
-    [Fact]
-    public void MultipleTools_AllAdded()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithCodeInterpreter()
-            .WithFileSearch()
-            .WithWebSearch();
-
-        Assert.Equal(3, agent.Resource.Tools.Count);
-        Assert.IsType<CodeInterpreterToolDefinition>(agent.Resource.Tools[0]);
-        Assert.IsType<FileSearchToolDefinition>(agent.Resource.Tools[1]);
-        Assert.IsType<WebSearchToolDefinition>(agent.Resource.Tools[2]);
-    }
-
-    [Fact]
-    public void AddAzureAISearchTool_CreatesToolResource()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var search = builder.AddAzureSearch("search");
-
-        var tool = project.AddAzureAISearchTool("search-tool", search);
+        var tool = project.AddCodeInterpreterTool("code-interp");
 
         Assert.NotNull(tool);
-        Assert.NotNull(tool.Resource);
-        Assert.Equal("search-tool", tool.Resource.Name);
-        Assert.IsType<AzureAISearchToolResource>(tool.Resource);
-        Assert.Same(search.Resource, tool.Resource.SearchResource);
+        Assert.Equal("code-interp", tool.Resource.Name);
+        Assert.IsType<CodeInterpreterToolResource>(tool.Resource);
+        Assert.Same(project.Resource, tool.Resource.Project);
     }
 
     [Fact]
-    public void AddAzureAISearchTool_SetsConnection()
+    public void AddFileSearchTool_CreatesResourceWithVectorStoreIds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var tool = project.AddFileSearchTool("fs", "store-1", "store-2");
+
+        Assert.NotNull(tool);
+        Assert.IsType<FileSearchToolResource>(tool.Resource);
+        Assert.Equal(["store-1", "store-2"], tool.Resource.VectorStoreIds);
+    }
+
+    [Fact]
+    public void AddWebSearchTool_CreatesResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var tool = project.AddWebSearchTool("ws");
+
+        Assert.NotNull(tool);
+        Assert.IsType<WebSearchToolResource>(tool.Resource);
+    }
+
+    [Fact]
+    public void AddAISearchTool_CreatesResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var tool = project.AddAISearchTool("search");
+
+        Assert.NotNull(tool);
+        Assert.IsType<AzureAISearchToolResource>(tool.Resource);
+        Assert.Same(project.Resource, tool.Resource.Project);
+        Assert.Null(tool.Resource.SearchResource);
+    }
+
+    [Fact]
+    public void AddAISearchTool_WithReference_LinksSearchResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
         var search = builder.AddAzureSearch("search");
 
-        var tool = project.AddAzureAISearchTool("search-tool", search);
+        var tool = project.AddAISearchTool("search-tool").WithReference(search);
 
+        Assert.NotNull(tool.Resource.SearchResource);
+        Assert.Same(search.Resource, tool.Resource.SearchResource);
         Assert.NotNull(tool.Resource.Connection);
     }
 
     [Fact]
-    public void WithTool_AddsResourceToolToAgent()
+    public void AddAISearchTool_WithReference_Twice_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var search = builder.AddAzureSearch("search");
+        var search2 = builder.AddAzureSearch("search2");
+
+        var tool = project.AddAISearchTool("search-tool").WithReference(search);
+
+        Assert.Throws<InvalidOperationException>(() => tool.WithReference(search2));
+    }
+
+    [Fact]
+    public void AddBingGroundingTool_CreatesResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var tool = project.AddBingGroundingTool("bing");
+
+        Assert.NotNull(tool);
+        Assert.IsType<BingGroundingToolResource>(tool.Resource);
+        Assert.Null(tool.Resource.Connection);
+    }
+
+    [Fact]
+    public void AddBingGroundingTool_WithReference_LinksConnection()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var search = builder.AddAzureSearch("search");
+        var connection = project.AddConnection(search);
+
+        var tool = project.AddBingGroundingTool("bing").WithReference(connection);
+
+        Assert.NotNull(tool.Resource.Connection);
+        Assert.Same(connection.Resource, tool.Resource.Connection);
+    }
+
+    [Fact]
+    public void AddBingGroundingTool_WithReference_Twice_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var search = builder.AddAzureSearch("search");
+        var conn1 = project.AddConnection(search);
+        var conn2 = project.AddConnection(search);
+
+        var tool = project.AddBingGroundingTool("bing").WithReference(conn1);
+
+        Assert.Throws<InvalidOperationException>(() => tool.WithReference(conn2));
+    }
+
+    [Fact]
+    public void AddSharePointTool_CreatesResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var tool = project.AddSharePointTool("sp", "conn-1", "conn-2");
+
+        Assert.NotNull(tool);
+        Assert.IsType<SharePointToolResource>(tool.Resource);
+        Assert.Equal(["conn-1", "conn-2"], tool.Resource.ProjectConnectionIds);
+    }
+
+    [Fact]
+    public void AddFabricTool_CreatesResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var tool = project.AddFabricTool("fab", "fab-conn-1");
+
+        Assert.NotNull(tool);
+        Assert.IsType<FabricToolResource>(tool.Resource);
+        Assert.Equal(["fab-conn-1"], tool.Resource.ProjectConnectionIds);
+    }
+
+    [Fact]
+    public void AddAzureFunctionTool_CreatesResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var tool = project.AddAzureFunctionTool(
+            "func-tool",
+            "myFunc",
+            "Does something useful",
+            BinaryData.FromString("""{"type":"object","properties":{}}"""),
+            "https://queue.core.windows.net",
+            "input-queue",
+            "https://queue.core.windows.net",
+            "output-queue");
+
+        Assert.NotNull(tool);
+        Assert.IsType<AzureFunctionToolResource>(tool.Resource);
+        Assert.Equal("myFunc", tool.Resource.FunctionName);
+    }
+
+    [Fact]
+    public void AddFunctionTool_CreatesResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var tool = project.AddFunctionTool(
+            "func",
+            "get_weather",
+            BinaryData.FromString("""{"type":"object","properties":{"location":{"type":"string"}}}"""),
+            description: "Gets the current weather");
+
+        Assert.NotNull(tool);
+        Assert.IsType<FunctionToolResource>(tool.Resource);
+        Assert.Equal("get_weather", tool.Resource.FunctionName);
+        Assert.Equal("Gets the current weather", tool.Resource.Description);
+    }
+
+    [Fact]
+    public void AddPromptAgent_WithMixedToolTypes()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
         var search = builder.AddAzureSearch("search");
-        var searchTool = project.AddAzureAISearchTool("search-tool", search);
 
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithTool(searchTool);
+        var codeInterp = project.AddCodeInterpreterTool("ci");
+        var webSearch = project.AddWebSearchTool("ws");
+        var aiSearch = project.AddAISearchTool("search-tool").WithReference(search);
+        var sharePoint = project.AddSharePointTool("sp", "sp-conn");
 
-        Assert.Single(agent.Resource.Tools);
-        Assert.Same(searchTool.Resource, agent.Resource.Tools[0]);
+        var agent = project.AddPromptAgent(model, "my-agent",
+            instructions: "You tell jokes.",
+            tools: [codeInterp, webSearch, aiSearch, sharePoint]);
+
+        Assert.Equal(4, agent.Resource.Tools.Count);
+        Assert.IsType<CodeInterpreterToolResource>(agent.Resource.Tools[0]);
+        Assert.IsType<WebSearchToolResource>(agent.Resource.Tools[1]);
+        Assert.IsType<AzureAISearchToolResource>(agent.Resource.Tools[2]);
+        Assert.IsType<SharePointToolResource>(agent.Resource.Tools[3]);
+    }
+
+    [Fact]
+    public void AddPromptAgent_ToolReusedAcrossAgents()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+        var codeInterp = project.AddCodeInterpreterTool("ci");
+
+        var agent1 = project.AddPromptAgent(model, "agent-1", tools: [codeInterp]);
+        var agent2 = project.AddPromptAgent(model, "agent-2", tools: [codeInterp]);
+
+        Assert.Single(agent1.Resource.Tools);
+        Assert.Single(agent2.Resource.Tools);
+        Assert.Same(codeInterp.Resource, agent1.Resource.Tools[0]);
+        Assert.Same(codeInterp.Resource, agent2.Resource.Tools[0]);
+    }
+
+    [Fact]
+    public void AddPromptAgent_CrossProjectTool_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var foundry = builder.AddFoundry("account");
+        var project1 = foundry.AddProject("proj-1");
+        var project2 = foundry.AddProject("proj-2");
+        var model = project1.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+        var toolFromProject2 = project2.AddCodeInterpreterTool("ci");
+
+        Assert.Throws<InvalidOperationException>(() =>
+            project1.AddPromptAgent(model, "agent", tools: [toolFromProject2]));
     }
 
     [Fact]
@@ -208,7 +374,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("test-account")
             .AddProject("test-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
 
         var pyapp = builder.AddPythonApp("app", "./app.py", "main:app")
             .WithReference(agent);
@@ -227,7 +393,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-        var agent = project.AddPromptAgent("my-agent", model);
+        var agent = project.AddPromptAgent(model, "my-agent");
 
         Assert.IsAssignableFrom<IResourceWithConnectionString>(agent.Resource);
         Assert.IsAssignableFrom<IResourceWithEnvironment>(agent.Resource);
@@ -235,171 +401,47 @@ public class PromptAgentTests
     }
 
     [Fact]
-    public void AddBingGroundingTool_CreatesToolResource()
+    public void AddImageGenerationTool_CreatesResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var search = builder.AddAzureSearch("search");
-        var connection = project.AddConnection(search);
 
-        var tool = project.AddBingGroundingTool("bing-tool", connection);
+        var tool = project.AddImageGenerationTool("img-gen");
 
         Assert.NotNull(tool);
-        Assert.NotNull(tool.Resource);
-        Assert.Equal("bing-tool", tool.Resource.Name);
-        Assert.IsType<BingGroundingToolResource>(tool.Resource);
-        Assert.NotNull(tool.Resource.Connection);
+        Assert.IsType<ImageGenerationToolResource>(tool.Resource);
     }
 
     [Fact]
-    public void WithBingGroundingTool_AddsToAgent()
+    public void AddComputerUseTool_CreatesResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-        var search = builder.AddAzureSearch("search");
-        var connection = project.AddConnection(search);
-        var bingTool = project.AddBingGroundingTool("bing-tool", connection);
 
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithTool(bingTool);
+        var tool = project.AddComputerUseTool("computer", displayWidth: 1920, displayHeight: 1080);
 
-        Assert.Single(agent.Resource.Tools);
-        Assert.Same(bingTool.Resource, agent.Resource.Tools[0]);
-    }
-
-    [Fact]
-    public void WithSharePoint_AddsToolToAgent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithSharePoint("conn-1", "conn-2");
-
-        Assert.Single(agent.Resource.Tools);
-        var spTool = Assert.IsType<SharePointToolDefinition>(agent.Resource.Tools[0]);
-        Assert.Equal(["conn-1", "conn-2"], spTool.ProjectConnectionIds);
-    }
-
-    [Fact]
-    public void WithFabric_AddsToolToAgent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithFabric("fabric-conn-1");
-
-        Assert.Single(agent.Resource.Tools);
-        var fabricTool = Assert.IsType<FabricToolDefinition>(agent.Resource.Tools[0]);
-        Assert.Equal(["fabric-conn-1"], fabricTool.ProjectConnectionIds);
-    }
-
-    [Fact]
-    public void WithAzureFunction_AddsToolToAgent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithAzureFunction(
-                "myFunc",
-                "Does something useful",
-                BinaryData.FromString("""{"type":"object","properties":{}}"""),
-                "https://queue.core.windows.net",
-                "input-queue",
-                "https://queue.core.windows.net",
-                "output-queue");
-
-        Assert.Single(agent.Resource.Tools);
-        var funcTool = Assert.IsType<AzureFunctionToolDefinition>(agent.Resource.Tools[0]);
-        Assert.Equal("myFunc", funcTool.FunctionName);
-    }
-
-    [Fact]
-    public void MultipleToolTypes_AllAdded()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-        var search = builder.AddAzureSearch("search");
-        var searchTool = project.AddAzureAISearchTool("search-tool", search);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithCodeInterpreter()
-            .WithWebSearch()
-            .WithSharePoint("sp-conn")
-            .WithFabric("fab-conn")
-            .WithTool(searchTool);
-
-        Assert.Equal(5, agent.Resource.Tools.Count);
-        Assert.IsType<CodeInterpreterToolDefinition>(agent.Resource.Tools[0]);
-        Assert.IsType<WebSearchToolDefinition>(agent.Resource.Tools[1]);
-        Assert.IsType<SharePointToolDefinition>(agent.Resource.Tools[2]);
-        Assert.IsType<FabricToolDefinition>(agent.Resource.Tools[3]);
-        Assert.Same(searchTool.Resource, agent.Resource.Tools[4]);
-    }
-
-    [Fact]
-    public void WithFunction_AddsToolToAgent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithFunction(
-                "get_weather",
-                BinaryData.FromString("""{"type":"object","properties":{"location":{"type":"string"}}}"""),
-                description: "Gets the current weather");
-
-        Assert.Single(agent.Resource.Tools);
-        var funcTool = Assert.IsType<FunctionToolDefinition>(agent.Resource.Tools[0]);
-        Assert.Equal("get_weather", funcTool.FunctionName);
-        Assert.Equal("Gets the current weather", funcTool.Description);
-    }
-
-    [Fact]
-    public void WithImageGeneration_AddsToolToAgent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithImageGeneration();
-
-        Assert.Single(agent.Resource.Tools);
-        Assert.IsType<ImageGenerationToolDefinition>(agent.Resource.Tools[0]);
-    }
-
-    [Fact]
-    public void WithComputerUse_AddsToolToAgent()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
-        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-
-        var agent = project.AddPromptAgent("my-agent", model)
-            .WithComputerUse(1920, 1080);
-
-        Assert.Single(agent.Resource.Tools);
-        var computerTool = Assert.IsType<ComputerToolDefinition>(agent.Resource.Tools[0]);
+        Assert.NotNull(tool);
+        var computerTool = Assert.IsType<ComputerToolResource>(tool.Resource);
         Assert.Equal(1920, computerTool.DisplayWidth);
         Assert.Equal(1080, computerTool.DisplayHeight);
         Assert.Equal("browser", computerTool.Environment);
+    }
+
+    [Fact]
+    public void ToolResources_HaveProjectReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var ci = project.AddCodeInterpreterTool("ci");
+        var fs = project.AddFileSearchTool("fs");
+        var ws = project.AddWebSearchTool("ws");
+
+        Assert.Same(project.Resource, ci.Resource.Project);
+        Assert.Same(project.Resource, fs.Resource.Project);
+        Assert.Same(project.Resource, ws.Resource.Project);
     }
 }

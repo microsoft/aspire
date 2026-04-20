@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Azure.AI.Projects.OpenAI;
 using OpenAI.Responses;
@@ -8,26 +9,30 @@ using OpenAI.Responses;
 namespace Aspire.Hosting.Foundry;
 
 /// <summary>
-/// A Foundry tool definition that enables an agent to invoke an Azure Function.
+/// A Foundry tool resource that enables an agent to invoke an Azure Function.
 /// </summary>
 /// <remarks>
 /// Azure Functions tools allow agents to call serverless functions as tools.
 /// The function definition includes the function name, parameters schema,
 /// and input/output bindings for Azure Storage queues.
 /// </remarks>
-public sealed class AzureFunctionToolDefinition : IFoundryTool
+public sealed class AzureFunctionToolResource : FoundryToolResource
 {
     /// <summary>
-    /// Creates a new instance of the <see cref="AzureFunctionToolDefinition"/> class.
+    /// Creates a new instance of the <see cref="AzureFunctionToolResource"/> class.
     /// </summary>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="project">The parent Foundry project resource.</param>
     /// <param name="functionName">The name of the Azure Function.</param>
-    /// <param name="description">A description of what the function does (used by the agent to decide when to call it).</param>
+    /// <param name="description">A description of what the function does.</param>
     /// <param name="parameters">The JSON schema defining the function parameters.</param>
     /// <param name="inputQueueEndpoint">The Azure Storage Queue endpoint for input binding.</param>
     /// <param name="inputQueueName">The queue name for input binding.</param>
     /// <param name="outputQueueEndpoint">The Azure Storage Queue endpoint for output binding.</param>
     /// <param name="outputQueueName">The queue name for output binding.</param>
-    public AzureFunctionToolDefinition(
+    public AzureFunctionToolResource(
+        [ResourceName] string name,
+        AzureCognitiveServicesProjectResource project,
         string functionName,
         string description,
         BinaryData parameters,
@@ -35,6 +40,7 @@ public sealed class AzureFunctionToolDefinition : IFoundryTool
         string inputQueueName,
         string outputQueueEndpoint,
         string outputQueueName)
+        : base(name, project)
     {
         ArgumentException.ThrowIfNullOrEmpty(functionName);
         ArgumentException.ThrowIfNullOrEmpty(description);
@@ -89,7 +95,7 @@ public sealed class AzureFunctionToolDefinition : IFoundryTool
     public string OutputQueueName { get; }
 
     /// <inheritdoc/>
-    public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
     {
         var function = new AzureFunctionDefinitionFunction(FunctionName, Parameters)
         {

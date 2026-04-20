@@ -2,23 +2,34 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
 
 /// <summary>
-/// A built-in Foundry tool that enables an agent to write and run Python code
+/// A Foundry tool resource that enables an agent to write and run Python code
 /// in a sandboxed environment for data analysis, math, and chart generation.
 /// </summary>
 /// <remarks>
 /// This tool requires no Azure provisioning or project connections.
 /// It is automatically available in all Foundry projects.
 /// </remarks>
-public sealed class CodeInterpreterToolDefinition : IFoundryTool
+public sealed class CodeInterpreterToolResource : FoundryToolResource
 {
+    /// <summary>
+    /// Creates a new instance of the <see cref="CodeInterpreterToolResource"/> class.
+    /// </summary>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="project">The parent Foundry project resource.</param>
+    public CodeInterpreterToolResource([ResourceName] string name, AzureCognitiveServicesProjectResource project)
+        : base(name, project)
+    {
+    }
+
     /// <inheritdoc/>
-    public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
     {
         var container = new CodeInterpreterToolContainer(new AutomaticCodeInterpreterToolContainerConfiguration());
         return Task.FromResult<ResponseTool>(new CodeInterpreterTool(container));
@@ -26,62 +37,92 @@ public sealed class CodeInterpreterToolDefinition : IFoundryTool
 }
 
 /// <summary>
-/// A built-in Foundry tool that enables an agent to search uploaded files
+/// A Foundry tool resource that enables an agent to search uploaded files
 /// and proprietary documents using vector search.
 /// </summary>
 /// <remarks>
 /// This tool requires no Azure provisioning or project connections.
 /// Vector store IDs can optionally be configured for specific document collections.
 /// </remarks>
-public sealed class FileSearchToolDefinition : IFoundryTool
+public sealed class FileSearchToolResource : FoundryToolResource
 {
     /// <summary>
-    /// Gets or sets the vector store IDs to search. If empty, the agent's default stores are used.
+    /// Creates a new instance of the <see cref="FileSearchToolResource"/> class.
+    /// </summary>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="project">The parent Foundry project resource.</param>
+    public FileSearchToolResource([ResourceName] string name, AzureCognitiveServicesProjectResource project)
+        : base(name, project)
+    {
+    }
+
+    /// <summary>
+    /// Gets the vector store IDs to search. If empty, the agent's default stores are used.
     /// </summary>
     public IList<string> VectorStoreIds { get; init; } = [];
 
     /// <inheritdoc/>
-    public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(ResponseTool.CreateFileSearchTool(VectorStoreIds));
     }
 }
 
 /// <summary>
-/// A built-in Foundry tool that retrieves real-time information from the public web
+/// A Foundry tool resource that retrieves real-time information from the public web
 /// and returns answers with inline citations.
 /// </summary>
 /// <remarks>
 /// This is the recommended way to add web grounding to an agent.
 /// No Azure provisioning is required — the tool is provided by the Foundry Agent Service.
 /// </remarks>
-public sealed class WebSearchToolDefinition : IFoundryTool
+public sealed class WebSearchToolResource : FoundryToolResource
 {
+    /// <summary>
+    /// Creates a new instance of the <see cref="WebSearchToolResource"/> class.
+    /// </summary>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="project">The parent Foundry project resource.</param>
+    public WebSearchToolResource([ResourceName] string name, AzureCognitiveServicesProjectResource project)
+        : base(name, project)
+    {
+    }
+
     /// <inheritdoc/>
-    public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(ResponseTool.CreateWebSearchTool());
     }
 }
 
 /// <summary>
-/// A built-in Foundry tool that enables an agent to generate and edit images.
+/// A Foundry tool resource that enables an agent to generate and edit images.
 /// </summary>
 /// <remarks>
 /// This is an experimental feature and may change in future releases.
 /// </remarks>
 [Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class ImageGenerationToolDefinition : IFoundryTool
+public sealed class ImageGenerationToolResource : FoundryToolResource
 {
+    /// <summary>
+    /// Creates a new instance of the <see cref="ImageGenerationToolResource"/> class.
+    /// </summary>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="project">The parent Foundry project resource.</param>
+    public ImageGenerationToolResource([ResourceName] string name, AzureCognitiveServicesProjectResource project)
+        : base(name, project)
+    {
+    }
+
     /// <inheritdoc/>
-    public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(new ImageGenerationTool());
     }
 }
 
 /// <summary>
-/// A built-in Foundry tool that enables an agent to interact with a computer desktop
+/// A Foundry tool resource that enables an agent to interact with a computer desktop
 /// by taking screenshots, moving the mouse, clicking, and typing.
 /// </summary>
 /// <remarks>
@@ -89,15 +130,23 @@ public sealed class ImageGenerationToolDefinition : IFoundryTool
 /// The computer tool requires specifying the display dimensions and environment.
 /// </remarks>
 [Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class ComputerToolDefinition : IFoundryTool
+public sealed class ComputerToolResource : FoundryToolResource
 {
     /// <summary>
-    /// Creates a new instance of the <see cref="ComputerToolDefinition"/> class.
+    /// Creates a new instance of the <see cref="ComputerToolResource"/> class.
     /// </summary>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="project">The parent Foundry project resource.</param>
     /// <param name="displayWidth">The width of the display in pixels.</param>
     /// <param name="displayHeight">The height of the display in pixels.</param>
     /// <param name="environment">The environment identifier (e.g., "browser").</param>
-    public ComputerToolDefinition(int displayWidth, int displayHeight, string environment = "browser")
+    public ComputerToolResource(
+        [ResourceName] string name,
+        AzureCognitiveServicesProjectResource project,
+        int displayWidth = 1024,
+        int displayHeight = 768,
+        string environment = "browser")
+        : base(name, project)
     {
         DisplayWidth = displayWidth;
         DisplayHeight = displayHeight;
@@ -120,7 +169,7 @@ public sealed class ComputerToolDefinition : IFoundryTool
     public string Environment { get; }
 
     /// <inheritdoc/>
-    public Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
     {
         return Task.FromResult<ResponseTool>(
             new ComputerTool(new ComputerToolEnvironment(Environment), DisplayWidth, DisplayHeight));

@@ -11,11 +11,11 @@ namespace Aspire.Hosting.Foundry;
 /// Base class for Foundry tool resources that participate in the Aspire application model.
 /// </summary>
 /// <remarks>
-/// Use this base class for tools that need Azure provisioning or Foundry project connections
-/// (e.g., Azure AI Search, Web Search/Bing Grounding). For lightweight built-in tools
-/// (e.g., Code Interpreter, File Search), implement <see cref="IFoundryTool"/> directly instead.
+/// All Foundry tools are modeled as project-level resources, enabling dashboard visibility,
+/// reusability across agents, and consistent lifecycle management. Create tool instances using
+/// the <c>Add*Tool</c> extension methods on <see cref="AzureCognitiveServicesProjectResource"/>.
 /// </remarks>
-public abstract class FoundryToolResource : Resource, IFoundryToolResource
+public abstract class FoundryToolResource : Resource, IFoundryTool
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FoundryToolResource"/> class.

@@ -26,7 +26,7 @@ namespace Aspire.Hosting.Foundry;
 [AspireExport(ExposeProperties = true)]
 public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWithEnvironment, IResourceWithConnectionString
 {
-    private readonly List<IFoundryTool> _tools = [];
+    private readonly List<FoundryToolResource> _tools = [];
 
     /// <summary>
     /// Creates a new instance of the <see cref="AzurePromptAgentResource"/> class.
@@ -112,17 +112,30 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
     public StaticValueProvider<string> Version { get; } = new();
 
     /// <summary>
-    /// Gets the list of tools attached to this agent.
+    /// Gets the list of tool resources attached to this agent.
     /// </summary>
-    public IReadOnlyList<IFoundryTool> Tools => _tools;
+    public IReadOnlyList<FoundryToolResource> Tools => _tools;
 
     /// <summary>
-    /// Adds a tool to this prompt agent.
+    /// Gets the list of custom tool implementations (escape hatch for advanced scenarios).
     /// </summary>
-    /// <param name="tool">The tool to add.</param>
-    internal void AddTool(IFoundryTool tool)
+    internal List<IFoundryTool> CustomTools { get; } = [];
+
+    /// <summary>
+    /// Adds a tool resource to this prompt agent.
+    /// </summary>
+    /// <param name="tool">The tool resource to add.</param>
+    internal void AddTool(FoundryToolResource tool)
     {
         ArgumentNullException.ThrowIfNull(tool);
+
+        if (tool.Project != Project)
+        {
+            throw new InvalidOperationException(
+                $"Tool '{tool.Name}' belongs to project '{tool.Project.Name}' but agent '{Name}' " +
+                $"belongs to project '{Project.Name}'. All tools must belong to the same project as the agent.");
+        }
+
         _tools.Add(tool);
     }
 
@@ -191,6 +204,12 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
         foreach (var tool in _tools)
         {
             var agentTool = await tool.ToAgentToolAsync(context, context.CancellationToken).ConfigureAwait(false);
+            config.Tools.Add(agentTool);
+        }
+
+        foreach (var customTool in CustomTools)
+        {
+            var agentTool = await customTool.ToAgentToolAsync(context, context.CancellationToken).ConfigureAwait(false);
             config.Tools.Add(agentTool);
         }
 
