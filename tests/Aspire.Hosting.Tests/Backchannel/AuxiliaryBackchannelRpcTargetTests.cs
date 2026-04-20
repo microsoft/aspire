@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,22 +12,6 @@ namespace Aspire.Hosting.Backchannel;
 [Trait("Partition", "4")]
 public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task GetResourceSnapshotsAsync_ReturnsEmptyList_WhenAppModelIsNull()
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton(ResourceNotificationServiceTestHelpers.Create());
-        var serviceProvider = services.BuildServiceProvider();
-
-        var target = new AuxiliaryBackchannelRpcTarget(
-            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
-            serviceProvider);
-
-        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
-
-        Assert.Empty(result);
-    }
-
     [Fact]
     public async Task GetResourceSnapshotsAsync_EnumeratesResources()
     {

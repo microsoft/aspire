@@ -550,14 +550,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>A list of resource snapshots.</returns>
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
     {
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
         var results = new List<ResourceSnapshot>();
-
-        if (appModel is null)
-        {
-            return results;
-        }
 
         // Get current state for each resource directly using TryGetCurrentState
         foreach (var resource in appModel.Resources)
@@ -847,11 +842,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
 
-        var appModel = serviceProvider.GetService<DistributedApplicationModel>();
-        if (appModel is null)
-        {
-            throw new InvalidOperationException("Application model not found.");
-        }
+        var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
 
         var resource = appModel.Resources
             .OfType<IResourceWithEndpoints>()
