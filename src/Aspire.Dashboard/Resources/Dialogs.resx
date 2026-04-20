@@ -322,6 +322,12 @@
   <data name="InteractionButtonClose" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="InteractionFileChooserPlaceholder" xml:space="preserve">
+    <value>Choose a file...</value>
+  </data>
+  <data name="InteractionFileChooserBrowse" xml:space="preserve">
+    <value>Browse</value>
+  </data>
   <data name="GenAIPreviousButtonText" xml:space="preserve">
     <value>Previous</value>
   </data>

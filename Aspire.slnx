@@ -198,6 +198,9 @@
   <Folder Name="/playground/CustomResources/">
     <Project Path="playground/CustomResources/CustomResources.AppHost/CustomResources.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/Interactions/">
+    <Project Path="playground/Interactions/Interactions.AppHost/Interactions.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/DotnetTool/">
     <Project Path="playground/DotnetTool/DotnetTool.AppHost/DotnetTool.AppHost.csproj" />
   </Folder>

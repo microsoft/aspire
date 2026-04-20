@@ -951,6 +951,12 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
+            InputType.FileChooser => await InteractionService.PromptForStringAsync(
+                promptText,
+                defaultValue: input.Value?.EscapeMarkup(),
+                required: input.Required,
+                cancellationToken: cancellationToken),
+
             _ => await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken)
         };
     }

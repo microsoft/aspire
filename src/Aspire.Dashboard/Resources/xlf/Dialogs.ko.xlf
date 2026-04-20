@@ -397,6 +397,16 @@
         <target state="translated">확인</target>
         <note />
       </trans-unit>
+      <trans-unit id="InteractionFileChooserBrowse">
+        <source>Browse</source>
+        <target state="new">Browse</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFileChooserPlaceholder">
+        <source>Choose a file...</source>
+        <target state="new">Choose a file...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
         <source>Manage logs and telemetry</source>
         <target state="translated">로그 및 원격 분석 관리</target>

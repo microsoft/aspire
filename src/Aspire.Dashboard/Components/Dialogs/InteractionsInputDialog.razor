@@ -159,6 +159,35 @@
                                                    aria-describedby="@input.DescriptionId" />
                             </InteractionInputField>
                             break;
+                        case InputType.FileChooser:
+                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                                                   InputViewModel="@localItem"
+                                                   MarkdownProcessor="@_markdownProcessor"
+                                                   Context="input">
+                                <div class="file-chooser-container">
+                                    <FluentTextField @ref="@_elementRefs[input.ViewModel]"
+                                                     @bind-Value="input.ViewModel.FileDisplayName"
+                                                     Placeholder="@(input.ViewModel.Input.Placeholder ?? Loc[nameof(Dialogs.InteractionFileChooserPlaceholder)])"
+                                                     Required="input.ViewModel.Input.Required"
+                                                     ReadOnly="true"
+                                                     Disabled="input.ViewModel.InputDisabled"
+                                                     aria-describedby="@input.DescriptionId" />
+                                    <FluentInputFile AnchorId="@($"file-chooser-{input.ViewModel.Input.Name}")"
+                                                     DragDropZoneVisible="false"
+                                                     Multiple="false"
+                                                     Mode="InputFileMode.Stream"
+                                                     OnCompleted="@(e => OnFileSelected(e, input.ViewModel))"
+                                                     Disabled="input.ViewModel.InputDisabled" />
+                                    <FluentButton Id="@($"file-chooser-{input.ViewModel.Input.Name}")"
+                                                  IconStart="@(new Icons.Regular.Size16.FolderOpen())"
+                                                  Appearance="Appearance.Outline"
+                                                  Disabled="input.ViewModel.InputDisabled"
+                                                  Title="@Loc[nameof(Dialogs.InteractionFileChooserBrowse)]">
+                                        @Loc[nameof(Dialogs.InteractionFileChooserBrowse)]
+                                    </FluentButton>
+                                </div>
+                            </InteractionInputField>
+                            break;
                         default:
                             @* Ignore unexpected InputTypes *@
                             break;

@@ -1078,6 +1078,112 @@ public class InteractionServiceTests
             new ServiceCollection().BuildServiceProvider(),
             configuration);
     }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileChooserWithValue_PassesValidation()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = true };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", "file-content-here", InputType.FileChooser)]);
+
+        Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+        Assert.Empty(input.ValidationErrors);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileChooserRequiredEmpty_ReturnErrors()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = true };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", string.Empty, InputType.FileChooser)]);
+
+        // The interaction should still be in progress due to required field being empty
+        Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+
+        Assert.Collection(input.ValidationErrors,
+            error => Assert.Equal("Value is required.", error));
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileChooserOptionalEmpty_PassesValidation()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = false };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", string.Empty, InputType.FileChooser)]);
+
+        Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+        Assert.Empty(input.ValidationErrors);
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_RejectsInvalidValues()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            MaxFileSize = 0
+        });
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            MaxFileSize = -1
+        });
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_AcceptsValidValues()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            MaxFileSize = 1024 * 1024
+        };
+
+        Assert.Equal(1024 * 1024, input.MaxFileSize);
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_DefaultsToNull()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser
+        };
+
+        Assert.Null(input.MaxFileSize);
+    }
 }
 
 #pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

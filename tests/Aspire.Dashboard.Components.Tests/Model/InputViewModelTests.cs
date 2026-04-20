@@ -178,4 +178,67 @@ public class InputViewModelTests
         // Assert - When AllowCustomChoice is true, value should not default
         Assert.True(string.IsNullOrEmpty(viewModel.Value));
     }
+
+    [Fact]
+    public void InputViewModel_FileChooser_DefaultsToEmptyValue()
+    {
+        // Arrange
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.FileChooser
+        };
+
+        // Act
+        var viewModel = new InputViewModel(input);
+
+        // Assert
+        Assert.True(string.IsNullOrEmpty(viewModel.Value));
+        Assert.Null(viewModel.FileDisplayName);
+    }
+
+    [Fact]
+    public void InputViewModel_FileChooser_FileDisplayNameIsIndependentOfValue()
+    {
+        // Arrange
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.FileChooser
+        };
+        var viewModel = new InputViewModel(input);
+
+        // Act
+        viewModel.Value = "file-content-here";
+        viewModel.FileDisplayName = "readme.txt";
+
+        // Assert
+        Assert.Equal("file-content-here", viewModel.Value);
+        Assert.Equal("readme.txt", viewModel.FileDisplayName);
+    }
+
+    [Fact]
+    public void InputViewModel_FileChooser_SetInputResetsFileDisplayName()
+    {
+        // Arrange
+        var initialInput = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.FileChooser
+        };
+        var viewModel = new InputViewModel(initialInput);
+        viewModel.FileDisplayName = "old-file.txt";
+
+        var newInput = new InteractionInput
+        {
+            Label = "Select Another File",
+            InputType = InputType.FileChooser
+        };
+
+        // Act
+        viewModel.SetInput(newInput);
+
+        // Assert - FileDisplayName is not managed by SetInput, so it retains its value
+        Assert.Equal("old-file.txt", viewModel.FileDisplayName);
+    }
 }
