@@ -391,8 +391,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 // Write each of the certificate, key, and PFX assets to the temp folder
                 File.WriteAllBytes(Path.Join(baseServerAuthOutputPath, $"{thumbprint}.key"), keyBytes);
 
-                Array.Clear(keyBytes, 0, keyBytes.Length);
                 Array.Clear(keyPem, 0, keyPem.Length);
+                Array.Clear(keyBytes, 0, keyBytes.Length);
             }
 
             if (pfxBytes is not null)
