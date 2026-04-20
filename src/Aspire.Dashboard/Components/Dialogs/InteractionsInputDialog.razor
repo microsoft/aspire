@@ -90,7 +90,7 @@
                                 *@
                                 @if (!localItem.Input.AllowCustomChoice)
                                 {
-                                    <FluentSelect @key="input.ViewModel.ChoiceVersion"
+                                    <FluentSelect @key="input.ViewModel.InputKey"
                                                   TOption="SelectViewModel<string>"
                                                   @ref="@_elementRefs[input.ViewModel]"
                                                   @bind-Value="input.ViewModel.Value"
@@ -108,7 +108,7 @@
                                 }
                                 else
                                 {
-                                    <FluentCombobox @key="input.ViewModel.ChoiceVersion"
+                                    <FluentCombobox @key="input.ViewModel.InputKey"
                                                     TOption="SelectViewModel<string>"
                                                     @ref="@_elementRefs[input.ViewModel]"
                                                     @bind-Value="input.ViewModel.Value"

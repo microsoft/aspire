@@ -180,7 +180,7 @@ public class InputViewModelTests
     }
 
     [Fact]
-    public void OptionsVersion_IncrementedWhenOptionsChange()
+    public void ChoiceVersion_IncrementedWhenOptionsChange()
     {
         var input = new InteractionInput
         {
@@ -208,7 +208,7 @@ public class InputViewModelTests
     }
 
     [Fact]
-    public void OptionsVersion_NotIncrementedForNonChoiceInput()
+    public void ChoiceVersion_NotIncrementedForNonChoiceInput()
     {
         var input = new InteractionInput
         {

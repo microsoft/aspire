@@ -671,8 +671,8 @@ internal static class InteractionCommands
 
                             context.Input.Options = [
                                 KeyValuePair.Create("rg-aspire-dev", "rg-aspire-dev"),
-                               KeyValuePair.Create("rg-myapp-prod", "rg-myapp-prod"),
-                               KeyValuePair.Create("rg-shared-services", "rg-shared-services")
+                                KeyValuePair.Create("rg-myapp-prod", "rg-myapp-prod"),
+                                KeyValuePair.Create("rg-shared-services", "rg-shared-services")
                             ];
                             context.Input.Disabled = false;
 

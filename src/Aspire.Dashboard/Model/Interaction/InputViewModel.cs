@@ -63,11 +63,17 @@ public sealed class InputViewModel
     public List<SelectViewModel<string>> SelectOptions { get; private set; } = [];
 
     /// <summary>
-    /// Incremented each time <see cref="SelectOptions"/> is rebuilt. Used as a <c>@key</c>
-    /// on FluentSelect so Blazor recreates the component when options change, avoiding a
-    /// race where the web component clears the bound value during an options refresh.
+    /// Incremented each time <see cref="SelectOptions"/> is rebuilt so Blazor
+    /// recreates the choice input component when options change, avoiding a race
+    /// where the web component clears the bound value during an options refresh.
     /// </summary>
     public int ChoiceVersion { get; private set; }
+
+    /// <summary>
+    /// A key unique per input that changes when <see cref="ChoiceVersion"/> changes.
+    /// Used as a Blazor <c>@key</c> on FluentSelect / FluentCombobox.
+    /// </summary>
+    public string InputKey => $"{Input.Name}_{ChoiceVersion}";
 
     public IEnumerable<SelectViewModel<string>> FilteredOptions()
     {
