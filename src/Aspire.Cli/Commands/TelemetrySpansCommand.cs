@@ -93,7 +93,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -153,8 +153,8 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch spans from Dashboard API");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
             return ExitCodeConstants.DashboardFailure;
         }
     }

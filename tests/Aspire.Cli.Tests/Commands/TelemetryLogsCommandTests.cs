@@ -443,6 +443,36 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task TelemetryLogsCommand_WithLoginUrl_ConnectionRefused_DisplaysConnectionFailedMessage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            throw new HttpRequestException("Connection refused");
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel logs --dashboard-url http://localhost:18888/login?t=sometoken");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, "http://localhost:18888"), errorMessage);
+    }
+
+    [Fact]
     public async Task TelemetryLogsCommand_WithDashboardUrl_ResourcesEndpoint404_DisplaysApiNotEnabledMessage()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -493,6 +523,13 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         {
             capturedBaseUrl ??= request.RequestUri!.GetLeftPart(UriPartial.Authority);
             var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/validateToken"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"apiKey":"test-key"}""", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
             if (url.Contains("/api/telemetry/resources"))
             {
                 return new HttpResponseMessage(HttpStatusCode.OK)

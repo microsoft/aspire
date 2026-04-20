@@ -3,7 +3,6 @@
 
 using System.Security.Claims;
 using System.Text.Encodings.Web;
-using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Configuration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
@@ -86,51 +85,13 @@ public sealed class ApiAuthenticationHandler(
 
                 return AuthenticateResult.Fail("Authentication failed.");
             }
-
-            // API key header not provided - fall through to frontend auth for browser access
-        }
-
-        // Try frontend authentication (for browser-based access)
-        var frontendResult = await Context.AuthenticateAsync(FrontendCompositeAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
-        if (frontendResult.Succeeded)
-        {
-            return frontendResult;
-        }
-
-        // Return frontend failure if present
-        if (frontendResult.Failure is not null)
-        {
-            return frontendResult;
+            else
+            {
+                return AuthenticateResult.Fail($"API key from '{ApiKeyHeaderName}' header is missing.");
+            }
         }
 
         return AuthenticateResult.NoResult();
-    }
-
-    protected override Task HandleChallengeAsync(AuthenticationProperties properties)
-    {
-        // If an API key was provided (but was wrong), return 401 instead of redirecting
-        if (Context.Request.Headers.ContainsKey(ApiKeyHeaderName))
-        {
-            Context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-            return Task.CompletedTask;
-        }
-
-        // For browser-based access without API key, redirect to login
-        var frontendAuthMode = dashboardOptions.CurrentValue.Frontend.AuthMode;
-        var scheme = frontendAuthMode switch
-        {
-            FrontendAuthMode.OpenIdConnect => FrontendAuthenticationDefaults.AuthenticationSchemeOpenIdConnect,
-            FrontendAuthMode.BrowserToken => FrontendAuthenticationDefaults.AuthenticationSchemeBrowserToken,
-            _ => null
-        };
-
-        if (scheme != null)
-        {
-            return Context.ChallengeAsync(scheme);
-        }
-
-        Context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-        return Task.CompletedTask;
     }
 
     public const string AuthenticationScheme = "Api";

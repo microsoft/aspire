@@ -265,6 +265,12 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
                     Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
                 };
             }
+            // The validateToken probe (POST) is used to distinguish "API not enabled" from "auth required".
+            // Return 404 to indicate the API is not enabled.
+            if (url.Contains("/api/telemetry/validateToken"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
             if (url.Contains("/api/telemetry/"))
             {
                 if (statusCode is null)
@@ -321,11 +327,12 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
             factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
 
-        Assert.Equal("test-api-key-123", result);
+        Assert.True(result.Success);
+        Assert.Equal("test-api-key-123", result.ApiKey);
     }
 
     [Fact]
-    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNull_WhenApiKeyIsNull()
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNullApiKey_WhenApiKeyIsNull()
     {
         var response = new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -337,11 +344,12 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
             factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.True(result.Success);
+        Assert.Null(result.ApiKey);
     }
 
     [Fact]
-    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNull_WhenUnauthorized()
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsFailed_WhenUnauthorized()
     {
         var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
         using var handler = new MockHttpMessageHandler(response);
@@ -350,11 +358,11 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
             factory, "http://localhost:18888", "wrong-token", NullLogger.Instance, CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.False(result.Success);
     }
 
     [Fact]
-    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNull_WhenNotFound()
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsFailed_WhenNotFound()
     {
         var response = new HttpResponseMessage(HttpStatusCode.NotFound);
         using var handler = new MockHttpMessageHandler(response);
@@ -363,11 +371,11 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
             factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.False(result.Success);
     }
 
     [Fact]
-    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNull_WhenConnectionFails()
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsConnectionError_WhenConnectionFails()
     {
         using var handler = new MockHttpMessageHandler(new HttpRequestException("Connection refused"));
         var factory = new MockHttpClientFactory(handler);
@@ -375,7 +383,8 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
             factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
 
-        Assert.Null(result);
+        Assert.False(result.Success);
+        Assert.True(result.ConnectionFailed);
     }
 
     [Fact]
@@ -395,7 +404,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
             factory, "http://localhost:18888", "my-token", NullLogger.Instance, CancellationToken.None);
 
-        Assert.Equal("\"my-token\"", capturedBody);
+        Assert.Equal("""{"token":"my-token"}""", capturedBody);
     }
 
     [Fact]

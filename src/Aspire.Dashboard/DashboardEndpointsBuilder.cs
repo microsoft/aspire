@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Serialization;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
@@ -27,9 +26,9 @@ public static class DashboardEndpointsBuilder
         IEndpointConventionBuilder builder;
         if (dashboardOptions.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
         {
-            builder = endpoints.MapPost("/api/validatetoken", async (string token, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions) =>
+            builder = endpoints.MapPost("/api/validatetoken", async ([FromBody] ValidateTokenRequest request, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions) =>
             {
-                return await ValidateTokenMiddleware.TryAuthenticateAsync(token, httpContext, dashboardOptions).ConfigureAwait(false);
+                return await ValidateTokenMiddleware.TryAuthenticateAsync(request.Token, httpContext, dashboardOptions).ConfigureAwait(false);
             });
 
 #if DEBUG
@@ -110,7 +109,7 @@ public static class DashboardEndpointsBuilder
         // POST /api/telemetry/validateToken - Exchange a browser token for the telemetry API key.
         // Returns the API key if the token is valid and the API uses key-based auth, or null if unsecured.
         // Returns 401 if the token is invalid, 404 if the telemetry API is not enabled.
-        group.MapPost("/validateToken", (string token, IOptionsMonitor<DashboardOptions> optionsMonitor) =>
+        group.MapPost("/validateToken", ([FromBody] TelemetryValidateTokenRequest request, IOptionsMonitor<DashboardOptions> optionsMonitor) =>
         {
             var currentOptions = optionsMonitor.CurrentValue;
 
@@ -121,7 +120,7 @@ public static class DashboardEndpointsBuilder
             }
 
             var expectedBrowserTokenBytes = currentOptions.Frontend.GetBrowserTokenBytes();
-            if (expectedBrowserTokenBytes is null || !CompareHelpers.CompareKey(expectedBrowserTokenBytes, token))
+            if (expectedBrowserTokenBytes is null || !CompareHelpers.CompareKey(expectedBrowserTokenBytes, request.Token))
             {
                 return Results.Unauthorized();
             }
@@ -131,7 +130,7 @@ public static class DashboardEndpointsBuilder
                 ? currentOptions.Api.PrimaryApiKey
                 : null;
 
-            return Results.Json(new TelemetryApiKeyResponse(apiKey), TelemetryApiKeyJsonContext.Default.TelemetryApiKeyResponse);
+            return Results.Json(new TelemetryValidateTokenResponse(apiKey), OtlpJsonSerializerContext.Default.TelemetryValidateTokenResponse);
         }).AllowAnonymous();
 
         // GET /api/telemetry/resources - List resources that have telemetry data
@@ -269,12 +268,5 @@ public static class DashboardEndpointsBuilder
     }
 }
 
-/// <summary>
-/// Response from the <c>POST /api/telemetry/validateToken</c> endpoint.
-/// </summary>
-/// <param name="ApiKey">The API key to use for telemetry API access, or <c>null</c> when the API is unsecured.</param>
-internal sealed record TelemetryApiKeyResponse(string? ApiKey);
-
-[JsonSerializable(typeof(TelemetryApiKeyResponse))]
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
-internal sealed partial class TelemetryApiKeyJsonContext : JsonSerializerContext;
+/// <param name="Token">The browser token to validate.</param>
+internal sealed record ValidateTokenRequest(string Token);
