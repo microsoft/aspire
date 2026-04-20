@@ -397,67 +397,6 @@ internal static class KubernetesDeployTestHelpers
         await auto.WaitForAnyPromptAsync(counter);
     }
 
-    private static async Task HandleAspireAddVersionSelectionAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
-    {
-        var versionPromptSearcher = new CellPatternSearcher().Find("(based on NuGet.config)");
-        var successPromptSearcher = new CellPatternSearcher()
-            .FindPattern(counter.Value.ToString())
-            .RightText(" OK] $ ");
-        var errorPromptSearcher = new CellPatternSearcher()
-            .FindPattern(counter.Value.ToString())
-            .RightText(" ERR:");
-
-        var showedVersionPrompt = false;
-        var sawSuccessPrompt = false;
-        var sawErrorPrompt = false;
-
-        await auto.WaitUntilAsync(
-            snapshot =>
-            {
-                if (versionPromptSearcher.Search(snapshot).Count > 0)
-                {
-                    showedVersionPrompt = true;
-                    return true;
-                }
-
-                if (successPromptSearcher.Search(snapshot).Count > 0)
-                {
-                    sawSuccessPrompt = true;
-                    return true;
-                }
-
-                if (errorPromptSearcher.Search(snapshot).Count > 0)
-                {
-                    sawErrorPrompt = true;
-                    return true;
-                }
-
-                return false;
-            },
-            timeout: TimeSpan.FromSeconds(180),
-            description: $"aspire add version prompt or completion [{counter.Value} OK/ERR] $");
-
-        if (showedVersionPrompt)
-        {
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
-            return;
-        }
-
-        if (sawErrorPrompt)
-        {
-            throw new InvalidOperationException(
-                $"aspire add exited with a non-zero code before prompting for version selection (sequence {counter.Value}).");
-        }
-
-        if (sawSuccessPrompt)
-        {
-            counter.Increment();
-        }
-    }
-
     /// <summary>
     /// Cleans up a KinD cluster and registry (best-effort, in-terminal).
     /// </summary>
