@@ -390,6 +390,20 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsOther_WhenUnexpectedStatusCode()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(TokenExchangeFailureKind.Other, result.FailureKind);
+    }
+
+    [Fact]
     public async Task ExchangeLoginTokenForApiKeyAsync_SendsTokenAsJsonBody()
     {
         string? capturedBody = null;
