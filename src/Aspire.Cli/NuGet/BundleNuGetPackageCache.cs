@@ -132,7 +132,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
                     : string.Empty;
 
                 var cliVersion = VersionHelper.GetDefaultTemplateVersion();
-                cacheKey = $"bundle|query={query}|prerelease={prerelease}|nugetConfigHash={nugetConfigHash}|cliVersion={cliVersion}";
+                cacheKey = $"bundle|query={query}|prerelease={prerelease}|workingDir={workingDirectory.FullName}|nugetConfigHash={nugetConfigHash}|cliVersion={cliVersion}";
 
                 var cached = await _diskCache.GetAsync(cacheKey, cancellationToken).ConfigureAwait(false);
                 if (cached is not null)
