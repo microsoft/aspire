@@ -44,18 +44,30 @@ public sealed class InputViewModel
                 .Select(option => new SelectViewModel<string> { Id = option.Key, Name = option.Value, })
                 .ToList();
 
-            SelectOptions = optionsVM;
-
-            // Default to the first option if no placeholder is set, the value is empty, and custom choice is disabled.
-            // This is done so the input model value matches frontend behavior (FluentSelect defaults to the first option)
-            if (string.IsNullOrEmpty(input.Placeholder) && string.IsNullOrEmpty(input.Value) && optionsVM.Count > 0 && !input.AllowCustomChoice)
+            // Only update the options if they have changed to avoid unnecessarily recreating the FluentSelect component.
+            if (!OptionsEqual(SelectOptions, optionsVM))
             {
-                input.Value = optionsVM[0].Id;
+                SelectOptions = optionsVM;
+                ChoiceVersion++;
+
+                // Default to the first option if no placeholder is set, the value is empty, and custom choice is disabled.
+                // This is done so the input model value matches frontend behavior (FluentSelect defaults to the first option)
+                if (string.IsNullOrEmpty(input.Placeholder) && string.IsNullOrEmpty(input.Value) && optionsVM.Count > 0 && !input.AllowCustomChoice)
+                {
+                    input.Value = optionsVM[0].Id;
+                }
             }
         }
     }
 
     public List<SelectViewModel<string>> SelectOptions { get; private set; } = [];
+
+    /// <summary>
+    /// Incremented each time <see cref="SelectOptions"/> is rebuilt. Used as a <c>@key</c>
+    /// on FluentSelect so Blazor recreates the component when options change, avoiding a
+    /// race where the web component clears the bound value during an options refresh.
+    /// </summary>
+    public int ChoiceVersion { get; private set; }
 
     public IEnumerable<SelectViewModel<string>> FilteredOptions()
     {
@@ -101,4 +113,22 @@ public sealed class InputViewModel
 
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
+
+    private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
+    {
+        if (existing.Count != incoming.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < existing.Count; i++)
+        {
+            if (existing[i].Id != incoming[i].Id || existing[i].Name != incoming[i].Name)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }
