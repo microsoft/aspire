@@ -1,7 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <CliRuntime>osx-x64</CliRuntime>
-  </PropertyGroup>
-
-  <Import Project="Common.projitems" />
-</Project>

@@ -1,7 +1,0 @@
-<Project>
-  <PropertyGroup>
-    <CliRuntime>win-arm64</CliRuntime>
-  </PropertyGroup>
-
-  <Import Project="Common.projitems" />
-</Project>
