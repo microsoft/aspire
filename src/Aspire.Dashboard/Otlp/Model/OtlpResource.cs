@@ -160,7 +160,7 @@ public class OtlpResource : IOtlpResource
                     try
                     {
                         instrument.FindScope(d.Attributes, ref tempAttributes).AddPointValue(d, Context);
-                        UpdateMaxTimestamp(OtlpHelpers.UnixNanoSecondsToDateTime(d.TimeUnixNano), ref maxTimestamp);
+                        UpdateMaxTimestamp(d.TimeUnixNano, ref maxTimestamp);
                         context.SuccessCount++;
                     }
                     catch (Exception ex)
@@ -176,7 +176,7 @@ public class OtlpResource : IOtlpResource
                     try
                     {
                         instrument.FindScope(d.Attributes, ref tempAttributes).AddPointValue(d, Context);
-                        UpdateMaxTimestamp(OtlpHelpers.UnixNanoSecondsToDateTime(d.TimeUnixNano), ref maxTimestamp);
+                        UpdateMaxTimestamp(d.TimeUnixNano, ref maxTimestamp);
                         context.SuccessCount++;
                     }
                     catch (Exception ex)
@@ -192,7 +192,7 @@ public class OtlpResource : IOtlpResource
                     try
                     {
                         instrument.FindScope(d.Attributes, ref tempAttributes).AddHistogramValue(d, Context);
-                        UpdateMaxTimestamp(OtlpHelpers.UnixNanoSecondsToDateTime(d.TimeUnixNano), ref maxTimestamp);
+                        UpdateMaxTimestamp(d.TimeUnixNano, ref maxTimestamp);
                         context.SuccessCount++;
                     }
                     catch (Exception ex)
@@ -214,8 +214,14 @@ public class OtlpResource : IOtlpResource
 
         return maxTimestamp;
 
-        static void UpdateMaxTimestamp(DateTime candidate, ref DateTime? max)
+        static void UpdateMaxTimestamp(ulong timeUnixNano, ref DateTime? max)
         {
+            if (timeUnixNano == 0)
+            {
+                return;
+            }
+
+            var candidate = OtlpHelpers.UnixNanoSecondsToDateTime(timeUnixNano);
             if (max is null || candidate > max.Value)
             {
                 max = candidate;

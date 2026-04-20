@@ -865,15 +865,15 @@ public sealed partial class TelemetryRepository : IDisposable
                     _latestTraceTimestamps.TryRemove(resource.ResourceKey, out _);
                 }
             }
+
+            if (resources is null || resources.Count == 0)
+            {
+                _latestTraceTimestamps.Clear();
+            }
         }
         finally
         {
             _tracesLock.ExitWriteLock();
-        }
-
-        if (resources is null || resources.Count == 0)
-        {
-            _latestTraceTimestamps.Clear();
         }
 
         RaiseSubscriptionChanged(_tracesSubscriptions);
@@ -915,15 +915,15 @@ public sealed partial class TelemetryRepository : IDisposable
                     _latestLogTimestamps.TryRemove(resource.ResourceKey, out _);
                 }
             }
+
+            if (resources is null || resources.Count == 0)
+            {
+                _latestLogTimestamps.Clear();
+            }
         }
         finally
         {
             _logsLock.ExitWriteLock();
-        }
-
-        if (resources is null || resources.Count == 0)
-        {
-            _latestLogTimestamps.Clear();
         }
 
         RaiseSubscriptionChanged(_logSubscriptions);
