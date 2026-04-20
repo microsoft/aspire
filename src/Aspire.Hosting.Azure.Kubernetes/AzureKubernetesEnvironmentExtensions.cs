@@ -387,7 +387,6 @@ public static class AzureKubernetesEnvironmentExtensions
 
         // Create the AKS managed cluster
         var aks = new ContainerServiceManagedCluster(aksResource.GetBicepIdentifier())
-
         {
             ClusterIdentity = new ManagedClusterIdentity
             {
