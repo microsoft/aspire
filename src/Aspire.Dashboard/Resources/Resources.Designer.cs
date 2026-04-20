@@ -124,7 +124,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0} &quot;{1}&quot; failed.
+        ///   Looks up a localized string similar to &quot;{0}&quot; failed.
         /// </summary>
         public static string ResourceCommandFailed {
             get {
@@ -133,7 +133,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0} &quot;{1}&quot; starting.
+        ///   Looks up a localized string similar to &quot;{0}&quot; starting.
         /// </summary>
         public static string ResourceCommandStarting {
             get {
@@ -142,7 +142,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to {0} &quot;{1}&quot; succeeded.
+        ///   Looks up a localized string similar to &quot;{0}&quot; succeeded.
         /// </summary>
         public static string ResourceCommandSuccess {
             get {
@@ -156,6 +156,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceCommandToastViewLogs {
             get {
                 return ResourceManager.GetString("ResourceCommandToastViewLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to View response.
+        /// </summary>
+        public static string ResourceCommandViewResponse {
+            get {
+                return ResourceManager.GetString("ResourceCommandViewResponse", resourceCulture);
             }
         }
         

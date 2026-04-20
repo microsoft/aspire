@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.repository_owner == 'microsoft' }}
     outputs:
-      runsheet: ${{ steps.generate_tests_matrix.outputs.runsheet }}
+      runsheet: ${{ steps.inject_properties.outputs.runsheet }}
       requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
       requiresCliArchive: ${{ steps.check_cli_archive.outputs.requiresCliArchive }}
     steps:
@@ -59,7 +59,7 @@ jobs:
           /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/BeforeBuildProps.props
 
       - name: Generate test runsheet
-        id: generate_tests_matrix
+        id: generate_tests_matrix_raw
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: >
@@ -74,11 +74,22 @@ jobs:
           /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/BeforeBuildProps.props
           /bl:${{ github.workspace }}/artifacts/log/Release/runsheet.binlog
 
+      - name: Inject enablePlaywrightInstall into runsheet properties
+        id: inject_properties
+        run: |
+          RUNSHEET='${{ steps.generate_tests_matrix_raw.outputs.runsheet }}'
+          if [ "$RUNSHEET" = "[]" ] || [ -z "$RUNSHEET" ]; then
+            echo "runsheet=[]" >> $GITHUB_OUTPUT
+          else
+            UPDATED=$(echo "$RUNSHEET" | jq -c --argjson epw ${{ inputs.enablePlaywrightInstall }} '[.[] | .properties.enablePlaywrightInstall = $epw]')
+            echo "runsheet=$UPDATED" >> $GITHUB_OUTPUT
+          fi
+
       - name: Check if any test requires NuGets
         id: check_nugets
         run: |
-          RUNSHEET='${{ steps.generate_tests_matrix.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .requiresNugets == true)' > /dev/null 2>&1; then
+          RUNSHEET='${{ steps.inject_properties.outputs.runsheet }}'
+          if echo "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresNugets == true)' > /dev/null 2>&1; then
             echo "requiresNugets=true" >> $GITHUB_OUTPUT
           else
             echo "requiresNugets=false" >> $GITHUB_OUTPUT
@@ -87,8 +98,8 @@ jobs:
       - name: Check if any test requires CLI archives
         id: check_cli_archive
         run: |
-          RUNSHEET='${{ steps.generate_tests_matrix.outputs.runsheet }}'
-          if echo "$RUNSHEET" | jq -e 'any(.[]; .requiresCliArchive == true)' > /dev/null 2>&1; then
+          RUNSHEET='${{ steps.inject_properties.outputs.runsheet }}'
+          if echo "$RUNSHEET" | jq -e 'any(.[]; .properties.requiresCliArchive == true)' > /dev/null 2>&1; then
             echo "requiresCliArchive=true" >> $GITHUB_OUTPUT
           else
             echo "requiresCliArchive=false" >> $GITHUB_OUTPUT
@@ -129,13 +140,12 @@ jobs:
     uses: ./.github/workflows/run-tests.yml
     with:
       testShortName: ${{ matrix.tests.project }}
-      requiresNugets: ${{ matrix.tests.requiresNugets == true }}
-      requiresTestSdk: ${{ matrix.tests.requiresTestSdk == true }}
+      properties: ${{ toJson(matrix.tests.properties) }}
       os: ${{ matrix.tests.os }}
-      enablePlaywrightInstall: ${{ inputs.enablePlaywrightInstall }}
+      testSessionTimeout: ${{ matrix.tests.testSessionTimeout }}
+      testHangTimeout: ${{ matrix.tests.testHangTimeout }}
       extraTestArgs: ${{ inputs.extraTestArgs }}
       ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
-      requiresCliArchive: ${{ matrix.tests.requiresCliArchive == true }}
 
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}

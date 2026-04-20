@@ -180,6 +180,8 @@ public static class AzureWebPubSubExtensions
         // Use the resource name as the hub name if it's not provided
         hubName ??= name;
 
+        ModelName.ValidateName(nameof(Resource), name);
+
         AzureWebPubSubHubResource? hubResource;
         if (!builder.Resource.Hubs.TryGetValue(hubName, out hubResource))
         {

@@ -1,15 +1,20 @@
----
-apiVersion: "keda.sh/v1alpha1"
-kind: "ScaledObject"
+﻿---
+apiVersion: "v1"
+kind: "Service"
 metadata:
-  name: "myapp-scaler"
+  name: "myapp-service"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
-  scaleTargetRef:
-    name: "myapp-rollout"
-    kind: "Rollout"
-  minReplicaCount: 1
-  maxReplicaCount: 3
+  type: "ClusterIP"
+  selector:
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "myapp"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+  ports:
+    - name: "http"
+      protocol: "TCP"
+      port: 8080
+      targetPort: 8080

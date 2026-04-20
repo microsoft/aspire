@@ -842,6 +842,7 @@ public class ProjectResourceTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
         builder.Services.AddSingleton<IContainerRuntime, FakeContainerRuntime>();
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         // Create a test container resource that implements IResourceWithContainerFiles
@@ -928,6 +929,21 @@ public class ProjectResourceTests
         var annotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void AddProjectCreatesRebuilderWithNameValidationPolicyAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.AddProject<TestProject>("projectName", options => { options.ExcludeLaunchProfile = true; });
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var rebuilder = appModel.Resources.OfType<ProjectRebuilderResource>().SingleOrDefault();
+        Assert.NotNull(rebuilder);
+        Assert.True(rebuilder.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     internal static IDistributedApplicationBuilder CreateBuilder(string[]? args = null, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)

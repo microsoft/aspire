@@ -198,7 +198,7 @@ public class TelemetryApiTests
         using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
 
         // Act - test query parameters without resource filter (no resources exist in test)
-        var response = await httpClient.GetAsync("/api/telemetry/spans?hasError=true&limit=50").DefaultTimeout();
+        var response = await httpClient.GetAsync($"/api/telemetry/spans?hasError=true&limit={int.MaxValue}").DefaultTimeout();
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -238,7 +238,7 @@ public class TelemetryApiTests
         using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
 
         // Act - test query parameters without resource filter (no resources exist in test)
-        var response = await httpClient.GetAsync("/api/telemetry/logs?severity=Error&limit=50").DefaultTimeout();
+        var response = await httpClient.GetAsync($"/api/telemetry/logs?severity=Error&limit={int.MaxValue}").DefaultTimeout();
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

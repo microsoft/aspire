@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
@@ -26,7 +26,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         Assert.False(result.Success);
-        Assert.Equal("Resource 'NotFoundResourceId' not found.", result.ErrorMessage);
+        Assert.Equal("Resource 'NotFoundResourceId' not found.", result.Message);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         Assert.False(result.Success);
-        Assert.Equal("Resource 'myResource' not found.", result.ErrorMessage);
+        Assert.Equal("Resource 'myResource' not found.", result.Message);
     }
 
     [Fact]
@@ -68,7 +68,48 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         Assert.False(result.Success);
-        Assert.Equal("Command 'NotFound' not available for resource 'myResource'.", result.ErrorMessage);
+        Assert.Equal("Command 'NotFound' not available for resource 'myResource'.", result.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_NoMatchingCommand_SingleInstance_MessageUsesDisplayName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myResource-abcdwxyz", "abcdwxyz", 0)
+            ]));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "NotFound");
+
+        Assert.False(result.Success);
+        Assert.Equal("Command 'NotFound' not available for resource 'myResource'.", result.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_NoMatchingCommand_HasReplicas_MessageUsesResourceId()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithAnnotation(new DcpInstancesAnnotation([
+            new DcpInstance("myResource-abcdwxyz", "abcdwxyz", 0),
+            new DcpInstance("myResource-efghwxyz", "efghwxyz", 1)
+            ]));
+        custom.WithAnnotation(new ReplicaAnnotation(2));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "NotFound");
+
+        Assert.False(result.Success);
+        Assert.Contains("'myResource-abcdwxyz'", result.Message);
+        Assert.Contains("'myResource-efghwxyz'", result.Message);
     }
 
     [Fact]
@@ -165,7 +206,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 displayName: "My command",
                 executeCommand: e =>
                 {
-                    return Task.FromResult(new ExecuteCommandResult { Success = false, ErrorMessage = "Failure!" });
+                    return Task.FromResult(new ExecuteCommandResult { Success = false, Message = "Failure!" });
                 });
 
         // Act
@@ -186,7 +227,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
             2 command executions failed.
             Resource '{resourceNames[0]}' failed with error message: Failure!
             Resource '{resourceNames[1]}' failed with error message: Failure!
-            """, result.ErrorMessage);
+            """, result.Message);
     }
 
     [Fact]
@@ -212,7 +253,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.False(result.Success);
         Assert.True(result.Canceled);
-        Assert.Null(result.ErrorMessage);
+        Assert.Null(result.Message);
     }
 
     [Fact]
@@ -242,7 +283,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.False(result.Success);
         Assert.True(result.Canceled);
-        Assert.Null(result.ErrorMessage);
+        Assert.Null(result.Message);
     }
 
     [Fact]
@@ -285,7 +326,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal($"""
             1 command executions failed.
             Resource '{resourceNames[0]}' failed with error message: Failure!
-            """, result.ErrorMessage);
+            """, result.Message);
     }
 
     [Fact] 
@@ -297,7 +338,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.False(result.Success);
         Assert.True(result.Canceled);
-        Assert.Null(result.ErrorMessage);
+        Assert.Null(result.Message);
     }
 
     [Fact]
@@ -323,7 +364,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.False(result.Success);
         Assert.True(result.Canceled);
-        Assert.Null(result.ErrorMessage);
+        Assert.Null(result.Message);
     }
 
     [Fact]
@@ -376,7 +417,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "generate-token",
                 displayName: "Generate Token",
-                executeCommand: _ => Task.FromResult(CommandResults.Success("{\"token\": \"abc123\"}", CommandResultFormat.Json)));
+                executeCommand: _ => Task.FromResult(CommandResults.Success("Generated token.", "{\"token\": \"abc123\"}", CommandResultFormat.Json)));
 
         var app = builder.Build();
         await app.StartAsync();
@@ -384,8 +425,9 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "generate-token");
 
         Assert.True(result.Success);
-        Assert.Equal("{\"token\": \"abc123\"}", result.Result);
-        Assert.Equal(CommandResultFormat.Json, result.ResultFormat);
+        Assert.NotNull(result.Data);
+        Assert.Equal("{\"token\": \"abc123\"}", result.Data.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data.Format);
     }
 
     [Fact]
@@ -404,8 +446,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "mycommand");
 
         Assert.True(result.Success);
-        Assert.Null(result.Result);
-        Assert.Null(result.ResultFormat);
+        Assert.Null(result.Data);
     }
 
     [Fact]
@@ -424,7 +465,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
                 executeCommand: e =>
                 {
                     var count = Interlocked.Increment(ref callCount);
-                    return Task.FromResult(CommandResults.Success($"token-{count}", CommandResultFormat.Text));
+                    return Task.FromResult(CommandResults.Success("Generated token.", $"token-{count}", CommandResultFormat.Text));
                 });
 
         var app = builder.Build();
@@ -433,29 +474,31 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, "generate-token");
 
         Assert.True(result.Success);
-        Assert.NotNull(result.Result);
-        Assert.StartsWith("token-", result.Result);
-        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
+        Assert.NotNull(result.Data);
+        Assert.StartsWith("token-", result.Data.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data.Format);
     }
 
     [Fact]
     public void CommandResults_SuccessWithResult_ProducesCorrectResult()
     {
-        var result = CommandResults.Success("{\"key\": \"value\"}", CommandResultFormat.Json);
+        var result = CommandResults.Success("Success.", "{\"key\": \"value\"}", CommandResultFormat.Json);
 
         Assert.True(result.Success);
-        Assert.Equal("{\"key\": \"value\"}", result.Result);
-        Assert.Equal(CommandResultFormat.Json, result.ResultFormat);
+        Assert.NotNull(result.Data);
+        Assert.Equal("{\"key\": \"value\"}", result.Data.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data.Format);
     }
 
     [Fact]
     public void CommandResults_SuccessWithTextResult_DefaultsToText()
     {
-        var result = CommandResults.Success("hello world");
+        var result = CommandResults.Success("Success.", "hello world");
 
         Assert.True(result.Success);
-        Assert.Equal("hello world", result.Result);
-        Assert.Equal(CommandResultFormat.Text, result.ResultFormat);
+        Assert.NotNull(result.Data);
+        Assert.Equal("hello world", result.Data.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data.Format);
     }
 
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport

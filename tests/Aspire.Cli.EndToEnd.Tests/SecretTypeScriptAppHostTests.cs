@@ -17,10 +17,10 @@ public sealed class SecretTypeScriptAppHostTests(ITestOutputHelper output)
     public async Task SecretCrudOnTypeScriptAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -29,7 +29,7 @@ public sealed class SecretTypeScriptAppHostTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create TypeScript AppHost via aspire init
         await auto.TypeAsync("aspire init");

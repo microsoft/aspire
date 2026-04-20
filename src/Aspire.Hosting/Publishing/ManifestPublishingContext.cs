@@ -177,7 +177,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
     {
         if (!project.TryGetLastAnnotation<IProjectMetadata>(out var metadata))
         {
-            throw new DistributedApplicationException("Project metadata not found.");
+            throw new DistributedApplicationException($"Project metadata was not found for resource '{project.Name}'.");
         }
 
         var relativePathToProjectFile = GetManifestRelativePath(metadata.ProjectPath);
@@ -327,7 +327,7 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
         {
             if (!container.TryGetContainerImageName(out var image))
             {
-                throw new DistributedApplicationException("Could not get container image name.");
+                throw new DistributedApplicationException($"Could not get the container image name for resource '{container.Name}'.");
             }
 
             if (deploymentTarget is not null)

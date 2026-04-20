@@ -12,13 +12,14 @@ using Aspire.Cli.Utils;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Parent command for documentation operations. Contains subcommands for listing, searching, and getting docs.
+/// Parent command for documentation operations. Contains subcommands for listing, searching, and getting docs, including API reference content.
 /// </summary>
 internal sealed class DocsCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
     public DocsCommand(
+        ApiCommand apiCommand,
         DocsListCommand listCommand,
         DocsSearchCommand searchCommand,
         DocsGetCommand getCommand,
@@ -32,6 +33,7 @@ internal sealed class DocsCommand : BaseCommand
         Subcommands.Add(listCommand);
         Subcommands.Add(searchCommand);
         Subcommands.Add(getCommand);
+        Subcommands.Add(apiCommand);
     }
 
     protected override bool UpdateNotificationsEnabled => false;

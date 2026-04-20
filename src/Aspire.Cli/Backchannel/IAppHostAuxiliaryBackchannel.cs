@@ -51,16 +51,18 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// <summary>
     /// Gets the current resource snapshots from the AppHost.
     /// </summary>
+    /// <param name="includeHidden">When <see langword="true"/>, includes resources with hidden state.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A list of resource snapshots representing current state.</returns>
-    Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default);
+    Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Watches for resource snapshot changes and streams them from the AppHost.
     /// </summary>
+    /// <param name="includeHidden">When <see langword="true"/>, includes resources with hidden state.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An async enumerable of resource snapshots as they change.</returns>
-    IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(CancellationToken cancellationToken = default);
+    IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets resource log lines from the AppHost.

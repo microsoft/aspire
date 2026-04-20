@@ -71,11 +71,7 @@ public sealed class VnetSqlServerConnectivityDeploymentTests(ITestOutputHelper o
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create starter project using aspire new
             output.WriteLine("Step 3: Creating starter project...");
@@ -91,39 +87,21 @@ public sealed class VnetSqlServerConnectivityDeploymentTests(ITestOutputHelper o
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5b: Add Aspire.Hosting.Azure.Network
             output.WriteLine("Step 5b: Adding Azure Network hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Network");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5c: Add Aspire.Hosting.Azure.Sql
             output.WriteLine("Step 5c: Adding Azure SQL hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Sql");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 6: Add Aspire client package to the Web project
             output.WriteLine("Step 6: Adding SQL client package to Web project...");
@@ -209,7 +187,7 @@ builder.AddSqlServerClient("db");
             output.WriteLine("Step 11: Starting Azure deployment...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 12: Verify PE infrastructure

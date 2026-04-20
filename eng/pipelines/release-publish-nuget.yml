@@ -47,7 +47,7 @@ variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
   # Variable group containing secrets (VscePublishToken for future use)
-  # Note: NuGet publishing uses service connection 'NuGet.org - microsoft/aspire' instead of API key
+  # Note: NuGet publishing uses service connection 'NuGet.org - dotnet/aspire' instead of API key
   - group: Aspire-Release-Secrets
   # Variable group containing aspire-winget-bot-pat and aspire-homebrew-bot-pat for WinGet and Homebrew publishing
   - group: Aspire-Secrets
@@ -60,7 +60,7 @@ resources:
       ref: refs/tags/release
   pipelines:
     - pipeline: aspire-build
-      source: dotnet-aspire  # Name of the main build pipeline
+      source: microsoft-aspire  # Name of the main build pipeline
       project: internal      # AzDO project name
       trigger: none          # Manual trigger only - no automatic releases
 
@@ -71,11 +71,17 @@ extends:
       name: NetCore1ESPool-Internal
       image: windows.vs2026preview.scout.amd64
       os: windows
-    # Required for publishing to external feeds like nuget.org
-    # Pattern from dotnet-workload-versions/official.yml
-    # Note: 'Permissive,CFSClean' blocks NuGet.org - must use just 'Permissive'
+    # Network isolation policy for ES4.2.4 CFS compliance.
+    # CFSClean is intentionally omitted here because it blocks all NuGet endpoints
+    # (api.nuget.org, www.nuget.org, etc.) via DNS sinkhole and this release pipeline
+    # must push packages to NuGet.org via the 1ES.PublishNuget@1 task. ES4.2.4 requires
+    # pipelines to *consume* packages from internal feeds (which we do — NuGet.config
+    # only uses pkgs.dev.azure.com/dnceng feeds), but does not prohibit *publishing* to
+    # public registries. CFSClean2 is retained to block Docker, PowerShell Gallery, and
+    # other endpoints not needed by this pipeline.
+    # See: https://eng.ms/docs/microsoft-ai/webxt/feed-verticals/start-experiences/fv-live-site/sfi-executor-centric-wiki/skills/security/mdp-cfs-security-change/skill
     settings:
-      networkIsolationPolicy: Permissive
+      networkIsolationPolicy: Permissive,CFSClean2
 
     stages:
       # ===== STAGE 1: PREPARE ARTIFACTS =====
@@ -385,7 +391,7 @@ extends:
                     packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
                     packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
                     nuGetFeedType: external
-                    publishFeedCredentials: 'NuGet.org - microsoft/aspire'
+                    publishFeedCredentials: 'NuGet.org - dotnet/aspire'
 
               # Skip message when SkipNuGetPublish is true
               - ${{ if eq(parameters.SkipNuGetPublish, true) }}:

@@ -43,17 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DeleteParameterMessage">
-        <source>Are you sure you want to delete the value for parameter `{0}`? </source>
-        <target state="translated">`{0}` 매개 변수의 값을 삭제하시겠습니까? </target>
-        <note>Contains markdown. {0} is the parameter name.</note>
-      </trans-unit>
-      <trans-unit id="DeleteParameterMessageWithUserSecrets">
-        <source>Are you sure you want to delete the value for parameter `{0}`?
-
-The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there.</source>
-        <target state="needs-review-translation">`{0}` 매개 변수의 값을 삭제하시겠습니까?
-
-이 값은 현재 [사용자 비밀](https://learn.microsoft.com/aspnet/core/security/app-secrets)에 저장되어 있습니다. 여기에서 삭제하도록 선택할 수도 있습니다.</target>
+        <source>Are you sure you want to delete the value for parameter `{0}`?</source>
+        <target state="needs-review-translation">`{0}` 매개 변수의 값을 삭제하시겠습니까? </target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -101,6 +92,11 @@ The value is currently saved in [user secrets](https://aka.ms/aspire/user-secret
         <target state="translated">해결되지 않은 매개 변수</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParametersInputsDeleteDescription">
+        <source>The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets).</source>
+        <target state="new">The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets).</target>
+        <note>Contains markdown</note>
+      </trans-unit>
       <trans-unit id="ParametersInputsDeleteLabel">
         <source>Delete from user secrets</source>
         <target state="translated">사용자 비밀에서 삭제</target>
@@ -126,10 +122,15 @@ The value is currently saved in [user secrets](https://aka.ms/aspire/user-secret
         <target state="translated">저장</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParametersInputsRememberDescriptionConfigured">
+        <source>Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</source>
+        <target state="new">Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</target>
+        <note>Contains markdown</note>
+      </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
         <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
         <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
-        <note />
+        <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
         <source>Save to user secrets</source>
@@ -162,9 +163,7 @@ The value is currently saved in [user secrets](https://aka.ms/aspire/user-secret
         <note />
       </trans-unit>
       <trans-unit id="SetParameterMessage">
-        <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
-
-New parameter values may not be used until dependent resources are restarted.</source>
+        <source>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</source>
         <target state="needs-review-translation">매개 변수에 대한 값을 제공하세요. 나중에 사용할 수 있도록 매개 변수를 [사용자 비밀](https://learn.microsoft.com/aspnet/core/security/app-secrets)에 저장할 수 있습니다.
 
 종속 리소스를 다시 시작할 때까지 새 매개 변수 값을 사용할 수 없습니다.</target>

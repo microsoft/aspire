@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Projects;
+
 namespace Aspire.Cli.Utils;
 
 /// <summary>
@@ -101,5 +103,100 @@ internal static class FileSystemHelper
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Shortens a list of paths so each is uniquely identifiable using the minimum
+    /// number of trailing path segments. Duplicate filenames get parent directories
+    /// added until unique. Non-project files (e.g. single-file AppHosts like
+    /// AppHost.cs) always include at least the parent folder to provide context.
+    /// </summary>
+    internal static Dictionary<string, string> ShortenPaths(IReadOnlyList<string> paths)
+    {
+        var comparer = OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+        var result = new Dictionary<string, string>(comparer);
+
+        if (paths.Count == 0)
+        {
+            return result;
+        }
+
+        // Split each path into normalized segments
+        var segmentsMap = new Dictionary<string, string[]>(comparer);
+        var depthMap = new Dictionary<string, int>(comparer);
+
+        foreach (var path in paths)
+        {
+            if (result.ContainsKey(path))
+            {
+                continue; // Skip duplicate paths
+            }
+
+            var normalized = path.Replace('\\', '/').TrimEnd('/');
+            var segments = normalized.Split('/');
+            segmentsMap[path] = segments;
+
+            // Non-project files (single-file AppHosts) always show parent/filename
+            var fileName = segments.Length > 0 ? segments[^1] : path;
+            var extension = Path.GetExtension(fileName);
+            var isProjectFile = DotNetAppHostProject.ProjectExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase);
+            var minDepth = !isProjectFile && segments.Length >= 2 ? 2 : 1;
+
+            depthMap[path] = minDepth;
+            result[path] = minDepth >= 2
+                ? Path.Combine(segments[^2], segments[^1])
+                : fileName;
+        }
+
+        // Iteratively resolve duplicates by adding more parent directory segments
+        while (true)
+        {
+            var duplicateGroups = result
+                .GroupBy(kvp => kvp.Value, comparer)
+                .Where(g => g.Count() > 1)
+                .ToList();
+
+            if (duplicateGroups.Count == 0)
+            {
+                break;
+            }
+
+            foreach (var group in duplicateGroups)
+            {
+                foreach (var kvp in group)
+                {
+                    var originalPath = kvp.Key;
+                    var segments = segmentsMap[originalPath];
+                    var newDepth = depthMap[originalPath] + 1;
+                    depthMap[originalPath] = newDepth;
+
+                    if (newDepth >= segments.Length)
+                    {
+                        // Use full path when all segments exhausted
+                        result[originalPath] = originalPath;
+                    }
+                    else
+                    {
+                        var candidate = Path.Combine(segments[^newDepth..]);
+
+                        // Switch to the full original path when the candidate itself
+                        // would include a root/drive segment, to avoid displaying
+                        // something like "C:\folder\Project.csproj" with a tilde prefix.
+                        var firstCandidateIndex = segments.Length - newDepth;
+                        var firstCandidateSegment = segments[firstCandidateIndex];
+                        if (firstCandidateSegment.Length == 0 || Path.IsPathRooted(firstCandidateSegment))
+                        {
+                            candidate = originalPath;
+                        }
+
+                        result[originalPath] = candidate;
+                    }
+                }
+            }
+        }
+
+        return result;
     }
 }

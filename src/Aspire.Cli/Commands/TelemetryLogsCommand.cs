@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -10,6 +9,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
@@ -24,6 +24,7 @@ namespace Aspire.Cli.Commands;
 internal sealed class TelemetryLogsCommand : BaseCommand
 {
     private readonly IInteractionService _interactionService;
+    private readonly ICliHostEnvironment _hostEnvironment;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<TelemetryLogsCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -52,6 +53,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry,
+        ICliHostEnvironment hostEnvironment,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
         TimeProvider timeProvider,
@@ -59,6 +61,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         : base("logs", TelemetryCommandStrings.LogsDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
+        _hostEnvironment = hostEnvironment;
         _httpClientFactory = httpClientFactory;
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
@@ -136,22 +139,10 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             return ExitCodeConstants.InvalidCommand;
         }
 
-        // Build query string with multiple resource parameters
-        var additionalParams = new List<(string key, string? value)>
-        {
-            ("traceId", traceId),
-            ("severity", severity)
-        };
-        if (limit.HasValue && !follow)
-        {
-            additionalParams.Add(("limit", limit.Value.ToString(CultureInfo.InvariantCulture)));
-        }
-        if (follow)
-        {
-            additionalParams.Add(("follow", "true"));
-        }
+        // Build URL with query parameters
+        int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
 
-        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, [.. additionalParams]);
+        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, traceId: traceId, severity: severity, limit: effectiveLimit, follow: follow ? true : null);
 
         try
         {
@@ -262,12 +253,13 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             : "";
         var severity = TelemetryCommandHelpers.GetSeverityText(log.SeverityNumber);
         var body = log.Body?.StringValue ?? "";
+        var displayBody = _hostEnvironment.SupportsAnsi ? body : AnsiParser.StripControlSequences(body);
 
         // Use severity number for color mapping (more reliable than text)
         var severityColor = TelemetryCommandHelpers.GetSeverityColor(log.SeverityNumber);
         var resourceColor = _resourceColorMap.GetColor(resourceName);
 
-        var escapedBody = body.EscapeMarkup();
+        var escapedBody = displayBody.EscapeMarkup();
         _interactionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{severityColor}]{severity,-4}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/] {escapedBody}");
     }
 }

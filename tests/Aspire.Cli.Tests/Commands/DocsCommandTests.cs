@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +18,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs");
@@ -36,7 +36,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs list");
@@ -53,7 +53,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs list --format json");
@@ -71,7 +71,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
             options.DocsSearchServiceFactory = _ => new TestDocsSearchService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs search redis");
@@ -89,7 +89,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
             options.DocsSearchServiceFactory = _ => new TestDocsSearchService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs search redis -n 3");
@@ -107,7 +107,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
             options.DocsSearchServiceFactory = _ => new TestDocsSearchService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs search redis --format json");
@@ -124,7 +124,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs get redis-integration");
@@ -141,13 +141,56 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs get redis-integration --section \"Getting Started\"");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void WrapMarkdownForConsole_PreservesMarkdownStructure()
+    {
+        var markdown = """
+            # Certificate configuration
+
+            > Learn how to configure HTTPS endpoints with the [Aspire CLI](https://aspire.dev/get-started/install-cli/) and `aspire run`.
+
+            ### Using the Aspire CLI (recommended)
+
+            * First item with [a link](https://example.com/docs)
+            * Second item
+
+            ```bash
+            aspire docs get certificate-configuration
+            ```
+            """;
+
+        var wrapped = Aspire.Cli.Commands.DocsGetCommand.WrapMarkdownForConsole(markdown, width: 60);
+
+        Assert.Contains("# Certificate configuration", wrapped);
+        Assert.Contains("\n\n### Using the Aspire CLI (recommended)\n\n", wrapped);
+        Assert.Contains("[Aspire CLI](https://aspire.dev/get-started/install-cli/)", wrapped);
+        Assert.Contains("`aspire run`", wrapped);
+        Assert.Contains("```bash\naspire docs get certificate-configuration\n```", wrapped.Replace("\r\n", "\n"));
+    }
+
+    [Fact]
+    public void WrapMarkdownForConsole_DoesNotWrapTableRows()
+    {
+        var markdown = """
+            | Setting | Environment variable | Purpose |
+            | ---------------------- | ----------------------- | ---------------------------------------------- |
+            | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
+            """;
+
+        var wrapped = Aspire.Cli.Commands.DocsGetCommand.WrapMarkdownForConsole(markdown, width: 40);
+
+        Assert.Contains("| Setting | Environment variable | Purpose |", wrapped);
+        Assert.Contains("| ---------------------- | ----------------------- | ---------------------------------------------- |", wrapped);
+        Assert.Contains("| `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |", wrapped);
     }
 
     [Fact]
@@ -158,7 +201,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         {
             options.DocsIndexServiceFactory = _ => new TestDocsIndexService();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
         var result = command.Parse("docs get nonexistent-page");

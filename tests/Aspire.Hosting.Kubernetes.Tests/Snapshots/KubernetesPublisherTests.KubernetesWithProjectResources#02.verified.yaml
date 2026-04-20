@@ -1,47 +1,38 @@
----
+﻿---
 apiVersion: "apps/v1"
 kind: "Deployment"
 metadata:
-  name: "project1-deployment"
+  name: "env-dashboard-deployment"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "project1"
+    app.kubernetes.io/component: "env-dashboard"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
   template:
     metadata:
       labels:
         app.kubernetes.io/name: "aspire-hosting-tests"
-        app.kubernetes.io/component: "project1"
+        app.kubernetes.io/component: "env-dashboard"
         app.kubernetes.io/instance: "{{ .Release.Name }}"
     spec:
       containers:
-        - image: "{{ .Values.parameters.project1.project1_image }}"
-          name: "project1"
-          envFrom:
-            - configMapRef:
-                name: "project1-config"
+        - image: "mcr.microsoft.com/dotnet/nightly/aspire-dashboard:latest"
+          name: "env-dashboard"
           ports:
             - name: "http"
               protocol: "TCP"
-              containerPort: {{ .Values.parameters.project1.port_http | int }}
-            - name: "custom1"
+              containerPort: 18888
+            - name: "otlp-grpc"
               protocol: "TCP"
-              containerPort: 8000
-            - name: "custom2"
+              containerPort: 18889
+            - name: "otlp-http"
               protocol: "TCP"
-              containerPort: 8001
-            - name: "custom3"
-              protocol: "TCP"
-              containerPort: 7002
-            - name: "custom4"
-              protocol: "TCP"
-              containerPort: 7004
+              containerPort: 18890
           imagePullPolicy: "IfNotPresent"
   selector:
     matchLabels:
       app.kubernetes.io/name: "aspire-hosting-tests"
-      app.kubernetes.io/component: "project1"
+      app.kubernetes.io/component: "env-dashboard"
       app.kubernetes.io/instance: "{{ .Release.Name }}"
   replicas: 1
   revisionHistoryLimit: 3

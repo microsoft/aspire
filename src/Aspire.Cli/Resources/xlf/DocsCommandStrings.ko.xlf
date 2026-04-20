@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../DocsCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Browse and search Aspire documentation from aspire.dev</source>
+        <source>Browse and search Aspire documentation and API reference from aspire.dev</source>
         <target state="needs-review-translation">aspire.dev에서 Aspire 설명서를 찾아보고 검색하세요.</target>
         <note />
       </trans-unit>

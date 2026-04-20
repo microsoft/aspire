@@ -83,5 +83,5 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["webpubsub"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.webpubsub.azure.com";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.webpubsub.azure.com"];
 }

@@ -211,6 +211,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
 
     private IEnumerable<NuGetPackage> FilterPackages(IEnumerable<NuGetPackage> packages, Func<string, bool>? filter)
     {
+        var showDeprecatedPackages = _features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
         var effectiveFilter = (NuGetPackage p) =>
         {
             if (filter is not null)
@@ -221,7 +222,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
 
             // Apply deprecated package filter unless the user wants to show deprecated packages
-            if (isOfficialPackage && !_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
+            if (isOfficialPackage && !showDeprecatedPackages)
             {
                 return !DeprecatedPackages.IsDeprecated(p.Id);
             }

@@ -571,8 +571,7 @@ public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var serviceProvider = services.BuildServiceProvider();
-        await using var _ = serviceProvider;
+        using var serviceProvider = services.BuildServiceProvider();
 
         var agentMcpCommand = serviceProvider.GetRequiredService<AgentMcpCommand>();
         var rootCommand = serviceProvider.GetRequiredService<RootCommand>();

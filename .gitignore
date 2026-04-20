@@ -1,5 +1,8 @@
 syntax: glob
 
+### GitHub Agentic Workflows ###
+.github/aw/logs/
+
 ### VisualStudio ###
 
 # Tools directory
@@ -120,6 +123,8 @@ Session.vim
 config.ps1
 **/IISApplications
 
+# Language server cache files
+*.lscache
 
 # Node.js modules
 node_modules/
@@ -199,3 +204,4 @@ extension/package.nls.*.json
 
 # Azure Functions local settings (may contain encrypted secrets)
 local.settings.json
+diagnostics.log

@@ -10,12 +10,16 @@ namespace Aspire.Hosting
 {
     public static partial class AzureManagedRedisExtensions
     {
+        [AspireExport("addAzureManagedRedis", Description = "Adds an Azure Managed Redis resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> AddAzureManagedRedis(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport("runAsContainer", Description = "Configures Azure Managed Redis to run in a local container", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.RedisResource>>? configureContainer = null) { throw null; }
 
+        [AspireExport("withAccessKeyAuthenticationWithKeyVault", Description = "Configures Azure Managed Redis to use access key authentication with a specific Key Vault")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder) { throw null; }
 
+        [AspireExport("withAccessKeyAuthentication", Description = "Configures Azure Managed Redis to use access key authentication")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzureManagedRedisResource> builder) { throw null; }
     }
 
@@ -43,15 +47,19 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureManagedRedisResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class AzureManagedRedisResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IAzurePrivateEndpointTarget
     {
         public AzureManagedRedisResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
+        [AspireExportIgnore]
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression HostName { get { throw null; } }
+
+        public BicepOutputReference Id { get { throw null; } }
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
@@ -70,6 +78,10 @@ namespace Aspire.Hosting.Azure
         public override void AddRoleAssignments(IAddRoleAssignmentsContext roleAssignmentContext) { }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+
+        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
     }
 
     [System.Obsolete("This class is obsolete and will be removed in a future version. Use AddAzureManagedRedis instead which provisions Azure Managed Redis.")]

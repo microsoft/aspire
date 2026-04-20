@@ -10,20 +10,26 @@ namespace Aspire.Hosting
 {
     public static partial class OpenAIExtensions
     {
+        [AspireExport("addModel", Description = "Adds an OpenAI model resource.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> AddModel(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, string name, string model) { throw null; }
 
+        [AspireExport("addOpenAI", Description = "Adds an OpenAI resource to the distributed application model.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> AddOpenAI(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport("withApiKey", Description = "Configures the API key for the OpenAI resource.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> WithApiKey(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> apiKey) { throw null; }
 
+        [AspireExport("withEndpoint", Description = "Configures the endpoint URI for the OpenAI resource.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> WithEndpoint(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, string endpoint) { throw null; }
 
+        [AspireExport("withHealthCheck", Description = "Adds a health check for the OpenAI model resource.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> WithHealthCheck(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> builder) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.OpenAI
 {
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Model = {Model}")]
     public partial class OpenAIModelResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<OpenAIResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
     {
         public OpenAIModelResource(string name, string model, OpenAIResource parent) : base(default!) { }

@@ -10,34 +10,46 @@ namespace Aspire.Hosting
 {
     public static partial class DockerComposeAspireDashboardResourceBuilderExtensions
     {
+        [AspireExport("withForwardedHeaders", Description = "Enables or disables forwarded headers support for the Aspire dashboard")]
         public static ApplicationModel.IResourceBuilder<Docker.DockerComposeAspireDashboardResource> WithForwardedHeaders(this ApplicationModel.IResourceBuilder<Docker.DockerComposeAspireDashboardResource> builder, bool enabled = true) { throw null; }
 
+        [AspireExport("withHostPort", Description = "Sets the host port for the Aspire dashboard")]
         public static ApplicationModel.IResourceBuilder<Docker.DockerComposeAspireDashboardResource> WithHostPort(this ApplicationModel.IResourceBuilder<Docker.DockerComposeAspireDashboardResource> builder, int? port = null) { throw null; }
     }
 
     public static partial class DockerComposeEnvironmentExtensions
     {
+        [AspireExport("addDockerComposeEnvironment", Description = "Adds a Docker Compose publishing environment")]
         public static ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> AddDockerComposeEnvironment(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "ComposeFile and its nested types are not exported to ATS.")]
         public static ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> ConfigureComposeFile(this ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> builder, System.Action<Docker.Resources.ComposeFile> configure) { throw null; }
 
+        [AspireExportIgnore(Reason = "Action<IDictionary<string, CapturedEnvironmentVariable>> callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> ConfigureEnvFile(this ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> builder, System.Action<System.Collections.Generic.IDictionary<string, Docker.CapturedEnvironmentVariable>> configure) { throw null; }
 
+        [AspireExport("configureDashboard", MethodName = "configureDashboard", Description = "Configures the Aspire dashboard resource for the Docker Compose environment", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> builder, System.Action<ApplicationModel.IResourceBuilder<Docker.DockerComposeAspireDashboardResource>> configure) { throw null; }
 
+        [AspireExport("withDashboard", Description = "Enables or disables the Aspire dashboard for the Docker Compose environment")]
         public static ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> builder, bool enabled = true) { throw null; }
 
+        [AspireExport("withProperties", Description = "Configures properties of the Docker Compose environment", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> WithProperties(this ApplicationModel.IResourceBuilder<Docker.DockerComposeEnvironmentResource> builder, System.Action<Docker.DockerComposeEnvironmentResource> configure) { throw null; }
     }
 
     public static partial class DockerComposeServiceExtensions
     {
+        [AspireExportIgnore(Reason = "Polyglot projection for Docker Compose placeholder helpers is not currently available.")]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.IManifestExpressionProvider manifestExpressionProvider, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot projection for Docker Compose placeholder helpers is not currently available.")]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot projection for Docker Compose placeholder helpers is not currently available.")]
         public static string AsEnvironmentPlaceholder(this ApplicationModel.ParameterResource parameter, Docker.DockerComposeServiceResource dockerComposeService) { throw null; }
 
+        [AspireExport("publishAsDockerComposeService", Description = "Publishes the resource as a Docker Compose service with custom service configuration")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsDockerComposeService<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Docker.DockerComposeServiceResource, Docker.Resources.ComposeNodes.Service> configure)
             where T : ApplicationModel.IComputeResource { throw null; }
     }
@@ -58,6 +70,7 @@ namespace Aspire.Hosting.Docker
         public object? Source { get { throw null; } set { } }
     }
 
+    [AspireExport(ExposeProperties = true)]
     public partial class DockerComposeAspireDashboardResource : ApplicationModel.ContainerResource
     {
         public DockerComposeAspireDashboardResource(string name) : base(default!, default) { }
@@ -67,6 +80,7 @@ namespace Aspire.Hosting.Docker
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
     }
 
+    [AspireExport(ExposeProperties = true)]
     public partial class DockerComposeEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
     {
         public DockerComposeEnvironmentResource(string name) : base(default!) { }
@@ -75,7 +89,8 @@ namespace Aspire.Hosting.Docker
 
         public string? DefaultNetworkName { get { throw null; } set { } }
 
-        ApplicationModel.ReferenceExpression ApplicationModel.IComputeEnvironmentResource.GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
     }
 
     public sealed partial class DockerComposeServiceCustomizationAnnotation : ApplicationModel.IResourceAnnotation
@@ -85,6 +100,7 @@ namespace Aspire.Hosting.Docker
         public System.Action<DockerComposeServiceResource, Resources.ComposeNodes.Service> Configure { get { throw null; } }
     }
 
+    [AspireExport(ExposeProperties = true)]
     public partial class DockerComposeServiceResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<DockerComposeEnvironmentResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource
     {
         public DockerComposeServiceResource(string name, ApplicationModel.IResource resource, DockerComposeEnvironmentResource composeEnvironmentResource) : base(default!) { }
@@ -202,6 +218,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes
         public string? Name { get { throw null; } set { } }
     }
 
+    [AspireExport(ExposeProperties = true)]
     [YamlDotNet.Serialization.YamlSerializable]
     public sealed partial class Service : NamedComposeMember
     {
@@ -309,6 +326,9 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes
 
         [YamlDotNet.Serialization.YamlMember(Alias = "profiles", DefaultValuesHandling = YamlDotNet.Serialization.DefaultValuesHandling.OmitEmptyCollections)]
         public System.Collections.Generic.List<string> Profiles { get { throw null; } set { } }
+
+        [YamlDotNet.Serialization.YamlMember(Alias = "pull_policy")]
+        public string? PullPolicy { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "read_only")]
         public bool? ReadOnly { get { throw null; } set { } }

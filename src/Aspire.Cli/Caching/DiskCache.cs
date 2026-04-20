@@ -60,12 +60,12 @@ internal sealed class DiskCache : IDiskCache
             var cacheFilePath = ResolveValidCacheFile(keyHash);
             if (cacheFilePath is null)
             {
-                _logger.LogDebug("Disk cache miss for key {RawKey}", key);
+                _logger.LogTrace("Disk cache miss for key {RawKey}", key);
                 return null;
             }
 
             // Assuming here is a hit we attempt to read the file and return the string.
-            _logger.LogDebug("Disk cache hit for key {RawKey} (file: {CacheFilePath})", key, cacheFilePath);
+            _logger.LogTrace("Disk cache hit for key {RawKey} (file: {CacheFilePath})", key, cacheFilePath);
             return await File.ReadAllTextAsync(cacheFilePath, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -120,7 +120,7 @@ internal sealed class DiskCache : IDiskCache
             }
 
             File.Move(tempFile, fullPath);
-            _logger.LogDebug("Stored disk cache entry for key {RawKey} (file: {CacheFilePath})", key, fullPath);
+            _logger.LogTrace("Stored disk cache entry for key {RawKey} (file: {CacheFilePath})", key, fullPath);
         }
         catch (Exception ex)
         {
@@ -270,19 +270,19 @@ internal sealed class DiskCache : IDiskCache
             file.Delete();
             if (expired)
             {
-                _logger.LogDebug("Deleted expired cache file: {CacheFile}", file.FullName);
+                _logger.LogTrace("Deleted expired cache file: {CacheFile}", file.FullName);
             }
             else if (old)
             {
-                _logger.LogDebug("Deleted old cache file during global cleanup: {CacheFile}", file.FullName);
+                _logger.LogTrace("Deleted old cache file during global cleanup: {CacheFile}", file.FullName);
             }
             else if (invalid)
             {
-                _logger.LogDebug("Deleted invalid cache file: {CacheFile}", file.FullName);
+                _logger.LogTrace("Deleted invalid cache file: {CacheFile}", file.FullName);
             }
             else
             {
-                _logger.LogDebug("Deleted cache file: {CacheFile}", file.FullName);
+                _logger.LogTrace("Deleted cache file: {CacheFile}", file.FullName);
             }
         }
         catch (Exception ex)

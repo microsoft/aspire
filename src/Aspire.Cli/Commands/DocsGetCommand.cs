@@ -4,9 +4,10 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -86,44 +87,163 @@ internal sealed partial class DocsGetCommand : BaseCommand
         }
         else
         {
-            // Format the markdown for better terminal readability
-            var formatted = FormatMarkdownForTerminal(doc.Content);
-            // Structured output always goes to stdout.
-            InteractionService.DisplayRawText(formatted, ConsoleOutput.Standard);
+            var markdown = WrapMarkdownForConsole(doc.Content);
+            var wroteBlock = false;
+
+            foreach (var block in SplitMarkdownBlocks(markdown))
+            {
+                if (wroteBlock)
+                {
+                    InteractionService.DisplayEmptyLine();
+                }
+
+                InteractionService.DisplayMarkdown(block);
+                wroteBlock = true;
+            }
         }
 
         return ExitCodeConstants.Success;
     }
 
-    /// <summary>
-    /// Formats minified markdown content for better terminal readability by inserting line breaks.
-    /// </summary>
-    private static string FormatMarkdownForTerminal(string content)
+    internal static string WrapMarkdownForConsole(string markdown, int width = 100)
     {
-        // The llms.txt format has markdown on single lines - insert breaks for readability
-        // Add newline before headings (##, ###)
-        content = HeadingRegex().Replace(content, "\n\n$0");
+        var wrappedLines = new List<string>();
+        var inCodeFence = false;
 
-        // Add newlines around code blocks
-        content = CodeBlockStartRegex().Replace(content, "\n$0\n");
-        content = CodeBlockEndRegex().Replace(content, "\n$0\n");
+        foreach (var line in markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            var trimmedLine = line.TrimEnd();
 
-        // Clean up excessive newlines
-        content = ExcessiveNewlinesRegex().Replace(content, "\n\n");
+            if (trimmedLine.StartsWith("```", StringComparison.Ordinal))
+            {
+                wrappedLines.Add(trimmedLine);
+                inCodeFence = !inCodeFence;
+                continue;
+            }
 
-        return content.Trim();
+            if (inCodeFence || string.IsNullOrWhiteSpace(trimmedLine) || IsHeading(trimmedLine) || IsTableLine(trimmedLine))
+            {
+                wrappedLines.Add(trimmedLine);
+                continue;
+            }
+
+            WrapLine(trimmedLine, width, wrappedLines);
+        }
+
+        return string.Join("\n", wrappedLines);
     }
 
-    // Match markdown headings: ## or ### at start or after space (not C#)
-    [System.Text.RegularExpressions.GeneratedRegex(@"(?<=\s)(#{2,6}\s)")]
-    private static partial System.Text.RegularExpressions.Regex HeadingRegex();
+    internal static IReadOnlyList<string> SplitMarkdownBlocks(string markdown)
+    {
+        var blocks = new List<string>();
+        var currentBlock = new List<string>();
+        var inCodeFence = false;
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"(?<!\n)```\w*")]
-    private static partial System.Text.RegularExpressions.Regex CodeBlockStartRegex();
+        foreach (var line in markdown.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            var trimmedLine = line.TrimEnd();
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"```(?!\w)(?!\n)")]
-    private static partial System.Text.RegularExpressions.Regex CodeBlockEndRegex();
+            if (!inCodeFence && string.IsNullOrWhiteSpace(trimmedLine))
+            {
+                AppendBlock(blocks, currentBlock);
+                continue;
+            }
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"\n{3,}")]
-    private static partial System.Text.RegularExpressions.Regex ExcessiveNewlinesRegex();
+            currentBlock.Add(trimmedLine);
+
+            if (trimmedLine.StartsWith("```", StringComparison.Ordinal))
+            {
+                inCodeFence = !inCodeFence;
+            }
+        }
+
+        AppendBlock(blocks, currentBlock);
+        return blocks;
+    }
+
+    private static void WrapLine(string line, int width, List<string> wrappedLines)
+    {
+        var prefixLength = GetPrefixLength(line);
+        var prefix = line[..prefixLength];
+        var remaining = line[prefixLength..].TrimStart();
+        var continuationPrefix = new string(' ', prefixLength);
+        var currentLine = prefix;
+
+        foreach (Match token in MarkdownTokenRegex().Matches(remaining))
+        {
+            var value = token.Value;
+            var trailingPunctuation = IsTrailingPunctuation(value);
+            var separator = currentLine.Length == prefix.Length || trailingPunctuation ? string.Empty : " ";
+            var candidate = $"{currentLine}{separator}{value}";
+
+            if (candidate.Length <= width || currentLine.Length == prefix.Length || trailingPunctuation)
+            {
+                currentLine = candidate;
+                continue;
+            }
+
+            wrappedLines.Add(currentLine);
+            currentLine = continuationPrefix + value;
+        }
+
+        wrappedLines.Add(currentLine);
+    }
+
+    private static int GetPrefixLength(string line)
+    {
+        if (line.StartsWith("> ", StringComparison.Ordinal))
+        {
+            return 2;
+        }
+
+        if (line.StartsWith("* ", StringComparison.Ordinal))
+        {
+            return 2;
+        }
+
+        var index = 0;
+        while (index < line.Length && char.IsDigit(line[index]))
+        {
+            index++;
+        }
+
+        if (index > 0 &&
+            index + 1 < line.Length &&
+            line[index] == '.' &&
+            line[index + 1] == ' ')
+        {
+            return index + 2;
+        }
+
+        return 0;
+    }
+
+    private static bool IsHeading(string line)
+    {
+        return line.StartsWith('#');
+    }
+
+    private static bool IsTableLine(string line)
+    {
+        return line.StartsWith("|", StringComparison.Ordinal) && line.Count(static character => character == '|') >= 2;
+    }
+
+    private static bool IsTrailingPunctuation(string value)
+    {
+        return value.All(static character => character is ',' or '.' or ':' or ';' or '!' or '?' or ')' or ']');
+    }
+
+    private static void AppendBlock(List<string> blocks, List<string> currentBlock)
+    {
+        if (currentBlock.Count == 0)
+        {
+            return;
+        }
+
+        blocks.Add(string.Join("\n", currentBlock));
+        currentBlock.Clear();
+    }
+
+    [GeneratedRegex(@"(\[((?:[^\[\]]|\[[^\[\]]*\])*)\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\S+)")]
+    private static partial Regex MarkdownTokenRegex();
 }

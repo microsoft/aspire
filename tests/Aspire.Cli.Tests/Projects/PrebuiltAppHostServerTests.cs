@@ -6,6 +6,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -155,7 +156,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
         var server = new PrebuiltAppHostServer(
             workspace.WorkspaceRoot.FullName,
             "test.sock",
@@ -190,6 +191,44 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 Directory.Delete(workingDirectory, recursive: true);
             }
         }
+    }
+
+    [Fact]
+    public async Task ResolveChannelNameAsync_UsesProjectLocalAspireConfig_NotGlobalChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "pr-new"
+            }
+            """);
+
+        var configurationService = new TestConfigurationService
+        {
+            OnGetConfiguration = key => key == "channel" ? "pr-old" : null
+        };
+
+        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var server = new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            new Aspire.Cli.Tests.Mcp.MockPackagingService(),
+            configurationService,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        var method = typeof(PrebuiltAppHostServer).GetMethod("ResolveChannelNameAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var channelTask = Assert.IsType<Task<string?>>(method.Invoke(server, [CancellationToken.None]));
+        var channel = await channelTask;
+
+        Assert.Equal("pr-new", channel);
     }
 
 }

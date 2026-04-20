@@ -167,6 +167,11 @@
         <target state="new">Project is not supported in the current environment: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectFilesCreatedButNodeToolsNotFound">
+        <source>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</source>
+        <target state="new">Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</target>
+        <note>Do not translate 'npm install', 'Node.js', or 'PATH'.</note>
+      </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
         <source>The project does not contain an Aspire AppHost.</source>
         <target state="needs-review-translation">Le projet ne contient pas d’Aspire AppHost.</target>

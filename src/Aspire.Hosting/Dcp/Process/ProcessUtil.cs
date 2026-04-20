@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dcp.Process;
 
@@ -19,6 +20,13 @@ internal static partial class ProcessUtil
 
     public static (Task<ProcessResult>, IAsyncDisposable) Run(ProcessSpec processSpec)
     {
+        var retainedOutputLineCount = processSpec.RetainedOutputLineCount ?? (processSpec.ThrowOnNonZeroReturnCode ? ProcessSpec.DefaultRetainedOutputLineCount : 0);
+        ArgumentOutOfRangeException.ThrowIfNegative(retainedOutputLineCount);
+
+        ProcessOutputCapture? outputCapture = retainedOutputLineCount > 0
+            ? new(retainedOutputLineCount)
+            : null;
+
         var process = new System.Diagnostics.Process()
         {
             StartInfo =
@@ -54,34 +62,46 @@ internal static partial class ProcessUtil
         // See https://github.com/dotnet/runtime/issues/29232#issuecomment-1451584094 for how this might affect waiting for process exit.
         // We are going to discard that (grandchild) output by checking process.HasExited.
 
-        if (processSpec.OnOutputData != null)
+        var stdoutComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stderrComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        process.OutputDataReceived += (_, e) =>
         {
-            process.OutputDataReceived += (_, e) =>
+            startupComplete.Wait();
+
+            if (e.Data is null)
             {
-                startupComplete.Wait();
+                stdoutComplete.TrySetResult();
+                return;
+            }
 
-                if (String.IsNullOrEmpty(e.Data))
-                {
-                    return;
-                }
+            if (string.IsNullOrEmpty(e.Data))
+            {
+                return;
+            }
 
-                processSpec.OnOutputData.Invoke(e.Data);
-            };
-        }
+            outputCapture?.Add(e.Data);
+            processSpec.OnOutputData?.Invoke(e.Data);
+        };
 
-        if (processSpec.OnErrorData != null)
+        process.ErrorDataReceived += (_, e) =>
         {
-            process.ErrorDataReceived += (_, e) =>
-            {
-                startupComplete.Wait();
-                if (String.IsNullOrEmpty(e.Data))
-                {
-                    return;
-                }
+            startupComplete.Wait();
 
-                processSpec.OnErrorData.Invoke(e.Data);
-            };
-        }
+            if (e.Data is null)
+            {
+                stderrComplete.TrySetResult();
+                return;
+            }
+
+            if (string.IsNullOrEmpty(e.Data))
+            {
+                return;
+            }
+
+            outputCapture?.Add(e.Data);
+            processSpec.OnErrorData?.Invoke(e.Data);
+        };
 
         var processLifetimeTcs = new TaskCompletionSource<ProcessResult>();
 
@@ -106,20 +126,38 @@ internal static partial class ProcessUtil
             process.BeginErrorReadLine();
             processSpec.OnStart?.Invoke(process.Id);
 
-            process.WaitForExitAsync().ContinueWith(t =>
+            _ = Task.Run(async () =>
             {
                 startupComplete.Wait();
 
-                if (processSpec.ThrowOnNonZeroReturnCode && process.ExitCode != 0)
+                try
                 {
-                    processLifetimeTcs.TrySetException(new InvalidOperationException(
-                        $"Command {processSpec.ExecutablePath} {processSpec.Arguments} returned non-zero exit code {process.ExitCode}"));
+                    await process.WaitForExitAsync().ConfigureAwait(false);
+                    await Task.WhenAll(stdoutComplete.Task, stderrComplete.Task).ConfigureAwait(false);
+
+                    processSpec.OnStop?.Invoke(process.ExitCode);
+
+                    if (processSpec.ThrowOnNonZeroReturnCode && process.ExitCode != 0)
+                    {
+                        var message = $"Command {processSpec.ExecutablePath} {processSpec.Arguments} returned non-zero exit code {process.ExitCode}";
+
+                        if (outputCapture?.TotalLineCount > 0)
+                        {
+                            message = $"{message}{Environment.NewLine}{outputCapture.GetFormattedOutput()}";
+                        }
+
+                        processLifetimeTcs.TrySetException(new InvalidOperationException(message));
+                    }
+                    else
+                    {
+                        processLifetimeTcs.TrySetResult(CreateProcessResult(process.ExitCode, outputCapture));
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    processLifetimeTcs.TrySetResult(new ProcessResult(process.ExitCode));
+                    processLifetimeTcs.TrySetException(ex);
                 }
-            }, TaskScheduler.Default);
+            });
         }
         finally
         {
@@ -130,6 +168,16 @@ internal static partial class ProcessUtil
         }
 
         return (processLifetimeTcs.Task, new ProcessDisposable(process, processLifetimeTcs.Task, processSpec.KillEntireProcessTree));
+    }
+
+    private static ProcessResult CreateProcessResult(int exitCode, ProcessOutputCapture? outputCapture)
+    {
+        if (outputCapture is null)
+        {
+            return new ProcessResult(exitCode);
+        }
+
+        return new ProcessResult(exitCode, outputCapture.ToArray(), outputCapture.TotalLineCount);
     }
 
     private sealed class ProcessDisposable : IAsyncDisposable

@@ -5,6 +5,7 @@ secrets:
   myapp:
     param1: ""
     param3: ""
+    ConnectionStrings__cs: ""
 config:
   myapp:
     ASPNETCORE_ENVIRONMENT: "Development"
@@ -14,3 +15,6 @@ config:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     MYAPP_HTTP: "http://myapp-service:8080"
     services__myapp__http__0: "http://myapp-service:8080"
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env-dashboard-service:18889"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+    OTEL_SERVICE_NAME: "project1"

@@ -4,6 +4,8 @@
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging;
@@ -97,6 +99,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         {
             Arguments = arguments,
             StandardInputContent = password,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
             OnOutputData = output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
@@ -122,7 +125,14 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             if (processResult.ExitCode != 0)
             {
                 _logger.LogError("{RuntimeName} login to {RegistryServer} failed with exit code {ExitCode}.", Name, registryServer, processResult.ExitCode);
-                throw new DistributedApplicationException($"{Name} login failed with exit code {processResult.ExitCode}.");
+
+                var message = $"{Name} login failed with exit code {processResult.ExitCode}.";
+                if (processResult.TotalProcessOutputLineCount > 0)
+                {
+                    message = $"{message}{Environment.NewLine}{processResult.GetFormattedOutput()}";
+                }
+
+                throw new DistributedApplicationException(message);
             }
 
             _logger.LogInformation("{RuntimeName} login to {RegistryServer} succeeded.", Name, registryServer);
@@ -138,7 +148,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// <param name="exceptionMessageTemplate">Exception message template (must include {ExitCode} placeholder).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="logArguments">Arguments to pass to the log templates.</param>
-    private async Task ExecuteContainerCommandAsync(
+    protected async Task ExecuteContainerCommandAsync(
         string arguments,
         string errorLogTemplate,
         string successLogTemplate,
@@ -146,7 +156,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         CancellationToken cancellationToken,
         params object[] logArguments)
     {
-        var spec = CreateProcessSpec(arguments);
+        var spec = CreateProcessSpec(arguments, retainOutput: true);
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
         var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
@@ -161,7 +171,14 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             {
                 var errorArgs = logArguments.Concat(new object[] { processResult.ExitCode }).ToArray();
                 _logger.LogError(errorLogTemplate, errorArgs);
-                throw new DistributedApplicationException(string.Format(System.Globalization.CultureInfo.InvariantCulture, exceptionMessageTemplate, processResult.ExitCode));
+
+                var message = string.Format(System.Globalization.CultureInfo.InvariantCulture, exceptionMessageTemplate, processResult.ExitCode);
+                if (processResult.TotalProcessOutputLineCount > 0)
+                {
+                    message = $"{message}{Environment.NewLine}{processResult.GetFormattedOutput(outputDescription: "Command output")}";
+                }
+
+                throw new DistributedApplicationException(message);
             }
 
             _logger.LogInformation(successLogTemplate, logArguments);
@@ -186,36 +203,15 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         object[] logArguments,
         Dictionary<string, string>? environmentVariables = null)
     {
-        var spec = CreateProcessSpec(arguments);
+        var processResult = await ExecuteContainerCommandWithResultAsync(
+            arguments,
+            errorLogTemplate,
+            successLogTemplate,
+            cancellationToken,
+            logArguments,
+            environmentVariables).ConfigureAwait(false);
 
-        // Add environment variables if provided
-        if (environmentVariables is not null)
-        {
-            foreach (var (key, value) in environmentVariables)
-            {
-                spec.EnvironmentVariables[key] = value;
-            }
-        }
-
-        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
-
-        await using (processDisposable)
-        {
-            var processResult = await pendingProcessResult
-                .WaitAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            if (processResult.ExitCode != 0)
-            {
-                var errorArgs = logArguments.Concat(new object[] { processResult.ExitCode }).ToArray();
-                _logger.LogError(errorLogTemplate, errorArgs);
-                return processResult.ExitCode;
-            }
-
-            _logger.LogDebug(successLogTemplate, logArguments);
-            return processResult.ExitCode;
-        }
+        return processResult.ExitCode;
     }
 
     /// <summary>
@@ -273,15 +269,56 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     }
 
     /// <summary>
-    /// Creates a ProcessSpec for executing container runtime commands.
+    /// Executes a container runtime command and returns the process result without throwing for non-zero exit codes.
     /// </summary>
-    /// <param name="arguments">The command arguments.</param>
-    /// <returns>A configured ProcessSpec instance.</returns>
-    private ProcessSpec CreateProcessSpec(string arguments)
+    protected async Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
+        string arguments,
+        string errorLogTemplate,
+        string successLogTemplate,
+        CancellationToken cancellationToken,
+        object[] logArguments,
+        Dictionary<string, string>? environmentVariables = null,
+        bool retainOutput = false)
+    {
+        var spec = CreateProcessSpec(arguments, retainOutput);
+
+        if (environmentVariables is not null)
+        {
+            foreach (var (key, value) in environmentVariables)
+            {
+                spec.EnvironmentVariables[key] = value;
+            }
+        }
+
+        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+
+        await using (processDisposable)
+        {
+            var processResult = await pendingProcessResult
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (processResult.ExitCode != 0)
+            {
+                var errorArgs = logArguments.Concat(new object[] { processResult.ExitCode }).ToArray();
+                _logger.LogError(errorLogTemplate, errorArgs);
+            }
+            else
+            {
+                _logger.LogDebug(successLogTemplate, logArguments);
+            }
+
+            return processResult;
+        }
+    }
+
+    private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false)
     {
         return new ProcessSpec(RuntimeExecutable)
         {
             Arguments = arguments,
+            RetainedOutputLineCount = retainOutput ? ProcessSpec.DefaultRetainedOutputLineCount : null,
             OnOutputData = output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
@@ -294,4 +331,319 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             InheritEnv = true
         };
     }
+
+    public virtual async Task ComposeUpAsync(ComposeOperationContext context, CancellationToken cancellationToken)
+    {
+        await EnsureRuntimeAvailableAsync().ConfigureAwait(false);
+
+        var arguments = BuildComposeArguments(context);
+        arguments += " up -d --remove-orphans";
+
+        _logger.LogInformation("Using container runtime '{Runtime}' for compose operations.", RuntimeExecutable);
+        _logger.LogDebug("Running {Runtime} compose up with arguments: {Arguments}", RuntimeExecutable, arguments);
+
+        var spec = new ProcessSpec(RuntimeExecutable)
+        {
+            Arguments = arguments,
+            WorkingDirectory = context.WorkingDirectory,
+            ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
+            InheritEnv = true,
+            OnOutputData = output =>
+            {
+                _logger.LogDebug("{Runtime} compose up (stdout): {Output}", RuntimeExecutable, output);
+            },
+            OnErrorData = error =>
+            {
+                _logger.LogDebug("{Runtime} compose up (stderr): {Error}", RuntimeExecutable, error);
+            },
+        };
+
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+
+        await using (processDisposable)
+        {
+            var processResult = await pendingProcessResult
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (processResult.ExitCode != 0)
+            {
+                var envHint = Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME") is not null
+                    ? $"The container runtime is configured via ASPIRE_CONTAINER_RUNTIME (current: '{RuntimeExecutable}')."
+                    : $"The container runtime was auto-detected as '{RuntimeExecutable}'. Set ASPIRE_CONTAINER_RUNTIME to override (e.g., 'docker' or 'podman').";
+
+                var message =
+                    $"'{RuntimeExecutable} compose up' failed with exit code {processResult.ExitCode}. " +
+                    $"Ensure '{RuntimeExecutable}' is installed and available on PATH. " +
+                    envHint;
+
+                if (processResult.TotalProcessOutputLineCount > 0)
+                {
+                    message = $"{message}{Environment.NewLine}{processResult.GetFormattedOutput()}";
+                }
+
+                throw new DistributedApplicationException(message);
+            }
+        }
+    }
+
+    public virtual async Task ComposeDownAsync(ComposeOperationContext context, CancellationToken cancellationToken)
+    {
+        await EnsureRuntimeAvailableAsync().ConfigureAwait(false);
+
+        var arguments = BuildComposeArguments(context);
+        arguments += " down";
+
+        _logger.LogDebug("Running {Runtime} compose down with arguments: {Arguments}", RuntimeExecutable, arguments);
+
+        var stderrLines = new List<string>();
+        var spec = new ProcessSpec(RuntimeExecutable)
+        {
+            Arguments = arguments,
+            WorkingDirectory = context.WorkingDirectory,
+            ThrowOnNonZeroReturnCode = false,
+            InheritEnv = true,
+            OnOutputData = output =>
+            {
+                _logger.LogDebug("{Runtime} compose down (stdout): {Output}", RuntimeExecutable, output);
+            },
+            OnErrorData = error =>
+            {
+                _logger.LogDebug("{Runtime} compose down (stderr): {Error}", RuntimeExecutable, error);
+                if (!string.IsNullOrWhiteSpace(error))
+                {
+                    stderrLines.Add(error);
+                }
+            },
+        };
+
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+
+        await using (processDisposable)
+        {
+            var processResult = await pendingProcessResult
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (processResult.ExitCode != 0)
+            {
+                var stderrOutput = stderrLines.Count > 0
+                    ? " " + string.Join(" ", stderrLines)
+                    : "";
+
+                throw new DistributedApplicationException(
+                    $"'{RuntimeExecutable} compose down' failed with exit code {processResult.ExitCode}.{stderrOutput}");
+            }
+        }
+    }
+
+    public virtual async Task<IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, CancellationToken cancellationToken)
+    {
+        await EnsureRuntimeAvailableAsync().ConfigureAwait(false);
+
+        var arguments = BuildComposeArguments(context);
+        arguments += " ps --format json";
+
+        var outputLines = new List<string>();
+
+        var spec = new ProcessSpec(RuntimeExecutable)
+        {
+            Arguments = arguments,
+            WorkingDirectory = context.WorkingDirectory,
+            ThrowOnNonZeroReturnCode = false,
+            InheritEnv = true,
+            OnOutputData = output =>
+            {
+                if (!string.IsNullOrWhiteSpace(output))
+                {
+                    outputLines.Add(output);
+                }
+            },
+            OnErrorData = error =>
+            {
+                if (!string.IsNullOrWhiteSpace(error))
+                {
+                    _logger.LogDebug("{Runtime} compose ps (stderr): {Error}", RuntimeExecutable, error);
+                }
+            }
+        };
+
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+
+        await using (processDisposable)
+        {
+            var processResult = await pendingProcessResult
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (processResult.ExitCode != 0)
+            {
+                _logger.LogDebug("{Runtime} compose ps failed with exit code {ExitCode}", RuntimeExecutable, processResult.ExitCode);
+                return null;
+            }
+        }
+
+        return ParseComposeServiceEntries(outputLines);
+    }
+
+    /// <summary>
+    /// Parses Docker Compose ps JSON output, handling both NDJSON (one object per line) and JSON array formats.
+    /// </summary>
+    /// <example>
+    /// NDJSON (Docker Compose v2+):
+    /// <code>
+    /// {"Service":"web","Publishers":[{"URL":"","TargetPort":80,"PublishedPort":8080,"Protocol":"tcp"}]}
+    /// {"Service":"cache","Publishers":[{"TargetPort":6379,"PublishedPort":6379}]}
+    /// </code>
+    /// JSON array (older versions):
+    /// <code>
+    /// [{"Service":"web","Publishers":[{"TargetPort":80,"PublishedPort":8080}]}]
+    /// </code>
+    /// </example>
+    internal static List<ComposeServiceInfo> ParseComposeServiceEntries(List<string> outputLines)
+    {
+        var results = new List<ComposeServiceInfo>();
+
+        foreach (var line in outputLines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+
+            // Try parsing as JSON array first (older Docker Compose versions)
+            if (trimmed.StartsWith('['))
+            {
+                try
+                {
+                    var entries = JsonSerializer.Deserialize(trimmed, ComposeJsonContext.Default.ListDockerComposePsEntry);
+                    if (entries is not null)
+                    {
+                        foreach (var entry in entries)
+                        {
+                            results.Add(MapDockerComposeEntry(entry));
+                        }
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Skip unparseable lines
+                }
+                continue;
+            }
+
+            // Parse as single JSON object (NDJSON format)
+            if (trimmed.StartsWith('{'))
+            {
+                try
+                {
+                    var entry = JsonSerializer.Deserialize(trimmed, ComposeJsonContext.Default.DockerComposePsEntry);
+                    if (entry is not null)
+                    {
+                        results.Add(MapDockerComposeEntry(entry));
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Skip unparseable lines
+                }
+            }
+        }
+
+        return results;
+    }
+
+    private static ComposeServiceInfo MapDockerComposeEntry(DockerComposePsEntry entry)
+    {
+        return new ComposeServiceInfo
+        {
+            Service = entry.Service,
+            Publishers = entry.Publishers?.Select(p => new ComposeServicePort
+            {
+                PublishedPort = p.PublishedPort,
+                TargetPort = p.TargetPort
+            }).ToList()
+        };
+    }
+
+    /// <summary>
+    /// Builds the compose CLI arguments from a <see cref="ComposeOperationContext"/>.
+    /// </summary>
+    private static string BuildComposeArguments(ComposeOperationContext context)
+    {
+        var arguments = context.ComposeFilePath is not null
+            ? $"compose -f \"{context.ComposeFilePath}\" --project-name \"{context.ProjectName}\""
+            : $"compose --project-name \"{context.ProjectName}\"";
+
+        if (context.EnvFilePath is not null && File.Exists(context.EnvFilePath))
+        {
+            arguments += $" --env-file \"{context.EnvFilePath}\"";
+        }
+
+        return arguments;
+    }
+
+    /// <summary>
+    /// Validates that the container runtime binary is available on the system PATH.
+    /// Fails fast with an actionable error message instead of a cryptic exit code.
+    /// </summary>
+    protected async Task EnsureRuntimeAvailableAsync()
+    {
+        try
+        {
+            var whichCommand = OperatingSystem.IsWindows() ? "where" : "which";
+            var spec = new ProcessSpec(whichCommand)
+            {
+                Arguments = RuntimeExecutable,
+                ThrowOnNonZeroReturnCode = false,
+                InheritEnv = true
+            };
+
+            var (pendingResult, processDisposable) = ProcessUtil.Run(spec);
+            await using (processDisposable)
+            {
+                var result = await pendingResult.ConfigureAwait(false);
+                if (result.ExitCode != 0)
+                {
+                    throw new DistributedApplicationException(
+                        $"Container runtime '{RuntimeExecutable}' was not found on PATH. " +
+                        $"Install {Name} or set ASPIRE_CONTAINER_RUNTIME to a different runtime (e.g., 'docker' or 'podman').");
+                }
+            }
+        }
+        catch (DistributedApplicationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to check if {Runtime} is available on PATH", RuntimeExecutable);
+        }
+    }
+}
+
+/// <summary>
+/// Internal DTO for deserializing Docker Compose ps JSON output.
+/// </summary>
+internal sealed class DockerComposePsEntry
+{
+    public string? Service { get; set; }
+    public List<DockerComposePsPublisher>? Publishers { get; set; }
+}
+
+/// <summary>
+/// Internal DTO for deserializing Docker Compose ps publisher entries.
+/// </summary>
+internal sealed class DockerComposePsPublisher
+{
+    public int? PublishedPort { get; set; }
+    public int? TargetPort { get; set; }
+}
+
+[JsonSerializable(typeof(DockerComposePsEntry))]
+[JsonSerializable(typeof(List<DockerComposePsEntry>))]
+internal sealed partial class ComposeJsonContext : JsonSerializerContext
+{
 }

@@ -67,14 +67,15 @@ internal static partial class DetachedProcessLauncher
     /// <param name="fileName">The executable path (e.g. dotnet or the native CLI).</param>
     /// <param name="arguments">The command-line arguments for the child process.</param>
     /// <param name="workingDirectory">The working directory for the child process.</param>
+    /// <param name="shouldRemoveEnvironmentVariable">Optional predicate that returns <see langword="true" /> for environment variable names that should be removed from the child process.</param>
     /// <returns>A <see cref="Process"/> object representing the launched child.</returns>
-    public static Process Start(string fileName, IReadOnlyList<string> arguments, string workingDirectory)
+    public static Process Start(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable = null)
     {
         if (OperatingSystem.IsWindows())
         {
-            return StartWindows(fileName, arguments, workingDirectory);
+            return StartWindows(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable);
         }
 
-        return StartUnix(fileName, arguments, workingDirectory);
+        return StartUnix(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable);
     }
 }

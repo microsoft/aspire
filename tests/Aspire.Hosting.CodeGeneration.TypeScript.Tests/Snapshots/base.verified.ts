@@ -7,6 +7,12 @@ export { Handle, AspireClient, CapabilityError, CancellationToken, registerCallb
 export type { MarshalledHandle, AtsError, AtsErrorDetails, CallbackFunction } from './transport.js';
 export { AtsErrorCodes, isMarshalledHandle, isAtsError, wrapIfHandle } from './transport.js';
 
+/**
+ * Utility type for parameters that accept either a resolved value or a promise of that value.
+ * Used by generated APIs to allow passing un-awaited resource builders directly.
+ */
+export type Awaitable<T> = T | PromiseLike<T>;
+
 // ============================================================================
 // Reference Expression
 // ============================================================================

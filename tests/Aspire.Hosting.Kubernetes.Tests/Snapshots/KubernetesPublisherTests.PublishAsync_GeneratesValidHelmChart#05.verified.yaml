@@ -1,20 +1,16 @@
----
+﻿---
 apiVersion: "v1"
-kind: "Service"
+kind: "ConfigMap"
 metadata:
-  name: "myapp-service"
+  name: "project1-config"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "myapp"
+    app.kubernetes.io/component: "project1"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
-spec:
-  type: "ClusterIP"
-  selector:
-    app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "myapp"
-    app.kubernetes.io/instance: "{{ .Release.Name }}"
-  ports:
-    - name: "http"
-      protocol: "TCP"
-      port: 8080
-      targetPort: 8080
+data:
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.project1.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
+  MYAPP_HTTP: "{{ .Values.config.project1.MYAPP_HTTP }}"
+  services__myapp__http__0: "{{ .Values.config.project1.services__myapp__http__0 }}"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.project1.OTEL_EXPORTER_OTLP_ENDPOINT }}"
+  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.project1.OTEL_EXPORTER_OTLP_PROTOCOL }}"
+  OTEL_SERVICE_NAME: "{{ .Values.config.project1.OTEL_SERVICE_NAME }}"

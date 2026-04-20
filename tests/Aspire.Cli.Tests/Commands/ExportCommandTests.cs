@@ -39,7 +39,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         var tracesJson = BuildTracesJson(
             ("apiservice", null, "span001", "GET /api/products", s_testTime, s_testTime.AddMilliseconds(50), false));
 
-        var provider = CreateExportTestServices(workspace, resources,
+        using var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = logsJson,
@@ -115,7 +115,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         var customDir = Path.Combine(workspace.WorkspaceRoot.FullName, "custom", "nested");
         var outputPath = Path.Combine(customDir, "my-export.zip");
 
-        var provider = CreateExportTestServices(workspace,
+        using var provider = CreateExportTestServices(workspace,
             resources: [new ResourceInfoJson { Name = "redis", InstanceId = null }],
             telemetryEndpoints: new Dictionary<string, string>
             {
@@ -159,7 +159,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
             options.OutputTextWriter = outputWriter;
             options.DisableAnsi = true;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"export --apphost {appHostProjectPath} --output {outputPath}");
@@ -274,7 +274,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"export --output {outputPath}");
@@ -319,7 +319,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
             ("apiservice", "abc", "span001", "GET /api/products", s_testTime, s_testTime.AddMilliseconds(50), false),
             ("apiservice", "def", "span002", "GET /api/orders", s_testTime.AddSeconds(1), s_testTime.AddSeconds(1).AddMilliseconds(80), false));
 
-        var provider = CreateExportTestServices(workspace, resources,
+        using var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = logsJson,
@@ -439,7 +439,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         var filteredTracesJson = BuildTracesJson(
             ("redis", null, "span001", "SET mykey", s_testTime, s_testTime.AddMilliseconds(10), false));
 
-        var provider = CreateExportTestServices(workspace, resources,
+        using var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = filteredLogsJson,
@@ -496,7 +496,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
         var tracesJson = BuildTracesJson(
             ("apiservice", null, "span001", "GET /api/products", s_testTime, s_testTime.AddMilliseconds(50), false));
 
-        var provider = CreateExportTestServices(workspace, resources,
+        using var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = logsJson,
@@ -554,7 +554,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
             ("apiservice", "abc", "span002", "GET /api/products", s_testTime, s_testTime.AddMilliseconds(50), false),
             ("apiservice", "def", "span003", "GET /api/orders", s_testTime.AddSeconds(1), s_testTime.AddSeconds(1).AddMilliseconds(80), false));
 
-        var provider = CreateExportTestServices(workspace, resources,
+        using var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = filteredLogsJson,
@@ -598,12 +598,142 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExportCommand_HiddenResources_AreExcludedByDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
+
+        using var provider = CreateExportTestServices(workspace,
+            resources: [],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/logs"] = BuildLogsJson(),
+                ["/api/telemetry/traces"] = BuildTracesJson(),
+            },
+            resourceSnapshots:
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
+                new ResourceSnapshot { Name = "hidden-svc", DisplayName = "hidden-svc", ResourceType = "Project", State = "Running", IsHidden = true },
+            ],
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Redis ready" },
+                new ResourceLogLine { ResourceName = "aspire-dashboard", LineNumber = 1, Content = "Dashboard started" },
+                new ResourceLogLine { ResourceName = "hidden-svc", LineNumber = 1, Content = "Hidden service log" },
+            ],
+            dashboardAvailable: false);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"export --output {outputPath}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(outputPath));
+
+        using var archive = ZipFile.OpenRead(outputPath);
+        var entryNames = archive.Entries.Select(e => e.FullName).OrderBy(n => n).ToList();
+
+        // Only redis should be present; hidden resources should be excluded
+        Assert.Collection(entryNames,
+            entry => Assert.Equal("consolelogs/redis.txt", entry),
+            entry => Assert.Equal("resources/redis.json", entry));
+    }
+
+    [Fact]
+    public async Task ExportCommand_IncludeHidden_ShowsHiddenResources()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
+
+        using var provider = CreateExportTestServices(workspace,
+            resources: [],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/logs"] = BuildLogsJson(),
+                ["/api/telemetry/traces"] = BuildTracesJson(),
+            },
+            resourceSnapshots:
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
+            ],
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Redis ready" },
+                new ResourceLogLine { ResourceName = "aspire-dashboard", LineNumber = 1, Content = "Dashboard started" },
+            ],
+            dashboardAvailable: false);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"export --include-hidden --output {outputPath}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(outputPath));
+
+        using var archive = ZipFile.OpenRead(outputPath);
+        var entryNames = archive.Entries.Select(e => e.FullName).OrderBy(n => n).ToList();
+
+        // Both resources should be present
+        Assert.Collection(entryNames,
+            entry => Assert.Equal("consolelogs/aspire-dashboard.txt", entry),
+            entry => Assert.Equal("consolelogs/redis.txt", entry),
+            entry => Assert.Equal("resources/aspire-dashboard.json", entry),
+            entry => Assert.Equal("resources/redis.json", entry));
+    }
+
+    [Fact]
+    public async Task ExportCommand_SpecificHiddenResource_WorksWithoutFlag()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
+
+        using var provider = CreateExportTestServices(workspace,
+            resources: [],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/logs"] = BuildLogsJson(),
+                ["/api/telemetry/traces"] = BuildTracesJson(),
+            },
+            resourceSnapshots:
+            [
+                new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+                new ResourceSnapshot { Name = "aspire-dashboard", DisplayName = "aspire-dashboard", ResourceType = "Executable", State = "Hidden" },
+            ],
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Redis ready" },
+                new ResourceLogLine { ResourceName = "aspire-dashboard", LineNumber = 1, Content = "Dashboard started" },
+            ],
+            dashboardAvailable: false);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"export aspire-dashboard --output {outputPath}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(File.Exists(outputPath));
+
+        using var archive = ZipFile.OpenRead(outputPath);
+        var entryNames = archive.Entries.Select(e => e.FullName).OrderBy(n => n).ToList();
+
+        // Only the specified hidden resource should be present
+        Assert.Collection(entryNames,
+            entry => Assert.Equal("consolelogs/aspire-dashboard.txt", entry),
+            entry => Assert.Equal("resources/aspire-dashboard.json", entry));
+    }
+
+    [Fact]
     public async Task ExportCommand_ResourceFilter_NonExistentResource_ReturnsError()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "export.zip");
 
-        var provider = CreateExportTestServices(workspace,
+        using var provider = CreateExportTestServices(workspace,
             resources: [new ResourceInfoJson { Name = "redis", InstanceId = null }],
             telemetryEndpoints: new Dictionary<string, string>
             {
@@ -640,7 +770,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
             ("redis", null, 9, "Information", "Ready to accept connections", s_testTime));
 
         // CreateExportTestServices sets up a backchannel, but --dashboard-url bypasses it entirely
-        var provider = CreateExportTestServices(workspace, resources,
+        using var provider = CreateExportTestServices(workspace, resources,
             telemetryEndpoints: new Dictionary<string, string>
             {
                 ["/api/telemetry/logs"] = logsJson,
@@ -686,7 +816,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var testInteractionService = new TestInteractionService();
 
-        var provider = CreateExportTestServices(workspace,
+        using var provider = CreateExportTestServices(workspace,
             resources: [],
             telemetryEndpoints: new Dictionary<string, string>(),
             resourceSnapshots:

@@ -42,7 +42,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -88,7 +88,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -140,7 +140,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -187,7 +187,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -233,7 +233,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -291,7 +291,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -370,7 +370,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -438,7 +438,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -490,7 +490,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -545,7 +545,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -616,7 +616,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act - use the --debug flag
@@ -660,7 +660,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -703,7 +703,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -837,6 +837,9 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
         await Task.CompletedTask; // Suppress CS1998
         yield break;
     }
+
+    public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
+        Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
 }
 
 // Data structures for tracking prompts
@@ -958,7 +961,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public void DisplayEmptyLine() { }
     public void DisplayPlainText(string text) { }
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
-    public void DisplayMarkdown(string markdown) { }
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null) { }
     public void DisplayMarkupLine(string markup) { }
 
     public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) { }

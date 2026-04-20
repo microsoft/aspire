@@ -35,26 +35,76 @@ internal sealed class KubernetesInfrastructure(
         foreach (var environment in kubernetesEnvironments)
         {
             var environmentContext = new KubernetesEnvironmentContext(environment, logger);
+            var containerRegistry = GetContainerRegistry(environment, @event.Model);
+
+            // Create a Kubernetes resource for the dashboard if enabled
+            if (environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource dashboard)
+            {
+                var dashboardService = await environmentContext.CreateKubernetesResourceAsync(dashboard, executionContext, cancellationToken).ConfigureAwait(false);
+                dashboardService.AddPrintSummaryStep();
+
+                dashboard.Annotations.Add(new DeploymentTargetAnnotation(dashboardService)
+                {
+                    ComputeEnvironment = environment,
+                    ContainerRegistry = containerRegistry
+                });
+            }
 
             foreach (var r in @event.Model.GetComputeResources())
             {
-                // Skip resources that are explicitly targeted to a different compute environment
+                // Skip resources that are explicitly targeted to a different compute environment.
+                // Also match if the resource targets a parent compute environment (e.g., AKS)
+                // that owns this Kubernetes environment.
                 var resourceComputeEnvironment = r.GetComputeEnvironment();
-                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != environment)
+                if (resourceComputeEnvironment is not null &&
+                    resourceComputeEnvironment != environment &&
+                    resourceComputeEnvironment != environment.OwningComputeEnvironment)
                 {
                     continue;
                 }
 
+                // Configure OTLP for resources if dashboard is enabled
+                if (environment.DashboardEnabled && environment.Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
+                {
+                    ConfigureOtlp(r, otlpGrpcEndpoint);
+                }
+
                 // Create a Kubernetes compute resource for the resource
                 var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
+                serviceResource.AddPrintSummaryStep();
 
-                // Add deployment target annotation to the resource
+                // Add deployment target annotation to the resource.
+                // Use the resource's actual compute environment (which may be a parent
+                // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
+                // can match it correctly during publish.
+                var computeEnvForAnnotation = resourceComputeEnvironment ?? (IComputeEnvironmentResource)environment;
                 r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
                 {
-                    ComputeEnvironment = environment
+                    ComputeEnvironment = computeEnvForAnnotation,
+                    ContainerRegistry = containerRegistry
                 });
             }
         }
+    }
+
+    private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
+    {
+        // Check for explicit container registry reference annotation on the environment
+        if (environment.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation))
+        {
+            return annotation.Registry;
+        }
+
+        // Check if there's a single container registry in the app model
+        var registries = appModel.Resources.OfType<IContainerRegistry>().ToArray();
+        if (registries.Length == 1)
+        {
+            return registries[0];
+        }
+
+        // Kubernetes has no local registry fallback — return null if no registry is configured.
+        // The PushPrereq step will validate and error if a registry is required but not available.
+        return null;
     }
 
     private static void EnsureNoPublishAsKubernetesServiceAnnotations(DistributedApplicationModel appModel)
@@ -65,6 +115,20 @@ internal sealed class KubernetesInfrastructure(
             {
                 throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as a Kubernetes service, but there are no '{nameof(KubernetesEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(KubernetesEnvironmentExtensions.AddKubernetesEnvironment)}'.");
             }
+        }
+    }
+
+    private static void ConfigureOtlp(IResource resource, EndpointReference otlpEndpoint)
+    {
+        if (resource is IResourceWithEnvironment resourceWithEnv && resource.Annotations.OfType<OtlpExporterAnnotation>().Any())
+        {
+            resourceWithEnv.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+            {
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = otlpEndpoint;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = "grpc";
+                context.EnvironmentVariables[KnownOtelConfigNames.ServiceName] = resource.Name;
+                return Task.CompletedTask;
+            }));
         }
     }
 

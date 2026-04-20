@@ -212,6 +212,22 @@ internal sealed class AppHostLauncher(
         return (dotnetPath, childArgs);
     }
 
+    /// <summary>
+    /// Prefix for environment variables that configure extension-host mode.
+    /// Any environment variable starting with this prefix is removed from
+    /// detached child processes to prevent them from entering extension mode.
+    /// Keep the DEBUG_SESSION_* and DCP session variables intact because the launched AppHost
+    /// still relies on them for IDE execution and dashboard integration.
+    /// </summary>
+    internal const string ExtensionEnvironmentVariablePrefix = "ASPIRE_EXTENSION_";
+
+    /// <summary>
+    /// Returns <see langword="true"/> if the specified environment variable name
+    /// should be removed from detached child CLI processes.
+    /// </summary>
+    internal static bool IsExtensionEnvironmentVariable(string name) =>
+        name.StartsWith(ExtensionEnvironmentVariablePrefix, StringComparison.OrdinalIgnoreCase);
+
     private record LaunchResult(Process? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode);
 
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
@@ -227,7 +243,8 @@ internal sealed class AppHostLauncher(
             childProcess = DetachedProcessLauncher.Start(
                 executablePath,
                 childArgs,
-                executionContext.WorkingDirectory.FullName);
+                executionContext.WorkingDirectory.FullName,
+                IsExtensionEnvironmentVariable);
         }
         catch (Exception ex)
         {
@@ -311,7 +328,7 @@ internal sealed class AppHostLauncher(
             }
         }
 
-        interactionService.DisplayMessage(KnownEmojis.MagnifyingGlassTiltedRight, string.Format(
+        interactionService.DisplayMessage(KnownEmojis.MagnifyingGlassTiltedLeft, string.Format(
             CultureInfo.CurrentCulture,
             RunCommandStrings.CheckLogsForDetails,
             childLogFile));

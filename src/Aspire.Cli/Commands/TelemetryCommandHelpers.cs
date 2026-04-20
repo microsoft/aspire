@@ -29,6 +29,12 @@ internal static class TelemetryCommandHelpers
     /// </summary>
     internal const string ApiKeyHeaderName = "X-API-Key";
 
+    /// <summary>
+    /// Limit passed to dashboard telemetry APIs. All data is fetched in one API call
+    /// so there shouldn't be a limit on data returned.
+    /// </summary>
+    internal const int MaxTelemetryLimit = int.MaxValue;
+
     #region Shared Command Options
 
     /// <summary>
@@ -398,17 +404,18 @@ internal static class TelemetryCommandHelpers
     /// <param name="dashboardUrl">The base dashboard URL.</param>
     /// <param name="traceId">The trace ID.</param>
     /// <param name="displayText">The text to display (defaults to shortened trace ID).</param>
+    /// <param name="spanId">Optional span ID to highlight in the trace detail view.</param>
     /// <returns>A Spectre markup string with hyperlink, or plain text if dashboardUrl is null.</returns>
-    public static string FormatTraceLink(string? dashboardUrl, string traceId, string? displayText = null)
+    public static string FormatTraceLink(string? dashboardUrl, string traceId, string? displayText = null, string? spanId = null)
     {
         var text = displayText ?? OtlpHelpers.ToShortenedId(traceId);
-        if (string.IsNullOrEmpty(dashboardUrl))
+        if (string.IsNullOrEmpty(dashboardUrl) || string.IsNullOrEmpty(traceId))
         {
             return text;
         }
 
         // Dashboard trace detail URL: /traces/detail/{traceId}
-        var url = DashboardUrls.CombineUrl(dashboardUrl, DashboardUrls.TraceDetailUrl(traceId));
+        var url = DashboardUrls.CombineUrl(dashboardUrl, DashboardUrls.TraceDetailUrl(traceId, spanId));
         return $"[link={url}]{text}[/]";
     }
 

@@ -200,7 +200,7 @@ public sealed class ParameterProcessor(
             executeCommand: async context =>
             {
                 await SetParameterAsync(parameterResource, context.CancellationToken).ConfigureAwait(false);
-                return CommandResults.Success();
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceSetParameter, parameterResource.Name) };
             },
             updateState: _ => ResourceCommandState.Enabled,
             displayDescription: CommandStrings.SetParameterDescription,
@@ -216,7 +216,7 @@ public sealed class ParameterProcessor(
             executeCommand: async context =>
             {
                 await DeleteParameterAsync(parameterResource, context.CancellationToken).ConfigureAwait(false);
-                return CommandResults.Success();
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceDeletedParameter, parameterResource.Name) };
             },
             updateState: _ => HasParameterValue(parameterResource) ? ResourceCommandState.Enabled : ResourceCommandState.Hidden,
             displayDescription: CommandStrings.DeleteParameterDescription,
@@ -314,7 +314,7 @@ public sealed class ParameterProcessor(
             Value = hasExistingValue ? "true" : null,
             Description = !userSecretsManager.IsAvailable
                 ? InteractionStrings.ParametersInputsRememberDescriptionNotConfigured
-                : null,
+                : InteractionStrings.ParametersInputsRememberDescriptionConfigured,
             EnableDescriptionMarkdown = true,
             Disabled = !userSecretsManager.IsAvailable
         };
@@ -333,10 +333,7 @@ public sealed class ParameterProcessor(
             var parameterSection = await deploymentStateManager.AcquireSectionAsync(parameterResource.ConfigurationKey, cancellationToken).ConfigureAwait(false);
             var hasSavedState = parameterSection.Data.Count > 0;
 
-            // Show different message based on whether value is saved in user secrets
-            var message = hasSavedState
-                ? string.Format(CultureInfo.CurrentCulture, InteractionStrings.DeleteParameterMessageWithUserSecrets, parameterResource.Name)
-                : string.Format(CultureInfo.CurrentCulture, InteractionStrings.DeleteParameterMessage, parameterResource.Name);
+            var message = string.Format(CultureInfo.CurrentCulture, InteractionStrings.DeleteParameterMessage, parameterResource.Name);
 
             var inputs = new List<InteractionInput>();
             InteractionInput? deleteFromUserSecretsInput = null;
@@ -348,7 +345,9 @@ public sealed class ParameterProcessor(
                 {
                     Name = DeleteFromUserSecretsName,
                     InputType = InputType.Boolean,
-                    Label = InteractionStrings.ParametersInputsDeleteLabel
+                    Label = InteractionStrings.ParametersInputsDeleteLabel,
+                    Description = InteractionStrings.ParametersInputsDeleteDescription,
+                    EnableDescriptionMarkdown = true
                 };
                 inputs.Add(deleteFromUserSecretsInput);
             }

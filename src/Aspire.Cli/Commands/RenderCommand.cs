@@ -31,9 +31,12 @@ internal sealed class RenderCommand : BaseCommand
     private static readonly Dictionary<string, string> s_choices = new()
     {
         ["displaymessage"] = "Display message (all emojis)",
+        ["displaystyles"] = "Display error, success, subtle, and cancellation messages",
         ["showstatus"] = "Show status spinner (first 5 emojis)",
         ["showstatus-markup"] = "Show status with markup rendered",
         ["showstatus-escaped"] = "Show status with markup escaped",
+        ["choice"] = "Selection prompt with formatted choices",
+        ["choice-simple"] = "Selection prompt without formatter",
         ["mixed"] = "Mixed interaction service methods",
         ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
         ["exit"] = "Exit",
@@ -136,12 +139,18 @@ internal sealed class RenderCommand : BaseCommand
             {
                 case "displaymessage":
                     return TestDisplayMessage();
+                case "displaystyles":
+                    return TestDisplayStyles();
                 case "showstatus":
                     return await TestShowStatusAsync(cancellationToken);
                 case "showstatus-markup":
                     return await TestShowStatusWithMarkupAsync(cancellationToken);
                 case "showstatus-escaped":
                     return await TestShowStatusEscapedAsync(cancellationToken);
+                case "choice":
+                    return await TestChoiceWithFormatterAsync(cancellationToken);
+                case "choice-simple":
+                    return await TestChoiceSimpleAsync(cancellationToken);
                 case "mixed":
                     await TestMixedMethodsAsync(cancellationToken);
                     return ExitCodeConstants.Success;
@@ -191,6 +200,15 @@ internal sealed class RenderCommand : BaseCommand
         return ExitCodeConstants.Success;
     }
 
+    private int TestDisplayStyles()
+    {
+        InteractionService.DisplayError("This is an error message.");
+        InteractionService.DisplaySuccess("Operation completed successfully.");
+        InteractionService.DisplaySubtleMessage("This is a subtle hint.");
+        InteractionService.DisplayCancellationMessage();
+        return ExitCodeConstants.Success;
+    }
+
     private async Task<int> TestShowStatusAsync(CancellationToken cancellationToken)
     {
         foreach (var emoji in s_allEmojis.Take(5))
@@ -234,6 +252,42 @@ internal sealed class RenderCommand : BaseCommand
             },
             emoji: KnownEmojis.Package);
 
+        return ExitCodeConstants.Success;
+    }
+
+    private async Task<int> TestChoiceWithFormatterAsync(CancellationToken cancellationToken)
+    {
+        var packages = new[]
+        {
+            ("Aspire.Hosting.Redis", "9.2.0", "[green]stable[/]"),
+            ("Aspire.Hosting.PostgreSQL", "9.2.0", "[green]stable[/]"),
+            ("Aspire.Hosting.RabbitMQ", "9.1.0", "[yellow]preview[/]"),
+            ("Aspire.Hosting.MongoDB [Deprecated]", "9.0.0", "[red]deprecated[/]"),
+            ("Aspire.Hosting.Kafka", "9.2.0", "[green]stable[/]"),
+            ("Aspire.Hosting.MySql [Preview]", "9.1.0", "[yellow]preview[/]"),
+        };
+
+        var selected = await InteractionService.PromptForSelectionAsync(
+            "Select a [bold blue]package[/] to install:",
+            packages,
+            p => $"{p.Item1.EscapeMarkup()} [dim]v{p.Item2}[/] ({p.Item3})",
+            cancellationToken);
+
+        InteractionService.DisplayMessage(KnownEmojis.Package, $"Selected: {selected.Item1} v{selected.Item2}");
+        return ExitCodeConstants.Success;
+    }
+
+    private async Task<int> TestChoiceSimpleAsync(CancellationToken cancellationToken)
+    {
+        var environments = new[] { "Development", "Staging", "Production" };
+
+        var selected = await InteractionService.PromptForSelectionAsync(
+            "Select a target environment:",
+            environments,
+            e => e,
+            cancellationToken);
+
+        InteractionService.DisplayMessage(KnownEmojis.Rocket, $"Deploying to {selected}...");
         return ExitCodeConstants.Success;
     }
 
@@ -334,8 +388,8 @@ internal sealed class RenderCommand : BaseCommand
             "Markup characters in names and failures",
             [
                 new("root", "Build [web] frontend", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromMilliseconds(120), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromMilliseconds(120)),
-                new("child", "Deploy [api] service", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromMilliseconds(35), "Failure while parsing [resource] => {bad}", "root", 1, 2, TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(95)),
-                new("sibling", "Notify [[observers]]", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromMilliseconds(12), null, "root", 1, 3, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(112)),
+                new("child", "Deploy [api] service", ConsoleActivityLogger.ActivityState.Failure, TimeSpan.FromMilliseconds(35), "Failure while parsing [[resource]] => [bold]{bad}[/]", "root", 1, 2, TimeSpan.FromMilliseconds(60), TimeSpan.FromMilliseconds(95)),
+                new("sibling", "Notify [observers]", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromMilliseconds(12), null, "root", 1, 3, TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(112)),
             ], false),
         "publish-summary-mixed-hierarchy" => new(
             "Mixed roots and orphaned parents",
@@ -344,7 +398,8 @@ internal sealed class RenderCommand : BaseCommand
                 new("orphan", "Orphaned child falls back to root ordering", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "missing-parent", 1, 2, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3)),
                 new("root-b", "Publish", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromSeconds(4), null, null, 0, 3, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(9)),
                 new("child-b", "Package", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(1), null, "root-b", 1, 4, TimeSpan.FromSeconds(6), TimeSpan.FromSeconds(7)),
-                new("root-c", "Validate", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, null, 0, 5, TimeSpan.FromSeconds(9), TimeSpan.FromSeconds(11)),
+                new("info-step", "Using cached configuration", ConsoleActivityLogger.ActivityState.Info, TimeSpan.FromSeconds(0), null, "root-b", 1, 5, TimeSpan.FromSeconds(7), TimeSpan.FromSeconds(7)),
+                new("root-c", "Validate", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, null, 0, 6, TimeSpan.FromSeconds(9), TimeSpan.FromSeconds(11)),
             ]),
         "publish-summary-duration-extremes" => new(
             "Duration extremes",

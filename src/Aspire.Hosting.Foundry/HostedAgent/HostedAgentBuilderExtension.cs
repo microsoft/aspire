@@ -77,7 +77,7 @@ public static class HostedAgentResourceBuilderExtensions
     [AspireExportIgnore(Reason = "Subset of the full PublishAsHostedAgent overload which is exported.")]
     public static IResourceBuilder<T> PublishAsHostedAgent<T>(
         this IResourceBuilder<T> builder, Action<HostedAgentConfiguration> configure)
-        where T : ExecutableResource
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         return PublishAsHostedAgent(builder, project: null, configure: configure);
     }
@@ -92,7 +92,7 @@ public static class HostedAgentResourceBuilderExtensions
     [AspireExport("publishAsHostedAgentExecutable", MethodName = "publishAsHostedAgent", Description = "Publishes an executable resource as a hosted agent in Microsoft Foundry.")]
     public static IResourceBuilder<T> PublishAsHostedAgent<T>(
         this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
-        where T : ExecutableResource
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         /*
          * Much of the logic here is similar to ExecutableResourceBuilderExtensions.PublishAsDockerFile().
@@ -105,8 +105,13 @@ public static class HostedAgentResourceBuilderExtensions
 
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
+            // Preserve any target port already configured on an existing "http" endpoint;
+            // fall back to the default MAF agent port (8088) when none is set.
+            var existingHttpEndpoint = resource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(e => e.Name == "http");
+            var targetPort = existingHttpEndpoint?.TargetPort ?? 8088;
+
             builder
-                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", port: 8088, targetPort: 8088, isProxied: false)
+                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", targetPort: targetPort)
                 .WithUrls((ctx) =>
                 {
                     var http = ctx.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == "http" || u.Endpoint?.EndpointName == "https");
@@ -114,15 +119,11 @@ public static class HostedAgentResourceBuilderExtensions
                     {
                         return;
                     }
-                    ctx.Urls.Add(new()
+                    http.DisplayText = "Responses Endpoint";
+                    http.Url = new UriBuilder(http.Url)
                     {
-                        DisplayText = "Responses endpoint",
-                        Url = new UriBuilder(http.Url)
-                        {
-                            Path = "/responses"
-                        }.ToString(),
-                        Endpoint = http.Endpoint,
-                    });
+                        Path = "/responses"
+                    }.ToString();
                     ctx.Urls.Add(new()
                     {
                         DisplayText = "Liveness probe",
@@ -271,8 +272,8 @@ public static class HostedAgentResourceBuilderExtensions
             }
             return builder;
         }
-        // Get the corresponding ContainerResource. Usually this is swapped in at publish time for ExecutableResources.
-        ContainerResource target;
+        // Get the corresponding ContainerResource for ExecutableResources. Usually this is swapped in at publish time for ExecutableResources.
+        IResource target;
         if (resource is ContainerResource containerResource)
         {
             target = containerResource;
@@ -283,16 +284,28 @@ public static class HostedAgentResourceBuilderExtensions
         }
         else
         {
-            // Ensure we have a container resource to deploy
-            builder.PublishAsDockerFile();
-            if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out crb))
+            // Ensure we have a container resource to deploy.
+            // ExecutableResource needs PublishAsDockerFile()
+            // to convert them into container resources at this stage.
+            if (resource is ExecutableResource)
             {
-                target = crb.Resource;
+                builder.ApplicationBuilder.CreateResourceBuilder((ExecutableResource)(object)resource).PublishAsDockerFile();
+
+                if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out crb))
+                {
+                    target = crb.Resource;
+                }
+                else
+                {
+                    throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be converted to a container resource.");
+                }
             }
-            else
+            else if (resource is not ProjectResource)
             {
-                throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be converted to a container resource.");
+                throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
             }
+
+            target = resource;
         }
         // Create a separate agent resource to host the deployment
         var agent = new AzureHostedAgentResource(agentName, target, configure);
@@ -309,29 +322,5 @@ public static class HostedAgentResourceBuilderExtensions
             .WithReference(project);
 
         return builder;
-    }
-
-    /// <summary>
-    /// Publish a simple prompt agent in Microsoft Foundry.
-    ///
-    /// If a project resource is not provided, the method will attempt to find an existing
-    /// Microsoft Foundry project resource in the application model.
-    /// </summary>
-    [AspireExport(Description = "Adds and publishes a prompt agent to a Microsoft Foundry project.")]
-    public static IResourceBuilder<AzurePromptAgentResource> AddAndPublishPromptAgent(
-        this IResourceBuilder<AzureCognitiveServicesProjectResource> project, IResourceBuilder<FoundryDeploymentResource> model, [ResourceName] string name, string? instructions)
-    {
-        ArgumentNullException.ThrowIfNull(project);
-        ArgumentNullException.ThrowIfNull(model);
-        var agent = new AzurePromptAgentResource(name, model.Resource.DeploymentName, instructions);
-        return project.ApplicationBuilder.AddResource(agent)
-            .WithReferenceRelationship(project)
-            .WithArgs([
-                // TODO: actually execute the prompt agent locally
-                "-c",
-                "--project", project.Resource.Endpoint,
-                "--model", model.Resource.DeploymentName,
-                "--instructions", instructions ?? string.Empty,
-            ]);
     }
 }

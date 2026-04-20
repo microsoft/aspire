@@ -11,11 +11,15 @@ namespace Aspire.Cli.DotNet;
 /// </summary>
 internal sealed class ProcessExecution : IProcessExecution
 {
+    private static readonly TimeSpan s_forwarderIdleTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan s_forwarderPollInterval = TimeSpan.FromMilliseconds(100);
+
     private readonly Process _process;
     private readonly ILogger _logger;
     private readonly ProcessInvocationOptions _options;
     private Task? _stdoutForwarder;
     private Task? _stderrForwarder;
+    private long _lastForwarderActivityTimestamp = Stopwatch.GetTimestamp();
 
     internal ProcessExecution(Process process, ILogger logger, ProcessInvocationOptions options)
     {
@@ -43,23 +47,16 @@ internal sealed class ProcessExecution : IProcessExecution
     /// <inheritdoc />
     public bool Start()
     {
-        var suppressLogging = _options.SuppressLogging;
-
         var started = _process.Start();
 
         if (!started)
         {
-            if (!suppressLogging)
-            {
-                _logger.LogDebug("Failed to start process {FileName} with args: {Args}", FileName, string.Join(" ", Arguments));
-            }
+            _logger.LogDebug("{FileName} failed to start with args: {Args}", FileName, string.Join(" ", Arguments));
             return false;
         }
 
-        if (!suppressLogging)
-        {
-            _logger.LogDebug("Started {FileName} with PID: {ProcessId}", FileName, _process.Id);
-        }
+        _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", FileName, _process.Id, _process.StartInfo.WorkingDirectory);
+        RecordForwarderActivity();
 
         // Start stream forwarders
         _stdoutForwarder = Task.Run(async () =>
@@ -67,8 +64,7 @@ internal sealed class ProcessExecution : IProcessExecution
             await ForwardStreamToLoggerAsync(
                 _process.StandardOutput,
                 "stdout",
-                _options.StandardOutputCallback,
-                suppressLogging);
+                _options.StandardOutputCallback);
         });
 
         _stderrForwarder = Task.Run(async () =>
@@ -76,8 +72,7 @@ internal sealed class ProcessExecution : IProcessExecution
             await ForwardStreamToLoggerAsync(
                 _process.StandardError,
                 "stderr",
-                _options.StandardErrorCallback,
-                suppressLogging);
+                _options.StandardErrorCallback);
         });
 
         return true;
@@ -86,55 +81,40 @@ internal sealed class ProcessExecution : IProcessExecution
     /// <inheritdoc />
     public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
     {
-        var suppressLogging = _options.SuppressLogging;
-
-        if (!suppressLogging)
-        {
-            _logger.LogDebug("Waiting for process to exit with PID: {ProcessId}", _process.Id);
-        }
+        _logger.LogDebug("{FileName}({ProcessId}) waiting for exit", FileName, _process.Id);
 
         await _process.WaitForExitAsync(cancellationToken);
 
         if (!_process.HasExited)
         {
-            if (!suppressLogging)
-            {
-                _logger.LogDebug("Process with PID: {ProcessId} has not exited, killing it.", _process.Id);
-            }
+            _logger.LogDebug("{FileName}({ProcessId}) has not exited, killing it", FileName, _process.Id);
             _process.Kill(false);
         }
         else
         {
-            if (!suppressLogging)
-            {
-                _logger.LogDebug("Process with PID: {ProcessId} has exited with code: {ExitCode}", _process.Id, _process.ExitCode);
-            }
+            _logger.LogDebug("{FileName}({ProcessId}) exited with code: {ExitCode}", FileName, _process.Id, _process.ExitCode);
         }
 
-        // Explicitly close the streams to unblock any pending ReadLineAsync calls.
-        // In some environments (particularly CI containers), the stream handles may not
-        // be automatically closed when the process exits, causing ReadLineAsync to block
-        // indefinitely. Disposing the streams forces them to close.
-        _logger.LogDebug("Closing stdout/stderr streams for PID: {ProcessId}", _process.Id);
-        _process.StandardOutput.Close();
-        _process.StandardError.Close();
+        // Give the forwarders a fresh idle window to consume any buffered tail output produced right before exit.
+        RecordForwarderActivity();
 
-        // Wait for all the stream forwarders to finish so we know we've got everything
-        // fired off through the callbacks. Use a timeout as a safety net in case
-        // something else is unexpectedly holding the streams open.
+        // Wait for the stream forwarders to drain naturally first so we don't cut off the
+        // tail of the process output. In some environments the stream handles can stay open
+        // after the process exits, so we fall back to closing them only if the forwarders
+        // stop making progress for the idle timeout.
         if (_stdoutForwarder is not null && _stderrForwarder is not null)
         {
-            var forwarderTimeout = Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
             var forwardersCompleted = Task.WhenAll([_stdoutForwarder, _stderrForwarder]);
+            if (!await WaitForForwardersAsync(forwardersCompleted, cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogDebug("{FileName}({ProcessId}) closing stdout/stderr streams after forwarder idle timeout", FileName, _process.Id);
+                _process.StandardOutput.Close();
+                _process.StandardError.Close();
 
-            var completedTask = await Task.WhenAny(forwardersCompleted, forwarderTimeout);
-            if (completedTask == forwarderTimeout)
-            {
-                _logger.LogWarning("Stream forwarders for PID {ProcessId} did not complete within timeout after stream close. Continuing anyway.", _process.Id);
-            }
-            else
-            {
-                _logger.LogDebug("Pending forwarders for PID completed: {ProcessId}", _process.Id);
+                if (!await WaitForForwardersAsync(forwardersCompleted, cancellationToken).ConfigureAwait(false))
+                {
+                    _logger.LogWarning("{FileName}({ProcessId}) stream forwarders did not complete within idle timeout after stream close", FileName, _process.Id);
+                }
             }
         }
 
@@ -153,23 +133,23 @@ internal sealed class ProcessExecution : IProcessExecution
         _process.Dispose();
     }
 
-    private async Task ForwardStreamToLoggerAsync(StreamReader reader, string identifier, Action<string>? lineCallback, bool suppressLogging)
+    private async Task ForwardStreamToLoggerAsync(StreamReader reader, string identifier, Action<string>? lineCallback)
     {
-        if (!suppressLogging)
-        {
-            _logger.LogDebug(
-                "Starting to forward stream with identifier '{Identifier}' on process '{ProcessId}' to logger",
-                identifier,
-                _process.Id
-                );
-        }
+        _logger.LogDebug(
+            "{FileName}({ProcessId}) starting to forward {Identifier} stream",
+            FileName,
+            _process.Id,
+            identifier
+            );
 
         try
         {
             string? line;
             while ((line = await reader.ReadLineAsync()) is not null)
             {
-                if (!suppressLogging)
+                RecordForwarderActivity();
+
+                if (_logger.IsEnabled(LogLevel.Trace))
                 {
                     _logger.LogTrace(
                         "{FileName}({ProcessId}) {Identifier}: {Line}",
@@ -180,12 +160,45 @@ internal sealed class ProcessExecution : IProcessExecution
                         );
                 }
                 lineCallback?.Invoke(line);
+                RecordForwarderActivity();
             }
         }
         catch (ObjectDisposedException)
         {
             // Stream was closed externally (e.g., after process exit). This is expected.
-            _logger.LogDebug("Stream forwarder completed for {Identifier} - stream was closed", identifier);
+            _logger.LogDebug("{FileName}({ProcessId}) {Identifier} stream forwarder completed - stream was closed", FileName, _process.Id, identifier);
         }
+    }
+
+    private async Task<bool> WaitForForwardersAsync(Task forwardersCompleted, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            if (forwardersCompleted.IsCompleted)
+            {
+                await forwardersCompleted.ConfigureAwait(false);
+                _logger.LogDebug("{FileName}({ProcessId}) forwarders completed", FileName, _process.Id);
+                return true;
+            }
+
+            if (Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastForwarderActivityTimestamp)) >= s_forwarderIdleTimeout)
+            {
+                return false;
+            }
+
+            try
+            {
+                await Task.Delay(s_forwarderPollInterval, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return false;
+            }
+        }
+    }
+
+    private void RecordForwarderActivity()
+    {
+        Interlocked.Exchange(ref _lastForwarderActivityTimestamp, Stopwatch.GetTimestamp());
     }
 }

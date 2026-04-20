@@ -227,6 +227,32 @@ public static partial class AzureAppServiceEnvironmentExtensions
     }
 
     /// <summary>
+    /// Configures whether HTTP endpoints should be automatically upgraded to HTTPS for the Azure App Service environment.
+    /// By default, HTTP endpoints are upgraded to HTTPS for security and WebSocket compatibility.
+    /// </summary>
+    /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
+    /// <param name="upgrade">Whether to upgrade HTTP endpoints to HTTPS. Default is true.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <remarks>
+    /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure App Service.
+    /// Note that Azure App Service forces HTTP to HTTPS redirects at the platform level,
+    /// so disabling upgrade primarily affects connection strings generated for dependent resources.
+    /// </remarks>
+    /// <example>
+    /// Preserve HTTP endpoints instead of automatically upgrading them to HTTPS:
+    /// <code>
+    /// var appService = builder.AddAzureAppServiceEnvironment("appservice")
+    ///     .WithHttpsUpgrade(false);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service")]
+    public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool upgrade = true)
+    {
+        builder.Resource.PreserveHttpEndpoints = !upgrade;
+        return builder;
+    }
+
+    /// <summary>
     /// Configures whether the Aspire dashboard should be included in the Azure App Service environment.
     /// </summary>
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
@@ -328,27 +354,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
     private static AzureContainerRegistryResource CreateDefaultAzureContainerRegistry(IDistributedApplicationBuilder builder, string name)
     {
-        var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
-        {
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, resourceName) =>
-                {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = resourceName;
-                    return resource;
-                },
-                (infra) => new ContainerRegistryService(infra.AspireResource.GetBicepIdentifier())
-                {
-                    Sku = new ContainerRegistrySku { Name = ContainerRegistrySkuName.Basic },
-                    Tags = { { "aspire-resource-name", infra.AspireResource.Name } }
-                });
-
-            infrastructure.Add(registry);
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer });
-        };
-
-        var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
+        var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
         if (builder.ExecutionContext.IsPublishMode)
         {
             builder.AddResource(resource);

@@ -77,6 +77,7 @@
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Utils\ContainerRuntimeDetector.cs" />
     <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownFormats.cs" Link="Utils\KnownFormats.cs" />
@@ -128,6 +129,8 @@
     <Compile Include="$(SharedDir)ConsoleLogs\SharedAIHelpers.cs" Link="ConsoleLogs\SharedAIHelpers.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="ConsoleLogs\UrlParser.cs" />
+    <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
+    <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="Utils\NpmVersionHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>

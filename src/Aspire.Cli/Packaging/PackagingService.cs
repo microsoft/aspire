@@ -5,6 +5,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
+using Semver;
 using System.Reflection;
 
 namespace Aspire.Cli.Packaging;
@@ -43,13 +44,16 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
             foreach (var prHive in prHives)
             {
                 // The packages subdirectory contains the actual .nupkg files
+                var packagesDirectory = new DirectoryInfo(Path.Combine(prHive.FullName, "packages"));
+                var pinnedVersion = GetLocalHivePinnedVersion(packagesDirectory);
+
                 // Use forward slashes for cross-platform NuGet config compatibility
-                var packagesPath = Path.Combine(prHive.FullName, "packages").Replace('\\', '/');
+                var packagesPath = packagesDirectory.FullName.Replace('\\', '/');
                 var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Both, new[]
                 {
                     new PackageMapping("Aspire*", packagesPath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nuGetPackageCache);
+                }, nuGetPackageCache, pinnedVersion: pinnedVersion);
 
                 prPackageChannels.Add(prChannel);
             }
@@ -124,7 +128,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         }
 
         // Extract commit hash from assembly version to build staging feed URL
-        // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-{commitHash}/nuget/v3/index.json
+        // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{commitHash}/nuget/v3/index.json
         var assembly = Assembly.GetExecutingAssembly();
         var informationalVersion = assembly
             .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
@@ -145,7 +149,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         var commitHash = informationalVersion[(plusIndex + 1)..];
         var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
         
-        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-dotnet-aspire-{truncatedHash}/nuget/v3/index.json";
+        return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
     }
 
     private PackageChannelQuality GetStagingQuality()
@@ -178,5 +182,33 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         var cliVersion = Utils.VersionHelper.GetDefaultTemplateVersion();
         var plusIndex = cliVersion.IndexOf('+');
         return plusIndex >= 0 ? cliVersion[..plusIndex] : cliVersion;
+    }
+
+    // Local hive channels point at a flat directory of .nupkg files instead of a searchable feed.
+    // Derive a concrete Aspire version from the hive contents and pin the channel to it so template
+    // and package resolution stays on the same locally built version instead of asking NuGet for "latest".
+    // Prefer Aspire.ProjectTemplates because it drives `aspire new`, then fall back to common packages
+    // that are still present when the templates package is absent.
+    private static string? GetLocalHivePinnedVersion(DirectoryInfo packagesDirectory)
+    {
+        if (!packagesDirectory.Exists)
+        {
+            return null;
+        }
+
+        return FindHighestVersion("Aspire.ProjectTemplates")
+            ?? FindHighestVersion("Aspire.Hosting")
+            ?? FindHighestVersion("Aspire.AppHost.Sdk");
+
+        string? FindHighestVersion(string packageId)
+        {
+            return packagesDirectory
+                .EnumerateFiles($"{packageId}.*.nupkg")
+                .Select(static file => file.Name)
+                .Select(fileName => fileName[(packageId.Length + 1)..^".nupkg".Length])
+                .Where(version => SemVersion.TryParse(version, SemVersionStyles.Strict, out _))
+                .OrderByDescending(version => SemVersion.Parse(version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
+                .FirstOrDefault();
+        }
     }
 }

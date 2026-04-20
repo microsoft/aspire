@@ -158,14 +158,15 @@ public interface IResourceContainerImageManager
 
 internal sealed class ResourceContainerImageManager(
     ILogger<ResourceContainerImageManager> logger,
-    IContainerRuntime containerRuntime,
+    IContainerRuntimeResolver containerRuntimeResolver,
     IServiceProvider serviceProvider,
     DistributedApplicationExecutionContext? executionContext = null) : IResourceContainerImageManager
 {
     // Disable concurrent builds for project resources to avoid issues with overlapping msbuild projects
     private readonly SemaphoreSlim _throttle = new(1);
 
-    private IContainerRuntime ContainerRuntime { get; } = containerRuntime;
+    private async Task<IContainerRuntime> GetContainerRuntimeAsync(CancellationToken cancellationToken)
+        => await containerRuntimeResolver.ResolveAsync(cancellationToken).ConfigureAwait(false);
 
     private sealed class ResolvedContainerBuildOptions
     {
@@ -205,22 +206,23 @@ internal sealed class ResourceContainerImageManager(
 
     public async Task BuildImagesAsync(IEnumerable<IResource> resources, CancellationToken cancellationToken = default)
     {
+        var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         logger.LogInformation("Starting to build container images");
 
         // Only check container runtime health if there are resources that need it
         if (await ResourcesRequireContainerRuntimeAsync(resources, cancellationToken).ConfigureAwait(false))
         {
-            logger.LogDebug("Checking {ContainerRuntimeName} health", ContainerRuntime.Name);
+            logger.LogDebug("Checking {ContainerRuntimeName} health", containerRuntime.Name);
 
-            var containerRuntimeHealthy = await ContainerRuntime.CheckIfRunningAsync(cancellationToken).ConfigureAwait(false);
+            var containerRuntimeHealthy = await containerRuntime.CheckIfRunningAsync(cancellationToken).ConfigureAwait(false);
 
             if (!containerRuntimeHealthy)
             {
-                logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container images.", ContainerRuntime.Name);
-                throw new InvalidOperationException($"Container runtime '{ContainerRuntime.Name}' is not running or is unhealthy.");
+                logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container images.", containerRuntime.Name);
+                throw new InvalidOperationException($"Container runtime '{containerRuntime.Name}' is not running or is unhealthy.");
             }
 
-            logger.LogDebug("{ContainerRuntimeName} is healthy", ContainerRuntime.Name);
+            logger.LogDebug("{ContainerRuntimeName} is healthy", containerRuntime.Name);
         }
 
         foreach (var resource in resources)
@@ -234,6 +236,7 @@ internal sealed class ResourceContainerImageManager(
 
     public async Task BuildImageAsync(IResource resource, CancellationToken cancellationToken = default)
     {
+        var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         logger.LogInformation("Building container image for resource {ResourceName}", resource.Name);
 
         var options = await ResolveContainerBuildOptionsAsync(resource, cancellationToken).ConfigureAwait(false);
@@ -241,17 +244,17 @@ internal sealed class ResourceContainerImageManager(
         // Check if this resource needs a container runtime
         if (await ResourcesRequireContainerRuntimeAsync([resource], cancellationToken).ConfigureAwait(false))
         {
-            logger.LogDebug("Checking {ContainerRuntimeName} health", ContainerRuntime.Name);
+            logger.LogDebug("Checking {ContainerRuntimeName} health", containerRuntime.Name);
 
-            var containerRuntimeHealthy = await ContainerRuntime.CheckIfRunningAsync(cancellationToken).ConfigureAwait(false);
+            var containerRuntimeHealthy = await containerRuntime.CheckIfRunningAsync(cancellationToken).ConfigureAwait(false);
 
             if (!containerRuntimeHealthy)
             {
-                logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container image.", ContainerRuntime.Name);
-                throw new InvalidOperationException($"Container runtime '{ContainerRuntime.Name}' is not running or is unhealthy.");
+                logger.LogError("Container runtime '{ContainerRuntimeName}' is not running or is unhealthy. Cannot build container image.", containerRuntime.Name);
+                throw new InvalidOperationException($"Container runtime '{containerRuntime.Name}' is not running or is unhealthy.");
             }
 
-            logger.LogDebug("{ContainerRuntimeName} is healthy", ContainerRuntime.Name);
+            logger.LogDebug("{ContainerRuntimeName} is healthy", containerRuntime.Name);
         }
 
         if (resource is ProjectResource)
@@ -268,7 +271,7 @@ internal sealed class ResourceContainerImageManager(
         {
             if (!resource.TryGetContainerImageName(out var imageName))
             {
-                throw new InvalidOperationException("Resource image name could not be determined.");
+                throw new InvalidOperationException($"The container image name for resource '{resource.Name}' could not be determined.");
             }
 
             // This is a container resource so we'll use the container runtime to build the image
@@ -288,7 +291,7 @@ internal sealed class ResourceContainerImageManager(
         }
         else
         {
-            throw new NotSupportedException($"The resource type '{resource.GetType().Name}' is not supported.");
+            throw new NotSupportedException($"The resource '{resource.Name}' of type '{resource.GetType().Name}' is not supported.");
         }
     }
 
@@ -298,20 +301,20 @@ internal sealed class ResourceContainerImageManager(
 
         try
         {
-
             logger.LogInformation("Building image: {ResourceName}", resource.Name);
 
-            var success = await ExecuteDotnetPublishAsync(resource, options, cancellationToken).ConfigureAwait(false);
+            await ExecuteDotnetPublishAsync(resource, options, cancellationToken).ConfigureAwait(false);
 
-            if (!success)
-            {
-                logger.LogError("Building image for {ResourceName} failed", resource.Name);
-                throw new DistributedApplicationException($"Failed to build container image.");
-            }
-            else
-            {
-                logger.LogInformation("Building image for {ResourceName} completed", resource.Name);
-            }
+            logger.LogInformation("Building image for {ResourceName} completed", resource.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Building image for {ResourceName} failed", resource.Name);
+            throw;
         }
         finally
         {
@@ -319,12 +322,12 @@ internal sealed class ResourceContainerImageManager(
         }
     }
 
-    private async Task<bool> ExecuteDotnetPublishAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
+    private async Task ExecuteDotnetPublishAsync(IResource resource, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
     {
         // This is a resource project so we'll use the .NET SDK to build the container image.
         if (!resource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
         {
-            throw new DistributedApplicationException($"The resource '{projectMetadata}' does not have a project metadata annotation.");
+            throw new DistributedApplicationException($"The resource '{resource.Name}' does not have a project metadata annotation.");
         }
 
         var arguments = $"publish \"{projectMetadata.ProjectPath}\" --configuration Release /t:PublishContainer /p:ContainerRepository=\"{options.LocalImageName}\" /p:ContainerImageTag=\"{options.LocalImageTag}\"";
@@ -378,6 +381,8 @@ internal sealed class ResourceContainerImageManager(
         var spec = new ProcessSpec("dotnet")
         {
             Arguments = arguments,
+            ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
             OnOutputData = output =>
             {
                 logger.LogDebug("dotnet publish {ProjectPath} (stdout): {Output}", projectMetadata.ProjectPath, output);
@@ -403,21 +408,24 @@ internal sealed class ResourceContainerImageManager(
 
             if (processResult.ExitCode != 0)
             {
-                logger.LogError("dotnet publish for project {ProjectPath} failed with exit code {ExitCode}.", projectMetadata.ProjectPath, processResult.ExitCode);
-                return false;
+                throw new ProcessFailedException(
+                    $"Failed to build container image for resource '{resource.Name}' from project '{projectMetadata.ProjectPath}' with exit code {processResult.ExitCode}.",
+                    processResult.ExitCode,
+                    processResult.ProcessOutput,
+                    processResult.TotalProcessOutputLineCount);
             }
             else
             {
                 logger.LogDebug(
                     ".NET CLI completed with exit code: {ExitCode}",
                     processResult.ExitCode);
-                return true;
             }
         }
     }
 
     private async Task BuildContainerImageFromDockerfileAsync(IResource resource, DockerfileBuildAnnotation dockerfileBuildAnnotation, string imageName, ResolvedContainerBuildOptions options, CancellationToken cancellationToken)
     {
+        var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
         logger.LogInformation("Building image: {ResourceName}", resource.Name);
 
         // If there's a factory, generate the Dockerfile content and write it to the specified path
@@ -471,7 +479,7 @@ internal sealed class ResourceContainerImageManager(
 
         try
         {
-            await ContainerRuntime.BuildImageAsync(
+            await containerRuntime.BuildImageAsync(
                 dockerfileBuildAnnotation.ContextPath,
                 dockerfileBuildAnnotation.DockerfilePath,
                 containerBuildOptions,
@@ -514,7 +522,8 @@ internal sealed class ResourceContainerImageManager(
 
     public async Task PushImageAsync(IResource resource, CancellationToken cancellationToken)
     {
-        await ContainerRuntime.PushImageAsync(resource, cancellationToken).ConfigureAwait(false);
+        var containerRuntime = await GetContainerRuntimeAsync(cancellationToken).ConfigureAwait(false);
+        await containerRuntime.PushImageAsync(resource, cancellationToken).ConfigureAwait(false);
     }
 
     // .NET Container builds that push OCI images to a local file path do not need a runtime

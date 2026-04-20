@@ -85,5 +85,7 @@ internal sealed class PublishCommand : PipelineCommandBase
 
     protected override string GetCanceledMessage() => InteractionServiceStrings.OperationCancelled;
 
+    protected override string? GetTargetStepName(ParseResult parseResult) => "publish";
+
     protected override string GetProgressMessage(ParseResult parseResult) => "Executing step publish";
 }

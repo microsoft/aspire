@@ -90,3 +90,5 @@ output aiFoundryApiEndpoint string = foundry.properties.endpoints['AI Foundry AP
 output endpoint string = foundry.properties.endpoint
 
 output name string = foundry.name
+
+output id string = foundry.id

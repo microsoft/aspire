@@ -21,7 +21,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump --help");
@@ -43,7 +43,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"sdk dump --format {format}");
@@ -56,7 +56,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump /nonexistent/path/to/integration.csproj");
@@ -71,7 +71,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump @13.2.0");
@@ -86,7 +86,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump Aspire.Hosting.Redis@");
@@ -101,7 +101,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump Aspire.Hosting.Redis@not-a-version!!!");
@@ -116,7 +116,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump some-random-string");
@@ -131,7 +131,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump Aspire.Hosting.Redis@13.2.0");
@@ -144,7 +144,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump Aspire.Hosting.Redis@13.2.0 Aspire.Hosting.PostgreSQL@13.2.0");
@@ -157,7 +157,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("sdk dump Aspire.Hosting.Redis@13.2.0-preview.1");
@@ -170,7 +170,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         // LastIndexOf('@') splits as "Aspire.Hosting.Redis@" and "13.2.0"
@@ -212,7 +212,9 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
                 Environment.SetEnvironmentVariable("DOTNET_SKIP_FIRST_TIME_EXPERIENCE", "true");
                 Environment.SetEnvironmentVariable("DOTNET_GENERATE_ASPNET_CERTIFICATE", "false");
 
-                var exitCode = await Program.Main(["sdk", "dump", "--format", "ci", "--output", outputPath, projectPath]).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+                // ExtraLongTimeout because this spawns a real dotnet build of Aspire.Hosting.csproj
+                // in a child process, which can exceed the default timeout under concurrent test load.
+                var exitCode = await Program.Main(["sdk", "dump", "--format", "ci", "--output", outputPath, projectPath]).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
                 Assert.Equal(ExitCodeConstants.Success, exitCode);
 
                 var output = await File.ReadAllTextAsync(outputPath);

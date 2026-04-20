@@ -44,8 +44,7 @@ void main() throws Exception {
         var builderProjectFoundry = builder.addFoundry("builder-project-foundry");
         var builderProject = builderProjectFoundry.addProject("builder-project");
         var _builderProjectModel = builderProject.addModelDeployment("builder-project-model", "Phi-4-mini", "1", "Microsoft");
-        var projectModel = project.addModelDeploymentFromModel("project-model", model);
-        var _promptAgent = project.addAndPublishPromptAgent(projectModel, "writer-agent", "Write concise answers.");
+        var _projectModel = project.addModelDeploymentFromModel("project-model", model);
         var hostedAgent = builder.addExecutable(
             "hosted-agent",
             "node",

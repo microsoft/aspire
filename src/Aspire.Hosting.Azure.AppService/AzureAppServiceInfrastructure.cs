@@ -71,6 +71,9 @@ internal sealed class AzureAppServiceInfrastructure(
                     ComputeEnvironment = appServiceEnvironment
                 });
             }
+
+            // Log once about all HTTP endpoints upgraded to HTTPS
+            appServiceEnvironmentContext.LogHttpsUpgradeIfNeeded();
         }
     }
 

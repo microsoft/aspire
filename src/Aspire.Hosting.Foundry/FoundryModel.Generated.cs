@@ -34,6 +34,11 @@ public partial class FoundryModel
         public static readonly FoundryModel ClaudeHaiku45 = new() { Name = "claude-haiku-4-5", Version = "20251001", Format = "Anthropic" };
 
         /// <summary>
+        /// Claude Mythos Preview (gated research preview) is a new class of intelligence for cybersecurity, coding, and long-running agents. Only available as a gated research preview with access prioritized for defensive cybersecurity use cases
+        /// </summary>
+        public static readonly FoundryModel ClaudeMythosPreview = new() { Name = "claude-mythos-preview", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
         /// Claude Opus 4.1 is an industry leader for coding. It delivers sustained performance on long-running tasks that require focused effort and thousands of steps, significantly expanding what AI agents can solve.
         /// </summary>
         public static readonly FoundryModel ClaudeOpus41 = new() { Name = "claude-opus-4-1", Version = "20250805", Format = "Anthropic" };
@@ -210,7 +215,7 @@ public partial class FoundryModel
         /// <summary>
         /// Llama 4 Scout 17B 16E Instruct is great at multi-document summarization, parsing extensive user activity for personalized tasks, and reasoning over vast codebases.
         /// </summary>
-        public static readonly FoundryModel Llama4Scout17B16EInstruct = new() { Name = "Llama-4-Scout-17B-16E-Instruct", Version = "2", Format = "Meta" };
+        public static readonly FoundryModel Llama4Scout17B16EInstruct = new() { Name = "Llama-4-Scout-17B-16E-Instruct", Version = "4", Format = "Meta" };
 
         /// <summary>
         /// A powerful 70-billion parameter model excelling in reasoning, coding, and broad language applications.
@@ -1313,6 +1318,16 @@ public partial class FoundryModel
         /// MAI-DS-R1 is a DeepSeek-R1 reasoning model that has been post-trained by the Microsoft AI team to fill in information gaps in the previous version of the model and improve its harm protections while maintaining R1 reasoning capabilities.
         /// </summary>
         public static readonly FoundryModel MaiDSR1 = new() { Name = "MAI-DS-R1", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// MAI-Transcribe-1 is an ASR model built to deliver high quality batch transcription whenever the user speaks. It is designed to achieve high accuracy across 25 languages and to adapt seamlessly to diverse accents, dialects, and regional speech patterns.
+        /// </summary>
+        public static readonly FoundryModel MaiTranscribe1 = new() { Name = "MAI-Transcribe-1", Version = "2026-01-23", Format = "Microsoft" };
+
+        /// <summary>
+        /// MAI-Voice-1 is a text-to-speech (TTS) model that generates high-quality single-speaker speech and, soon, multi-speaker speech for public preview. It produces audio that strictly follows the input transcript and supports per-turn emotion control as well as
+        /// </summary>
+        public static readonly FoundryModel MaiVoice1 = new() { Name = "MAI-Voice-1", Version = "2025-12-18", Format = "Microsoft" };
 
         /// <summary>
         /// Model router is a deployable AI model that is trained to select the most suitable large language model (LLM) for a given prompt.
@@ -3967,6 +3982,16 @@ public partial class FoundryModel
         /// Grok 4.1 Fast Reasoning is a frontier multimodal model built for high‑performance, agentic execution—combining strong reasoning, advanced tool calling, and agentic search to handle complex tasks with speed and precision. It delivers natural, fluid dialogue
         /// </summary>
         public static readonly FoundryModel Grok41FastReasoning = new() { Name = "grok-4-1-fast-reasoning", Version = "1", Format = "xAI" };
+
+        /// <summary>
+        /// Grok 4.2 is xAI’s latest large language model, built for strong reasoning, multimodal understanding, and enterprise use. It improves instruction following, honesty, and calibration over earlier Grok versions, while supporting both single‑agent and multi‑ag
+        /// </summary>
+        public static readonly FoundryModel Grok420NonReasoning = new() { Name = "grok-4-20-non-reasoning", Version = "1", Format = "xAI" };
+
+        /// <summary>
+        /// Grok 4.2 is xAI’s latest large language model, built for strong reasoning, multimodal understanding, and enterprise use. It improves instruction following, honesty, and calibration over earlier Grok versions, while supporting both single‑agent and multi‑ag
+        /// </summary>
+        public static readonly FoundryModel Grok420Reasoning = new() { Name = "grok-4-20-reasoning", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok 4 Fast is an efficiency-focused large language model developed by xAI, pre-trained on general-purpose data and post-trained on task demonstrations and tool use, with built-in safety features including refusal behaviors, a fixed system prompt enforcing

@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.AgentServer.AgentFramework" />
+    <PackageReference Include="Azure.AI.Projects" />
+    <PackageReference Include="Azure.AI.OpenAI" />
+    <PackageReference Include="Azure.Identity" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" VersionOverride="1.0.0-rc4" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" VersionOverride="10.3.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" VersionOverride="10.3.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" VersionOverride="10.3.0" />
+  </ItemGroup>
+
+</Project>

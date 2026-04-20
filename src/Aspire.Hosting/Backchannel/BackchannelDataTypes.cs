@@ -11,6 +11,7 @@ namespace Aspire.Hosting.Backchannel;
 
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 
@@ -284,17 +285,64 @@ internal sealed class ExecuteResourceCommandResponse
     /// <summary>
     /// Gets the error message if the command failed.
     /// </summary>
+    [Obsolete("Use Message instead.")]
     public string? ErrorMessage { get; init; }
 
     /// <summary>
-    /// Gets the result data produced by the command.
+    /// Gets the message associated with the command result.
     /// </summary>
-    public string? Result { get; init; }
+    public string? Message { get; init; }
 
     /// <summary>
-    /// Gets the format of the result data (e.g. "none", "text", "json").
+    /// Gets the value produced by the command.
     /// </summary>
-    public string? ResultFormat { get; init; }
+    public ExecuteResourceCommandResult? Value { get; init; }
+}
+
+/// <summary>
+/// Value produced by a resource command.
+/// </summary>
+internal sealed class ExecuteResourceCommandResult
+{
+    /// <summary>
+    /// Gets the value data.
+    /// </summary>
+    public required string Value { get; init; }
+
+    /// <summary>
+    /// Gets the format of the value data.
+    /// </summary>
+    public CommandResultFormat Format { get; init; }
+
+    /// <summary>
+    /// Gets whether to immediately display the value in the dashboard.
+    /// </summary>
+    public bool DisplayImmediately { get; init; }
+}
+
+/// <summary>
+/// Specifies the format of a command result.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CommandResultFormat>))]
+internal enum CommandResultFormat
+{
+    /// <summary>
+    /// Plain text result.
+    /// </summary>
+    [JsonStringEnumMemberName("text")]
+    Text,
+
+    /// <summary>
+    /// JSON result.
+    /// </summary>
+    [JsonStringEnumMemberName("json")]
+    Json,
+
+    /// <summary>
+    /// Markdown result.
+    /// </summary>
+    [JsonStringEnumMemberName("markdown")]
+    Markdown
 }
 
 #endregion
@@ -641,6 +689,60 @@ internal class PublishingPromptInputAnswer
 }
 
 /// <summary>
+/// Represents metadata about a pipeline step for display purposes (e.g., --list-steps).
+/// </summary>
+internal sealed class PipelineStepInfo
+{
+    /// <summary>
+    /// Gets the unique name of the step.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the description of the step.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets the names of steps that this step depends on.
+    /// </summary>
+    public string[] DependsOn { get; init; } = [];
+
+    /// <summary>
+    /// Gets the tags that categorize this step.
+    /// </summary>
+    public string[] Tags { get; init; } = [];
+
+    /// <summary>
+    /// Gets the name of the resource this step is associated with, if any.
+    /// </summary>
+    public string? ResourceName { get; init; }
+}
+
+/// <summary>
+/// Request for getting pipeline step metadata.
+/// </summary>
+internal sealed class GetPipelineStepsRequest
+{
+    /// <summary>
+    /// Gets or sets the target step name to filter to (including transitive dependencies).
+    /// When null, all steps are returned.
+    /// </summary>
+    public string? Step { get; init; }
+}
+
+/// <summary>
+/// Response containing pipeline step metadata.
+/// </summary>
+internal sealed class GetPipelineStepsResponse
+{
+    /// <summary>
+    /// Gets the pipeline steps in topological (execution) order.
+    /// </summary>
+    public required PipelineStepInfo[] Steps { get; init; }
+}
+
+/// <summary>
 /// Represents the connection information for the Dashboard MCP server.
 /// </summary>
 internal sealed class DashboardMcpConnectionInfo
@@ -754,6 +856,11 @@ internal sealed class ResourceSnapshot
     /// This allows for extensibility without changing the schema.
     /// </summary>
     public Dictionary<string, string?> Properties { get; init; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether this resource is hidden.
+    /// </summary>
+    public bool IsHidden { get; init; }
 
     /// <summary>
     /// Gets the MCP server information if the resource exposes an MCP endpoint.
@@ -972,6 +1079,12 @@ internal sealed class AppHostInformation
     /// Gets or sets when the AppHost process started.
     /// </summary>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets when the CLI process that launched the AppHost started.
+    /// This value is only set when the AppHost is launched via the Aspire CLI.
+    /// </summary>
+    public DateTimeOffset? CliStartedAt { get; init; }
 }
 
 /// <summary>

@@ -277,7 +277,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetTemplates_WhenShowAllTemplatesIsEnabled_ReturnsAllTemplates()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: true);
+        var features = new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
         var factory = CreateTemplateFactory(features);
 
         // Act
@@ -296,7 +296,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetTemplates_WhenShowAllTemplatesIsDisabled_ReturnsOnlyStarterTemplates()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: false);
+        var features = new TestFeatures();
         var factory = CreateTemplateFactory(features);
 
         // Act
@@ -315,7 +315,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetTemplates_SingleFileAppHostIsNotReturned()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: false);
+        var features = new TestFeatures();
         var factory = CreateTemplateFactory(features);
 
         // Act
@@ -331,7 +331,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetInitTemplates_IncludesSingleFileAppHostTemplate()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: false);
+        var features = new TestFeatures();
         var factory = CreateTemplateFactory(features);
 
         // Act
@@ -346,7 +346,7 @@ public class DotNetTemplateFactoryTests
     public async Task GetTemplates_WhenDotNetSdkIsUnavailable_ReturnsNoTemplates()
     {
         // Arrange
-        var features = new TestFeatures(showAllTemplates: true);
+        var features = new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
         var sdkInstaller = new TestDotNetSdkInstaller
         {
             CheckAsyncCallback = _ => (false, null, "10.0.100")
@@ -431,25 +431,6 @@ public class DotNetTemplateFactoryTests
         }
     }
 
-    private sealed class TestFeatures : IFeatures
-    {
-        private readonly bool _showAllTemplates;
-
-        public TestFeatures(bool showAllTemplates = false)
-        {
-            _showAllTemplates = showAllTemplates;
-        }
-
-        public bool IsFeatureEnabled(string featureFlag, bool defaultValue)
-        {
-            return featureFlag switch
-            {
-                "showAllTemplates" => _showAllTemplates,
-                _ => defaultValue
-            };
-        }
-    }
-
     private sealed class TestInteractionService : IInteractionService
     {
         public ConsoleOutput Console { get; set; }
@@ -486,7 +467,7 @@ public class DotNetTemplateFactoryTests
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
         public void DisplayPlainText(string text) { }
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
-        public void DisplayMarkdown(string markdown) { }
+        public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null) { }
         public void DisplayMarkupLine(string markup) { }
         public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
         public void DisplayEmptyLine() { }

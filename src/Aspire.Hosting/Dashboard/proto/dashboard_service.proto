@@ -91,15 +91,22 @@ enum ResourceCommandResponseKind {
 
 message ResourceCommandResponse {
     ResourceCommandResponseKind kind = 1;
-    optional string error_message = 2;
-    optional string result = 3;
-    CommandResultFormat result_format = 4;
+    optional string error_message = 2 [deprecated = true];
+    optional string message = 3;
+    optional ResourceCommandResult result = 4;
+}
+
+message ResourceCommandResult {
+    string value = 1;
+    CommandResultFormat format = 2;
+    bool display_immediately = 3;
 }
 
 enum CommandResultFormat {
     COMMAND_RESULT_FORMAT_NONE = 0;
     COMMAND_RESULT_FORMAT_TEXT = 1;
     COMMAND_RESULT_FORMAT_JSON = 2;
+    COMMAND_RESULT_FORMAT_MARKDOWN = 3;
 }
 
 ////////////////////////////////////////////

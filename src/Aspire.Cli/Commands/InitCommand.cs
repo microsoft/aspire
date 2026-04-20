@@ -292,7 +292,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
                 foreach (var project in initContext.ExecutableProjectsToAddToAppHost)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.CheckBoxWithCheck, project.ProjectFile.Name);
+                    InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, project.ProjectFile.Name);
                 }
 
                 var addServiceDefaultsMessage = """

@@ -181,10 +181,12 @@ internal sealed class TestArmClient : IArmClient
 {
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
+    private readonly TestResourceGroupResource? _resourceGroup;
 
-    public TestArmClient(Dictionary<string, object> deploymentOutputs)
+    public TestArmClient(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null)
     {
         _deploymentOutputs = deploymentOutputs;
+        _resourceGroup = resourceGroup;
     }
 
     public TestArmClient(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
@@ -205,7 +207,7 @@ internal sealed class TestArmClient : IArmClient
         }
         else
         {
-            subscription = new TestSubscriptionResource(_deploymentOutputs!);
+            subscription = new TestSubscriptionResource(_deploymentOutputs!, _resourceGroup);
         }
         var tenant = new TestTenantResource();
         return Task.FromResult<(ISubscriptionResource, ITenantResource)>((subscription, tenant));
@@ -271,10 +273,12 @@ internal sealed class TestSubscriptionResource : ISubscriptionResource
 {
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
+    private readonly TestResourceGroupResource? _resourceGroup;
 
-    public TestSubscriptionResource(Dictionary<string, object> deploymentOutputs)
+    public TestSubscriptionResource(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null)
     {
         _deploymentOutputs = deploymentOutputs;
+        _resourceGroup = resourceGroup;
     }
 
     public TestSubscriptionResource(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
@@ -305,7 +309,7 @@ internal sealed class TestSubscriptionResource : ISubscriptionResource
         {
             return new TestResourceGroupCollection(_deploymentOutputsProvider);
         }
-        return new TestResourceGroupCollection(_deploymentOutputs!);
+        return new TestResourceGroupCollection(_deploymentOutputs!, _resourceGroup);
     }
 }
 
@@ -316,10 +320,12 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
 {
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
+    private readonly TestResourceGroupResource? _resourceGroup;
 
-    public TestResourceGroupCollection(Dictionary<string, object> deploymentOutputs)
+    public TestResourceGroupCollection(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null)
     {
         _deploymentOutputs = deploymentOutputs;
+        _resourceGroup = resourceGroup;
     }
 
     public TestResourceGroupCollection(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
@@ -333,6 +339,11 @@ internal sealed class TestResourceGroupCollection : IResourceGroupCollection
 
     public Task<Response<IResourceGroupResource>> GetAsync(string resourceGroupName, CancellationToken cancellationToken = default)
     {
+        if (_resourceGroup is not null)
+        {
+            return Task.FromResult(Response.FromValue<IResourceGroupResource>(_resourceGroup, new MockResponse(200)));
+        }
+
         IResourceGroupResource resourceGroup;
         if (_deploymentOutputsProvider is not null)
         {
@@ -396,6 +407,22 @@ internal sealed class TestResourceGroupResource : IResourceGroupResource
             return new TestArmDeploymentCollection(_deploymentOutputsProvider);
         }
         return new TestArmDeploymentCollection(_deploymentOutputs!);
+    }
+
+    public bool WasDeleteCalled { get; private set; }
+    public bool WasGetResourcesCalled { get; private set; }
+
+    public Task DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default)
+    {
+        WasDeleteCalled = true;
+        return Task.CompletedTask;
+    }
+
+    public async IAsyncEnumerable<(string Name, string ResourceType)> GetResourcesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        WasGetResourcesCalled = true;
+        await Task.CompletedTask;
+        yield break;
     }
 }
 
@@ -542,6 +569,7 @@ internal sealed class TestArmClientProvider : IArmClientProvider
 {
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
+    private readonly TestResourceGroupResource? _resourceGroup;
 
     public TestArmClientProvider(Dictionary<string, object> deploymentOutputs)
     {
@@ -551,6 +579,12 @@ internal sealed class TestArmClientProvider : IArmClientProvider
     public TestArmClientProvider(Func<string, Dictionary<string, object>> deploymentOutputsProvider)
     {
         _deploymentOutputsProvider = deploymentOutputsProvider;
+    }
+
+    public TestArmClientProvider(TestResourceGroupResource resourceGroup)
+    {
+        _resourceGroup = resourceGroup;
+        _deploymentOutputs = [];
     }
 
     public TestArmClientProvider() : this([])
@@ -563,7 +597,7 @@ internal sealed class TestArmClientProvider : IArmClientProvider
         {
             return new TestArmClient(_deploymentOutputsProvider);
         }
-        return new TestArmClient(_deploymentOutputs!);
+        return new TestArmClient(_deploymentOutputs!, _resourceGroup);
     }
 
     public IArmClient GetArmClient(TokenCredential credential)
@@ -629,6 +663,8 @@ internal sealed class TestUserSecretsManager : IDeploymentStateManager
         _state[section.SectionName] = section.Data;
         return Task.CompletedTask;
     }
+
+    public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 }
 
 internal sealed class TestUserPrincipalProvider : IUserPrincipalProvider

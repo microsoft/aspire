@@ -27,7 +27,7 @@ internal static class CommandsConfigurationExtensions
                 var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return CommandResults.Success();
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
             {
@@ -60,7 +60,7 @@ internal static class CommandsConfigurationExtensions
                 var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return CommandResults.Success();
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStopped, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
             {
@@ -100,7 +100,7 @@ internal static class CommandsConfigurationExtensions
 
                 await orchestrator.StopResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                 await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
-                return CommandResults.Success();
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRestarted, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
             {
@@ -189,7 +189,7 @@ internal static class CommandsConfigurationExtensions
         var rebuilderResource = model.Resources.OfType<ProjectRebuilderResource>().FirstOrDefault(r => r.Parent == projectResource);
         if (rebuilderResource is null)
         {
-            return new ExecuteCommandResult { Success = false, ErrorMessage = string.Format(CultureInfo.InvariantCulture, CommandStrings.RebuilderResourceNotFound, projectResource.Name) };
+            return new ExecuteCommandResult { Success = false, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.RebuilderResourceNotFound, projectResource.Name) };
         }
 
         var mainLogger = loggerService.GetLogger(projectResource);
@@ -261,7 +261,7 @@ internal static class CommandsConfigurationExtensions
                 {
                     State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
                 }).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = false, ErrorMessage = "Build timed out." };
+                return new ExecuteCommandResult { Success = false, Message = "Build timed out." };
             }
 
             if (exitCode == 0)
@@ -316,7 +316,7 @@ internal static class CommandsConfigurationExtensions
                     }
                 }
 
-                return CommandResults.Success();
+                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRebuilt, projectResource.Name) };
             }
             else
             {
@@ -325,7 +325,7 @@ internal static class CommandsConfigurationExtensions
                 {
                     State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
                 }).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = false, ErrorMessage = $"Build failed with exit code {exitCode}." };
+                return new ExecuteCommandResult { Success = false, Message = $"Build failed with exit code {exitCode}." };
             }
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
@@ -337,7 +337,7 @@ internal static class CommandsConfigurationExtensions
             {
                 State = new ResourceStateSnapshot(KnownResourceStates.Finished, KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
-            return new ExecuteCommandResult { Success = false, ErrorMessage = "Rebuild was cancelled." };
+            return new ExecuteCommandResult { Success = false, Message = "Rebuild was cancelled." };
         }
         finally
         {

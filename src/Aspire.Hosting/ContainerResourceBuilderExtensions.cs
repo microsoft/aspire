@@ -7,6 +7,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.Pipelines;
@@ -51,7 +52,7 @@ public static class ContainerResourceBuilderExtensions
                     },
                     Tags = [WellKnownPipelineTags.BuildCompute],
                     RequiredBySteps = [WellKnownPipelineSteps.Build],
-                    DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
+                    DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq, WellKnownPipelineSteps.CheckContainerRuntime],
                     Resource = builder.Resource
                 };
                 steps.Add(buildStep);
@@ -90,7 +91,7 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="image">The container image name. The tag is assumed to be "latest".</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Adds a container resource")]
+    [AspireExportIgnore(Reason = "Use the polyglot addContainer overload that accepts a string or AddContainerOptions value.")]
     public static IResourceBuilder<ContainerResource> AddContainer(this IDistributedApplicationBuilder builder, [ResourceName] string name, string image)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -110,12 +111,53 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="image">The container image name.</param>
     /// <param name="tag">The container image tag.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddContainer(IDistributedApplicationBuilder, string, string)"/> with <see cref="ContainerResourceBuilderExtensions.WithImageTag{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "Use AddContainer with WithImageTag instead for a cleaner API.")]
+    [AspireExportIgnore(Reason = "Use the polyglot addContainer overload that accepts a string or AddContainerOptions value.")]
     public static IResourceBuilder<ContainerResource> AddContainer(this IDistributedApplicationBuilder builder, [ResourceName] string name, string image, string tag)
     {
         return AddContainer(builder, name, image)
            .WithImageTag(tag);
+    }
+
+    /// <summary>
+    /// Adds a container resource to the application.
+    /// </summary>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="image">The image name or image options for the container.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport("addContainer", Description = "Adds a container resource")]
+    internal static IResourceBuilder<ContainerResource> AddContainerForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(AddContainerOptions))] object image)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(image);
+
+        return image switch
+        {
+            string imageName => AddContainer(builder, name, imageName),
+            AddContainerOptions options => AddContainer(builder, name, options),
+            _ => throw new ArgumentException("Image must be a string or AddContainerOptions.", nameof(image))
+        };
+    }
+
+    private static IResourceBuilder<ContainerResource> AddContainer(
+        IDistributedApplicationBuilder builder,
+        string name,
+        AddContainerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentException.ThrowIfNullOrEmpty(options.Image);
+
+        if (options.Tag is { } tag)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(tag);
+            return AddContainer(builder, name, options.Image, tag);
+        }
+
+        return AddContainer(builder, name, options.Image);
     }
 
     /// <summary>
@@ -924,8 +966,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDockerfile"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+    [AspireExport(Description = "Adds a container resource built from a programmatically generated Dockerfile")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null)
     {
@@ -972,8 +1013,8 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDockerfile"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+    /// <remarks>This synchronous overload is not available in polyglot app hosts. Use the overload that accepts a <see cref="Func{T, TResult}"/>.</remarks>
+    [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Action<DockerfileBuilderCallbackContext> callback, string? stage = null)
     {
@@ -1039,7 +1080,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use the ParameterResource overload instead.</remarks>
+    /// <remarks>This method is not available in polyglot app hosts. Use the ATS dispatcher overload instead.</remarks>
     [AspireExportIgnore(Reason = "Uses object parameter which is not ATS-compatible.")]
     public static IResourceBuilder<T> WithBuildArg<T>(this IResourceBuilder<T> builder, string name, object? value) where T : ContainerResource
     {
@@ -1050,7 +1091,7 @@ public static class ContainerResourceBuilderExtensions
 
         if (annotation is null)
         {
-            throw new InvalidOperationException("The resource does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildArg.");
+            throw new InvalidOperationException($"The resource '{builder.Resource.Name}' does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildArg.");
         }
 
         annotation.BuildArguments[name] = value;
@@ -1091,7 +1132,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withParameterBuildArg", MethodName = "withBuildArg", Description = "Adds a build argument from a parameter resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the union-based withBuildArg dispatcher export.")]
     public static IResourceBuilder<T> WithBuildArg<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> value) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1100,10 +1141,38 @@ public static class ContainerResourceBuilderExtensions
 
         if (value.Resource.Secret)
         {
-            throw new InvalidOperationException("Cannot add secret parameter as a build argument. Use WithBuildSecret instead.");
+            throw new InvalidOperationException($"Cannot add secret parameter '{value.Resource.Name}' as build argument '{name}' while configuring resource '{builder.Resource.Name}'. Use WithBuildSecret instead.");
         }
 
         return builder.WithBuildArg(name, value.Resource);
+    }
+
+    /// <summary>
+    /// Adds a build argument when the container is built from a Dockerfile.
+    /// </summary>
+    /// <typeparam name="T">The type of container resource.</typeparam>
+    /// <param name="builder">The resource builder for the container resource.</param>
+    /// <param name="name">The name of the build argument.</param>
+    /// <param name="value">The build argument value, either a string or a parameter resource.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withBuildArg", Description = "Adds a build argument from a string value or parameter resource")]
+    internal static IResourceBuilder<T> WithBuildArgExport<T>(
+        this IResourceBuilder<T> builder,
+        string name,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object value) where T : ContainerResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(value);
+
+        return value switch
+        {
+            string stringValue => builder.WithBuildArg(name, (object?)stringValue),
+            IResourceBuilder<ParameterResource> parameter => builder.WithBuildArg(name, parameter),
+            _ => throw new ArgumentException(
+                $"Unsupported build argument type '{value.GetType().Name}'. Expected string or IResourceBuilder<ParameterResource>.",
+                nameof(value))
+        };
     }
 
     /// <summary>
@@ -1150,7 +1219,7 @@ public static class ContainerResourceBuilderExtensions
 
         if (annotation is null)
         {
-            throw new InvalidOperationException("The resource does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildSecret.");
+            throw new InvalidOperationException($"The resource '{builder.Resource.Name}' does not have a Dockerfile build annotation. Call WithDockerfile before calling WithBuildSecret.");
         }
 
         annotation.BuildSecrets[name] = value.Resource;
@@ -1168,7 +1237,7 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="defaultCertificateBundlePaths">List of default certificate bundle paths in the container that will be replaced in <see cref="CertificateTrustScope.Override"/> or <see cref="CertificateTrustScope.System"/> modes. If not specified, defaults to <c>/etc/ssl/certs/ca-certificates.crt</c> for Linux containers.</param>
     /// <param name="defaultCertificateDirectoryPaths">List of default certificate directory paths in the container that may be appended to the custom certificates directory in <see cref="CertificateTrustScope.Append"/> mode. If not specified, defaults to <c>/usr/local/share/ca-certificates/</c> for Linux containers.</param>
     /// <returns>The updated resource builder.</returns>
-    /// <remarks>This method is not available in polyglot app hosts.</remarks>
+    /// <remarks>This method is not available in polyglot app hosts. Use the ATS wrapper overload instead.</remarks>
     [AspireExportIgnore(Reason = "Uses List<string> which is not ATS-compatible (only T[] is supported, not List<T>).")]
     public static IResourceBuilder<TResource> WithContainerCertificatePaths<TResource>(this IResourceBuilder<TResource> builder, string? customCertificatesDestination = null, List<string>? defaultCertificateBundlePaths = null, List<string>? defaultCertificateDirectoryPaths = null)
         where TResource : ContainerResource
@@ -1181,6 +1250,31 @@ public static class ContainerResourceBuilderExtensions
             DefaultCertificateBundles = defaultCertificateBundlePaths,
             DefaultCertificateDirectories = defaultCertificateDirectoryPaths,
         }, ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Adds container certificate path overrides used for certificate trust at run time.
+    /// </summary>
+    /// <typeparam name="TResource">The type of the resource.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="customCertificatesDestination">The destination path in the container where custom certificates will be copied.</param>
+    /// <param name="defaultCertificateBundlePaths">Default certificate bundle paths in the container that will be replaced.</param>
+    /// <param name="defaultCertificateDirectoryPaths">Default certificate directory paths in the container that may be appended.</param>
+    /// <returns>The updated resource builder.</returns>
+    [AspireExport("withContainerCertificatePaths", Description = "Overrides container certificate bundle and directory paths used for trust configuration")]
+    internal static IResourceBuilder<TResource> WithContainerCertificatePathsExport<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string? customCertificatesDestination = null,
+        string[]? defaultCertificateBundlePaths = null,
+        string[]? defaultCertificateDirectoryPaths = null)
+        where TResource : ContainerResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithContainerCertificatePaths(
+            customCertificatesDestination,
+            defaultCertificateBundlePaths?.ToList(),
+            defaultCertificateDirectoryPaths?.ToList());
     }
 
     /// <summary>
@@ -1430,8 +1524,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithDockerfile{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+    [AspireExport(Description = "Configures the resource to use a programmatically generated Dockerfile")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null) where T : ContainerResource
     {
@@ -1535,8 +1628,8 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithDockerfile{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileBuilderCallbackContext is not an ATS-exported callback context.")]
+    /// <remarks>This synchronous overload is not available in polyglot app hosts. Use the overload that accepts a <see cref="Func{T, TResult}"/>.</remarks>
+    [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Action<DockerfileBuilderCallbackContext> callback, string? stage = null) where T : ContainerResource
     {

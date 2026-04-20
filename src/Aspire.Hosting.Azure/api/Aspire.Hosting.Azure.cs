@@ -10,15 +10,19 @@ namespace Aspire.Hosting
 {
     public static partial class AzureBicepResourceExtensions
     {
+        [AspireExport("addBicepTemplate", Description = "Adds an Azure Bicep template resource from a file")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureBicepResource> AddBicepTemplate(this IDistributedApplicationBuilder builder, string name, string bicepFile) { throw null; }
 
+        [AspireExport("addBicepTemplateString", Description = "Adds an Azure Bicep template resource from inline Bicep content")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureBicepResource> AddBicepTemplateString(this IDistributedApplicationBuilder builder, string name, string bicepContent) { throw null; }
 
+        [AspireExport("getOutput", Description = "Gets an output reference from an Azure Bicep template resource")]
         public static Azure.BicepOutputReference GetOutput(this ApplicationModel.IResourceBuilder<Azure.AzureBicepResource> builder, string name) { throw null; }
 
         [System.Obsolete("GetSecretOutput is obsolete. Use IAzureKeyVaultResource.GetSecret instead.")]
         public static Azure.BicepSecretOutputReference GetSecretOutput(this ApplicationModel.IResourceBuilder<Azure.AzureBicepResource> builder, string name) { throw null; }
 
+        [AspireExport("withEnvironmentFromOutput", Description = "Sets an environment variable from a Bicep output reference")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, Azure.BicepOutputReference bicepOutputReference)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
@@ -26,97 +30,128 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, Azure.BicepSecretOutputReference bicepOutputReference)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
+        [AspireExport("withEnvironmentFromKeyVaultSecret", Description = "Sets an environment variable from an Azure Key Vault secret reference")]
         public static ApplicationModel.IResourceBuilder<T> WithEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, Azure.IAzureKeyVaultSecretReference secretReference)
             where T : ApplicationModel.IResourceWithEnvironment { throw null; }
 
+        [AspireExport("withParameterFromEndpoint", Description = "Adds a Bicep parameter from an endpoint reference")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.EndpointReference value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExport("withParameterFromConnectionString", Description = "Adds a Bicep parameter from a connection string resource builder")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExport("withParameterFromParameter", Description = "Adds a Bicep parameter from a parameter resource builder")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExportIgnore(Reason = "Raw ParameterResource overload; use the IResourceBuilder<ParameterResource> overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.ParameterResource value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExport("withParameterFromReferenceExpression", Description = "Adds a Bicep parameter from a reference expression")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, ApplicationModel.ReferenceExpression value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExport("withParameterFromOutput", Description = "Adds a Bicep parameter from another Bicep output reference")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, Azure.BicepOutputReference value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExport("withParameterStringValues", Description = "Adds a Bicep parameter with a string list value")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, System.Collections.Generic.IEnumerable<string> value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExportIgnore(Reason = "Func<object?> callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, System.Func<object?> valueCallback)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExport("withParameterStringValue", Description = "Adds a Bicep parameter with a string value")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExportIgnore(Reason = "JsonNode values are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, System.Text.Json.Nodes.JsonNode value)
             where T : Azure.AzureBicepResource { throw null; }
 
+        [AspireExport("withParameter", Description = "Adds a Bicep parameter without a value")]
         public static ApplicationModel.IResourceBuilder<T> WithParameter<T>(this ApplicationModel.IResourceBuilder<T> builder, string name)
             where T : Azure.AzureBicepResource { throw null; }
     }
 
     public static partial class AzureProvisionerExtensions
     {
+        [AspireExport("addAzureProvisioning", Description = "Adds Azure provisioning services to the distributed application builder")]
         public static IDistributedApplicationBuilder AddAzureProvisioning(this IDistributedApplicationBuilder builder) { throw null; }
     }
 
     public static partial class AzureProvisioningResourceExtensions
     {
+        [AspireExport("addAzureInfrastructure", Description = "Adds an Azure provisioning resource to the application model")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureProvisioningResource> AddAzureInfrastructure(this IDistributedApplicationBuilder builder, string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure) { throw null; }
 
+        [AspireExportIgnore(Reason = "KeyVaultSecret is an Azure.Provisioning type not compatible with ATS.")]
         public static global::Azure.Provisioning.KeyVault.KeyVaultSecret AsKeyVaultSecret(this Azure.IAzureKeyVaultSecretReference secretReference, Azure.AzureResourceInfrastructure infrastructure) { throw null; }
 
+        [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
         public static global::Azure.Provisioning.ProvisioningParameter AsProvisioningParameter(this ApplicationModel.EndpointReference endpointReference, Azure.AzureResourceInfrastructure infrastructure, string parameterName) { throw null; }
 
+        [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
         public static global::Azure.Provisioning.ProvisioningParameter AsProvisioningParameter(this ApplicationModel.IManifestExpressionProvider manifestExpressionProvider, Azure.AzureResourceInfrastructure infrastructure, string? parameterName = null, bool? isSecure = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
         public static global::Azure.Provisioning.ProvisioningParameter AsProvisioningParameter(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> parameterResourceBuilder, Azure.AzureResourceInfrastructure infrastructure, string? parameterName = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
         public static global::Azure.Provisioning.ProvisioningParameter AsProvisioningParameter(this ApplicationModel.ParameterResource parameterResource, Azure.AzureResourceInfrastructure infrastructure, string? parameterName = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
         public static global::Azure.Provisioning.ProvisioningParameter AsProvisioningParameter(this ApplicationModel.ReferenceExpression expression, Azure.AzureResourceInfrastructure infrastructure, string parameterName) { throw null; }
 
+        [AspireExportIgnore(Reason = "ProvisioningParameter is an Azure.Provisioning type not compatible with ATS.")]
         public static global::Azure.Provisioning.ProvisioningParameter AsProvisioningParameter(this Azure.BicepOutputReference outputReference, Azure.AzureResourceInfrastructure infrastructure, string? parameterName = null) { throw null; }
 
+        [AspireExport("configureInfrastructure", Description = "Configures the Azure provisioning infrastructure callback")]
         public static ApplicationModel.IResourceBuilder<T> ConfigureInfrastructure<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Azure.AzureResourceInfrastructure> configure)
             where T : Azure.AzureProvisioningResource { throw null; }
     }
 
     public static partial class AzureResourceExtensions
     {
+        [AspireExport("clearDefaultRoleAssignments", Description = "Clears the default Azure role assignments from a resource")]
         public static ApplicationModel.IResourceBuilder<T> ClearDefaultRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IAzureResource { throw null; }
 
+        [AspireExport("getBicepIdentifier", Description = "Gets the normalized Bicep identifier for an Azure resource")]
         public static string GetBicepIdentifier(this ApplicationModel.IAzureResource resource) { throw null; }
 
+        [AspireExport("publishAsConnectionString", Description = "Publishes an Azure resource to the manifest as a connection string")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsConnectionString<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IAzureResource, ApplicationModel.IResourceWithConnectionString { throw null; }
     }
 
     public static partial class ExistingAzureResourceExtensions
     {
+        [AspireExportIgnore(Reason = "Use the polyglot asExisting overload that accepts string or ParameterResource values instead.")]
         public static ApplicationModel.IResourceBuilder<T> AsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? resourceGroupParameter)
             where T : ApplicationModel.IAzureResource { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the Azure resource-specific polyglot export instead.")]
         public static bool IsExisting(this ApplicationModel.IResource resource) { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the polyglot publishAsExisting overload that accepts string or ParameterResource values instead.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? resourceGroupParameter)
             where T : ApplicationModel.IAzureResource { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the polyglot publishAsExisting overload that accepts string or ParameterResource values instead.")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string? resourceGroup)
             where T : ApplicationModel.IAzureResource { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the polyglot runAsExisting overload that accepts string or ParameterResource values instead.")]
         public static ApplicationModel.IResourceBuilder<T> RunAsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> nameParameter, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? resourceGroupParameter)
             where T : ApplicationModel.IAzureResource { throw null; }
 
+        [AspireExportIgnore(Reason = "Use the polyglot runAsExisting overload that accepts string or ParameterResource values instead.")]
         public static ApplicationModel.IResourceBuilder<T> RunAsExisting<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string? resourceGroup)
             where T : ApplicationModel.IAzureResource { throw null; }
     }
@@ -124,6 +159,7 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.ApplicationModel
 {
+    [AspireExport]
     public partial interface IAzureResource : IResource
     {
         System.Threading.Tasks.TaskCompletionSource? ProvisioningTaskCompletionSource { get; set; }
@@ -215,12 +251,15 @@ namespace Aspire.Hosting.Azure
 
     public static partial class AzureEnvironmentResourceExtensions
     {
+        [AspireExport("addAzureEnvironment", Description = "Adds the shared Azure environment resource to the application model")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> AddAzureEnvironment(this IDistributedApplicationBuilder builder) { throw null; }
 
+        [AspireExport("withLocation", Description = "Sets the Azure location for the shared Azure environment resource")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> WithLocation(this ApplicationModel.IResourceBuilder<AzureEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> location) { throw null; }
 
+        [AspireExport("withResourceGroup", Description = "Sets the Azure resource group for the shared Azure environment resource")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<AzureEnvironmentResource> WithResourceGroup(this ApplicationModel.IResourceBuilder<AzureEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> resourceGroup) { throw null; }
     }
@@ -272,6 +311,7 @@ namespace Aspire.Hosting.Azure
         public System.Threading.Tasks.Task WriteModelAsync(ApplicationModel.DistributedApplicationModel model, AzureEnvironmentResource environment, System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class AzureResourceInfrastructure : global::Azure.Provisioning.Infrastructure
     {
         internal AzureResourceInfrastructure() : base(default!) { }
@@ -281,8 +321,10 @@ namespace Aspire.Hosting.Azure
 
     public static partial class AzureUserAssignedIdentityExtensions
     {
+        [AspireExport("addAzureUserAssignedIdentity", Description = "Adds an Azure user-assigned identity resource")]
         public static ApplicationModel.IResourceBuilder<AzureUserAssignedIdentityResource> AddAzureUserAssignedIdentity(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport("withUserAssignedIdentityAzureUserAssignedIdentity", MethodName = "withAzureUserAssignedIdentity", Description = "Associates an Azure user-assigned identity with a compute resource")]
         public static ApplicationModel.IResourceBuilder<T> WithAzureUserAssignedIdentity<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<AzureUserAssignedIdentityResource> identityResourceBuilder)
             where T : ApplicationModel.IComputeResource { throw null; }
     }
@@ -304,6 +346,7 @@ namespace Aspire.Hosting.Azure
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
     }
 
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class BicepOutputReference : ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, System.IEquatable<BicepOutputReference>
     {
         public BicepOutputReference(string name, AzureBicepResource resource) { }
@@ -361,6 +404,21 @@ namespace Aspire.Hosting.Azure
         public System.Collections.Generic.IReadOnlySet<RoleDefinition> Roles { get { throw null; } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    public sealed partial class DelegatedSubnetAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public DelegatedSubnetAnnotation(ApplicationModel.ReferenceExpression subnetId) { }
+
+        public ApplicationModel.ReferenceExpression SubnetId { get { throw null; } }
+    }
+
+    public sealed partial class DeploymentPrerequisitesAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public DeploymentPrerequisitesAnnotation(System.Collections.Generic.IReadOnlySet<AzureBicepResource> resources) { }
+
+        public System.Collections.Generic.IReadOnlySet<AzureBicepResource> Resources { get { throw null; } }
+    }
+
     public sealed partial class ExistingAzureResourceAnnotation : ApplicationModel.IResourceAnnotation
     {
         public ExistingAzureResourceAnnotation(object name, object? resourceGroup = null) { }
@@ -398,13 +456,26 @@ namespace Aspire.Hosting.Azure
 
     public partial interface IAzureComputeEnvironmentResource : ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
     {
+        IAzureContainerRegistryResource? ContainerRegistry { get; }
     }
 
+    [System.Obsolete("Use IAzureContainerRegistryResource instead and access container registry through IAzureComputeEnvironmentResource.ContainerRegistry property.")]
     public partial interface IAzureContainerRegistry : ApplicationModel.IContainerRegistry
     {
         ApplicationModel.ReferenceExpression ManagedIdentityId { get; }
     }
 
+    public partial interface IAzureContainerRegistryResource : ApplicationModel.IContainerRegistry, ApplicationModel.IAzureResource, ApplicationModel.IResource
+    {
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    public partial interface IAzureDelegatedSubnetResource : ApplicationModel.IResource
+    {
+        string DelegatedSubnetServiceName { get; }
+    }
+
+    [AspireExport]
     public partial interface IAzureKeyVaultResource : ApplicationModel.IResource, ApplicationModel.IAzureResource
     {
         BicepOutputReference NameOutputReference { get; }
@@ -416,6 +487,7 @@ namespace Aspire.Hosting.Azure
         IAzureKeyVaultSecretReference GetSecret(string secretName);
     }
 
+    [AspireExport]
     public partial interface IAzureKeyVaultSecretReference : ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         System.Collections.Generic.IEnumerable<object> ApplicationModel.IValueWithReferences.References { get; }
@@ -427,9 +499,26 @@ namespace Aspire.Hosting.Azure
         ApplicationModel.IResource? SecretOwner { get; set; }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    public partial interface IAzurePrivateEndpointTarget : ApplicationModel.IResource
+    {
+        BicepOutputReference Id { get; }
+
+        string GetPrivateDnsZoneName();
+        System.Collections.Generic.IEnumerable<string> GetPrivateLinkGroupIds();
+    }
+
     public partial interface IResourceWithAzureFunctionsConfig : ApplicationModel.IResource
     {
         void ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName);
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    public sealed partial class PrivateEndpointTargetAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public PrivateEndpointTargetAnnotation(AzureProvisioningResource privateEndpointResource) { }
+
+        public AzureProvisioningResource PrivateEndpointResource { get { throw null; } }
     }
 
     public partial class RoleAssignmentAnnotation : ApplicationModel.IResourceAnnotation

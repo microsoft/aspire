@@ -60,6 +60,13 @@ public sealed class RuntimeSpec
     /// this capability. When null, the CLI always uses the default process-based launcher.
     /// </summary>
     public string? ExtensionLaunchCapability { get; init; }
+
+    /// <summary>
+    /// Gets files that must exist in the project directory before execution.
+    /// If a file in this dictionary is missing, the CLI will create it with the provided content.
+    /// This supports upgrade scenarios where new runtime requirements are introduced.
+    /// </summary>
+    public Dictionary<string, string>? MigrationFiles { get; init; }
 }
 
 /// <summary>

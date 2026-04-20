@@ -1,0 +1,14 @@
+[project]
+name = "weather-agent-python"
+version = "0.1.0"
+description = "Weather intelligence agent for AlpineAI ski resort"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.104.1",
+    "agent-framework",
+    "azure-ai-agentserver-agentframework>=1.0.0b17",
+    "azure-identity",
+]
+
+[tool.uv]
+prerelease = "allow"

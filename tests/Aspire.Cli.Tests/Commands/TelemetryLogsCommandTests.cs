@@ -24,7 +24,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel logs");
@@ -42,7 +42,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"telemetry logs --limit {limitValue}");
@@ -57,7 +57,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
             [
                 new ResourceInfoJson { Name = "redis", InstanceId = null },
@@ -92,7 +92,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
-        var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
             [
                 new ResourceInfoJson { Name = "apiservice", InstanceId = guid1.ToString() },
@@ -117,6 +117,34 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, logLines.Count);
         Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} INFO apiservice-11111111 Hello from replica 1", logLines[0]);
         Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime.AddSeconds(1))} WARN apiservice-aaaaaaaa Slow response from replica 2", logLines[1]);
+    }
+
+    [Fact]
+    public async Task TelemetryLogsCommand_TableOutput_StripsAnsiControlSequencesFromBody()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
+            resources:
+            [
+                new ResourceInfoJson { Name = "apiservice", InstanceId = null },
+            ],
+            telemetryEndpoints: new Dictionary<string, string>
+            {
+                ["/api/telemetry/logs"] = BuildLogsJson(
+                    ("apiservice", null, 9, "Information", "\u001b[38;5;252mRequest received\u001b[0m", s_testTime))
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel logs");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var logLine = Assert.Single(outputWriter.Logs, l => l.Contains("apiservice", StringComparison.Ordinal));
+        Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} INFO apiservice Request received", logLine);
+        Assert.DoesNotContain("\u001b", logLine, StringComparison.Ordinal);
     }
 
     private static string BuildLogsJson(params (string serviceName, string? instanceId, int severityNumber, string severityText, string body, DateTime time)[] entries)
@@ -186,7 +214,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel logs --dashboard-url http://localhost:18888");
 
@@ -238,7 +266,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel logs --dashboard-url http://localhost:18888 --api-key my-secret-key");
 
@@ -260,7 +288,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => testInteractionService;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel logs --dashboard-url http://localhost:18888 --apphost TestAppHost.csproj");
 
@@ -283,7 +311,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => testInteractionService;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel logs --dashboard-url not-a-url");
 
@@ -321,7 +349,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel logs --dashboard-url http://localhost:18888");
 
@@ -364,7 +392,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel logs --dashboard-url http://localhost:18888");
 
@@ -403,7 +431,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel logs --dashboard-url http://localhost:18888");
 
