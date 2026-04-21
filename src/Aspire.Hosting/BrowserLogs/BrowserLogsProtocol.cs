@@ -3,6 +3,7 @@
 
 using System.Buffers;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
@@ -26,6 +27,11 @@ namespace Aspire.Hosting;
 // tested independently from CDP frame handling.
 internal static class BrowserLogsProtocol
 {
+    private static readonly JsonWriterOptions s_commandFrameWriterOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     internal const string BrowserCloseMethod = "Browser.close";
     internal const string LogEnableMethod = "Log.enable";
     internal const string LogEntryAddedMethod = "Log.entryAdded";
@@ -106,7 +112,7 @@ internal static class BrowserLogsProtocol
     internal static byte[] CreateCommandFrame(long id, string method, string? sessionId, Action<Utf8JsonWriter>? writeParameters)
     {
         var buffer = new ArrayBufferWriter<byte>();
-        using var writer = new Utf8JsonWriter(buffer);
+        using var writer = new Utf8JsonWriter(buffer, s_commandFrameWriterOptions);
 
         writer.WriteStartObject();
         writer.WriteNumber("id", id);

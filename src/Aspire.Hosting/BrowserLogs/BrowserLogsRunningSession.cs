@@ -235,6 +235,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
         _userDataDirectory = CreateUserDataDirectory(_settings.Browser, _browserExecutable, _settings.Profile);
         var devToolsActivePortFilePath = GetDevToolsActivePortFilePath();
+        var previousBrowserEndpointWriteTimeUtc = PrepareBrowserEndpointFile(devToolsActivePortFilePath);
         await StartBrowserProcessAsync(cancellationToken).ConfigureAwait(false);
         _resourceLogger.LogInformation("[{SessionId}] Started tracked browser process '{BrowserExecutable}'.", _sessionId, _browserExecutable);
         if (_settings.Profile is not null)
@@ -245,7 +246,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
         try
         {
-            _browserEndpoint = await WaitForBrowserEndpointAsync(cancellationToken).ConfigureAwait(false);
+            _browserEndpoint = await WaitForBrowserEndpointAsync(devToolsActivePortFilePath, previousBrowserEndpointWriteTimeUtc, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -584,9 +585,8 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
     }
 
-    private async Task<Uri> WaitForBrowserEndpointAsync(CancellationToken cancellationToken)
+    private async Task<Uri> WaitForBrowserEndpointAsync(string devToolsActivePortFilePath, DateTime? previousWriteTimeUtc, CancellationToken cancellationToken)
     {
-        var devToolsActivePortFilePath = GetDevToolsActivePortFilePath();
         var timeoutAt = _timeProvider.GetUtcNow() + s_browserEndpointTimeout;
 
         // Chromium chooses the actual debugging port when asked for port 0 and writes it to DevToolsActivePort.
@@ -594,11 +594,19 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         while (_timeProvider.GetUtcNow() < timeoutAt)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            await ThrowIfBrowserExitedBeforeEndpointWasWrittenAsync(devToolsActivePortFilePath).ConfigureAwait(false);
 
             try
             {
                 if (File.Exists(devToolsActivePortFilePath))
                 {
+                    if (previousWriteTimeUtc is { } previousWriteTime &&
+                        File.GetLastWriteTimeUtc(devToolsActivePortFilePath) <= previousWriteTime)
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+                        continue;
+                    }
+
                     var contents = await File.ReadAllTextAsync(devToolsActivePortFilePath, cancellationToken).ConfigureAwait(false);
                     if (BrowserLogsDebugEndpointParser.TryParseBrowserDebugEndpoint(contents) is { } browserEndpoint)
                     {
@@ -617,6 +625,44 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
 
         throw new TimeoutException($"Timed out waiting for the tracked browser to write '{devToolsActivePortFilePath}'.");
+    }
+
+    private DateTime? PrepareBrowserEndpointFile(string devToolsActivePortFilePath)
+    {
+        if (!File.Exists(devToolsActivePortFilePath))
+        {
+            return null;
+        }
+
+        var previousWriteTimeUtc = File.GetLastWriteTimeUtc(devToolsActivePortFilePath);
+
+        try
+        {
+            File.Delete(devToolsActivePortFilePath);
+            return null;
+        }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(ex, "[{SessionId}] Unable to delete stale tracked browser endpoint metadata '{DevToolsActivePortFilePath}'. Waiting for a fresh file instead.", _sessionId, devToolsActivePortFilePath);
+            return previousWriteTimeUtc;
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogDebug(ex, "[{SessionId}] Unable to delete stale tracked browser endpoint metadata '{DevToolsActivePortFilePath}'. Waiting for a fresh file instead.", _sessionId, devToolsActivePortFilePath);
+            return previousWriteTimeUtc;
+        }
+    }
+
+    private async Task ThrowIfBrowserExitedBeforeEndpointWasWrittenAsync(string devToolsActivePortFilePath)
+    {
+        if (_browserProcessTask is not { IsCompleted: true } browserProcessTask)
+        {
+            return;
+        }
+
+        var result = await browserProcessTask.ConfigureAwait(false);
+        throw new InvalidOperationException(
+            $"Tracked browser process exited with code {result.ExitCode} before the debug endpoint metadata was written to '{devToolsActivePortFilePath}'.");
     }
 
     private string GetDevToolsActivePortFilePath()

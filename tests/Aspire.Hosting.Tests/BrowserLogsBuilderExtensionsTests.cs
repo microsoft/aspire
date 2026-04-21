@@ -44,6 +44,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         Assert.Equal(web.Resource.Name, browserLogsResource.ParentResource.Name);
         Assert.Equal("chrome", browserLogsResource.Browser);
         Assert.Null(browserLogsResource.Profile);
+        Assert.Contains(browserLogsResource.Annotations.OfType<NameValidationPolicyAnnotation>(), static annotation => annotation == NameValidationPolicyAnnotation.None);
 
         Assert.True(browserLogsResource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
         var parentRelationship = Assert.Single(relationships, relationship => relationship.Type == "Parent");

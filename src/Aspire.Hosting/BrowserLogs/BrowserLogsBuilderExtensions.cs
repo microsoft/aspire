@@ -86,14 +86,15 @@ public static class BrowserLogsBuilderExtensions
         where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ValidateOptionalArgument(browser, nameof(browser));
-        ValidateOptionalArgument(profile, nameof(profile));
+        ThrowIfBlankWhenSpecified(browser, nameof(browser));
+        ThrowIfBlankWhenSpecified(profile, nameof(profile));
 
         builder.ApplicationBuilder.Services.TryAddSingleton<IBrowserLogsSessionManager, BrowserLogsSessionManager>();
 
         var parentResource = builder.Resource;
         var settings = ResolveSettings(builder.ApplicationBuilder.Configuration, parentResource.Name, browser, profile);
         var browserLogsResource = new BrowserLogsResource($"{parentResource.Name}-browser-logs", parentResource, settings, browser, profile);
+        browserLogsResource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         builder.ApplicationBuilder.AddResource(browserLogsResource)
             .WithParentRelationship(parentResource)
@@ -170,17 +171,21 @@ public static class BrowserLogsBuilderExtensions
             List<ResourcePropertySnapshot> properties =
             [
                 new(CustomResourceKnownProperties.Source, resourceName),
-                new(BrowserPropertyName, settings.Browser),
-                new(ActiveSessionCountPropertyName, 0),
-                new(ActiveSessionsPropertyName, "None"),
-                new(BrowserSessionsPropertyName, "[]"),
-                new(TotalSessionsLaunchedPropertyName, 0)
+                new(BrowserPropertyName, settings.Browser)
             ];
 
-            if (settings.Profile is not null)
+            if (settings.Profile is { } profile)
             {
-                properties.Insert(2, new ResourcePropertySnapshot(ProfilePropertyName, settings.Profile));
+                properties.Add(new ResourcePropertySnapshot(ProfilePropertyName, profile));
             }
+
+            properties.AddRange(
+            [
+                new ResourcePropertySnapshot(ActiveSessionCountPropertyName, 0),
+                new ResourcePropertySnapshot(ActiveSessionsPropertyName, "None"),
+                new ResourcePropertySnapshot(BrowserSessionsPropertyName, "[]"),
+                new ResourcePropertySnapshot(TotalSessionsLaunchedPropertyName, 0)
+            ]);
 
             return [.. properties];
         }
@@ -208,7 +213,7 @@ public static class BrowserLogsBuilderExtensions
             return new Uri(endpointReference.Url, UriKind.Absolute);
         }
 
-        static void ValidateOptionalArgument(string? value, string paramName)
+        static void ThrowIfBlankWhenSpecified(string? value, string paramName)
         {
             if (value is not null)
             {

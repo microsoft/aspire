@@ -3,6 +3,8 @@
 
 using System.Net.WebSockets;
 using Aspire.Hosting.Tests.Utils;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests;
 
@@ -133,10 +135,58 @@ public class BrowserLogsSessionManagerTests
                 "2000-12-29T20:59:59.0000000Z [session-0001] Reconnect attempt 2 failed: InvalidOperationException: Attaching to the tracked browser target failed. --> TimeoutException: Timed out waiting for a tracked browser protocol response to 'Target.attachToTarget'.",
                 log.Content),
             log => Assert.Equal(
-                "2000-12-29T20:59:59.0000000Z [session-0001] Unable to reconnect tracked browser debug connection. Closing the tracked browser session. Last error: InvalidOperationException: Connecting to the tracked browser debug endpoint failed. --> WebSocketException: Connection refused",
-                log.Content));
+                 "2000-12-29T20:59:59.0000000Z [session-0001] Unable to reconnect tracked browser debug connection. Closing the tracked browser session. Last error: InvalidOperationException: Connecting to the tracked browser debug endpoint failed. --> WebSocketException: Connection refused",
+                 log.Content));
+    }
+
+    [Fact]
+    public async Task StartSessionAsync_ThrowsWhenManagerIsDisposing()
+    {
+        var sessionFactory = new ThrowIfCalledSessionFactory();
+        var manager = new BrowserLogsSessionManager(
+            ConsoleLoggingTestHelpers.GetResourceLoggerService(),
+            ResourceNotificationServiceTestHelpers.Create(),
+            TimeProvider.System,
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            sessionFactory);
+        var resource = new BrowserLogsResource(
+            "web-browser-logs",
+            new TestResourceWithEndpoints("web"),
+            new BrowserLogsSettings("chrome", null),
+            browserOverride: null,
+            profileOverride: null);
+
+        await manager.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => manager.StartSessionAsync(
+            resource,
+            new BrowserLogsSettings("chrome", null),
+            resource.Name,
+            new Uri("https://localhost"),
+            CancellationToken.None));
+
+        Assert.False(sessionFactory.WasCalled);
     }
 
     private static Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService resourceLoggerService, string resourceName, int targetLogCount, Action writeLogs) =>
         ConsoleLoggingTestHelpers.CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount, writeLogs);
+
+    private sealed class ThrowIfCalledSessionFactory : IBrowserLogsRunningSessionFactory
+    {
+        public bool WasCalled { get; private set; }
+
+        public Task<IBrowserLogsRunningSession> StartSessionAsync(
+            BrowserLogsSettings settings,
+            string resourceName,
+            Uri url,
+            string sessionId,
+            ILogger resourceLogger,
+            CancellationToken cancellationToken)
+        {
+            WasCalled = true;
+            throw new InvalidOperationException("StartSessionAsync should not be called after disposal.");
+        }
+    }
+
+    private sealed class TestResourceWithEndpoints(string name) : Resource(name), IResourceWithEndpoints;
 }

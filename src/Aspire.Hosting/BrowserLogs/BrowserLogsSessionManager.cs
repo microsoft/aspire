@@ -59,12 +59,15 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         ArgumentNullException.ThrowIfNull(settings.Browser);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
         ArgumentNullException.ThrowIfNull(url);
+        ThrowIfDisposing();
 
         var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
         await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
+            ThrowIfDisposing();
+
             var sessionSequence = ++resourceState.TotalSessionsLaunched;
             var sessionId = $"session-{sessionSequence:0000}";
             resourceState.LastSessionId = sessionId;
@@ -150,6 +153,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         finally
         {
             resourceState.Lock.Release();
+        }
+
+        void ThrowIfDisposing()
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposing) != 0, this);
         }
     }
 

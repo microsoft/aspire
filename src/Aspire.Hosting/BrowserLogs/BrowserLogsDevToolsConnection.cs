@@ -163,21 +163,16 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
             var payload = BrowserLogsProtocol.CreateCommandFrame(commandId, method, sessionId, writeParameters);
             _logger.LogTrace("Tracked browser protocol -> {Frame}", BrowserLogsProtocol.DescribeFrame(payload));
 
-            var lockHeld = false;
+            await _sendLock.WaitAsync(sendCts.Token).ConfigureAwait(false);
             try
             {
                 // ClientWebSocket does not allow overlapping sends, so startup, reconnect, and shutdown all share
                 // this serialized path.
-                await _sendLock.WaitAsync(sendCts.Token).ConfigureAwait(false);
-                lockHeld = true;
                 await _webSocket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, sendCts.Token).ConfigureAwait(false);
             }
             finally
             {
-                if (lockHeld)
-                {
-                    _sendLock.Release();
-                }
+                _sendLock.Release();
             }
 
             return await pendingCommand.Task.ConfigureAwait(false);
@@ -222,21 +217,7 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
 
                 try
                 {
-                    var header = BrowserLogsProtocol.ParseMessageHeader(frame);
-                    if (header.Id is long commandId)
-                    {
-                        if (_pendingCommands.TryGetValue(commandId, out var pendingCommand))
-                        {
-                            pendingCommand.SetResult(frame);
-                        }
-
-                        continue;
-                    }
-
-                    if (header.Method is not null && BrowserLogsProtocol.ParseEvent(header, frame) is { } protocolEvent)
-                    {
-                        await _eventHandler(protocolEvent).ConfigureAwait(false);
-                    }
+                    await HandleFrameAsync(frame).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -269,6 +250,25 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
         if (!_disposeCts.IsCancellationRequested)
         {
             throw terminalException ?? new InvalidOperationException("Browser debug connection closed.");
+        }
+    }
+
+    private async Task HandleFrameAsync(byte[] frame)
+    {
+        var header = BrowserLogsProtocol.ParseMessageHeader(frame);
+        if (header.Id is long commandId)
+        {
+            if (_pendingCommands.TryGetValue(commandId, out var pendingCommand))
+            {
+                pendingCommand.SetResult(frame);
+            }
+
+            return;
+        }
+
+        if (header.Method is not null && BrowserLogsProtocol.ParseEvent(header, frame) is { } protocolEvent)
+        {
+            await _eventHandler(protocolEvent).ConfigureAwait(false);
         }
     }
 

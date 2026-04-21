@@ -77,4 +77,19 @@ public class BrowserLogsProtocolTests
         Assert.Contains("Method not found", exception.Message);
         Assert.Contains("-32601", exception.Message);
     }
+
+    [Fact]
+    public void CreateCommandFrame_DoesNotEscapeNonAsciiCharacters()
+    {
+        var payload = BrowserLogsProtocol.CreateCommandFrame(
+            7,
+            BrowserLogsProtocol.PageNavigateMethod,
+            "session-1",
+            writer => writer.WriteString("url", "https://example.test/über"));
+
+        var json = Encoding.UTF8.GetString(payload);
+
+        Assert.Contains("https://example.test/über", json);
+        Assert.DoesNotContain("\\u00fc", json);
+    }
 }

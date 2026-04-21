@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
 using System.Globalization;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -11,6 +14,11 @@ namespace Aspire.Hosting;
 // redirects, timing, and console formatting without needing a live browser.
 internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogger)
 {
+    private static readonly JsonWriterOptions s_structuredValueWriterOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     private readonly string _sessionId = sessionId;
     private readonly ILogger _resourceLogger = resourceLogger;
     private readonly Dictionary<string, BrowserNetworkRequestState> _networkRequests = new(StringComparer.Ordinal);
@@ -309,107 +317,49 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
     private static string FormatStructuredValue(BrowserLogsProtocolValue value)
     {
-        var builder = new StringBuilder();
-        AppendStructuredValue(builder, value);
-        return builder.ToString();
+        var buffer = new ArrayBufferWriter<byte>();
+        using var writer = new Utf8JsonWriter(buffer, s_structuredValueWriterOptions);
+        WriteStructuredValue(writer, value);
+        writer.Flush();
+        return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    private static void AppendStructuredValue(StringBuilder builder, BrowserLogsProtocolValue value)
+    private static void WriteStructuredValue(Utf8JsonWriter writer, BrowserLogsProtocolValue value)
     {
         switch (value)
         {
             case BrowserLogsProtocolArrayValue arrayValue:
-                builder.Append('[');
-                for (var i = 0; i < arrayValue.Items.Count; i++)
+                writer.WriteStartArray();
+                foreach (var item in arrayValue.Items)
                 {
-                    if (i > 0)
-                    {
-                        builder.Append(',');
-                    }
-
-                    AppendStructuredValue(builder, arrayValue.Items[i]);
+                    WriteStructuredValue(writer, item);
                 }
 
-                builder.Append(']');
+                writer.WriteEndArray();
                 break;
             case BrowserLogsProtocolBooleanValue booleanValue:
-                builder.Append(booleanValue.Value ? "true" : "false");
+                writer.WriteBooleanValue(booleanValue.Value);
                 break;
             case BrowserLogsProtocolNullValue:
-                builder.Append("null");
+                writer.WriteNullValue();
                 break;
             case BrowserLogsProtocolNumberValue numberValue:
-                builder.Append(numberValue.RawValue);
+                writer.WriteRawValue(numberValue.RawValue, skipInputValidation: false);
                 break;
             case BrowserLogsProtocolObjectValue objectValue:
-                builder.Append('{');
-                var needsComma = false;
+                writer.WriteStartObject();
                 foreach (var (propertyName, propertyValue) in objectValue.Properties)
                 {
-                    if (needsComma)
-                    {
-                        builder.Append(',');
-                    }
-
-                    needsComma = true;
-                    AppendEscapedString(builder, propertyName);
-                    builder.Append(':');
-                    AppendStructuredValue(builder, propertyValue);
+                    writer.WritePropertyName(propertyName);
+                    WriteStructuredValue(writer, propertyValue);
                 }
 
-                builder.Append('}');
+                writer.WriteEndObject();
                 break;
             case BrowserLogsProtocolStringValue stringValue:
-                AppendEscapedString(builder, stringValue.Value);
+                writer.WriteStringValue(stringValue.Value);
                 break;
         }
-    }
-
-    private static void AppendEscapedString(StringBuilder builder, string value)
-    {
-        builder.Append('"');
-
-        foreach (var character in value)
-        {
-            switch (character)
-            {
-                case '\\':
-                    builder.Append("\\\\");
-                    break;
-                case '"':
-                    builder.Append("\\\"");
-                    break;
-                case '\b':
-                    builder.Append("\\b");
-                    break;
-                case '\f':
-                    builder.Append("\\f");
-                    break;
-                case '\n':
-                    builder.Append("\\n");
-                    break;
-                case '\r':
-                    builder.Append("\\r");
-                    break;
-                case '\t':
-                    builder.Append("\\t");
-                    break;
-                default:
-                    if (char.IsControl(character))
-                    {
-                        builder.Append("\\u");
-                        builder.Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
-                    }
-                    else
-                    {
-                        builder.Append(character);
-                    }
-
-                    break;
-            }
-        }
-
-        builder.Append('"');
     }
 
     private static string GetLocationSuffix(BrowserLogsSourceLocation details)
