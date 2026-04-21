@@ -232,6 +232,16 @@ public class MarkdownToSpectreConverterTests
     }
 
     [Fact]
+    public void ConvertToRenderable_WithMarkupSensitiveLinkTarget_DoesNotThrow()
+    {
+        var markdown = "[Aspire CLI](https://example.com/install?target=docs])";
+
+        var exception = Record.Exception(() => RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown)));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
     public void ConvertToRenderable_WithQuotedStructuredContent_RendersReadableOutput()
     {
         var markdown = """

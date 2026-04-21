@@ -16,7 +16,7 @@ public sealed class DocsCommandE2ETests(ITestOutputHelper output)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect();
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var docsFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "llms-small.txt");
 
         File.WriteAllText(docsFilePath, """

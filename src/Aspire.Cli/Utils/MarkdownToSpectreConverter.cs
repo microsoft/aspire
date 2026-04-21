@@ -183,6 +183,8 @@ internal static partial class MarkdownToSpectreConverter
         ListBlock list => RenderListToPlainText(list),
         CodeBlock codeBlock => GetRawCodeText(codeBlock).TrimEnd('\r', '\n'),
         MarkdigTable table => RenderTableToPlainText(table),
+        LeafBlock leaf when leaf.Inline is not null => RenderInlinesToPlainText(leaf.Inline),
+        ContainerBlock container => RenderBlocksToPlainText(container),
         _ => string.Empty
     };
 
@@ -194,6 +196,8 @@ internal static partial class MarkdownToSpectreConverter
         ListBlock list => RenderListToMarkup(list),
         CodeBlock codeBlock => $"[grey]{GetRawCodeText(codeBlock).TrimEnd('\r', '\n').EscapeMarkup()}[/]",
         MarkdigTable table => RenderTableToPlainText(table).EscapeMarkup(),
+        LeafBlock leaf when leaf.Inline is not null => RenderInlinesToMarkup(leaf.Inline),
+        ContainerBlock container => RenderBlocksToMarkup(container),
         _ => string.Empty
     };
 
@@ -291,13 +295,13 @@ internal static partial class MarkdownToSpectreConverter
         {
             builder.Append(prefix.TrimEnd());
             builder.Append('\n');
-            builder.Append(IndentBlock(renderedBlocks[0].Content, continuationPrefix));
+            AppendIndentedLines(builder, renderedBlocks[0].Content, continuationPrefix);
         }
 
         for (var i = 1; i < renderedBlocks.Count; i++)
         {
             builder.Append('\n');
-            builder.Append(IndentBlock(renderedBlocks[i].Content, continuationPrefix));
+            AppendIndentedLines(builder, renderedBlocks[i].Content, continuationPrefix);
         }
 
         return builder.ToString();
@@ -322,9 +326,8 @@ internal static partial class MarkdownToSpectreConverter
         }
     }
 
-    private static string IndentBlock(string content, string prefix)
+    private static void AppendIndentedLines(StringBuilder builder, string content, string prefix)
     {
-        var builder = new StringBuilder();
         var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Split('\n');
 
         for (var i = 0; i < lines.Length; i++)
@@ -341,8 +344,6 @@ internal static partial class MarkdownToSpectreConverter
 
             builder.Append(lines[i]);
         }
-
-        return builder.ToString();
     }
 
     private static string RenderInlinesToMarkup(ContainerInline? inline)
@@ -396,8 +397,9 @@ internal static partial class MarkdownToSpectreConverter
             return text;
         }
 
-        var linkText = string.IsNullOrEmpty(text) ? url.EscapeMarkup() : text;
-        return $"[cyan][link={url}]{linkText}[/][/]";
+        var escapedUrl = url.EscapeMarkup();
+        var linkText = string.IsNullOrEmpty(text) ? escapedUrl : text;
+        return $"[cyan][link={escapedUrl}]{linkText}[/][/]";
     }
 
     private static string RenderInlinesToPlainText(ContainerInline? inline)
