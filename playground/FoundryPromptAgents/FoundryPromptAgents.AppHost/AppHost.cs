@@ -66,8 +66,10 @@ var researchAgent = project.AddPromptAgent(chat, "research-agent",
         1. Use Bing grounding to search the web for current information
         2. Use the code interpreter to analyze data or perform calculations
         Always cite your sources and be thorough in your analysis.
-        """,
-    tools: [bingTool, aiSearchTool, codeInterpreter]);
+        """)
+    .WithTool(bingTool)
+    .WithTool(aiSearchTool)
+    .WithTool(codeInterpreter);
 
 // Joker agent: a simple agent with just code interpreter for fun
 var jokerAgent = project.AddPromptAgent(chat, "joker-agent",
@@ -75,8 +77,8 @@ var jokerAgent = project.AddPromptAgent(chat, "joker-agent",
         You are a hilarious comedian. Tell jokes, be witty, and make people laugh.
         If someone asks you to analyze something, use the code interpreter to
         create funny charts or calculations about the topic.
-        """,
-    tools: [codeInterpreter]);
+        """)
+    .WithTool(codeInterpreter);
 
 // --- Consumer service that talks to the prompt agents ---
 

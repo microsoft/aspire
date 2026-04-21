@@ -182,8 +182,9 @@ var webSearch = project.AddWebSearchTool("web-search");
 
 // Add agent with tools
 var agent = project.AddPromptAgent(chat, "joker-agent",
-    instructions: "You are good at telling jokes.",
-    tools: [codeInterp, webSearch]);
+    instructions: "You are good at telling jokes.")
+    .WithTool(codeInterp)
+    .WithTool(webSearch);
 
 builder.AddPythonApp("app", "./app", "main:app")
        .WithReference(agent);
@@ -213,8 +214,8 @@ Prompt agents support several tool types, all created as project-level resources
 var search = builder.AddAzureSearch("search");
 var aiSearch = project.AddAISearchTool("search-tool").WithReference(search);
 
-var agent = project.AddPromptAgent(chat, "research-agent",
-    tools: [aiSearch]);
+var agent = project.AddPromptAgent(chat, "research-agent")
+    .WithTool(aiSearch);
 ```
 
 ### Bing Grounding tool example
@@ -229,8 +230,8 @@ The simplest approach is to pass the Bing resource ID directly — Aspire will c
 var bingResourceId = "/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}";
 var bing = project.AddBingGroundingTool("bing-tool").WithReference(bingResourceId);
 
-var agent = project.AddPromptAgent(chat, "news-agent",
-    tools: [bing]);
+var agent = project.AddPromptAgent(chat, "news-agent")
+    .WithTool(bing);
 ```
 
 Alternatively, you can create the connection yourself for full control:
@@ -248,8 +249,8 @@ Tools are project-level resources, so they can be shared across multiple agents:
 var codeInterp = project.AddCodeInterpreterTool("code-interp");
 var webSearch = project.AddWebSearchTool("web-search");
 
-var agent1 = project.AddPromptAgent(chat, "agent-1", tools: [codeInterp, webSearch]);
-var agent2 = project.AddPromptAgent(chat, "agent-2", tools: [codeInterp]);
+var agent1 = project.AddPromptAgent(chat, "agent-1").WithTool(codeInterp).WithTool(webSearch);
+var agent2 = project.AddPromptAgent(chat, "agent-2").WithTool(codeInterp);
 ```
 
 ## Additional documentation

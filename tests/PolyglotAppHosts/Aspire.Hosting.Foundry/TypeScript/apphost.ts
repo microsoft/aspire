@@ -67,10 +67,18 @@ const azFunc = await project.addAzureFunctionTool('az-func-tool', 'myFunction', 
 const funcTool = await project.addFunctionTool('func-tool', 'myFunc', '{}');
 
 // Prompt Agent
-const _promptAgent = await project.addPromptAgent(chat, 'prompt-agent', [
-    codeInterpreter, fileSearch, webSearch, imageGen, computerUse,
-    aiSearchTool, bingTool, sharepoint, fabric, azFunc, funcTool
-]);
+const _promptAgent = await project.addPromptAgent(chat, 'prompt-agent');
+await _promptAgent.withTool(codeInterpreter);
+await _promptAgent.withTool(fileSearch);
+await _promptAgent.withTool(webSearch);
+await _promptAgent.withTool(imageGen);
+await _promptAgent.withTool(computerUse);
+await _promptAgent.withTool(aiSearchTool);
+await _promptAgent.withTool(bingTool);
+await _promptAgent.withTool(sharepoint);
+await _promptAgent.withTool(fabric);
+await _promptAgent.withTool(azFunc);
+await _promptAgent.withTool(funcTool);
 
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');

@@ -47,6 +47,17 @@ with create_builder() as builder:
 
     # Prompt Agent
     _prompt_agent = project.add_prompt_agent("resource")
+    _prompt_agent.with_tool(code_interpreter)
+    _prompt_agent.with_tool(file_search)
+    _prompt_agent.with_tool(web_search)
+    _prompt_agent.with_tool(image_gen)
+    _prompt_agent.with_tool(computer_use)
+    _prompt_agent.with_tool(ai_search_tool)
+    _prompt_agent.with_tool(bing_tool)
+    _prompt_agent.with_tool(sharepoint)
+    _prompt_agent.with_tool(fabric)
+    _prompt_agent.with_tool(az_func)
+    _prompt_agent.with_tool(func_tool)
 
     builder_project_foundry = builder.add_foundry("resource")
     builder_project = builder_project_foundry.add_project("resource", ".", "default")

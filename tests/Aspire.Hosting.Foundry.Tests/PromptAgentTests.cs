@@ -101,8 +101,9 @@ public class PromptAgentTests
         var webSearch = project.AddWebSearchTool("ws");
 
         var agent = project.AddPromptAgent(model, "my-agent",
-            instructions: "You tell jokes.",
-            tools: [codeInterp, webSearch]);
+            instructions: "You tell jokes.")
+            .WithTool(codeInterp)
+            .WithTool(webSearch);
 
         Assert.Equal(2, agent.Resource.Tools.Count);
         Assert.IsType<CodeInterpreterToolResource>(agent.Resource.Tools[0]);
@@ -390,8 +391,11 @@ public class PromptAgentTests
         var sharePoint = project.AddSharePointTool("sp", "sp-conn");
 
         var agent = project.AddPromptAgent(model, "my-agent",
-            instructions: "You tell jokes.",
-            tools: [codeInterp, webSearch, aiSearch, sharePoint]);
+            instructions: "You tell jokes.")
+            .WithTool(codeInterp)
+            .WithTool(webSearch)
+            .WithTool(aiSearch)
+            .WithTool(sharePoint);
 
         Assert.Equal(4, agent.Resource.Tools.Count);
         Assert.IsType<CodeInterpreterToolResource>(agent.Resource.Tools[0]);
@@ -410,8 +414,8 @@ public class PromptAgentTests
 
         var codeInterp = project.AddCodeInterpreterTool("ci");
 
-        var agent1 = project.AddPromptAgent(model, "agent-1", tools: [codeInterp]);
-        var agent2 = project.AddPromptAgent(model, "agent-2", tools: [codeInterp]);
+        var agent1 = project.AddPromptAgent(model, "agent-1").WithTool(codeInterp);
+        var agent2 = project.AddPromptAgent(model, "agent-2").WithTool(codeInterp);
 
         Assert.Single(agent1.Resource.Tools);
         Assert.Single(agent2.Resource.Tools);
@@ -431,7 +435,7 @@ public class PromptAgentTests
         var toolFromProject2 = project2.AddCodeInterpreterTool("ci");
 
         Assert.Throws<InvalidOperationException>(() =>
-            project1.AddPromptAgent(model, "agent", tools: [toolFromProject2]));
+            project1.AddPromptAgent(model, "agent").WithTool(toolFromProject2));
     }
 
     [Fact]

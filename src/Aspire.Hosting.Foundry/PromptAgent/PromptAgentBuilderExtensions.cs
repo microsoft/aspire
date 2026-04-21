@@ -37,7 +37,6 @@ public static class PromptAgentBuilderExtensions
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
     /// <param name="model">The model deployment to use for this agent.</param>
     /// <param name="name">The name of the prompt agent. This will be the agent name in Foundry.</param>
-    /// <param name="tools">The tools to attach to this agent. Use project-level <c>Add*Tool</c> methods to create tools.</param>
     /// <param name="instructions">Optional system instructions for the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the prompt agent resource.</returns>
     /// <example>
@@ -51,8 +50,10 @@ public static class PromptAgentBuilderExtensions
     /// var codeInterp = project.AddCodeInterpreterTool("code-interp");
     ///
     /// project.AddPromptAgent(chat, "joker-agent",
-    ///     instructions: "You are good at telling jokes.",
-    ///     tools: [bing, aiSearch, codeInterp]);
+    ///     instructions: "You are good at telling jokes.")
+    ///     .WithTool(bing)
+    ///     .WithTool(aiSearch)
+    ///     .WithTool(codeInterp);
     /// </code>
     /// </example>
     [AspireExport(Description = "Adds a prompt agent to a Microsoft Foundry project.")]
@@ -60,7 +61,6 @@ public static class PromptAgentBuilderExtensions
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         IResourceBuilder<FoundryDeploymentResource> model,
         string name,
-        IResourceBuilder<FoundryToolResource>[]? tools = null,
         string? instructions = null)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -75,12 +75,6 @@ public static class PromptAgentBuilderExtensions
         var agentBuilder = project.ApplicationBuilder.AddResource(agent)
             .WithReferenceRelationship(project)
             .WithReference(project);
-
-        foreach (var tool in tools ?? [])
-        {
-            agent.AddTool(tool.Resource);
-            agentBuilder.WithReferenceRelationship(tool);
-        }
 
         // Add "Send Message" command to the dashboard (like hosted agents)
         agentBuilder.WithCommand(
@@ -157,6 +151,26 @@ public static class PromptAgentBuilderExtensions
         // The actual URL is set by the PromptAgentDeployer after provisioning completes.
 
         return agentBuilder;
+    }
+
+    /// <summary>
+    /// Adds a tool to a prompt agent.
+    /// </summary>
+    /// <param name="agent">The prompt agent resource builder.</param>
+    /// <param name="tool">The tool resource to attach to this agent.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport(Description = "Adds a tool to a prompt agent.")]
+    public static IResourceBuilder<AzurePromptAgentResource> WithTool(
+        this IResourceBuilder<AzurePromptAgentResource> agent,
+        IResourceBuilder<FoundryToolResource> tool)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        ArgumentNullException.ThrowIfNull(tool);
+
+        agent.Resource.AddTool(tool.Resource);
+        agent.WithReferenceRelationship(tool);
+
+        return agent;
     }
 
     // ──────────────────────────────────────────────────────────────

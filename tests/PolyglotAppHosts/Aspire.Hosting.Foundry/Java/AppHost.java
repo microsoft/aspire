@@ -49,7 +49,7 @@ void main() throws Exception {
         var webSearch = project.addWebSearchTool("web-search");
         var imageGen = project.addImageGenerationTool("image-gen");
         var computerUse = project.addComputerUseTool("computer-use");
-        var aiSearchTool = project.addAISearchTool("ai-search-tool", "my-index");
+        var aiSearchTool = project.addAISearchTool("ai-search-tool");
         aiSearchTool.withReference(search);
         var bingTool = project.addBingGroundingTool("bing-tool");
         bingTool.withBingConnectionReference(_searchConnection);
@@ -62,9 +62,18 @@ void main() throws Exception {
         var funcTool = project.addFunctionTool("func-tool", "myFunc", "{}");
 
         // Prompt Agent
-        var _promptAgent = project.addPromptAgent(chat, "prompt-agent",
-            new Handle[] { codeInterpreter, fileSearch, webSearch, imageGen, computerUse,
-                aiSearchTool, bingTool, sharepoint, fabric, azFunc, funcTool });
+        var _promptAgent = project.addPromptAgent(chat, "prompt-agent");
+        _promptAgent.withTool(codeInterpreter);
+        _promptAgent.withTool(fileSearch);
+        _promptAgent.withTool(webSearch);
+        _promptAgent.withTool(imageGen);
+        _promptAgent.withTool(computerUse);
+        _promptAgent.withTool(aiSearchTool);
+        _promptAgent.withTool(bingTool);
+        _promptAgent.withTool(sharepoint);
+        _promptAgent.withTool(fabric);
+        _promptAgent.withTool(azFunc);
+        _promptAgent.withTool(funcTool);
 
         var builderProjectFoundry = builder.addFoundry("builder-project-foundry");
         var builderProject = builderProjectFoundry.addProject("builder-project");
