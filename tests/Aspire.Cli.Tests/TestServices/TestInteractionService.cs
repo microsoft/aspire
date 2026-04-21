@@ -41,7 +41,6 @@ internal sealed class TestInteractionService : IInteractionService
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
     public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
-    public int DisplayCancellationMessageCallCount { get; private set; }
 
     // Response queue setup methods
     public void SetupStringPromptResponse(string response) => _responses.Enqueue((response, ResponseType.String));
@@ -174,7 +173,6 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayCancellationMessage()
     {
-        DisplayCancellationMessageCallCount++;
     }
 
     public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default)

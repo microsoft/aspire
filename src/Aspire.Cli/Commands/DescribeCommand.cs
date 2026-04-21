@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -166,28 +165,11 @@ internal sealed class DescribeCommand : BaseCommand
             {
                 return await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken);
             }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsExpectedBackchannelDisconnect(ex))
             {
-                _interactionService.DisplayCancellationMessage();
-                return ExitCodeConstants.Success;
-            }
-            catch (Exception ex) when (IsExpectedBackchannelDisconnect(ex))
-            {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    _interactionService.DisplayCancellationMessage();
-                }
-                else if (HasAppHostExited(connection))
-                {
-                    // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
-                    // describe --follow is active. Treat the lost watch as a normal end of stream
-                    // rather than surfacing it as an unexpected CLI failure, while still
-                    // explaining why the follow operation stopped.
-                    _interactionService.DisplayMessage(
-                        KnownEmojis.Information,
-                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.AppHostConnectionLost, ex.Message));
-                }
-
+                // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
+                // describe --follow is active. Treat the lost watch as a normal end of stream
+                // rather than surfacing it as an unexpected CLI failure.
                 return ExitCodeConstants.Success;
             }
         }
@@ -296,32 +278,6 @@ internal sealed class DescribeCommand : BaseCommand
         return ex is ConnectionLostException
             || ex is ObjectDisposedException
             || ex is OperationCanceledException { InnerException: ConnectionLostException };
-    }
-
-    private static bool HasAppHostExited(IAppHostAuxiliaryBackchannel connection)
-    {
-        if (connection.AppHostInfo?.ProcessId is not int pid)
-        {
-            return true;
-        }
-
-        try
-        {
-            using var process = Process.GetProcessById(pid);
-            return process.HasExited;
-        }
-        catch (ArgumentException)
-        {
-            return true;
-        }
-        catch (InvalidOperationException)
-        {
-            return true;
-        }
-        catch (NotSupportedException)
-        {
-            return true;
-        }
     }
 
     private void DisplayResourcesTable(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl)
