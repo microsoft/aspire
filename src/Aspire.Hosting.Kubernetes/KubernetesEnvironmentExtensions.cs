@@ -253,9 +253,9 @@ public static class KubernetesEnvironmentExtensions
     /// <remarks>
     /// This sets the environment-level default. Individual resources can override this
     /// using <see cref="KubernetesServiceExtensions.WithKubernetesIngress{T}"/>.
-    /// The last annotation added wins (via <see cref="ResourceExtensions.TryGetLastAnnotation{T}"/>).
+    /// The last annotation added wins.
     /// </remarks>
-    [AspireExport(Description = "Configures the default ingress strategy for a Kubernetes environment")]
+    [AspireExport("withIngressConfigure", Description = "Configures the default ingress strategy for a Kubernetes environment")]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithIngress(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         Func<KubernetesIngressContext, Task> configure)
@@ -281,7 +281,7 @@ public static class KubernetesEnvironmentExtensions
     /// <see cref="KubernetesIngressConfigurationAnnotation"/> from the environment,
     /// preventing automatic ingress generation for all resources.
     /// </remarks>
-    [AspireExport(Description = "Enables or disables automatic ingress for a Kubernetes environment")]
+    [AspireExport("withIngressEnabled", Description = "Enables or disables automatic ingress for a Kubernetes environment")]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithIngress(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         bool enabled)

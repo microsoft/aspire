@@ -8,6 +8,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <summary>
 /// Provides context for configuring Kubernetes ingress for a resource with external HTTP endpoints.
 /// </summary>
+[AspireExport(ExposeProperties = true)]
 public sealed class KubernetesIngressContext
 {
     /// <summary>
