@@ -157,6 +157,11 @@
         <target state="translated">'{0}' yükleme dizinine yazılamıyor. Lütfen güncellemeyi yükseltilmiş izinlerle (örneğin Linux/macOS'ta sudo kullanarak) çalıştırın.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PackageNotFoundInChannelWarningFormat">
+        <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
+        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">Paket başvurusunda Kimlik yok.</target>

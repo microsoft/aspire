@@ -96,7 +96,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
     }
 
     /// <summary>
-    /// Applies Aspire-specific policy checks (minimum version, Windows containers, tunnel)
+    /// Applies Aspire-specific policy checks (minimum version, Windows containers)
     /// using version info already gathered by the detector. No process spawning.
     /// </summary>
     private static EnvironmentCheckResult? CheckRuntimePolicy(ContainerRuntimeInfo info)
@@ -133,25 +133,6 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
                 Fix = "Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')",
                 Link = "https://aka.ms/dotnet/aspire/containers"
             };
-        }
-
-        // Docker Engine (not Desktop): check tunnel
-        if (info.Name == "Docker" && !info.IsDockerDesktop)
-        {
-            var tunnelEnabled = Environment.GetEnvironmentVariable("ASPIRE_ENABLE_CONTAINER_TUNNEL");
-            if (!string.Equals(tunnelEnabled, "true", StringComparison.OrdinalIgnoreCase))
-            {
-                var versionSuffix = info.ClientVersion is not null ? $" (version {info.ClientVersion})" : "";
-                return new EnvironmentCheckResult
-                {
-                    Category = "container",
-                    Name = "container-runtime",
-                    Status = EnvironmentCheckStatus.Warning,
-                    Message = $"Docker Engine detected{versionSuffix}. Aspire's container tunnel is required to allow containers to reach applications running on the host",
-                    Fix = "Set environment variable: ASPIRE_ENABLE_CONTAINER_TUNNEL=true",
-                    Link = "https://aka.ms/aspire-prerequisites#docker-engine"
-                };
-            }
         }
 
         return null; // No issues

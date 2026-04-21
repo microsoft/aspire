@@ -182,6 +182,25 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public void DisplayMarkdown_WhenNonInteractive_UsesPlainTextFallback()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var interactionService = CreateInteractionService(console, executionContext, TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        interactionService.DisplayMarkdown("Visit [GitHub](https://github.com) for more info.");
+
+        Assert.Contains("Visit GitHub (https://github.com) for more info.", output.ToString());
+    }
+
+    [Fact]
     public async Task ShowStatusAsync_InDebugMode_DisplaysSubtleMessageInsteadOfSpinner()
     {
         // Arrange
