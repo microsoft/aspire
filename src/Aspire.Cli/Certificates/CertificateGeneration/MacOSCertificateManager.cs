@@ -416,7 +416,7 @@ internal sealed class MacOSCertificateManager : CertificateManager
 
             ExportCertificate(diskCert, Path.Combine(s_aspireDevCertsCacheDirectory, $"{aspireLookup}.pfx"), includePrivateKey: true, null, CertificateKeyExportFormat.Pfx);
 
-            // Write PEM key cache — must match the format produced by DeveloperCertificateService.ExportKeyPemFromRsa
+            // Write PEM key cache — must match the format produced by DeveloperCertificateService.ExportKeyPem
             using var key = diskCert.GetRSAPrivateKey();
             if (key is not null)
             {

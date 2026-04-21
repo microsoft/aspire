@@ -255,7 +255,7 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
             if (cachedPfx is not null && cachedKey is not null)
             {
                 return (
-                    needKeyPem ? new string(Encoding.UTF8.GetString(cachedKey)).ToCharArray() : null,
+                    needKeyPem ? Encoding.UTF8.GetString(cachedKey).ToCharArray() : null,
                     needPfx ? cachedPfx : null);
             }
 
@@ -305,22 +305,25 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
             return (null, null);
         }
 
-        using var privateKey = certificate.GetRSAPrivateKey();
+        using AsymmetricAlgorithm? privateKey =
+            (AsymmetricAlgorithm?)certificate.GetRSAPrivateKey()
+            ?? certificate.GetECDsaPrivateKey();
+
         if (privateKey is null)
         {
-            return (null, null);
+            throw new InvalidOperationException("The certificate does not have an associated RSA or ECDSA private key.");
         }
 
-        var keyPem = needKeyPem ? ExportKeyPemFromRsa(privateKey, password) : null;
+        var keyPem = needKeyPem ? ExportKeyPem(privateKey, password) : null;
         var pfxBytes = needPfx ? certificate.Export(X509ContentType.Pfx, password) : null;
 
         return (keyPem, pfxBytes);
     }
 
     /// <summary>
-    /// Exports an RSA private key in PEM format.
+    /// Exports an asymmetric private key in PEM format. Supports RSA and ECDSA keys.
     /// </summary>
-    private static char[] ExportKeyPemFromRsa(RSA privateKey, string? password)
+    private static char[] ExportKeyPem(AsymmetricAlgorithm privateKey, string? password)
     {
         var keyBytes = privateKey.ExportEncryptedPkcs8PrivateKey(
             password ?? string.Empty,
@@ -332,7 +335,12 @@ internal class DeveloperCertificateService : IDeveloperCertificateService
 
         if (password is null)
         {
-            using var tempKey = RSA.Create();
+            using AsymmetricAlgorithm tempKey = privateKey switch
+            {
+                RSA => RSA.Create(),
+                ECDsa => ECDsa.Create(),
+                _ => throw new InvalidOperationException($"Unsupported private key type: {privateKey.GetType().FullName}.")
+            };
             tempKey.ImportFromEncryptedPem(pemKey, string.Empty);
             Array.Clear(keyBytes, 0, keyBytes.Length);
             Array.Clear(pemKey, 0, pemKey.Length);
