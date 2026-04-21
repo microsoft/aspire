@@ -66,7 +66,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 var keyVaultConn = aspireResource.Parent.KeyVaultConn.AddAsExistingResource(infrastructure);
                 connection.DependsOn.Add(keyVaultConn);
             }
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = connection.Name });
+            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = connection.Id });
         }
         var connectionResource = new AzureCognitiveServicesProjectConnectionResource(name, configureInfrastructure, builder.Resource);
         return builder.ApplicationBuilder.AddResource(connectionResource);
@@ -90,7 +90,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         {
             Category = CognitiveServicesConnectionCategory.CosmosDB,
             Target = db.ConnectionStringOutput.AsProvisioningParameter(infra),
-            IsSharedToAll = false,
+            IsSharedToAll = true,
             Metadata =
             {
                 { "ApiType", "Azure" },
@@ -130,7 +130,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         {
             Category = CognitiveServicesConnectionCategory.AzureBlob,
             Target = storage.BlobEndpoint.AsProvisioningParameter(infra),
-            IsSharedToAll = false,
+            IsSharedToAll = true,
             Metadata =
             {
                 { "ApiType", "Azure" },
@@ -171,7 +171,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         {
             Category = CognitiveServicesConnectionCategory.ContainerRegistry,
             Target = registry.RegistryEndpoint.AsProvisioningParameter(infra),
-            IsSharedToAll = false,
+            IsSharedToAll = true,
             Credentials = new CognitiveServicesConnectionManagedIdentity(){
                 ClientId = "aiprojectidentityprincipleaid",
                 ResourceId = registry.NameOutputReference.AsProvisioningParameter(infra)
@@ -316,7 +316,13 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             return new BingGroundingConnectionProperties()
             {
                 Target = "https://api.bing.microsoft.com/",
-                IsSharedToAll = false,
+                IsSharedToAll = true,
+                CredentialsKey = (BicepValue<string>)new MemberExpression(
+                    new FunctionCallExpression(
+                        new IdentifierExpression("listKeys"),
+                        new StringLiteralExpression(bingResourceId),
+                        new StringLiteralExpression("2020-06-10")),
+                    "key1"),
                 Metadata =
                 {
                     { "type", "bing_grounding" },
@@ -356,15 +362,22 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
 
         return builder.AddConnection(name, (infra) =>
         {
+            var resourceIdParam = bingResourceId.AsProvisioningParameter(infra);
             return new BingGroundingConnectionProperties()
             {
                 Target = "https://api.bing.microsoft.com/",
-                IsSharedToAll = false,
+                IsSharedToAll = true,
+                CredentialsKey = (BicepValue<string>)new MemberExpression(
+                    new FunctionCallExpression(
+                        new IdentifierExpression("listKeys"),
+                        resourceIdParam.Value.Compile(),
+                        new StringLiteralExpression("2020-06-10")),
+                    "key1"),
                 Metadata =
                 {
                     { "type", "bing_grounding" },
                     { "ApiType", "Azure" },
-                    { "ResourceId", bingResourceId.AsProvisioningParameter(infra) }
+                    { "ResourceId", resourceIdParam }
                 }
             };
         });

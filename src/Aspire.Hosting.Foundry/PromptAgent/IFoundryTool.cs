@@ -25,8 +25,8 @@ public interface IFoundryTool
     /// Tools that depend on provisioned resources (e.g., Azure AI Search connections) can
     /// safely resolve their connection identifiers at this point.
     /// </remarks>
-    /// <param name="context">The pipeline step context for resolving deploy-time values.</param>
+    /// <param name="context">The pipeline step context for resolving deploy-time values, or <c>null</c> in run mode.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The SDK tool representation.</returns>
-    Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default);
+    Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default);
 }

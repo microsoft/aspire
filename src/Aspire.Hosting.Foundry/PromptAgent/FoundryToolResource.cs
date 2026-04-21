@@ -35,5 +35,5 @@ public abstract class FoundryToolResource : Resource, IFoundryTool
     public AzureCognitiveServicesProjectResource Project { get; }
 
     /// <inheritdoc/>
-    public abstract Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default);
+    public abstract Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default);
 }

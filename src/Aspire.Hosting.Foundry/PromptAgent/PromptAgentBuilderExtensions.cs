@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
+using Aspire.Hosting.Lifecycle;
 
 namespace Aspire.Hosting;
 
@@ -61,6 +62,9 @@ public static class PromptAgentBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var agent = new AzurePromptAgentResource(name, model.Resource.DeploymentName, project.Resource, instructions);
+
+        // Register the deployer that handles prompt agent deployment during aspire run
+        project.ApplicationBuilder.Services.TryAddEventingSubscriber<PromptAgentDeployer>();
 
         var agentBuilder = project.ApplicationBuilder.AddResource(agent)
             .WithReferenceRelationship(project)
@@ -206,16 +210,21 @@ public static class PromptAgentBuilderExtensions
     /// </remarks>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
     /// <param name="name">The name of the tool resource.</param>
+    /// <param name="indexName">Optional name of the search index to query. If not specified, the agent must be told which index to use.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
     [AspireExport(Description = "Adds an Azure AI Search tool to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureAISearchToolResource> AddAISearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name)
+        string name,
+        string? indexName = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        var resource = new AzureAISearchToolResource(name, project.Resource);
+        var resource = new AzureAISearchToolResource(name, project.Resource)
+        {
+            IndexName = indexName
+        };
         return project.ApplicationBuilder.AddResource(resource)
             .WithReferenceRelationship(project);
     }

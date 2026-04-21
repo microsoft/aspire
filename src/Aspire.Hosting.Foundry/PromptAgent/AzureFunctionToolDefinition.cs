@@ -3,7 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
-using Azure.AI.Projects.OpenAI;
+using Azure.AI.Projects.Agents;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -95,7 +95,7 @@ public sealed class AzureFunctionToolResource : FoundryToolResource
     public string OutputQueueName { get; }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
     {
         var function = new AzureFunctionDefinitionFunction(FunctionName, Parameters)
         {
@@ -107,6 +107,6 @@ public sealed class AzureFunctionToolResource : FoundryToolResource
             new AzureFunctionStorageQueue(OutputQueueEndpoint, OutputQueueName));
 
         var definition = new AzureFunctionDefinition(function, inputBinding, outputBinding);
-        return Task.FromResult<ResponseTool>(new AzureFunctionAgentTool(definition));
+        return Task.FromResult<ResponseTool>(new AzureFunctionTool(definition));
     }
 }

@@ -7,7 +7,7 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure.AI.Projects;
-using Azure.AI.Projects.OpenAI;
+using Azure.AI.Projects.Agents;
 using Azure.Identity;
 using Microsoft.Extensions.Logging;
 
@@ -169,22 +169,40 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
     /// <summary>
     /// Deploys the prompt agent to the given Microsoft Foundry project.
     /// </summary>
-    public async Task<AgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
+    public async Task<ProjectsAgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
+    {
+        return await DeployAsync(project, context.CancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Deploys the prompt agent to the parent Microsoft Foundry project.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The deployed agent version.</returns>
+    public async Task<ProjectsAgentVersion> DeployAsync(CancellationToken cancellationToken = default)
+    {
+        return await DeployAsync(Project, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Deploys the prompt agent to the given Microsoft Foundry project.
+    /// </summary>
+    internal async Task<ProjectsAgentVersion> DeployAsync(AzureCognitiveServicesProjectResource project, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(project);
 
-        var projectEndpoint = await project.Endpoint.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+        var projectEndpoint = await project.Endpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrEmpty(projectEndpoint))
         {
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid endpoint.");
         }
 
-        var config = await ToPromptAgentConfigurationAsync(context).ConfigureAwait(false);
+        var config = await ToPromptAgentConfigurationAsync(cancellationToken).ConfigureAwait(false);
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
-        var result = await projectClient.Agents.CreateAgentVersionAsync(
+        var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
-            config.ToAgentVersionCreationOptions(),
-            context.CancellationToken
+            config.ToProjectsAgentVersionCreationOptions(),
+            cancellationToken: cancellationToken
         ).ConfigureAwait(false);
 
         return result.Value;
@@ -193,7 +211,7 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
     /// <summary>
     /// Builds the agent configuration, resolving all tool definitions at deploy time.
     /// </summary>
-    internal async Task<PromptAgentConfiguration> ToPromptAgentConfigurationAsync(PipelineStepContext context)
+    internal async Task<PromptAgentConfiguration> ToPromptAgentConfigurationAsync(CancellationToken cancellationToken)
     {
         var config = new PromptAgentConfiguration(Model, Instructions)
         {
@@ -203,13 +221,13 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
 
         foreach (var tool in _tools)
         {
-            var agentTool = await tool.ToAgentToolAsync(context, context.CancellationToken).ConfigureAwait(false);
+            var agentTool = await tool.ToAgentToolAsync(null, cancellationToken).ConfigureAwait(false);
             config.Tools.Add(agentTool);
         }
 
         foreach (var customTool in CustomTools)
         {
-            var agentTool = await customTool.ToAgentToolAsync(context, context.CancellationToken).ConfigureAwait(false);
+            var agentTool = await customTool.ToAgentToolAsync(null, cancellationToken).ConfigureAwait(false);
             config.Tools.Add(agentTool);
         }
 

@@ -32,8 +32,15 @@ var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
 
 // --- Azure AI Search (provisioned by Aspire, connected to Foundry) ---
 
-var search = builder.AddAzureSearch("search");
-var aiSearchTool = project.AddAISearchTool("aisearch-tool")
+var search = builder.AddAzureSearch("search")
+    .ConfigureInfrastructure(infra =>
+    {
+        var searchService = infra.GetProvisionableResources()
+            .OfType<Azure.Provisioning.Search.SearchService>()
+            .Single();
+        searchService.SearchSkuName = Azure.Provisioning.Search.SearchServiceSkuName.Free;
+    });
+var aiSearchTool = project.AddAISearchTool("aisearch-tool", indexName: "default")
     .WithReference(search);
 
 // --- Bing Grounding (existing resource, connected to Foundry via resource ID) ---
@@ -49,17 +56,15 @@ var bingTool = project.AddBingGroundingTool("bing-tool")
 // --- Built-in tools (no connection or provisioning needed) ---
 
 var codeInterpreter = project.AddCodeInterpreterTool("code-interp");
-var fileSearch = project.AddFileSearchTool("file-search");
 
 // --- Prompt Agents ---
 
 // Research agent: uses Bing for grounding + AI Search for indexed data + code interpreter
-project.AddPromptAgent(chat, "research-agent",
+var researchAgent = project.AddPromptAgent(chat, "research-agent",
     instructions: """
         You are a research assistant. When asked a question:
         1. Use Bing grounding to search the web for current information
-        2. Use Azure AI Search to find relevant indexed documents
-        3. Use the code interpreter to analyze data or perform calculations
+        2. Use the code interpreter to analyze data or perform calculations
         Always cite your sources and be thorough in your analysis.
         """,
     tools: [bingTool, aiSearchTool, codeInterpreter]);
@@ -71,13 +76,14 @@ var jokerAgent = project.AddPromptAgent(chat, "joker-agent",
         If someone asks you to analyze something, use the code interpreter to
         create funny charts or calculations about the topic.
         """,
-    tools: [codeInterpreter, fileSearch]);
+    tools: [codeInterpreter]);
 
 // --- Consumer service that talks to the prompt agents ---
 
 builder.AddProject<Projects.PromptAgentChat>("chat-app")
     .WithExternalHttpEndpoints()
-    .WithReference(jokerAgent).WaitFor(jokerAgent);
+    .WithReference(jokerAgent).WaitFor(jokerAgent)
+    .WithReference(researchAgent).WaitFor(researchAgent);
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

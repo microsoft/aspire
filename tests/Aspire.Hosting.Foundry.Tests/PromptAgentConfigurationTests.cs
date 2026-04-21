@@ -3,7 +3,7 @@
 
 #pragma warning disable OPENAI001 // ResponseTool is for evaluation purposes only
 
-using Azure.AI.Projects;
+using Azure.AI.Projects.Agents;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry.Tests;
@@ -55,39 +55,39 @@ public class PromptAgentConfigurationTests
     }
 
     [Fact]
-    public void ToAgentVersionCreationOptions_CreatesValidOptions()
+    public void ToProjectsAgentVersionCreationOptions_CreatesValidOptions()
     {
         var config = new PromptAgentConfiguration("gpt-4.1", "Tell jokes")
         {
             Description = "Test Agent"
         };
 
-        var options = config.ToAgentVersionCreationOptions();
+        var options = config.ToProjectsAgentVersionCreationOptions();
 
         Assert.NotNull(options);
-        Assert.IsType<AgentVersionCreationOptions>(options);
+        Assert.IsType<ProjectsAgentVersionCreationOptions>(options);
         Assert.Equal("Test Agent", options.Description);
     }
 
     [Fact]
-    public void ToAgentVersionCreationOptions_IncludesMetadata()
+    public void ToProjectsAgentVersionCreationOptions_IncludesMetadata()
     {
         var config = new PromptAgentConfiguration("gpt-4.1", null);
         config.Metadata["TestKey"] = "TestValue";
 
-        var options = config.ToAgentVersionCreationOptions();
+        var options = config.ToProjectsAgentVersionCreationOptions();
 
         Assert.Contains("TestKey", options.Metadata.Keys);
         Assert.Equal("TestValue", options.Metadata["TestKey"]);
     }
 
     [Fact]
-    public void ToAgentVersionCreationOptions_IncludesTools()
+    public void ToProjectsAgentVersionCreationOptions_IncludesTools()
     {
         var config = new PromptAgentConfiguration("gpt-4.1", null);
         config.Tools.Add(new WebSearchTool());
 
-        var options = config.ToAgentVersionCreationOptions();
+        var options = config.ToProjectsAgentVersionCreationOptions();
 
         Assert.NotNull(options);
     }

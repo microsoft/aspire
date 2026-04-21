@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Data.Common;
-using Azure.AI.OpenAI;
+using Azure.AI.Extensions.OpenAI;
+using Azure.AI.Projects;
 using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,46 +11,37 @@ builder.AddServiceDefaults();
 
 var app = builder.Build();
 
-app.MapGet("/", () => "Prompt Agent Chat - use /chat?message=your+message to talk to the joker agent");
+app.MapGet("/", () => "Prompt Agent Chat - use /chat?message=... (joker) or /research?message=... (research agent with Bing)");
 
 app.MapGet("/chat", async (string? message) =>
 {
-    message ??= "Tell me a joke!";
+    return await InvokeAgentAsync("joker-agent", message ?? "Tell me a joke!");
+});
 
-    // Read the agent connection string injected by Aspire
-    // Format: Endpoint={projectEndpoint}/agents/{agentName}
-    var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__joker-agent")
-        ?? throw new InvalidOperationException("ConnectionStrings__joker-agent is not set.");
+app.MapGet("/research", async (string? message) =>
+{
+    return await InvokeAgentAsync("research-agent", message ?? "What are the latest .NET Aspire features?");
+});
 
-    var connectionBuilder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+static async Task<IResult> InvokeAgentAsync(string agentResourceName, string message)
+{
+    var connectionString = Environment.GetEnvironmentVariable($"ConnectionStrings__{agentResourceName}")
+        ?? throw new InvalidOperationException($"ConnectionStrings__{agentResourceName} is not set.");
 
-    if (!connectionBuilder.TryGetValue("Endpoint", out var endpointObj) || endpointObj is null)
-    {
-        throw new InvalidOperationException("Connection string is missing 'Endpoint'.");
-    }
-
-    var fullEndpoint = endpointObj.ToString()!;
-    var agentIndex = fullEndpoint.IndexOf("/agents/", StringComparison.OrdinalIgnoreCase);
+    var agentIndex = connectionString.IndexOf("/agents/", StringComparison.OrdinalIgnoreCase);
     if (agentIndex < 0)
     {
-        throw new InvalidOperationException("Connection string endpoint doesn't contain '/agents/' segment.");
+        throw new InvalidOperationException("Connection string doesn't contain '/agents/' segment.");
     }
 
-    var projectEndpoint = fullEndpoint[..agentIndex];
-    var agentName = fullEndpoint[(agentIndex + "/agents/".Length)..];
+    var projectEndpoint = connectionString[..agentIndex];
+    var agentName = connectionString[(agentIndex + "/agents/".Length)..];
 
-    // Create an AzureOpenAI client pointing at the Foundry project endpoint.
-    // The prompt agent is invoked via the OpenAI Responses API — Foundry routes
-    // the request to the pre-configured agent identified by its name.
-    var openAiClient = new AzureOpenAIClient(new Uri(projectEndpoint), new DefaultAzureCredential());
-
-#pragma warning disable OPENAI001 // Responses API is in preview
-    var responsesClient = openAiClient.GetResponsesClient();
-
-    // Use the agent name as the "model" parameter — Foundry resolves it to the agent definition
-    var response = await responsesClient.CreateResponseAsync(agentName, message);
+    var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
+    var agentRef = new AgentReference(name: agentName);
+    var responseClient = projectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(agentRef);
+    var response = await responseClient.CreateResponseAsync(message);
     var outputText = response.Value.GetOutputText();
-#pragma warning restore OPENAI001
 
     return Results.Ok(new
     {
@@ -58,6 +49,6 @@ app.MapGet("/chat", async (string? message) =>
         Message = message,
         Response = outputText
     });
-});
+}
 
 app.Run();

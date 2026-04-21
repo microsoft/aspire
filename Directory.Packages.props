@@ -15,7 +15,8 @@
     <PackageVersion Include="Azure.AI.AgentServer.AgentFramework" Version="1.0.0-beta.11" />
     <PackageVersion Include="Azure.AI.Inference" Version="1.0.0-beta.5" />
     <PackageVersion Include="Azure.AI.OpenAI" Version="2.5.0-beta.1" />
-    <PackageVersion Include="Azure.AI.Projects" Version="1.2.0-beta.4" />
+    <PackageVersion Include="Azure.AI.Extensions.OpenAI" Version="2.0.0" />
+    <PackageVersion Include="Azure.AI.Projects" Version="2.0.0" />
     <PackageVersion Include="Azure.Data.Tables" Version="12.11.0" />
     <PackageVersion Include="Azure.Extensions.AspNetCore.Configuration.Secrets" Version="1.4.0" />
     <PackageVersion Include="Azure.Messaging.EventHubs" Version="5.12.2" />
@@ -185,7 +186,7 @@
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
     <PackageVersion Include="Azure.Core" Version="1.52.0" />
-    <PackageVersion Include="Azure.Identity" Version="1.18.0" />
+    <PackageVersion Include="Azure.Identity" Version="1.20.0" />
     <!-- https://github.com/Azure/azure-cosmos-dotnet-v3/pull/3313 -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>

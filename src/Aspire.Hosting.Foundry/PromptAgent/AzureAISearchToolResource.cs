@@ -4,7 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
-using Azure.AI.Projects.OpenAI;
+using Azure.AI.Projects.Agents;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -39,13 +39,19 @@ public class AzureAISearchToolResource : FoundryToolResource
     public AzureSearchResource? SearchResource { get; internal set; }
 
     /// <summary>
+    /// Gets or sets the optional search index name to query. If not set, the tool
+    /// will use a default or prompt-specified index at runtime.
+    /// </summary>
+    public string? IndexName { get; set; }
+
+    /// <summary>
     /// Gets or sets the Foundry project connection resource for this search tool.
     /// Set by <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>.
     /// </summary>
     internal AzureCognitiveServicesProjectConnectionResource? Connection { get; set; }
 
     /// <inheritdoc/>
-    public override async Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override async Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
     {
         if (Connection is null)
         {
@@ -66,9 +72,10 @@ public class AzureAISearchToolResource : FoundryToolResource
 
         var index = new AzureAISearchToolIndex
         {
-            ProjectConnectionId = connectionName
+            ProjectConnectionId = connectionName,
+            IndexName = IndexName
         };
         var options = new AzureAISearchToolOptions([index]);
-        return new AzureAISearchAgentTool(options);
+        return new AzureAISearchTool(options);
     }
 }

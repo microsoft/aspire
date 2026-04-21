@@ -3,7 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
-using Azure.AI.Projects.OpenAI;
+using Azure.AI.Projects.Agents;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -39,7 +39,7 @@ public sealed class SharePointToolResource : FoundryToolResource
     public IList<string> ProjectConnectionIds { get; }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
     {
         var options = new SharePointGroundingToolOptions();
         foreach (var connectionId in ProjectConnectionIds)
@@ -47,7 +47,7 @@ public sealed class SharePointToolResource : FoundryToolResource
             options.ProjectConnections.Add(new ToolProjectConnection(connectionId));
         }
 
-        return Task.FromResult<ResponseTool>(new SharepointAgentTool(options));
+        return Task.FromResult<ResponseTool>(new SharepointPreviewTool(options));
     }
 }
 
@@ -82,7 +82,7 @@ public sealed class FabricToolResource : FoundryToolResource
     public IList<string> ProjectConnectionIds { get; }
 
     /// <inheritdoc/>
-    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext context, CancellationToken cancellationToken = default)
+    public override Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)
     {
         var options = new FabricDataAgentToolOptions();
         foreach (var connectionId in ProjectConnectionIds)
@@ -90,6 +90,6 @@ public sealed class FabricToolResource : FoundryToolResource
             options.ProjectConnections.Add(new ToolProjectConnection(connectionId));
         }
 
-        return Task.FromResult<ResponseTool>(new MicrosoftFabricAgentTool(options));
+        return Task.FromResult<ResponseTool>(new MicrosoftFabricPreviewTool(options));
     }
 }

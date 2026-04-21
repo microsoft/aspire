@@ -2,8 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Azure.AI.Projects;
-using Azure.AI.Projects.OpenAI;
+using Azure.AI.Projects.Agents;
 using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
@@ -12,7 +11,7 @@ namespace Aspire.Hosting.Foundry;
 /// A configuration helper for prompt agents.
 /// </summary>
 /// <remarks>
-/// This type wraps the Foundry SDK's <see cref="AgentVersionCreationOptions"/> to provide a strongly typed
+/// This type wraps the Foundry SDK's <see cref="ProjectsAgentVersionCreationOptions"/> to provide a strongly typed
 /// configuration surface for prompt agent definitions. Unlike <see cref="HostedAgentConfiguration"/> which
 /// configures a containerized agent, this configures a model-based agent with instructions and tools.
 /// </remarks>
@@ -50,11 +49,11 @@ public class PromptAgentConfiguration(string model, string? instructions)
     public IList<ResponseTool> Tools { get; init; } = [];
 
     /// <summary>
-    /// Converts this configuration to an <see cref="AgentVersionCreationOptions"/> instance.
+    /// Converts this configuration to an <see cref="ProjectsAgentVersionCreationOptions"/> instance.
     /// </summary>
-    public AgentVersionCreationOptions ToAgentVersionCreationOptions()
+    public ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions()
     {
-        var def = new PromptAgentDefinition(Model)
+        var def = new DeclarativeAgentDefinition(Model)
         {
             Instructions = Instructions
         };
@@ -64,7 +63,7 @@ public class PromptAgentConfiguration(string model, string? instructions)
             def.Tools.Add(tool);
         }
 
-        var options = new AgentVersionCreationOptions(def)
+        var options = new ProjectsAgentVersionCreationOptions(def)
         {
             Description = Description,
         };
