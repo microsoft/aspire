@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Certificates;
@@ -45,7 +46,8 @@ internal interface ICertificateService
 internal sealed class CertificateService(
     ICertificateToolRunner certificateToolRunner,
     IInteractionService interactionService,
-    AspireCliTelemetry telemetry) : ICertificateService
+    AspireCliTelemetry telemetry,
+    ICliHostEnvironment hostEnvironment) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
 
@@ -54,6 +56,38 @@ internal sealed class CertificateService(
         using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
 
         var environmentVariables = new Dictionary<string, string>();
+
+        // In non-interactive environments on macOS and Windows we can't successfully
+        // prompt for trust (macOS Keychain password, Windows trust dialog) and we also
+        // don't want to silently generate a new certificate that won't be trusted.
+        // Skip the trust attempt but still check the current state so we can warn when
+        // the environment does not already have a trusted certificate. Linux trust is
+        // non-interactive so it's safe to run the full flow there.
+        var canPerformTrust = hostEnvironment.SupportsInteractiveInput || OperatingSystem.IsLinux();
+
+        if (!canPerformTrust)
+        {
+            var preCheck = certificateToolRunner.CheckHttpCertificate();
+            if (preCheck.IsPartiallyTrusted)
+            {
+                interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesPartiallyTrustedNonInteractive);
+            }
+            else if (!preCheck.IsFullyTrusted)
+            {
+                interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesNotTrustedNonInteractive);
+            }
+
+            if (preCheck.IsPartiallyTrusted && OperatingSystem.IsLinux())
+            {
+                ConfigureSslCertDir(environmentVariables);
+            }
+
+            return new EnsureCertificatesTrustedResult
+            {
+                EnvironmentVariables = environmentVariables,
+                Success = true
+            };
+        }
 
         // Always run trust so the Aspire cache stays populated even when the certificate
         // is already trusted. Each platform's TrustCertificateCore short-circuits without

@@ -42,6 +42,16 @@
         <target state="translated">Certyfikaty dewelopera mogą nie być w pełni zaufane (kod zakończenia zaufania: {0}).</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificatesNotTrustedNonInteractive">
+        <source>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CertificatesPartiallyTrustedNonInteractive">
+        <source>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">To polecenie nie jest jeszcze obsługiwane w przypadku hostów AppHost z jednym plikiem.</target>

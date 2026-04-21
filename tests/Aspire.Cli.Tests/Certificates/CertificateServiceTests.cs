@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Certificates;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Cli.Tests.Certificates;
@@ -141,11 +144,179 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         Assert.Empty(result.EnvironmentVariables);
     }
 
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_ChecksButDoesNotTrustOnNonLinux()
+    {
+        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive skip only applies to macOS/Windows; Linux trust is non-interactive.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var trustCalled = false;
+        var checkCalled = false;
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () =>
+            {
+                trustCalled = true;
+                return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+            },
+            CheckHttpCertificateCallback = () =>
+            {
+                checkCalled = true;
+                return CreateTrustResult(CertificateManager.TrustLevel.Full);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(trustCalled);
+        Assert.True(checkCalled);
+        Assert.True(result.Success);
+        Assert.False(result.WasCancelled);
+        Assert.Null(result.ResultCode);
+        Assert.Empty(result.EnvironmentVariables);
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenUntrustedOnNonLinux()
+    {
+        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive skip only applies to macOS/Windows; Linux trust is non-interactive.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var trustCalled = false;
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () =>
+            {
+                trustCalled = true;
+                return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+            },
+            CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.None)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+        var interactionService = (TestInteractionService)sp.GetRequiredService<IInteractionService>();
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(trustCalled);
+        Assert.True(result.Success);
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message.Contains("are not trusted", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenPartiallyTrustedOnNonLinux()
+    {
+        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive skip only applies to macOS/Windows; Linux trust is non-interactive.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var trustCalled = false;
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () =>
+            {
+                trustCalled = true;
+                return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+            },
+            CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+            options.InteractionServiceFactory = _ => new TestInteractionService();
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+        var interactionService = (TestInteractionService)sp.GetRequiredService<IInteractionService>();
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.False(trustCalled);
+        Assert.True(result.Success);
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message.Contains("partially trusted", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_NonInteractive_ProceedsOnLinux()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Linux-only: non-interactive trust is supported on Linux.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var trustCalled = false;
+
+        var toolRunner = new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () =>
+            {
+                trustCalled = true;
+                return EnsureCertificateResult.ExistingHttpsCertificateTrusted;
+            },
+            CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Full)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(trustCalled);
+        Assert.True(result.Success);
+    }
+
     private ServiceProvider CreateServiceProvider(TemporaryWorkspace workspace, TestCertificateToolRunner toolRunner)
     {
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CertificateToolRunnerFactory = _ => toolRunner;
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: false);
+            };
         });
 
         return services.BuildServiceProvider();

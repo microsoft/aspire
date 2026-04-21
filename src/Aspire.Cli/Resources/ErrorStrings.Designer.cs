@@ -109,6 +109,22 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string CertificatesNotTrustedNonInteractive
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificatesNotTrustedNonInteractive", resourceCulture);
+            }
+        }
+
+        public static string CertificatesPartiallyTrustedNonInteractive
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificatesPartiallyTrustedNonInteractive", resourceCulture);
+            }
+        }
+
         public static string FailedToRetrieveCachedTemplatePackages
         {
             get

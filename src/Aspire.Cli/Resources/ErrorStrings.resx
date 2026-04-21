@@ -139,6 +139,12 @@
   <data name="CertificatesMayNotBeFullyTrusted" xml:space="preserve">
     <value>Developer certificates may not be fully trusted (trust exit code was: {0}).</value>
   </data>
+  <data name="CertificatesNotTrustedNonInteractive" xml:space="preserve">
+    <value>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</value>
+  </data>
+  <data name="CertificatesPartiallyTrustedNonInteractive" xml:space="preserve">
+    <value>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</value>
+  </data>
   <data name="FailedToRetrieveCachedTemplatePackages" xml:space="preserve">
     <value>Failed to retrieve template packages via cache.</value>
   </data>
