@@ -157,6 +157,11 @@
         <target state="translated">Nie można zapisać w katalogu instalacyjnym „{0}”. Uruchom aktualizację z podniesionymi uprawnieniami (np. używając programu sudo w systemie Linux lub macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="PackageNotFoundInChannelWarningFormat">
+        <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
+        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">Odwołanie do pakietu nie ma tożsamości.</target>

@@ -59,7 +59,6 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--otlp-grpc-url http://localhost:4317")]
     [InlineData("--otlp-http-url http://localhost:4318")]
     [InlineData("--allow-anonymous")]
-    [InlineData("--enable-api")]
     [InlineData("--config-file-path /path/to/config.json")]
     public void DashboardRunCommand_ParsesOptionsWithoutErrors(string args)
     {
@@ -170,7 +169,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             arg => Assert.Equal("dashboard", arg),
             arg => Assert.Equal("--ASPNETCORE_URLS=http://localhost:18888", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:4317", arg),
-            arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:4318", arg));
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:4318", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_API_ENABLED=true", arg));
     }
 
     [Theory]
@@ -178,7 +178,6 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--otlp-grpc-url http://localhost:9317", "--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:9317")]
     [InlineData("--otlp-http-url http://localhost:9318", "--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:9318")]
     [InlineData("--allow-anonymous", "--ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true")]
-    [InlineData("--enable-api", "--ASPIRE_DASHBOARD_API_ENABLED=true")]
     [InlineData("--config-file-path /path/to/config.json", "--ASPIRE_DASHBOARD_CONFIG_FILE_PATH=/path/to/config.json")]
     public async Task DashboardRunCommand_IndividualOption_PassesCorrectArgToProcess(string cliArgs, string expectedArg)
     {
@@ -218,6 +217,9 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(capturedEnv);
         Assert.True(capturedEnv.ContainsKey("DASHBOARD__FRONTEND__BROWSERTOKEN"));
         Assert.False(string.IsNullOrEmpty(capturedEnv["DASHBOARD__FRONTEND__BROWSERTOKEN"]));
+        Assert.True(capturedEnv.ContainsKey("DASHBOARD__API__PRIMARYAPIKEY"));
+        Assert.False(string.IsNullOrEmpty(capturedEnv["DASHBOARD__API__PRIMARYAPIKEY"]));
+        Assert.Equal("ApiKey", capturedEnv["DASHBOARD__API__AUTHMODE"]);
     }
 
     [Fact]
@@ -242,6 +244,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             arg => Assert.Equal("--ASPNETCORE_URLS=http://localhost:18888", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:4317", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:4318", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_API_ENABLED=true", arg),
             arg => Assert.Equal("--CUSTOM_SETTING=myvalue", arg));
     }
 
@@ -256,7 +259,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("dashboard run --frontend-url http://localhost:5000 --otlp-grpc-url http://localhost:9317 --otlp-http-url http://localhost:9318 --allow-anonymous --enable-api --config-file-path /my/config.json");
+        var result = command.Parse("dashboard run --frontend-url http://localhost:5000 --otlp-grpc-url http://localhost:9317 --otlp-http-url http://localhost:9318 --allow-anonymous --config-file-path /my/config.json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 

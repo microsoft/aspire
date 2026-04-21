@@ -678,7 +678,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
     /// <summary>
     /// Executes pipeline steps by building a Task DAG where each step waits on its dependencies.
-    /// Uses CancellationToken to stop remaining work when any step fails.
+    /// Failed steps prevent dependent steps from executing, while independent steps continue running.
     /// </summary>
     private static async Task ExecuteStepsAsTaskDag(
         List<PipelineStep> steps,
@@ -688,161 +688,135 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Validate no cycles exist in the dependency graph
         ValidateDependencyGraph(steps, stepsByName);
 
-        // Create a linked CancellationTokenSource that will be cancelled when any step fails
-        // or when the original context token is cancelled
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-
-        // Store the original token and set the linked token on the context
-        var originalToken = context.CancellationToken;
-        context.CancellationToken = linkedCts.Token;
-
-        try
+        // Create a TaskCompletionSource for each step
+        var stepCompletions = new Dictionary<string, TaskCompletionSource>(steps.Count, StringComparer.Ordinal);
+        var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
+        foreach (var step in steps)
         {
-            // Create a TaskCompletionSource for each step
-            var stepCompletions = new Dictionary<string, TaskCompletionSource>(steps.Count, StringComparer.Ordinal);
-            var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
-            foreach (var step in steps)
+            stepCompletions[step.Name] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        // Execute a step after its dependencies complete
+        async Task ExecuteStepWithDependencies(PipelineStep step)
+        {
+            var stepTcs = stepCompletions[step.Name];
+
+            // Wait for all dependencies to complete (will throw if any dependency failed)
+            if (step.DependsOnSteps.Count > 0)
             {
-                stepCompletions[step.Name] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            }
-
-            // Execute a step after its dependencies complete
-            async Task ExecuteStepWithDependencies(PipelineStep step)
-            {
-                var stepTcs = stepCompletions[step.Name];
-
-                // Wait for all dependencies to complete (will throw if any dependency failed)
-                if (step.DependsOnSteps.Count > 0)
-                {
-                    try
-                    {
-                        var depTasks = step.DependsOnSteps
-                            .Where(stepCompletions.ContainsKey)
-                            .Select(depName => stepCompletions[depName].Task);
-                        await Task.WhenAll(depTasks).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Find all dependencies that failed
-                        var failedDeps = step.DependsOnSteps
-                            .Where(depName => stepCompletions.ContainsKey(depName) && stepCompletions[depName].Task.IsFaulted)
-                            .ToList();
-
-                        var message = failedDeps.Count > 0
-                            ? $"Step '{step.Name}' cannot run because {(failedDeps.Count == 1 ? "dependency" : "dependencies")} {string.Join(", ", failedDeps.Select(d => $"'{d}'"))} failed"
-                            : $"Step '{step.Name}' cannot run because a dependency failed";
-
-                        // Wrap the dependency failure with context about this step
-                        var wrappedException = new InvalidOperationException(message, ex);
-                        stepTcs.TrySetException(wrappedException);
-                        return;
-                    }
-                }
-
                 try
                 {
-                    var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
-                    var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
-                    var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
-
-                    await using (reportingStep.ConfigureAwait(false))
-                    {
-                        var stepContext = new PipelineStepContext
-                        {
-                            PipelineContext = context,
-                            ReportingStep = reportingStep
-                        };
-
-                        try
-                        {
-                            PipelineLoggerProvider.CurrentStep = reportingStep;
-
-                            await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            stepContext.Logger.LogError(ex, "Step '{StepName}' failed.", step.Name);
-
-                            // Report the failure to the activity reporter before disposing
-                            await reportingStep.FailAsync(ex.Message).ConfigureAwait(false);
-                            throw;
-                        }
-                        finally
-                        {
-                            PipelineLoggerProvider.CurrentStep = null;
-                        }
-                    }
-
-                    stepTcs.TrySetResult();
+                    var depTasks = step.DependsOnSteps
+                        .Where(stepCompletions.ContainsKey)
+                        .Select(depName => stepCompletions[depName].Task);
+                    await Task.WhenAll(depTasks).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    // Execution failure - mark as failed, cancel all other work, and re-throw
-                    stepTcs.TrySetException(ex);
+                    // Find all dependencies that failed
+                    var failedDeps = step.DependsOnSteps
+                        .Where(depName => stepCompletions.ContainsKey(depName) && stepCompletions[depName].Task.IsFaulted)
+                        .ToList();
 
-                    // Cancel all remaining work
-                    try
-                    {
-                        linkedCts.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // Ignore cancellation errors
-                    }
+                    var message = failedDeps.Count > 0
+                        ? $"Step '{step.Name}' cannot run because {(failedDeps.Count == 1 ? "dependency" : "dependencies")} {string.Join(", ", failedDeps.Select(d => $"'{d}'"))} failed"
+                        : $"Step '{step.Name}' cannot run because a dependency failed";
 
-                    throw;
+                    // Wrap the dependency failure with context about this step
+                    var wrappedException = new InvalidOperationException(message, ex);
+                    stepTcs.TrySetException(wrappedException);
+                    return;
                 }
             }
 
-            // Start all steps (they'll wait on their dependencies internally)
-            var allStepTasks = new Task[steps.Count];
-            for (var i = 0; i < steps.Count; i++)
-            {
-                var step = steps[i];
-                allStepTasks[i] = Task.Run(() => ExecuteStepWithDependencies(step));
-            }
-
-            // Wait for all steps to complete (or fail)
             try
             {
-                await Task.WhenAll(allStepTasks).ConfigureAwait(false);
-            }
-            catch
-            {
-                // Collect all failed steps and their names
-                var failures = allStepTasks
-                    .Where(t => t.IsFaulted)
-                    .Select(t => t.Exception!)
-                    .SelectMany(ae => ae.InnerExceptions)
-                    .ToList();
+                var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
+                var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
+                var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
 
-                if (failures.Count > 1)
+                await using (reportingStep.ConfigureAwait(false))
                 {
-                    // Match failures to steps to get their names
-                    var failedStepNames = new List<string>();
-                    for (var i = 0; i < allStepTasks.Length; i++)
+                    var stepContext = new PipelineStepContext
                     {
-                        if (allStepTasks[i].IsFaulted)
-                        {
-                            failedStepNames.Add(steps[i].Name);
-                        }
+                        PipelineContext = context,
+                        ReportingStep = reportingStep
+                    };
+
+                    try
+                    {
+                        PipelineLoggerProvider.CurrentStep = reportingStep;
+
+                        await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
                     }
+                    catch (Exception ex)
+                    {
+                        stepContext.Logger.LogError(ex, "Step '{StepName}' failed.", step.Name);
 
-                    var message = failedStepNames.Count > 0
-                        ? $"Multiple pipeline steps failed: {string.Join(", ", failedStepNames.Distinct())}"
-                        : "Multiple pipeline steps failed.";
-
-                    throw new AggregateException(message, failures);
+                        // Report the failure to the activity reporter before disposing
+                        await reportingStep.FailAsync(ex.Message).ConfigureAwait(false);
+                        throw;
+                    }
+                    finally
+                    {
+                        PipelineLoggerProvider.CurrentStep = null;
+                    }
                 }
 
-                // Single failure - just rethrow
+                stepTcs.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                // Execution failure - mark as faulted so dependent steps won't run.
+                // Independent steps continue — the dependency graph handles blocking.
+                stepTcs.TrySetException(ex);
                 throw;
             }
         }
-        finally
+
+        // Start all steps (they'll wait on their dependencies internally)
+        var allStepTasks = new Task[steps.Count];
+        for (var i = 0; i < steps.Count; i++)
         {
-            // Restore the original token
-            context.CancellationToken = originalToken;
+            var step = steps[i];
+            allStepTasks[i] = Task.Run(() => ExecuteStepWithDependencies(step));
+        }
+
+        // Wait for all steps to complete (or fail)
+        try
+        {
+            await Task.WhenAll(allStepTasks).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Collect all failed steps and their names
+            var failures = allStepTasks
+                .Where(t => t.IsFaulted)
+                .Select(t => t.Exception!)
+                .SelectMany(ae => ae.InnerExceptions)
+                .ToList();
+
+            if (failures.Count > 1)
+            {
+                // Match failures to steps to get their names
+                var failedStepNames = new List<string>();
+                for (var i = 0; i < allStepTasks.Length; i++)
+                {
+                    if (allStepTasks[i].IsFaulted)
+                    {
+                        failedStepNames.Add(steps[i].Name);
+                    }
+                }
+
+                var message = failedStepNames.Count > 0
+                    ? $"Multiple pipeline steps failed: {string.Join(", ", failedStepNames.Distinct())}"
+                    : "Multiple pipeline steps failed.";
+
+                throw new AggregateException(message, failures);
+            }
+
+            // Single failure - just rethrow
+            throw;
         }
     }
 

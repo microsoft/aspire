@@ -7,6 +7,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Packaging;
@@ -34,7 +35,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         
         var features = new TestFeatures();
         var configuration = new ConfigurationBuilder().Build();
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -78,7 +79,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -122,7 +123,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -155,7 +156,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -188,7 +189,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -220,7 +221,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -251,7 +252,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -282,7 +283,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -312,7 +313,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -343,7 +344,8 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new CliExecutionContext(tempDir, tempDir, tempDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log"), 
             new FakeNuGetPackageCache(), 
             features, 
-            configuration);
+            configuration,
+            NullLogger<PackagingService>.Instance);
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var stagingChannel = channels.First(c => c.Name == "staging");
@@ -397,7 +399,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -447,7 +449,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // Staging disabled by default
         var configuration = new ConfigurationBuilder().Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -490,7 +492,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -526,7 +528,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -564,7 +566,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -602,7 +604,8 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new CliExecutionContext(tempDir, tempDir, tempDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log"), 
             new FakeNuGetPackageCache(), 
             features, 
-            configuration);
+            configuration,
+            NullLogger<PackagingService>.Instance);
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var stagingChannel = channels.First(c => c.Name == "staging");
@@ -643,7 +646,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -676,7 +679,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -707,7 +710,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -734,7 +737,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.ProjectTemplates.{localVersion}.nupkg"), string.Empty);
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{localVersion}.nupkg"), string.Empty);
 
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build());
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -764,7 +767,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         const string localVersion = "13.3.0-local.20260413.t002308";
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.ProjectTemplates.{localVersion}.nupkg"), string.Empty);
 
-        var packagingService = new PackagingService(executionContext, fakeCache, new TestFeatures(), new ConfigurationBuilder().Build());
+        var packagingService = new PackagingService(executionContext, fakeCache, new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -812,7 +815,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, fakeCache, features, configuration);
+        var packagingService = new PackagingService(executionContext, fakeCache, features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -865,7 +868,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, fakeCache, features, configuration);
+        var packagingService = new PackagingService(executionContext, fakeCache, features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -917,7 +920,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        var packagingService = new PackagingService(executionContext, fakeCache, features, configuration);
+        var packagingService = new PackagingService(executionContext, fakeCache, features, configuration, NullLogger<PackagingService>.Instance);
 
         // Act
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();

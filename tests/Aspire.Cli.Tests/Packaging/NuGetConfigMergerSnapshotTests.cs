@@ -8,6 +8,7 @@ using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Packaging;
 
@@ -34,7 +35,7 @@ public class NuGetConfigMergerSnapshotTests
     {
         var features = new TestFeatures();
         var configuration = new ConfigurationBuilder().Build();
-        return new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration);
+        return new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
     }
 
     private static async Task<FileInfo> WriteConfigAsync(DirectoryInfo dir, string content)

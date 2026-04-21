@@ -62,8 +62,7 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
         {
             options.Frontend.AuthMode ??= FrontendAuthMode.BrowserToken;
             options.Otlp.AuthMode ??= OtlpAuthMode.Unsecured;
-
-            options.Api.AuthMode ??= string.IsNullOrEmpty(options.Api.PrimaryApiKey) ? ApiAuthMode.Unsecured : ApiAuthMode.ApiKey;
+            options.Api.AuthMode ??= ApiAuthMode.ApiKey;
         }
 
         if (options.Frontend.AuthMode == FrontendAuthMode.BrowserToken && string.IsNullOrEmpty(options.Frontend.BrowserToken))
@@ -76,9 +75,31 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
             options.Frontend.BrowserToken = token;
         }
 
+        if (options.Api.AuthMode == ApiAuthMode.ApiKey && string.IsNullOrEmpty(options.Api.PrimaryApiKey))
+        {
+            var apiKey = TokenGenerator.GenerateToken();
+
+            // Set the generated API key in configuration. This is required because options could be created multiple times
+            // (at startup, after CI is created, after options change). Setting the key in configuration makes it consistent.
+            _configuration[DashboardConfigNames.DashboardApiPrimaryApiKeyName.ConfigKey] = apiKey;
+            options.Api.PrimaryApiKey = apiKey;
+        }
+
         options.AI.Disabled = _configuration.GetBool(DashboardConfigNames.DashboardAIDisabledName.ConfigKey);
 
-        options.Api.Enabled ??= _configuration.GetBool(DashboardConfigNames.DashboardAspireApiEnabledName.ConfigKey);
+        // DashboardAspireApiDisabledName takes precedence over DashboardAspireApiEnabledName.
+        if (_configuration.GetBool(DashboardConfigNames.DashboardAspireApiDisabledName.ConfigKey) is { } apiDisabled)
+        {
+            options.Api.Disabled ??= apiDisabled;
+        }
+        else if (_configuration.GetBool(DashboardConfigNames.DashboardAspireApiEnabledName.ConfigKey) is { } apiEnabled)
+        {
+#pragma warning disable CS0618 // Type or member is obsolete
+            options.Api.Enabled ??= apiEnabled;
+#pragma warning restore CS0618
+        }
+
+        options.Api.Disabled ??= false;
 
         if (_configuration.GetBool(DashboardConfigNames.Legacy.DashboardOtlpSuppressUnsecuredTelemetryMessageName.ConfigKey) is { } suppressUnsecuredTelemetryMessage)
         {
