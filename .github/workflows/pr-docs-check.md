@@ -110,6 +110,10 @@ safe-outputs:
   create-pull-request:
     title-prefix: "[docs] "
     labels: [docs-from-code]
+    # On pull_request-triggered runs, request the original aspire PR author as
+    # reviewer for the generated aspire.dev draft PR. On workflow_dispatch runs
+    # this expression resolves to empty and no reviewer is auto-requested.
+    reviewers: "${{ github.event.pull_request.user.login || '' }}"
     draft: true
     # Default to aspire.dev main, but allow the agent to override the PR base
     # per run using the milestone/linked-issue/source-base reasoning in the
