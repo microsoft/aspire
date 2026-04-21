@@ -15,7 +15,6 @@ namespace Aspire.Hosting.Foundry;
 /// configuration surface for prompt agent definitions. Unlike <see cref="HostedAgentConfiguration"/> which
 /// configures a containerized agent, this configures a model-based agent with instructions and tools.
 /// </remarks>
-[AspireExport(ExposeProperties = true)]
 public class PromptAgentConfiguration(string model, string? instructions)
 {
     /// <summary>
@@ -45,13 +44,11 @@ public class PromptAgentConfiguration(string model, string? instructions)
     /// <summary>
     /// Gets the tools available to the prompt agent.
     /// </summary>
-    [AspireExportIgnore(Reason = "OpenAI SDK-specific type not usable from polyglot hosts.")]
     public IList<ResponseTool> Tools { get; init; } = [];
 
     /// <summary>
     /// Converts this configuration to an <see cref="ProjectsAgentVersionCreationOptions"/> instance.
     /// </summary>
-    [AspireExportIgnore(Reason = "Azure SDK-specific return type not usable from polyglot hosts.")]
     public ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions()
     {
         var def = new DeclarativeAgentDefinition(Model)
