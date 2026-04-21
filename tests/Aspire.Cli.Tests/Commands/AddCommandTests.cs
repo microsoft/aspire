@@ -887,14 +887,6 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         Assert.False(promptedForVersion);
         Assert.Equal(cliVersion, selectedPackageVersion);
-
-        // Verify that a NuGet config was created with the Aspire* wildcard mapping
-        // (not scoped to individual packages) so transitive deps including RID-specific
-        // packages can resolve from the PR hive.
-        var nuGetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
-        Assert.True(File.Exists(nuGetConfigPath), "Expected nuget.config to be created for PR channel package installation.");
-        var nuGetConfigContents = File.ReadAllText(nuGetConfigPath);
-        Assert.Contains("Aspire*", nuGetConfigContents, StringComparison.Ordinal);
     }
 }
 

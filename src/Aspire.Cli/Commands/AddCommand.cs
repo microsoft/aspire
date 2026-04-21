@@ -207,17 +207,36 @@ internal sealed class AddCommand : BaseCommand
                 _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
             };
 
-            // When installing from a PR channel, create/update a NuGet.config so that
-            // `dotnet add package` can resolve the PR-version package from the hive.
-            // Use the original (unscoped) channel so the Aspire* wildcard mapping
-            // covers all transitive dependencies including RID-specific packages.
+            // When installing from a PR channel, ensure the project has access to
+            // the PR hive as a NuGet source so `dotnet add package` can resolve the
+            // PR-version package. We add the hive source to the project's nuget.config
+            // WITHOUT package source mapping restrictions, so that transitive deps
+            // (including RID-specific and stable-versioned packages) can still resolve
+            // from NuGet.org via the normal NuGet source hierarchy.
             if (string.IsNullOrEmpty(source) && VersionHelper.IsPrChannel(selectedNuGetPackage.Channel.Name))
             {
-                var nugetConfigPrompter = new NuGetConfigPrompter(InteractionService);
-                await nugetConfigPrompter.CreateOrUpdateWithoutPromptAsync(
-                    effectiveAppHostProjectFile.Directory!,
-                    selectedNuGetPackage.Channel,
-                    cancellationToken);
+                var mappings = selectedNuGetPackage.Channel.Mappings;
+                if (mappings is { Length: > 0 })
+                {
+                    var hiveSources = mappings
+                        .Select(m => m.Source)
+                        .Where(s => !s.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                    var nugetConfigPath = Path.Combine(effectiveAppHostProjectFile.Directory!.FullName, "nuget.config");
+                    if (!File.Exists(nugetConfigPath))
+                    {
+                        var configXml = new System.Xml.Linq.XDocument(
+                            new System.Xml.Linq.XElement("configuration",
+                                new System.Xml.Linq.XElement("packageSources",
+                                    hiveSources.Select(s =>
+                                        new System.Xml.Linq.XElement("add",
+                                            new System.Xml.Linq.XAttribute("key", s),
+                                            new System.Xml.Linq.XAttribute("value", s))))));
+                        configXml.Save(nugetConfigPath);
+                        InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+                    }
+                }
             }
 
             context = new AddPackageContext
