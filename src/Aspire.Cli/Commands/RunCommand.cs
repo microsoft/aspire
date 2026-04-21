@@ -185,11 +185,19 @@ internal sealed class RunCommand : BaseCommand
         {
             using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
+            // Start a reported telemetry activity for the app host run early so that
+            // all failure paths (project not found, incompatible version, etc.) are captured.
+            runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
+            runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, "unknown"); // Will be updated once the project is found.
+            runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
+            runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
+
             var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: true, cancellationToken);
             var effectiveAppHostFile = searchResult.SelectedProjectFile;
 
             if (effectiveAppHostFile is null)
             {
+                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
                 return ExitCodeConstants.FailedToFindProject;
             }
 
@@ -197,15 +205,12 @@ internal sealed class RunCommand : BaseCommand
             var project = _projectFactory.TryGetProject(effectiveAppHostFile);
             if (project is null)
             {
+                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
                 InteractionService.DisplayError("Unrecognized app host type.");
                 return ExitCodeConstants.FailedToFindProject;
             }
 
-            // Start a reported telemetry activity for the app host run
-            runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
-            runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
-            runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
             // Check for running instance — even if we fail to stop we won't
             // block the apphost starting to make sure we don't ever break flow.
@@ -378,6 +383,7 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
         {
+            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
             InteractionService.DisplayCancellationMessage();
             return ExitCodeConstants.Success;
         }

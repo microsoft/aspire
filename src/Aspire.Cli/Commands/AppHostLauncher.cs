@@ -241,24 +241,17 @@ internal sealed class AppHostLauncher(
 
         try
         {
-            // Set detached mode env var so the child RunCommand records it in telemetry
-            Environment.SetEnvironmentVariable(KnownConfigNames.CliRunDetached, "true");
-
             childProcess = DetachedProcessLauncher.Start(
                 executablePath,
                 childArgs,
                 executionContext.WorkingDirectory.FullName,
-                IsExtensionEnvironmentVariable);
+                IsExtensionEnvironmentVariable,
+                new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" });
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to start child CLI process");
             return new LaunchResult(null, null, null, false, 0);
-        }
-        finally
-        {
-            // Clear the detached env var in the parent process to avoid affecting future launches
-            Environment.SetEnvironmentVariable(KnownConfigNames.CliRunDetached, null);
         }
 
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);

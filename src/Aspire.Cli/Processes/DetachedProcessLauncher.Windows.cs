@@ -17,7 +17,7 @@ internal static partial class DetachedProcessLauncher
     /// PROC_THREAD_ATTRIBUTE_HANDLE_LIST to prevent handle inheritance to grandchildren.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static Process StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable)
+    private static Process StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables)
     {
         // Open NUL device for stdout/stderr — child writes go nowhere
         using var nulHandle = CreateFileW(
@@ -89,15 +89,15 @@ internal static partial class DetachedProcessLauncher
 
                     var flags = CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewProcessGroup;
 
-                    // Build a filtered environment block if variables need to be removed.
+                    // Build a custom environment block if variables need to be removed or added.
                     // CreateProcessW with lpEnvironment=nint.Zero inherits the parent's
-                    // environment, so we only build a custom block when filtering is needed.
+                    // environment, so we only build a custom block when customization is needed.
                     var envBlockHandle = nint.Zero;
                     try
                     {
-                        if (shouldRemoveEnvironmentVariable is not null)
+                        if (shouldRemoveEnvironmentVariable is not null || additionalEnvironmentVariables is not null)
                         {
-                            envBlockHandle = BuildFilteredEnvironmentBlock(shouldRemoveEnvironmentVariable);
+                            envBlockHandle = BuildCustomEnvironmentBlock(shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
                         }
 
                         if (!CreateProcessW(
@@ -238,21 +238,31 @@ internal static partial class DetachedProcessLauncher
     }
 
     /// <summary>
-    /// Builds a Unicode environment block for CreateProcessW with specified variables removed.
-    /// The block is sorted by variable name (case-insensitive, as required by Windows)
-    /// and double-null-terminated. The caller must free the returned pointer with Marshal.FreeHGlobal.
+    /// Builds a Unicode environment block for CreateProcessW with specified variables
+    /// removed and/or added. The block is sorted by variable name (case-insensitive,
+    /// as required by Windows) and double-null-terminated. The caller must free the
+    /// returned pointer with Marshal.FreeHGlobal.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static nint BuildFilteredEnvironmentBlock(Func<string, bool> shouldRemove)
+    private static nint BuildCustomEnvironmentBlock(Func<string, bool>? shouldRemove, IReadOnlyDictionary<string, string>? additionalVariables)
     {
         // Collect current environment variables, excluding the ones to remove.
         var envVars = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
         {
             var key = (string)entry.Key;
-            if (!shouldRemove(key))
+            if (shouldRemove is null || !shouldRemove(key))
             {
                 envVars[key] = (string?)entry.Value ?? string.Empty;
+            }
+        }
+
+        // Add additional variables (overwrites any existing keys with the same name).
+        if (additionalVariables is not null)
+        {
+            foreach (var (key, value) in additionalVariables)
+            {
+                envVars[key] = value;
             }
         }
 
