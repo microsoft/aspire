@@ -47,7 +47,6 @@ with create_builder() as builder:
 
     # Prompt Agent
     _prompt_agent = project.add_prompt_agent("resource")
-    _prompt_agent.with_properties()
 
     builder_project_foundry = builder.add_foundry("resource")
     builder_project = builder_project_foundry.add_project("resource", ".", "default")

@@ -37,8 +37,8 @@ public static class PromptAgentBuilderExtensions
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
     /// <param name="model">The model deployment to use for this agent.</param>
     /// <param name="name">The name of the prompt agent. This will be the agent name in Foundry.</param>
-    /// <param name="instructions">Optional system instructions for the agent.</param>
     /// <param name="tools">The tools to attach to this agent. Use project-level <c>Add*Tool</c> methods to create tools.</param>
+    /// <param name="instructions">Optional system instructions for the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the prompt agent resource.</returns>
     /// <example>
     /// <code>
@@ -60,8 +60,8 @@ public static class PromptAgentBuilderExtensions
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         IResourceBuilder<FoundryDeploymentResource> model,
         string name,
-        string? instructions = null,
-        params IResourceBuilder<FoundryToolResource>[] tools)
+        IResourceBuilder<FoundryToolResource>[]? tools = null,
+        string? instructions = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentNullException.ThrowIfNull(model);
@@ -76,7 +76,7 @@ public static class PromptAgentBuilderExtensions
             .WithReferenceRelationship(project)
             .WithReference(project);
 
-        foreach (var tool in tools)
+        foreach (var tool in tools ?? [])
         {
             agent.AddTool(tool.Resource);
             agentBuilder.WithReferenceRelationship(tool);

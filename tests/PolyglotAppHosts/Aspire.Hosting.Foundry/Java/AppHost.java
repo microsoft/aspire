@@ -48,7 +48,7 @@ void main() throws Exception {
         var fileSearch = project.addFileSearchTool("file-search", new String[] { "vs_placeholder" });
         var webSearch = project.addWebSearchTool("web-search");
         var imageGen = project.addImageGenerationTool("image-gen");
-        var computerUse = project.addComputerUseTool("computer-use", 1024, 768);
+        var computerUse = project.addComputerUseTool("computer-use");
         var aiSearchTool = project.addAISearchTool("ai-search-tool", "my-index");
         aiSearchTool.withReference(search);
         var bingTool = project.addBingGroundingTool("bing-tool");
@@ -56,22 +56,15 @@ void main() throws Exception {
         bingTool.withBingResourceIdReference("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing");
         var bingParam = builder.addParameter("bing-resource-id");
         bingTool.withBingParameterReference(bingParam);
-        var sharepoint = project.addSharePointTool("sharepoint-tool", "https://contoso.sharepoint.com", "MySite");
-        var fabric = project.addFabricTool("fabric-tool", "workspace-id");
+        var sharepoint = project.addSharePointTool("sharepoint-tool", new String[] { "https://contoso.sharepoint.com", "MySite" });
+        var fabric = project.addFabricTool("fabric-tool", new String[] { "workspace-id" });
         var azFunc = project.addAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q");
         var funcTool = project.addFunctionTool("func-tool", "myFunc", "{}");
 
         // Prompt Agent
-        var _promptAgent = project.addPromptAgent(chat, "prompt-agent", "You are a helpful assistant.",
-            new Object[] { codeInterpreter, fileSearch, webSearch, imageGen, computerUse,
+        var _promptAgent = project.addPromptAgent(chat, "prompt-agent",
+            new Handle[] { codeInterpreter, fileSearch, webSearch, imageGen, computerUse,
                 aiSearchTool, bingTool, sharepoint, fabric, azFunc, funcTool });
-
-        _promptAgent.withProperties((config) -> {
-            config.setDescription("Test prompt agent");
-            config.setModel("gpt-4.1-mini");
-            config.setInstructions("Be helpful");
-            config.setMetadata(null);
-        });
 
         var builderProjectFoundry = builder.addFoundry("builder-project-foundry");
         var builderProject = builderProjectFoundry.addProject("builder-project");
