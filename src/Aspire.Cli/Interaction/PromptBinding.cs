@@ -7,9 +7,9 @@ namespace Aspire.Cli.Interaction;
 
 /// <summary>
 /// Binds a CLI option to an interactive prompt.
-/// When a prompt method receives this, it first checks the parse result for an explicitly provided value
-/// before prompting interactively. In non-interactive mode, it uses the default value or displays an
-/// actionable error naming the required option.
+/// When a prompt method receives this, it first checks the parse result for an explicitly provided
+/// option value before prompting interactively. In non-interactive mode, it uses the default value
+/// or displays an actionable error naming the required option.
 /// </summary>
 internal sealed class PromptBinding<T>
 {
@@ -121,7 +121,7 @@ internal static class PromptBinding
     public static PromptBinding<string?> CreateBoolAsSelection(ParseResult parseResult, Option<bool?> option, string trueValue, string falseValue) =>
         new(parseResult, FormatOptionName(option), BuildBoolAsSelectionResolver(option, trueValue, falseValue), falseValue, hasExplicitDefault: true);
 
-    private static string FormatOptionName<T>(Option<T> option) => $"'--{option.Name}'";
+    private static string FormatOptionName<T>(Option<T> option) => $"'{option.Name}'";
 
     private static Func<ParseResult, (bool, T?)> BuildOptionResolver<T>(Option<T> option) =>
         parseResult =>

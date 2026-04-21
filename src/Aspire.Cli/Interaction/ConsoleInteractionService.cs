@@ -212,16 +212,19 @@ internal class ConsoleInteractionService : IInteractionService
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
         ArgumentNullException.ThrowIfNull(choiceFormatter, nameof(choiceFormatter));
 
+        // Materialize once to avoid re-enumerating the choices enumerable.
+        var choicesList = choices as IReadOnlyList<T> ?? choices.ToList();
+
         var (wasProvided, value, defaultValue) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
-            var match = MatchChoice(value, choices, choiceFormatter);
+            var match = MatchChoice(value, choicesList, choiceFormatter);
             if (match is not null)
             {
                 return match;
             }
 
-            ThrowNonInteractiveInvalidValue(value, binding!.SymbolDisplayName, choices, choiceFormatter);
+            ThrowNonInteractiveInvalidValue(value, binding!.SymbolDisplayName, choicesList, choiceFormatter);
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -230,13 +233,13 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 if (defaultValue != null)
                 {
-                    var match = MatchChoice(defaultValue, choices, choiceFormatter);
+                    var match = MatchChoice(defaultValue, choicesList, choiceFormatter);
                     if (match is not null)
                     {
                         return match;
                     }
 
-                    ThrowNonInteractiveSelectionError(binding.SymbolDisplayName, choices, choiceFormatter);
+                    ThrowNonInteractiveSelectionError(binding.SymbolDisplayName, choicesList, choiceFormatter);
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -246,7 +249,7 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         // Check if the choices collection is empty to avoid throwing an InvalidOperationException
-        if (!choices.Any())
+        if (choicesList.Count == 0)
         {
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NoItemsAvailableForSelection, promptText));
         }
@@ -256,7 +259,7 @@ internal class ConsoleInteractionService : IInteractionService
         var prompt = new SelectionPrompt<T>()
             .Title(promptText)
             .UseConverter(choiceFormatter)
-            .AddChoices(choices)
+            .AddChoices(choicesList)
             .PageSize(10)
             .EnableSearch();
 
@@ -273,17 +276,19 @@ internal class ConsoleInteractionService : IInteractionService
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
         ArgumentNullException.ThrowIfNull(choiceFormatter, nameof(choiceFormatter));
 
+        // Materialize once to avoid re-enumerating the choices enumerable.
+        var choicesList = choices as IReadOnlyList<T> ?? choices.ToList();
+
         var (wasProvided, value, defaultValue) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
-            var fallbackChoices = choices.ToList();
-            var matched = MatchChoices(value, fallbackChoices, choiceFormatter);
+            var matched = MatchChoices(value, choicesList, choiceFormatter);
             if (matched is not null)
             {
                 return matched;
             }
 
-            ThrowNonInteractiveInvalidValue(value, binding!.SymbolDisplayName, choices, choiceFormatter);
+            ThrowNonInteractiveInvalidValue(value, binding!.SymbolDisplayName, choicesList, choiceFormatter);
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -292,14 +297,13 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 if (defaultValue != null)
                 {
-                    var fallbackChoices = choices.ToList();
-                    var matched = MatchChoices(defaultValue, fallbackChoices, choiceFormatter);
+                    var matched = MatchChoices(defaultValue, choicesList, choiceFormatter);
                     if (matched is not null)
                     {
                         return matched;
                     }
 
-                    ThrowNonInteractiveSelectionError(binding.SymbolDisplayName, choices, choiceFormatter);
+                    ThrowNonInteractiveSelectionError(binding.SymbolDisplayName, choicesList, choiceFormatter);
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -307,8 +311,6 @@ internal class ConsoleInteractionService : IInteractionService
 
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
-
-        var choicesList = choices.ToList();
 
         if (choicesList.Count == 0)
         {
@@ -509,6 +511,13 @@ internal class ConsoleInteractionService : IInteractionService
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
 
+        // When no binding is provided, default to true (matching the historical behavior
+        // where the old ConfirmAsync signature had defaultValue = true).
+        if (binding is null)
+        {
+            defaultValue = true;
+        }
+
         MessageLogger.LogInformation("Confirm: {PromptText} (default: {DefaultValue})", promptText, defaultValue);
 
         // Use [Y/n] or [y/N] convention where the capitalized letter indicates the default value.
@@ -583,6 +592,8 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 return null; // Signal that matching failed
             }
+            // MatchChoice returns the instance from the choices list via FirstOrDefault,
+            // so reference equality is correct here for deduplication.
             if (!matched.Contains(match))
             {
                 matched.Add(match);
@@ -598,7 +609,7 @@ internal class ConsoleInteractionService : IInteractionService
         throw new NonInteractiveException(symbolDisplayName);
     }
 
-    private void ValidateResolvedStringValue(string value, bool required, Func<string, ValidationResult>? validator, string symbolDisplayName)
+    internal void ValidateResolvedStringValue(string value, bool required, Func<string, ValidationResult>? validator, string symbolDisplayName)
     {
         if (required && string.IsNullOrEmpty(value))
         {

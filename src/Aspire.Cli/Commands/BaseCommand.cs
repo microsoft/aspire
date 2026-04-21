@@ -57,7 +57,7 @@ internal abstract class BaseCommand : Command
             catch (NonInteractiveException)
             {
                 // Error messages have already been displayed by the interaction service.
-                return ExitCodeConstants.MissingRequiredArgument;
+                exitCode = ExitCodeConstants.MissingRequiredArgument;
             }
 
             if (UpdateNotificationsEnabled && features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))

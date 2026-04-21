@@ -105,6 +105,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
+            _consoleInteractionService.ValidateResolvedStringValue(value, required, validator, binding!.SymbolDisplayName);
             return value;
         }
 
