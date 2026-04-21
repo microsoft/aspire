@@ -517,7 +517,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
-        logger.LogInformation("GetDashboardUrlsAsync called on auxiliary backchannel");
+        logger.LogDebug("GetDashboardUrlsAsync called on auxiliary backchannel");
         return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
     }
 
@@ -902,7 +902,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public Task StopAppHostAsync(CancellationToken cancellationToken = default)
     {
         _ = cancellationToken; // Unused but kept for API consistency
-        logger.LogInformation("Received request to stop AppHost");
+        logger.LogDebug("Received request to stop AppHost");
 
         // Start a background task to delay the stop by 500ms to allow the RPC response to be sent
         _ = Task.Run(async () =>
@@ -918,7 +918,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 var lifetime = serviceProvider.GetService<IHostApplicationLifetime>();
                 if (lifetime is not null)
                 {
-                    logger.LogInformation("Stopping AppHost application");
+                    logger.LogDebug("Stopping AppHost application");
                     lifetime.StopApplication();
                 }
                 else
