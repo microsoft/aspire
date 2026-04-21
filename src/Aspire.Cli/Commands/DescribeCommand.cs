@@ -165,11 +165,20 @@ internal sealed class DescribeCommand : BaseCommand
             {
                 return await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken);
             }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
+            {
+                _interactionService.DisplayCancellationMessage();
+                return ExitCodeConstants.Success;
+            }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsExpectedBackchannelDisconnect(ex))
             {
                 // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
                 // describe --follow is active. Treat the lost watch as a normal end of stream
-                // rather than surfacing it as an unexpected CLI failure.
+                // rather than surfacing it as an unexpected CLI failure, while still
+                // explaining why the follow operation stopped.
+                _interactionService.DisplayMessage(
+                    KnownEmojis.Information,
+                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.AppHostConnectionLost, ex.Message));
                 return ExitCodeConstants.Success;
             }
         }
