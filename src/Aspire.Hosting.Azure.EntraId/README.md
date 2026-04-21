@@ -147,7 +147,7 @@ The `WithReference` method injects environment variables like `AzureAd__TenantId
 ## Additional documentation
 
 * https://learn.microsoft.com/entra/identity-platform/
-* https://learn.microsoft.com/dotnet/aspire/
+* https://aspire.dev/
 * https://devblogs.microsoft.com/aspire/securing-dotnet-aspire-apps-with-microsoft-entra-id/
 
 ## Feedback & contributing
