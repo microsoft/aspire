@@ -396,7 +396,7 @@ public static class AzureKubernetesEnvironmentExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         // Find the AKS subnet to discover the parent VNet
-        if (!builder.Resource.TryGetLastAnnotation<AksSubnetAnnotation>(out var subnetAnnotation))
+        if (!builder.Resource.TryGetLastAnnotation<AksSubnetAnnotation>(out _))
         {
             throw new InvalidOperationException(
                 $"WithApplicationGateway() requires a VNet subnet. " +
