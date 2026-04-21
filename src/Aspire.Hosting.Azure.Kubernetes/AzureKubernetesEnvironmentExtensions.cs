@@ -10,6 +10,7 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Extensions;
+using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
@@ -98,6 +99,13 @@ public static class AzureKubernetesEnvironmentExtensions
         // can create an AcrPull role assignment for the kubelet identity.
         // The publishing context will wire this as a parameter in main.bicep.
         resource.Parameters["acrName"] = defaultRegistry.Resource.NameOutputReference;
+
+        // Configure default ingress for external HTTP endpoints using
+        // Azure Application Gateway for Containers (AGC).
+        // This generates Kubernetes Ingress resources with the AGC ingress class.
+        // NOTE: AGC Azure resource provisioning (trafficControllers) is deferred
+        // until Azure.Provisioning.ServiceNetworking is available.
+        k8sEnvBuilder.WithIngress(ConfigureAksDefaultIngress);
 
         // Ensure push steps wait for ALL Azure provisioning to complete. Push steps
         // call registry.Endpoint.GetValueAsync() which awaits the BicepOutputReference
@@ -371,6 +379,64 @@ public static class AzureKubernetesEnvironmentExtensions
         builder.Resource.OidcIssuerEnabled = enabled;
         builder.Resource.WorkloadIdentityEnabled = enabled;
         return builder;
+    }
+
+    private static Task ConfigureAksDefaultIngress(KubernetesIngressContext ctx)
+    {
+        var serviceName = ctx.Resource.Name.ToServiceName();
+
+        foreach (var endpoint in ctx.ExternalHttpEndpoints)
+        {
+            // Determine the service port — use the exposed port if explicitly set,
+            // otherwise fall back to the target port.
+            var portNumber = endpoint.Port ?? endpoint.TargetPort ?? 80;
+
+            var ingress = new Ingress
+            {
+                Metadata =
+                {
+                    Name = $"{ctx.Resource.Name.ToKubernetesResourceName()}-{endpoint.Name}-ingress",
+                    Labels = ctx.KubernetesResource.Labels.ToDictionary(),
+                },
+                Spec =
+                {
+                    // Azure Application Gateway for Containers ingress class.
+                    // The ALB controller watches for this class and configures AGC.
+                    IngressClassName = "azure-alb-external",
+                    Rules =
+                    {
+                        new IngressRuleV1
+                        {
+                            // No host specified — AGC auto-assigns an FQDN under
+                            // *.appgw.containers.azure.net with a managed TLS cert.
+                            Http = new HttpIngressRuleValueV1
+                            {
+                                Paths =
+                                {
+                                    new HttpIngressPathV1
+                                    {
+                                        Path = "/",
+                                        PathType = "Prefix",
+                                        Backend = new IngressBackendV1
+                                        {
+                                            Service = new IngressServiceBackendV1
+                                            {
+                                                Name = serviceName,
+                                                Port = new ServiceBackendPortV1 { Number = portNumber }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            ctx.KubernetesResource.AdditionalResources.Add(ingress);
+        }
+
+        return Task.CompletedTask;
     }
 
     private static void ConfigureAksInfrastructure(AzureResourceInfrastructure infrastructure)
