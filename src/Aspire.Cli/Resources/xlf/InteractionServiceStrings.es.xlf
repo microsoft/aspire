@@ -7,9 +7,19 @@
         <target state="needs-review-translation">Se perdió la conexión con el host de la aplicación: {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostConnectionLostGeneric">
+        <source>The connection to the application was lost.</source>
+        <target state="new">The connection to the application was lost.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
         <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">La versión de AppHost no es compatible. Actualice el apphost o la CLI de Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostShutDown">
+        <source>The application shut down.</source>
+        <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">

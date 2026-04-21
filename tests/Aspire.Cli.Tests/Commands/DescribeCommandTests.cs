@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared.Model.Serialization;
@@ -337,13 +338,15 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
         ], configureConnection: connection =>
         {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
             connection.WatchResourceSnapshotsHandler = static (_, cancellationToken) => ThrowObjectDisposedAfterSnapshot(cancellationToken);
-        });
-        
+        }, errorTextWriter: errorWriter);
+
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("describe --follow --format json");
 
@@ -357,6 +360,60 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Single(jsonLines);
         Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("unexpected error occurred", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_WhenAppHostHasExited_WritesShutdownMessageToStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+        ], configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, int.MaxValue);
+            connection.WatchResourceSnapshotsHandler = static (_, cancellationToken) => ThrowObjectDisposedAfterSnapshot(cancellationToken);
+        }, errorTextWriter: errorWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        Assert.Contains(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_WhenCanceledAndBackchannelIsDisposed_DoesNotWriteStatusToStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+        ], configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+            connection.WatchResourceSnapshotsHandler = static (_, cancellationToken) => ThrowObjectDisposedAfterCancellationAsync(cancellationToken);
+        }, errorTextWriter: errorWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+        await Task.Yield();
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.DoesNotContain(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -557,7 +614,8 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         List<ResourceSnapshot> resourceSnapshots,
         bool disableAnsi = false,
         DashboardUrlsState? dashboardUrlsState = null,
-        Action<TestAppHostAuxiliaryBackchannel>? configureConnection = null)
+        Action<TestAppHostAuxiliaryBackchannel>? configureConnection = null,
+        StringWriter? errorTextWriter = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -578,10 +636,20 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             options.OutputTextWriter = outputWriter;
+            options.ErrorTextWriter = errorTextWriter;
             options.DisableAnsi = disableAnsi;
         });
 
         return services.BuildServiceProvider();
+    }
+
+    private static AppHostInformation CreateAppHostInfo(TemporaryWorkspace workspace, int processId)
+    {
+        return new AppHostInformation
+        {
+            AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+            ProcessId = processId
+        };
     }
 
     private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterSnapshot([EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -596,6 +664,23 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
+
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterCancellationAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceSnapshot
+        {
+            Name = "redis",
+            DisplayName = "redis",
+            ResourceType = "Container",
+            State = "Running"
+        };
+
+        var waitForCancellation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(() => waitForCancellation.TrySetResult());
+        await waitForCancellation.Task;
 
         throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
     }

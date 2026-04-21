@@ -187,6 +187,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The connection to the application was lost..
+        /// </summary>
+        public static string AppHostConnectionLostGeneric {
+            get {
+                return ResourceManager.GetString("AppHostConnectionLostGeneric", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The application shut down..
+        /// </summary>
+        public static string AppHostShutDown {
+            get {
+                return ResourceManager.GetString("AppHostShutDown", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Finding apphosts....
         /// </summary>
         public static string FindingAppHosts {
