@@ -188,7 +188,6 @@ internal sealed class RunCommand : BaseCommand
             // Start a reported telemetry activity for the app host run early so that
             // all failure paths (project not found, incompatible version, etc.) are captured.
             runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
-            runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, "unknown"); // Will be updated once the project is found.
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
@@ -283,6 +282,7 @@ internal sealed class RunCommand : BaseCommand
 
             if (dashboardUrls.DashboardHealthy is false)
             {
+                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "dashboard_failed");
                 InteractionService.DisplayError(RunCommandStrings.DashboardFailedToStart);
                 return ExitCodeConstants.DashboardFailure;
             }
