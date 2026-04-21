@@ -76,8 +76,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds CosmosDB to a project as a connection
     /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the resource-builder overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Raw AzureCosmosDBResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
+    [AspireExport("addCosmosConnectionFromResource", Description = "Adds an Azure Cosmos DB connection to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureCosmosDBResource db)
@@ -115,8 +114,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// Adds an Azure Storage account to a project as a connection.
     /// </summary>
     /// <returns></returns>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the resource-builder overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Raw AzureStorageResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
+    [AspireExport("addStorageConnectionFromResource", Description = "Adds an Azure Storage connection to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureStorageResource storage)
@@ -156,8 +154,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// Adds a container registry connection to the Microsoft Foundry project.
     /// </summary>
     /// <returns></returns>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the resource-builder overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Raw AzureContainerRegistryResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
+    [AspireExport("addContainerRegistryConnectionFromResource", Description = "Adds an Azure Container Registry connection to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureContainerRegistryResource registry)
@@ -200,8 +197,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds an Azure AI Search connection to a Microsoft Foundry project.
     /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the resource-builder overload instead.</remarks>
-    [AspireExportIgnore(Reason = "Raw AzureSearchResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
+    [AspireExport("addSearchConnectionFromResource", Description = "Adds an Azure AI Search connection to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureSearchResource search)
