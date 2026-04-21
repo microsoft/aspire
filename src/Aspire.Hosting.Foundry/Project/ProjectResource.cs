@@ -202,8 +202,8 @@ public class AzureCognitiveServicesProjectResource :
     internal static string EncodeSubscriptionId(string subscriptionId)
     {
         var guid = Guid.Parse(subscriptionId);
-        Span<byte> bytes = stackalloc byte[16];
-        guid.TryWriteBytes(bytes, bigEndian: true, out _);
+        // Convert hex pairs from the canonical GUID string to bytes (preserves display order)
+        var bytes = Convert.FromHexString(guid.ToString("N"));
         return Base64Url.EncodeToString(bytes).TrimEnd('=');
     }
 
