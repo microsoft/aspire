@@ -531,21 +531,19 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
-    /// Prepares a local NuGet package channel for source-build E2E tests.
-    /// Copies packed Aspire.*.nupkg files to a workspace-local directory and extracts the SDK version.
+    /// Prepares local channel metadata for source-build E2E tests.
+    /// Validates that the expected packed Aspire.*.nupkg files exist and extracts the SDK version.
     /// Returns <c>null</c> when the CLI install strategy does not use a local hive archive.
     /// </summary>
     /// <param name="repoRoot">The repo root directory containing artifacts/.</param>
-    /// <param name="workspace">The temporary workspace where the local channel directory will be created.</param>
     /// <param name="strategy">The detected CLI install strategy.</param>
     /// <param name="requiredPackagePrefixes">
     /// Optional additional package name prefixes to validate beyond <c>Aspire.Hosting.</c>.
     /// For example, <c>["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]</c>.
     /// </param>
-    /// <returns>A <see cref="LocalChannelInfo"/> with the packages path and SDK version, or <c>null</c> when the strategy is not local hive.</returns>
+    /// <returns>A <see cref="LocalChannelInfo"/> with the SDK version, or <c>null</c> when the strategy is not local hive.</returns>
     internal static LocalChannelInfo? PrepareLocalChannel(
         string repoRoot,
-        TemporaryWorkspace workspace,
         CliInstallStrategy strategy,
         string[]? requiredPackagePrefixes = null)
     {
@@ -554,12 +552,11 @@ internal static class CliE2ETestHelpers
             return null;
         }
 
-        return PrepareLocalChannelCore(repoRoot, workspace, requiredPackagePrefixes);
+        return PrepareLocalChannelCore(repoRoot, requiredPackagePrefixes);
     }
 
     private static LocalChannelInfo PrepareLocalChannelCore(
         string repoRoot,
-        TemporaryWorkspace workspace,
         string[]? requiredPackagePrefixes)
     {
         var shippingPackagesDirectory = new[]
@@ -611,15 +608,7 @@ internal static class CliE2ETestHelpers
             }
         }
 
-        var localChannelPackagesPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire-local", "packages");
-        Directory.CreateDirectory(localChannelPackagesPath);
-
-        foreach (var packageFile in packageFiles)
-        {
-            File.Copy(packageFile, Path.Combine(localChannelPackagesPath, Path.GetFileName(packageFile)), overwrite: true);
-        }
-
-        return new LocalChannelInfo(localChannelPackagesPath, sdkVersion);
+        return new LocalChannelInfo(sdkVersion);
     }
 
     internal static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)
@@ -641,9 +630,8 @@ internal static class CliE2ETestHelpers
     /// <summary>
     /// Information about a local NuGet package channel for source-build E2E tests.
     /// </summary>
-    /// <param name="PackagesPath">The directory path containing the local .nupkg files.</param>
     /// <param name="SdkVersion">The Aspire SDK version extracted from the package filenames.</param>
-    internal sealed record LocalChannelInfo(string PackagesPath, string SdkVersion);
+    internal sealed record LocalChannelInfo(string SdkVersion);
 
     /// <summary>
     /// Copies a directory to testresults/workspaces/{testName}/{label} for CI artifact upload.

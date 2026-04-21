@@ -31,7 +31,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
-        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, workspace, strategy,
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
@@ -45,7 +45,6 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
 
         output.WriteLine($"Testing TypeScript AppHost toolchain: {toolchain}");
 
@@ -129,7 +128,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
-        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, workspace, strategy,
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
@@ -148,7 +147,6 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
         await auto.EnablePolyglotSupportAsync(counter);
 
         // Create brownfield Vite project

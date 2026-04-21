@@ -30,7 +30,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
-        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, workspace, strategy,
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.Redis.", "Aspire.Hosting.SqlServer."]);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, workspace: workspace);
@@ -43,7 +43,6 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
-        await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
 
         output.WriteLine($"Testing TypeScript AppHost toolchain: {toolchain}");
 
