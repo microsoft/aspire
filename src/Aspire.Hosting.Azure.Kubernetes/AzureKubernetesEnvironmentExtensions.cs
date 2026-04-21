@@ -769,13 +769,13 @@ public static class AzureKubernetesEnvironmentExtensions
             };
         }
 
-        // Application Gateway for Containers (ALB Controller) addon.
-        // When WithApplicationGateway() is called, enable the ALB controller addon
-        // so Kubernetes Ingress resources with ingressClassName 'azure-alb-external'
-        // are processed by the AGC controller.
+        // Application Gateway for Containers: enable the ALB controller addon
+        // when WithApplicationGateway() has been called. The addon key is
+        // "applicationLoadBalancer" (not "ingressApplicationGateway" which is
+        // for the classic Application Gateway AGIC).
         if (aksResource.AgcResourceId is not null)
         {
-            aks.AddonProfiles["IngressApplicationGateway"] = new ManagedClusterAddonProfile
+            aks.AddonProfiles["applicationLoadBalancer"] = new ManagedClusterAddonProfile
             {
                 IsEnabled = true,
             };
