@@ -51,6 +51,7 @@ public class PromptAgentConfiguration(string model, string? instructions)
     /// <summary>
     /// Converts this configuration to an <see cref="ProjectsAgentVersionCreationOptions"/> instance.
     /// </summary>
+    [AspireExportIgnore(Reason = "Azure SDK-specific return type not usable from polyglot hosts.")]
     public ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions()
     {
         var def = new DeclarativeAgentDefinition(Model)

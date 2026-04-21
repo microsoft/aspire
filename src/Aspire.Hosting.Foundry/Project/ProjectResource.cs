@@ -198,6 +198,7 @@ public class AzureCognitiveServicesProjectResource :
     /// <summary>
     /// This is the encoding that the Microsoft Foundry web portal uses in their URLs, for some reason
     /// </summary>
+    // Foundry portal URLs use big-endian (RFC 4122) GUID encoding, not .NET's mixed-endian ToByteArray().
     internal static string EncodeSubscriptionId(string subscriptionId)
     {
         var guid = Guid.Parse(subscriptionId);

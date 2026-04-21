@@ -16,6 +16,7 @@ with create_builder() as builder:
     app_insights = builder.add_azure_application_insights("resource")
     cosmos = builder.add_azure_cosmos_db("resource")
     storage = builder.add_azure_storage("resource")
+    search = builder.add_azure_search("resource")
     project = foundry.add_project("resource", ".", "default")
     project.with_container_registry()
     project.with_key_vault()
@@ -24,6 +25,30 @@ with create_builder() as builder:
     _storage_connection = project.add_storage_connection("resource")
     _registry_connection = project.add_container_registry_connection("resource")
     _key_vault_connection = project.add_key_vault_connection("resource")
+    _search_connection = project.add_search_connection("resource")
+
+    # Prompt Agent tools
+    code_interpreter = project.add_code_interpreter_tool("resource")
+    file_search = project.add_file_search_tool("resource")
+    web_search = project.add_web_search_tool("resource")
+    image_gen = project.add_image_generation_tool("resource")
+    computer_use = project.add_computer_use_tool("resource")
+    ai_search_tool = project.add_ai_search_tool("resource")
+    ai_search_tool.with_reference()
+    bing_tool = project.add_bing_grounding_tool("resource")
+    bing_tool.with_bing_connection_reference()
+    bing_tool.with_bing_resource_id_reference("resource")
+    bing_param = builder.add_parameter("resource")
+    bing_tool.with_bing_parameter_reference()
+    sharepoint = project.add_share_point_tool("resource")
+    fabric = project.add_fabric_tool("resource")
+    az_func = project.add_azure_function_tool("resource")
+    func_tool = project.add_function_tool("resource")
+
+    # Prompt Agent
+    _prompt_agent = project.add_prompt_agent("resource")
+    _prompt_agent.with_properties()
+
     builder_project_foundry = builder.add_foundry("resource")
     builder_project = builder_project_foundry.add_project("resource", ".", "default")
     _builder_project_model = builder_project.add_model_deployment("resource")

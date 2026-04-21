@@ -539,7 +539,7 @@ public static class PromptAgentBuilderExtensions
     /// <param name="outputQueueEndpoint">The Azure Storage Queue endpoint for output binding.</param>
     /// <param name="outputQueueName">The queue name for output binding.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible. Use the string overload instead.")]
     public static IResourceBuilder<AzureFunctionToolResource> AddAzureFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -562,6 +562,37 @@ public static class PromptAgentBuilderExtensions
     }
 
     /// <summary>
+    /// Adds an Azure Function tool to a Microsoft Foundry project, enabling agents to
+    /// invoke a serverless Azure Function with queue-based input/output bindings.
+    /// </summary>
+    /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="functionName">The name of the Azure Function.</param>
+    /// <param name="description">A description of what the function does.</param>
+    /// <param name="parametersJson">The JSON schema defining the function parameters as a JSON string.</param>
+    /// <param name="inputQueueEndpoint">The Azure Storage Queue endpoint for input binding.</param>
+    /// <param name="inputQueueName">The queue name for input binding.</param>
+    /// <param name="outputQueueEndpoint">The Azure Storage Queue endpoint for output binding.</param>
+    /// <param name="outputQueueName">The queue name for output binding.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
+    [AspireExport(Description = "Adds an Azure Function tool to a Microsoft Foundry project.")]
+    public static IResourceBuilder<AzureFunctionToolResource> AddAzureFunctionTool(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        string name,
+        string functionName,
+        string description,
+        string parametersJson,
+        string inputQueueEndpoint,
+        string inputQueueName,
+        string outputQueueEndpoint,
+        string outputQueueName)
+    {
+        return project.AddAzureFunctionTool(
+            name, functionName, description, BinaryData.FromString(parametersJson),
+            inputQueueEndpoint, inputQueueName, outputQueueEndpoint, outputQueueName);
+    }
+
+    /// <summary>
     /// Adds a function calling tool to a Microsoft Foundry project, enabling agents to
     /// call application-defined functions with structured parameters.
     /// </summary>
@@ -572,7 +603,7 @@ public static class PromptAgentBuilderExtensions
     /// <param name="description">A description of what the function does.</param>
     /// <param name="strictModeEnabled">Whether to enable strict mode for parameter validation.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible. Use the string overload instead.")]
     public static IResourceBuilder<FunctionToolResource> AddFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -588,6 +619,30 @@ public static class PromptAgentBuilderExtensions
             name, project.Resource, functionName, parameters, description, strictModeEnabled);
         return project.ApplicationBuilder.AddResource(resource)
             .WithReferenceRelationship(project);
+    }
+
+    /// <summary>
+    /// Adds a function calling tool to a Microsoft Foundry project, enabling agents to
+    /// call application-defined functions with structured parameters.
+    /// </summary>
+    /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <param name="name">The name of the tool resource.</param>
+    /// <param name="functionName">The name of the function.</param>
+    /// <param name="parametersJson">The JSON schema defining the function parameters as a JSON string.</param>
+    /// <param name="description">A description of what the function does.</param>
+    /// <param name="strictModeEnabled">Whether to enable strict mode for parameter validation.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
+    [AspireExport(Description = "Adds a function calling tool to a Microsoft Foundry project.")]
+    public static IResourceBuilder<FunctionToolResource> AddFunctionTool(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        string name,
+        string functionName,
+        string parametersJson,
+        string? description = null,
+        bool? strictModeEnabled = null)
+    {
+        return project.AddFunctionTool(
+            name, functionName, BinaryData.FromString(parametersJson), description, strictModeEnabled);
     }
 
     // ──────────────────────────────────────────────────────────────

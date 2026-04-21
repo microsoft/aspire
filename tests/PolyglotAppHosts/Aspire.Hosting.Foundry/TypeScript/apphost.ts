@@ -46,6 +46,38 @@ const _cosmosConnection = await project.addCosmosConnection(cosmos);
 const _storageConnection = await project.addStorageConnection(storage);
 const _registryConnection = await project.addContainerRegistryConnection(registry);
 const _keyVaultConnection = await project.addKeyVaultConnection(keyVault);
+const _searchConnection = await project.addSearchConnection(search);
+
+// Prompt Agent tools
+const codeInterpreter = await project.addCodeInterpreterTool('code-interpreter');
+const fileSearch = await project.addFileSearchTool('file-search', ['vs_placeholder']);
+const webSearch = await project.addWebSearchTool('web-search');
+const imageGen = await project.addImageGenerationTool('image-gen');
+const computerUse = await project.addComputerUseTool('computer-use', 1024, 768);
+const aiSearchTool = await project.addAISearchTool('ai-search-tool', 'my-index');
+await aiSearchTool.withReference(search);
+const bingTool = await project.addBingGroundingTool('bing-tool');
+await bingTool.withBingConnectionReference(_searchConnection);
+await bingTool.withBingResourceIdReference('/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing');
+const bingParam = await builder.addParameter('bing-resource-id');
+await bingTool.withBingParameterReference(bingParam);
+const sharepoint = await project.addSharePointTool('sharepoint-tool', 'https://contoso.sharepoint.com', 'MySite');
+const fabric = await project.addFabricTool('fabric-tool', 'workspace-id');
+const azFunc = await project.addAzureFunctionTool('az-func-tool', 'myFunction', 'Does something', '{}', 'https://queue.core.windows.net', 'input-q', 'https://queue.core.windows.net', 'output-q');
+const funcTool = await project.addFunctionTool('func-tool', 'myFunc', '{}');
+
+// Prompt Agent
+const _promptAgent = await project.addPromptAgent(chat, 'prompt-agent', 'You are a helpful assistant.', [
+    codeInterpreter, fileSearch, webSearch, imageGen, computerUse,
+    aiSearchTool, bingTool, sharepoint, fabric, azFunc, funcTool
+]);
+
+await _promptAgent.withProperties(async (config) => {
+    await config.description.set('Test prompt agent');
+    await config.model.set('gpt-4.1-mini');
+    await config.instructions.set('Be helpful');
+    await config.metadata.set('env', 'test');
+});
 
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');
