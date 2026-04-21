@@ -141,6 +141,21 @@ internal sealed partial class AzureKubernetesInfrastructure(
                     // Store the identity reference for federated credential Bicep generation
                     environment.WorkloadIdentities[r.Name] = appIdentity.IdentityResource;
                 }
+
+                // Wire the AGC resource ID as a deferred Helm value so the Ingress
+                // alb-id annotation gets the actual resource ID at deploy time.
+                // ConfigureAksDefaultIngress sets {{ .Values.parameters.<name>.agcId }}
+                // in the Ingress annotation; this provides the actual value.
+                if (environment.AgcResourceId is IValueProvider agcIdProvider &&
+                    r.Annotations.OfType<EndpointAnnotation>().Any(e => e.IsExternal && e.UriScheme is "http" or "https"))
+                {
+                    environment.KubernetesEnvironment.CapturedHelmValueProviders.Add(
+                        new KubernetesEnvironmentResource.CapturedHelmValueProvider(
+                            "parameters",
+                            r.Name,
+                            "agcId",
+                            agcIdProvider));
+                }
             }
         }
 

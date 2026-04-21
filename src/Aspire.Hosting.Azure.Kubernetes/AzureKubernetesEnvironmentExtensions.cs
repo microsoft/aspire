@@ -501,14 +501,22 @@ public static class AzureKubernetesEnvironmentExtensions
     private static Task ConfigureAksDefaultIngress(KubernetesIngressContext ctx)
     {
         var serviceName = ctx.Resource.Name.ToServiceName();
+        var resourceName = ctx.Resource.Name;
 
-        // If the environment is owned by an AKS resource, get the AGC resource ID
-        // to annotate the Ingress resources with.
-        string? agcResourceIdExpression = null;
+        // If the environment is owned by an AKS resource with AGC provisioned,
+        // use a Helm expression for the AGC resource ID annotation. The actual
+        // value will be resolved at deploy time from Bicep outputs via
+        // CapturedHelmValueProviders (wired in AzureKubernetesInfrastructure).
+        string? agcIdHelmExpression = null;
         if (ctx.Environment.OwningComputeEnvironment is AzureKubernetesEnvironmentResource aksResource &&
             aksResource.AgcResourceId is not null)
         {
-            agcResourceIdExpression = aksResource.AgcResourceId.ValueExpression;
+            var helmKey = "agcId";
+            agcIdHelmExpression = $"{{{{ .Values.parameters.{resourceName}.{helmKey} }}}}";
+
+            // Add a placeholder parameter so values.yaml has the section structure.
+            ctx.KubernetesResource.Parameters[helmKey] = new KubernetesResource.HelmValue(
+                agcIdHelmExpression, string.Empty);
         }
 
         foreach (var endpoint in ctx.ExternalHttpEndpoints)
@@ -561,9 +569,10 @@ public static class AzureKubernetesEnvironmentExtensions
 
             // Wire the AGC resource ID as an annotation so the ALB controller
             // knows which Application Gateway for Containers instance to use.
-            if (agcResourceIdExpression is not null)
+            // The Helm expression is resolved at deploy time.
+            if (agcIdHelmExpression is not null)
             {
-                ingress.Metadata.Annotations["alb.networking.azure.io/alb-id"] = agcResourceIdExpression;
+                ingress.Metadata.Annotations["alb.networking.azure.io/alb-id"] = agcIdHelmExpression;
             }
 
             ctx.KubernetesResource.AdditionalResources.Add(ingress);
