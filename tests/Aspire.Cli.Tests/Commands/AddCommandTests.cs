@@ -878,7 +878,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add redis");
