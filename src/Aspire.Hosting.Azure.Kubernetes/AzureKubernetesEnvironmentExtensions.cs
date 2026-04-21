@@ -457,6 +457,12 @@ public static class AzureKubernetesEnvironmentExtensions
 
         var name = builder.Resource.Name;
 
+        // Add service delegation to the subnet — AGC requires the subnet
+        // to be delegated to Microsoft.ServiceNetworking/TrafficControllers.
+        const string agcDelegationService = "Microsoft.ServiceNetworking/TrafficControllers";
+        subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
+            agcDelegationService, agcDelegationService));
+
         // Provision AGC via inline Bicep
         var agc = builder.ApplicationBuilder.AddBicepTemplateString($"{name}-agc", GenerateAgcBicep());
         agc.Resource.Parameters["subnetId"] = subnet.Resource.Id;
