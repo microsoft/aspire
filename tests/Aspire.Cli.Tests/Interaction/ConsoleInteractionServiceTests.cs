@@ -299,17 +299,19 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
-    public async Task ConfirmAsync_WhenInteractiveInputNotSupported_ThrowsInvalidOperationException()
+    public async Task ConfirmAsync_WhenInteractiveInputNotSupported_ReturnsDefaultValue()
     {
         // Arrange
         var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         var hostEnvironment = TestHelpers.CreateNonInteractiveHostEnvironment();
         var interactionService = CreateInteractionService(AnsiConsole.Console, executionContext, hostEnvironment);
 
-        // Act & Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            interactionService.ConfirmAsync("Confirm?", true, CancellationToken.None));
-        Assert.Contains(InteractionServiceStrings.InteractiveInputNotSupported, exception.Message);
+        // Act & Assert - returns the default value instead of throwing
+        var resultTrue = await interactionService.ConfirmAsync("Confirm?", defaultValue: true, CancellationToken.None);
+        Assert.True(resultTrue);
+
+        var resultFalse = await interactionService.ConfirmAsync("Confirm?", defaultValue: false, CancellationToken.None);
+        Assert.False(resultFalse);
     }
 
     [Fact]

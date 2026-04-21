@@ -33,6 +33,14 @@ internal interface IInteractionService
     void DisplayEmptyLine();
 
     /// <summary>
+    /// Gets whether the interaction service supports interactive input (e.g., prompts).
+    /// When <c>false</c>, calling interactive methods like <see cref="PromptForStringAsync"/> or
+    /// <see cref="PromptForSelectionAsync{T}"/> will throw <see cref="InvalidOperationException"/>.
+    /// <see cref="ConfirmAsync"/> returns the default value instead of prompting.
+    /// </summary>
+    bool SupportsInteractiveInput { get; }
+
+    /// <summary>
     /// Gets or sets the default console output stream for human-readable messages.
     /// When set to <see cref="ConsoleOutput.Error"/>, display methods route output to stderr
     /// so that structured output (e.g., JSON) on stdout remains parseable.

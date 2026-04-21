@@ -435,6 +435,8 @@ public class DotNetTemplateFactoryTests
     {
         public ConsoleOutput Console { get; set; }
 
+        public bool SupportsInteractiveInput => true;
+
         public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, CancellationToken cancellationToken) where T : notnull
             => throw new NotImplementedException();
 

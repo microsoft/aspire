@@ -2072,6 +2072,8 @@ internal sealed class OrderTrackingInteractionService(List<string> operationOrde
 {
     public ConsoleOutput Console { get; set; }
 
+    public bool SupportsInteractiveInput => true;
+
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         return action();

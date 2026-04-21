@@ -177,7 +177,7 @@ internal sealed class UpdateCommand : BaseCommand
                 // Otherwise, use the implicit/default channel automatically.
                 var hasHives = ExecutionContext.GetPrHiveCount() > 0;
 
-                if (hasHives)
+                if (hasHives && InteractionService.SupportsInteractiveInput)
                 {
                     // Prompt for channel selection
                     channel = await InteractionService.PromptForSelectionAsync(
@@ -274,15 +274,23 @@ internal sealed class UpdateCommand : BaseCommand
         // for future 'aspire new' and 'aspire init' commands.
         if (string.IsNullOrEmpty(channel))
         {
-            var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
-            var channels = isStagingEnabled
-                ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
-                : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
-            channel = await InteractionService.PromptForSelectionAsync(
-                "Select the channel to update to:",
-                channels,
-                q => q,
-                cancellationToken);
+            if (!InteractionService.SupportsInteractiveInput)
+            {
+                // In non-interactive mode, default to the stable channel
+                channel = PackageChannelNames.Stable;
+            }
+            else
+            {
+                var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+                var channels = isStagingEnabled
+                    ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
+                    : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
+                channel = await InteractionService.PromptForSelectionAsync(
+                    "Select the channel to update to:",
+                    channels,
+                    q => q,
+                    cancellationToken);
+            }
         }
 
         try

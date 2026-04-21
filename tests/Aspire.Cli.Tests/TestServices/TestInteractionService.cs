@@ -17,6 +17,8 @@ internal sealed class TestInteractionService : IInteractionService
 
     public ConsoleOutput Console { get; set; }
 
+    public bool SupportsInteractiveInput { get; set; } = true;
+
     // Callback hooks
     public Action<string>? DisplaySubtleMessageCallback { get; set; }
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }

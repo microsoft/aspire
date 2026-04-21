@@ -37,6 +37,8 @@ internal class ConsoleInteractionService : IInteractionService
 
     public ConsoleOutput Console { get; set; }
 
+    public bool SupportsInteractiveInput => _hostEnvironment.SupportsInteractiveInput;
+
     public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);
@@ -406,7 +408,8 @@ internal class ConsoleInteractionService : IInteractionService
     {
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
-            throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
+            MessageLogger.LogInformation("Confirm (non-interactive, using default): {PromptText} = {DefaultValue}", promptText, defaultValue);
+            return defaultValue;
         }
 
         MessageLogger.LogInformation("Confirm: {PromptText} (default: {DefaultValue})", promptText, defaultValue);

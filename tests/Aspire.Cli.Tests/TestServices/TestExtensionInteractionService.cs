@@ -14,6 +14,7 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestExtensionInteractionService(IServiceProvider serviceProvider) : IExtensionInteractionService
 {
     public ConsoleOutput Console { get; set; }
+    public bool SupportsInteractiveInput => true;
     public Action<string>? DisplayErrorCallback { get; set; }
     public Action<string>? DisplaySubtleMessageCallback { get; set; }
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }
