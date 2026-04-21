@@ -466,6 +466,7 @@ public static class AzureKubernetesEnvironmentExtensions
         // Provision AGC via inline Bicep
         var agc = builder.ApplicationBuilder.AddBicepTemplateString($"{name}-agc", GenerateAgcBicep());
         agc.Resource.Parameters["subnetId"] = subnet.Resource.Id;
+        agc.Resource.Parameters["aksClusterName"] = builder.Resource.NameOutputReference;
 
         // Store the AGC outputs on the AKS resource
         builder.Resource.AgcResourceId = new BicepOutputReference("agcId", agc.Resource);
@@ -590,10 +591,67 @@ public static class AzureKubernetesEnvironmentExtensions
             @description('The resource ID of the dedicated subnet for AGC.')
             param subnetId string
 
+            @description('The name of the AKS cluster to enable the ALB controller on.')
+            param aksClusterName string
+
+            // Reference the existing AKS cluster to enable the ALB controller.
+            resource aksCluster 'Microsoft.ContainerService/managedClusters@2026-01-01' existing = {
+              name: aksClusterName
+            }
+
+            // Update the cluster to enable the Application Load Balancer ingress profile.
+            // This is the ARM API equivalent of 'az aks update --enable-application-load-balancer'.
+            // The addon creates a managed identity and installs the ALB controller pods.
+            resource aksAlbUpdate 'Microsoft.ContainerService/managedClusters@2026-01-01' = {
+              name: aksClusterName
+              location: aksCluster.location
+              properties: {
+                ingressProfile: {
+                  applicationLoadBalancer: {
+                    enabled: true
+                  }
+                }
+              }
+              identity: aksCluster.identity
+              sku: aksCluster.sku
+            }
+
+            // The ALB addon creates a managed identity in the node resource group.
+            // For BYO deployment, we need to grant it permissions to manage AGC resources.
+            // AppGw for Containers Configuration Manager role on the resource group.
+            var appGwConfigManagerRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'fbc52c3f-28ad-4303-a892-8a056630b8f1')
+            // Network Contributor role on the AGC subnet.
+            var networkContributorRoleId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7')
+
+            // Get the ALB controller's managed identity principal ID from the addon profile.
+            var albPrincipalId = aksAlbUpdate.properties.ingressProfile.applicationLoadBalancer.identity.objectId
+
+            // Grant AppGw for Containers Configuration Manager on this resource group
+            resource agcConfigManagerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+              name: guid(resourceGroup().id, albPrincipalId, appGwConfigManagerRoleId)
+              properties: {
+                roleDefinitionId: appGwConfigManagerRoleId
+                principalId: albPrincipalId
+                principalType: 'ServicePrincipal'
+              }
+            }
+
+            // Grant Network Contributor on the AGC subnet for association
+            resource agcNetworkContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+              name: guid(subnetId, albPrincipalId, networkContributorRoleId)
+              scope: aksCluster // scoped to the subnet via the subnetId, but we use RG scope for simplicity
+              properties: {
+                roleDefinitionId: networkContributorRoleId
+                principalId: albPrincipalId
+                principalType: 'ServicePrincipal'
+              }
+            }
+
             resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2023-11-01' = {
               name: 'aspire-agc'
               location: location
               properties: {}
+              dependsOn: [aksAlbUpdate, agcConfigManagerRole, agcNetworkContributorRole]
             }
 
             resource frontend 'Microsoft.ServiceNetworking/trafficControllers/frontends@2023-11-01' = {
@@ -766,18 +824,6 @@ public static class AzureKubernetesEnvironmentExtensions
             aks.NetworkProfile = new ContainerServiceNetworkProfile
             {
                 NetworkPlugin = ContainerServiceNetworkPlugin.Azure,
-            };
-        }
-
-        // Application Gateway for Containers: enable the ALB controller addon
-        // when WithApplicationGateway() has been called. The addon key is
-        // "applicationLoadBalancer" (not "ingressApplicationGateway" which is
-        // for the classic Application Gateway AGIC).
-        if (aksResource.AgcResourceId is not null)
-        {
-            aks.AddonProfiles["applicationLoadBalancer"] = new ManagedClusterAddonProfile
-            {
-                IsEnabled = true,
             };
         }
 
