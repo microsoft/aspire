@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 32
+Total steps defined: 37
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -14,43 +14,57 @@ EXECUTION ORDER
 This shows the order in which steps would execute, respecting all dependencies.
 Steps with no dependencies run first, followed by steps that depend on them.
 
-  1. process-parameters
-  2. build-prereq
-  3. check-container-runtime
-  4. deploy-prereq
-  5. build-api
-  6. build
-  7. validate-azure-login
-  8. create-provisioning-context
-  9. provision-api-identity
- 10. provision-kv
- 11. provision-api-roles-kv
- 12. provision-env-acr
- 13. provision-env
- 14. login-to-acr-env-acr
- 15. push-prereq
- 16. push-api
- 17. provision-api-website
- 18. print-api-summary
- 19. provision-azure-bicep-resources
- 20. print-dashboard-url-env
- 21. deploy
- 22. deploy-api
- 23. destroy-prereq
- 24. destroy-azure-azure634f9
- 25. destroy
- 26. diagnostics
- 27. publish-prereq
- 28. publish-azure634f9
- 29. validate-appservice-config-env
- 30. publish
- 31. publish-manifest
- 32. push
+  1. azure-prepare-resources
+  2. prepare-azure-app-service-env
+  3. run-mode-azure-provision
+  4. validate-azure-app-service
+  5. before-start
+  6. process-parameters
+  7. build-prereq
+  8. check-container-runtime
+  9. deploy-prereq
+ 10. build-api
+ 11. build
+ 12. validate-azure-login
+ 13. create-provisioning-context
+ 14. provision-api-identity
+ 15. provision-kv
+ 16. provision-api-roles-kv
+ 17. provision-env-acr
+ 18. provision-env
+ 19. login-to-acr-env-acr
+ 20. push-prereq
+ 21. push-api
+ 22. provision-api-website
+ 23. print-api-summary
+ 24. provision-azure-bicep-resources
+ 25. print-dashboard-url-env
+ 26. deploy
+ 27. deploy-api
+ 28. destroy-prereq
+ 29. destroy-azure-azure634f9
+ 30. destroy
+ 31. diagnostics
+ 32. publish-prereq
+ 33. publish-azure634f9
+ 34. validate-appservice-config-env
+ 35. publish
+ 36. publish-manifest
+ 37. push
 
 DETAILED STEP ANALYSIS
 ======================
 Shows each step's dependencies, associated resources, tags, and descriptions.
 ✓ = dependency exists, ? = dependency missing
+
+Step: azure-prepare-resources
+    Description: Prepares the Azure resources.
+    Dependencies: none
+    Resource: azure634f9 (AzureEnvironmentResource)
+
+Step: before-start
+    Description: Aggregation step for operations that run before the application starts.
+    Dependencies: ✓ azure-prepare-resources, ✓ prepare-azure-app-service-env, ✓ run-mode-azure-provision, ✓ validate-azure-app-service
 
 Step: build
     Description: Aggregation step for all build operations. All build steps should be required by this step.
@@ -110,6 +124,11 @@ Step: login-to-acr-env-acr
     Dependencies: ✓ provision-env-acr
     Resource: env-acr (AzureContainerRegistryResource)
     Tags: acr-login
+
+Step: prepare-azure-app-service-env
+    Description: Prepares Azure App Service deployment targets for env.
+    Dependencies: ✓ azure-prepare-resources
+    Resource: env (AzureAppServiceEnvironmentResource)
 
 Step: print-api-summary
     Description: Prints the deployment summary and URL for api.
@@ -199,10 +218,18 @@ Step: push-prereq
     Description: Prerequisite step that runs before any push operations.
     Dependencies: ✓ login-to-acr-env-acr
 
+Step: run-mode-azure-provision
+    Description: Provisions the Azure resources for azure634f9.
+    Dependencies: ✓ azure-prepare-resources
+    Resource: azure634f9 (AzureEnvironmentResource)
+
 Step: validate-appservice-config-env
     Description: Validates Azure App Service configuration for env.
     Dependencies: ✓ publish-prereq
     Resource: env (AzureAppServiceEnvironmentResource)
+
+Step: validate-azure-app-service
+    Dependencies: none
 
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
@@ -220,6 +247,20 @@ EXECUTION SIMULATION ("What If" Analysis):
 Shows what steps would run for each possible target step and in what order.
 Steps at the same level can run concurrently.
 ─────────────────────────────────────────────────────────────────────────────
+If targeting 'azure-prepare-resources':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] azure-prepare-resources
+
+If targeting 'before-start':
+  Direct dependencies: azure-prepare-resources, prepare-azure-app-service-env, run-mode-azure-provision, validate-azure-app-service
+  Total steps: 5
+  Execution order:
+    [0] azure-prepare-resources | validate-azure-app-service (parallel)
+    [1] prepare-azure-app-service-env | run-mode-azure-provision (parallel)
+    [2] before-start
+
 If targeting 'build':
   Direct dependencies: build-api
   Total steps: 6
@@ -336,6 +377,13 @@ If targeting 'login-to-acr-env-acr':
     [3] create-provisioning-context
     [4] provision-env-acr
     [5] login-to-acr-env-acr
+
+If targeting 'prepare-azure-app-service-env':
+  Direct dependencies: azure-prepare-resources
+  Total steps: 2
+  Execution order:
+    [0] azure-prepare-resources
+    [1] prepare-azure-app-service-env
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-website
@@ -524,6 +572,13 @@ If targeting 'push-prereq':
     [5] login-to-acr-env-acr
     [6] push-prereq
 
+If targeting 'run-mode-azure-provision':
+  Direct dependencies: azure-prepare-resources
+  Total steps: 2
+  Execution order:
+    [0] azure-prepare-resources
+    [1] run-mode-azure-provision
+
 If targeting 'validate-appservice-config-env':
   Direct dependencies: publish-prereq
   Total steps: 3
@@ -531,6 +586,12 @@ If targeting 'validate-appservice-config-env':
     [0] process-parameters
     [1] publish-prereq
     [2] validate-appservice-config-env
+
+If targeting 'validate-azure-app-service':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] validate-azure-app-service
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

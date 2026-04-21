@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -46,7 +46,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         ConfigureTestServices(builder, interactionService: testInteractionService, bicepProvisioner: new NoOpBicepProvisioner(), setDefaultProvisioningOptions: false);
 
         // Add an Azure environment resource which will trigger the deployment prompting
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         // Act
         using var app = builder.Build();
@@ -690,7 +690,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
         // Add a parameter that will be unresolved
         var param = builder.AddParameter("unresolved-test-param");
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         // Act
         using var app = builder.Build();
@@ -732,7 +732,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         // Add a parameter with a resolved value
         var param = builder.AddParameter("test-param", () => "resolved-value");
         var secondParam = builder.AddParameter("test-param-2");
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         // Act
         using var app = builder.Build();
@@ -761,7 +761,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                 EnableDescriptionMarkdown = false,
                 Placeholder = "8080"
             });
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         // Act
         using var app = builder.Build();
@@ -928,7 +928,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
         // Add a parameter with GenerateParameterDefault (like Redis password)
         var redis = builder.AddRedis("cache");
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         // Act
         using var app = builder.Build();
@@ -953,7 +953,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var container = builder.AddContainer("test-container", "test-image")
             .WithEnvironment("DEPENDENT_VALUE", dependentParam);
 
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         // Act
         using var app = builder.Build();
@@ -998,7 +998,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var container = builder.AddContainer("test-container", "test-image")
             .WithArgs("--port", portParam, "--verbose");
 
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         // Act
         using var app = builder.Build();
@@ -1552,7 +1552,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
         ConfigureTestServicesWithFileDeploymentStateManager(builder, bicepProvisioner: new NoOpBicepProvisioner());
 
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         using var app = builder.Build();
 
@@ -1607,14 +1607,14 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             $"AppHostSha={appHostSha}");
 
         ConfigureTestServicesWithFileDeploymentStateManager(builder, bicepProvisioner: new NoOpBicepProvisioner());
+        builder.AddAzureProvisioning();
+
         using var app = builder.Build();
 
         // Verify that the cached state was loaded into configuration
         Assert.Equal("cached-sub-12345678-1234-1234-1234-123456789012", builder.Configuration["Azure:SubscriptionId"]);
         Assert.Equal("westus2", builder.Configuration["Azure:Location"]);
         Assert.Equal("cached-rg-test", builder.Configuration["Azure:ResourceGroup"]);
-
-        builder.AddAzureEnvironment();
 
         await app.StartAsync();
         await app.WaitForShutdownAsync();
@@ -1641,7 +1641,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
         ConfigureTestServicesWithFileDeploymentStateManager(builder, bicepProvisioner: new NoOpBicepProvisioner());
 
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         using var app = builder.Build();
 
@@ -1673,7 +1673,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
 
         ConfigureTestServicesWithFileDeploymentStateManager(builder, bicepProvisioner: new NoOpBicepProvisioner(), environmentName: "Staging");
 
-        builder.AddAzureEnvironment();
+        builder.AddAzureProvisioning();
 
         using var app = builder.Build();
 
@@ -1735,7 +1735,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             var connectionStringParam = builder.AddConnectionString("mydb");
             var customKeyParam = builder.AddParameterFromConfiguration("custom-setting", "MyApp:Setting");
 
-            builder.AddAzureEnvironment();
+            builder.AddAzureProvisioning();
 
             using var app = builder.Build();
 
