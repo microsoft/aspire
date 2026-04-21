@@ -154,18 +154,18 @@ kill <pid>
 
 (1) Build from the root with `./build.sh` (~3-5 minutes).
 (2) If that produces errors, fix those errors and build again. Repeat until the build is successful.
-(3) To run tests for a specific project: `dotnet test --project tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
+(3) To run tests for a specific project: `dotnet test --project tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
 
 Note that tests for a project can be executed without first building from the root.
 
 (4) To run specific tests, include the filter after `--`:
 ```bash
-dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
 (5) To apply a timeout for a specific test run use `--hangdump` and `--hangdump-timeout` options after `--`, for example:
 ```bash
-dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
 ```
 You need both options (`--hangdump-timeout` does not work without `--hangdump`). Timeout can be expressed in minutes (e.g. `3m` for 3-minute timeout), or seconds (e.g. `30s` for 30-seconds timeout).
 
@@ -180,8 +180,8 @@ This repo uses **Microsoft.Testing.Platform (MTP)** as the test runner, not VSTe
 dotnet test --project tests/Project.Tests/Project.Tests.csproj --filter "FullyQualifiedName~ClassName"
 
 # CORRECT - MTP-native filters go after the -- separator
-dotnet test --project tests/Project.Tests/Project.Tests.csproj -- --filter-class "*.ClassName"
-dotnet test --project tests/Project.Tests/Project.Tests.csproj -- --filter-method "*.MethodName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-class "*.ClassName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "*.MethodName"
 ```
 
 All test filtering must use MTP-native switches placed **after `--`**. See the filter switches listed below for the full set of options.
@@ -192,10 +192,10 @@ When running tests in automated environments (including Copilot agent), **always
 
 ```bash
 # Correct - excludes quarantined and outerloop tests (use this in automation)
-dotnet test --project tests/Project.Tests/Project.Tests.csproj -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 
 # For specific test filters, combine with quarantine and outerloop exclusion
-dotnet test --project tests/Project.Tests/Project.Tests.csproj -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
 Never run all tests without the quarantine and outerloop filters in automated environments, as this will include flaky tests that are known to fail intermittently and long-running tests that slow down CI.
