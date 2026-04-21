@@ -26,7 +26,7 @@ namespace Aspire.Hosting.Docker;
 /// <remarks>
 /// Initializes a new instance of the <see cref="DockerComposeEnvironmentResource"/> class.
 /// </remarks>
-[global::Aspire.Hosting.AspireExport(ExposeProperties = true)]
+[AspireExport(ExposeProperties = true)]
 public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentResource
 {
     private const string DockerComposeUpTag = "docker-compose-up";
@@ -249,6 +249,7 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
     }
 
     /// <inheritdoc/>
+    [AspireExport(Description = "Gets the host address expression used to reach a resource endpoint from Docker Compose")]
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {

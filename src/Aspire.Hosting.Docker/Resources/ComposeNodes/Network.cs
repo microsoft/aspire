@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
+using Aspire.Hosting;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
@@ -13,6 +14,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
 /// This class encapsulates the properties and options related to a network in a Docker Compose file.
 /// It includes configurations such as driver type, options, labels, IPAM settings, and more.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Network : NamedComposeMember
 {

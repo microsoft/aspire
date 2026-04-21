@@ -4,6 +4,7 @@
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using Aspire.Hosting.Yaml;
+using Aspire.Hosting;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -16,6 +17,7 @@ namespace Aspire.Hosting.Docker.Resources;
 /// This class is designed to encapsulate the structure of a Docker Compose file as a strongly-typed model.
 /// It supports serialization to YAML format for usage in Docker Compose operations.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class ComposeFile
 {

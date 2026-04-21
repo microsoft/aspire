@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
@@ -13,6 +14,7 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes;
 /// such as passwords, keys, or certificates. These secrets can either be externally managed
 /// or provided locally from a specific file.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Secret
 {

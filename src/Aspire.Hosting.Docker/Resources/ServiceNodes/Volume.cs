@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
+using Aspire.Hosting;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Docker.Resources.ServiceNodes;
@@ -13,6 +14,7 @@ namespace Aspire.Hosting.Docker.Resources.ServiceNodes;
 /// The <see cref="Volume"/> class is used to define properties and options for volumes in a Docker environment.
 /// Volumes are used to persist data beyond the lifecycle of a container and can be shared among multiple containers.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Volume : NamedComposeMember
 {
