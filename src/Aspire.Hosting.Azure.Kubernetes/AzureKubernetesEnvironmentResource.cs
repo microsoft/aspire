@@ -120,4 +120,14 @@ public class AzureKubernetesEnvironmentResource(
     /// Gets or sets the default container registry auto-created for this AKS environment.
     /// </summary>
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
+
+    /// <summary>
+    /// Gets or sets the resource ID of the Azure Application Gateway for Containers instance.
+    /// </summary>
+    internal BicepOutputReference? AgcResourceId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the FQDN of the AGC frontend.
+    /// </summary>
+    internal BicepOutputReference? AgcFrontendFqdn { get; set; }
 }

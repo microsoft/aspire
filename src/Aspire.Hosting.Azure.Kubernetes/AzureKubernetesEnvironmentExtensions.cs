@@ -100,11 +100,17 @@ public static class AzureKubernetesEnvironmentExtensions
         // The publishing context will wire this as a parameter in main.bicep.
         resource.Parameters["acrName"] = defaultRegistry.Resource.NameOutputReference;
 
-        // Configure default ingress for external HTTP endpoints using
-        // Azure Application Gateway for Containers (AGC).
+        // Provision Azure Application Gateway for Containers (AGC) as the default
+        // ingress controller. This creates a trafficController + frontend + association
+        // alongside the AKS cluster.
+        var agc = builder.AddBicepTemplateString($"{name}-agc", GenerateAgcBicep());
+
+        // Store the AGC resource ID so the ingress annotation can reference it
+        resource.AgcResourceId = new BicepOutputReference("agcId", agc.Resource);
+        resource.AgcFrontendFqdn = new BicepOutputReference("agcFrontendFqdn", agc.Resource);
+
+        // Configure default ingress for external HTTP endpoints using AGC.
         // This generates Kubernetes Ingress resources with the AGC ingress class.
-        // NOTE: AGC Azure resource provisioning (trafficControllers) is deferred
-        // until Azure.Provisioning.ServiceNetworking is available.
         k8sEnvBuilder.WithIngress(ConfigureAksDefaultIngress);
 
         // Ensure push steps wait for ALL Azure provisioning to complete. Push steps
@@ -385,6 +391,15 @@ public static class AzureKubernetesEnvironmentExtensions
     {
         var serviceName = ctx.Resource.Name.ToServiceName();
 
+        // If the environment is owned by an AKS resource, get the AGC resource ID
+        // to annotate the Ingress resources with.
+        string? agcResourceIdExpression = null;
+        if (ctx.Environment.OwningComputeEnvironment is AzureKubernetesEnvironmentResource aksResource &&
+            aksResource.AgcResourceId is not null)
+        {
+            agcResourceIdExpression = aksResource.AgcResourceId.ValueExpression;
+        }
+
         foreach (var endpoint in ctx.ExternalHttpEndpoints)
         {
             // Determine the service port — use the exposed port if explicitly set,
@@ -433,10 +448,41 @@ public static class AzureKubernetesEnvironmentExtensions
                 }
             };
 
+            // Wire the AGC resource ID as an annotation so the ALB controller
+            // knows which Application Gateway for Containers instance to use.
+            if (agcResourceIdExpression is not null)
+            {
+                ingress.Metadata.Annotations["alb.networking.azure.io/alb-id"] = agcResourceIdExpression;
+            }
+
             ctx.KubernetesResource.AdditionalResources.Add(ingress);
         }
 
         return Task.CompletedTask;
+    }
+
+    private static string GenerateAgcBicep()
+    {
+        return """
+            @description('The Azure region for the Application Gateway for Containers resources.')
+            param location string = resourceGroup().location
+
+            resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2023-11-01' = {
+              name: 'aspire-agc'
+              location: location
+              properties: {}
+            }
+
+            resource frontend 'Microsoft.ServiceNetworking/trafficControllers/frontends@2023-11-01' = {
+              parent: trafficController
+              name: 'default'
+              location: location
+              properties: {}
+            }
+
+            output agcId string = trafficController.id
+            output agcFrontendFqdn string = frontend.properties.fqdn
+            """;
     }
 
     private static void ConfigureAksInfrastructure(AzureResourceInfrastructure infrastructure)

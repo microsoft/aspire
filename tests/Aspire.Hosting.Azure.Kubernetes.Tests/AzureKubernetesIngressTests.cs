@@ -163,4 +163,29 @@ public class AzureKubernetesIngressTests
         var ingressFiles = Directory.GetFiles(templatesDir, "*ingress*");
         Assert.Equal(2, ingressFiles.Length);
     }
+
+    [Fact]
+    public void AddAzureKubernetesEnvironment_ProvisionesAgcBicepResource()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        // Verify the AGC Bicep resource was added to the model
+        var agcResource = builder.Resources
+            .OfType<AzureBicepResource>()
+            .FirstOrDefault(r => r.Name == "aks-agc");
+        Assert.NotNull(agcResource);
+
+        // Verify the Bicep template contains the traffic controller
+        var bicep = agcResource.GetBicepTemplateString();
+        Assert.Contains("Microsoft.ServiceNetworking/trafficControllers", bicep);
+        Assert.Contains("Microsoft.ServiceNetworking/trafficControllers/frontends", bicep);
+        Assert.Contains("output agcId string", bicep);
+        Assert.Contains("output agcFrontendFqdn string", bicep);
+
+        // Verify AGC resource ID is stored on the AKS resource
+        Assert.NotNull(aks.Resource.AgcResourceId);
+        Assert.NotNull(aks.Resource.AgcFrontendFqdn);
+    }
 }

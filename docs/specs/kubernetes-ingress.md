@@ -393,13 +393,7 @@ AGC supports three TLS scenarios, each with a different certificate model:
 
 ### Azure Infrastructure for AGC
 
-> **Note**: The `Azure.Provisioning.ServiceNetworking` NuGet package does not exist yet.
-> AGC Bicep provisioning is deferred until this package becomes available. The Kubernetes-side
-> ingress generation (Ingress YAML in Helm charts) works independently and is implemented
-> in Phase 6. When the provisioning package is available, the AGC traffic controller,
-> frontend, and association resources should be added to `ConfigureAksInfrastructure`.
-
-AGC uses the `Microsoft.ServiceNetworking/trafficControllers` Azure resource type (not the traditional `Microsoft.Network/applicationGateways`). The Bicep provisioning includes:
+AGC uses the `Microsoft.ServiceNetworking/trafficControllers` Azure resource type (not the traditional `Microsoft.Network/applicationGateways`). The implementation uses an inline Bicep template (`AzureBicepResource`) to provision the traffic controller and frontend:
 
 ```bicep
 // Traffic Controller (Application Gateway for Containers)
