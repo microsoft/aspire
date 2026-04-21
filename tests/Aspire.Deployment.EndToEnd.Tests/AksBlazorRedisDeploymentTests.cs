@@ -181,8 +181,8 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            // Verify root page
-            await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/ -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
+            // Verify root page — fail explicitly if all retries exhausted
+            await auto.TypeAsync("OK=0; for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/ -o /dev/null -w '%{http_code}' && echo ' OK' && OK=1 && break; done; [ \"$OK\" = \"1\" ] || { echo 'FAIL: root page unreachable after 10 retries'; exit 1; }");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
@@ -190,7 +190,7 @@ builder.Build().Run();
             // The /weather page uses Blazor SSR streaming rendering which keeps the HTTP connection open.
             // We use -m 5 (max-time) to avoid curl hanging, and capture the status code in a variable
             // because --max-time causes curl to exit non-zero (code 28) even on HTTP 200.
-            await auto.TypeAsync("for i in $(seq 1 10); do sleep 3; S=$(curl -so /dev/null -w '%{http_code}' -m 5 http://localhost:18081/weather); [ \"$S\" = \"200\" ] && echo \"$S OK\" && break; done");
+            await auto.TypeAsync("OK=0; for i in $(seq 1 10); do sleep 3; S=$(curl -so /dev/null -w '%{http_code}' -m 5 http://localhost:18081/weather); [ \"$S\" = \"200\" ] && echo \"$S OK\" && OK=1 && break; done; [ \"$OK\" = \"1\" ] || { echo 'FAIL: /weather unreachable after 10 retries'; exit 1; }");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
 
@@ -239,7 +239,6 @@ builder.Build().Run();
             // Clean up the resource group created by the pipeline
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
             TriggerCleanupResourceGroup(resourceGroupName);
-            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
         }
     }
 
@@ -249,7 +248,7 @@ builder.Build().Run();
     /// </summary>
     private void TriggerCleanupResourceGroup(string resourceGroupName)
     {
-        var process = new System.Diagnostics.Process
+        using var process = new System.Diagnostics.Process
         {
             StartInfo = new System.Diagnostics.ProcessStartInfo
             {
@@ -266,10 +265,12 @@ builder.Build().Run();
         {
             process.Start();
             output.WriteLine($"Cleanup triggered for resource group: {resourceGroupName}");
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
         }
         catch (Exception ex)
         {
             output.WriteLine($"Failed to trigger cleanup: {ex.Message}");
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: false, ex.Message);
         }
     }
 }
