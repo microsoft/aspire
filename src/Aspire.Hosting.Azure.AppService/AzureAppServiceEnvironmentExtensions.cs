@@ -16,7 +16,6 @@ using Azure.Provisioning.Expressions;
 using Azure.Provisioning.OperationalInsights;
 using Azure.Provisioning.Roles;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Hosting;
 
@@ -28,15 +27,19 @@ public static partial class AzureAppServiceEnvironmentExtensions
     internal static IDistributedApplicationBuilder AddAzureAppServiceInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
         // ensure AzureProvisioning is added first so the AzureResourcePreparer pipeline step
-        // runs before the prepare-azure-app-service step (which depends on it).
+        // runs before the per-environment prepare-azure-app-service-{name} steps that depend on it.
         builder.AddAzureProvisioning();
 
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
 
-        builder.Services.TryAddSingleton<AzureAppServiceInfrastructure>();
-
         // Register the pipeline step idempotently. AddAzureAppServiceInfrastructureCore can be
-        // called more than once; the marker singleton ensures the step is added only once.
+        // called more than once (e.g. when AddAzureAppServiceEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating App Service resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on AzureAppServiceEnvironmentResource.
+        // This global step only validates that no resource has a PublishAs* annotation when there are
+        // no AzureAppServiceEnvironmentResource instances in the model.
         if (builder.Services.All(d => d.ServiceType != typeof(AppServicePipelineStepMarker)))
         {
             builder.Services.AddSingleton<AppServicePipelineStepMarker>();
@@ -44,12 +47,21 @@ public static partial class AzureAppServiceEnvironmentExtensions
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             builder.Pipeline.AddStep(
                 name: AppServicePipelineStepMarker.StepName,
-                action: async ctx =>
+                action: ctx =>
                 {
-                    var infra = ctx.Services.GetRequiredService<AzureAppServiceInfrastructure>();
-                    await infra.PrepareDeploymentTargetsAsync(ctx.Model, ctx.Services, ctx.CancellationToken).ConfigureAwait(false);
+                    if (!ctx.Model.Resources.OfType<AzureAppServiceEnvironmentResource>().Any())
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<AzureAppServiceWebsiteCustomizationAnnotation>())
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as an Azure AppService Website, but there are no '{nameof(AzureAppServiceEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddAzureAppServiceEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
                 },
-                dependsOn: AzureEnvironmentResource.PrepareResourcesStepName,
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
 #pragma warning restore ASPIREPIPELINES001
         }
@@ -59,7 +71,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
     private sealed class AppServicePipelineStepMarker
     {
-        public const string StepName = "prepare-azure-app-service";
+        public const string StepName = "validate-azure-app-service";
     }
 
     /// <summary>
