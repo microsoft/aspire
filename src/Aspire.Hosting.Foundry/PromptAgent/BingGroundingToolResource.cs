@@ -57,16 +57,16 @@ public class BingGroundingToolResource : FoundryToolResource
                 "Ensure the tool was added using AddBingGroundingTool().");
         }
 
-        var connectionNameRef = new BicepOutputReference("name", Connection);
-        var connectionName = await connectionNameRef.GetValueAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(connectionName))
+        var connectionIdRef = new BicepOutputReference("id", Connection);
+        var connectionId = await connectionIdRef.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(connectionId))
         {
             throw new InvalidOperationException(
-                $"Failed to resolve connection name for Bing Grounding tool '{Name}'. " +
+                $"Failed to resolve connection ID for Bing Grounding tool '{Name}'. " +
                 "The Foundry project connection may not have been provisioned correctly.");
         }
 
-        var config = new BingGroundingSearchConfiguration(connectionName);
+        var config = new BingGroundingSearchConfiguration(connectionId);
         var options = new BingGroundingSearchToolOptions([config]);
         return new BingGroundingTool(options);
     }

@@ -67,7 +67,7 @@ internal sealed class PromptAgentDeployer(
             var projectAzureResource = project as IAzureResource;
             if (projectAzureResource?.ProvisioningTaskCompletionSource is not null)
             {
-                await projectAzureResource.ProvisioningTaskCompletionSource.Task.ConfigureAwait(false);
+                await projectAzureResource.ProvisioningTaskCompletionSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -85,12 +85,12 @@ internal sealed class PromptAgentDeployer(
                 if (tool is BingGroundingToolResource { Connection: IAzureResource bingConn } &&
                     bingConn.ProvisioningTaskCompletionSource is not null)
                 {
-                    await bingConn.ProvisioningTaskCompletionSource.Task.ConfigureAwait(false);
+                    await bingConn.ProvisioningTaskCompletionSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
                 }
                 else if (tool is AzureAISearchToolResource { Connection: IAzureResource searchConn } &&
                     searchConn.ProvisioningTaskCompletionSource is not null)
                 {
-                    await searchConn.ProvisioningTaskCompletionSource.Task.ConfigureAwait(false);
+                    await searchConn.ProvisioningTaskCompletionSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
 

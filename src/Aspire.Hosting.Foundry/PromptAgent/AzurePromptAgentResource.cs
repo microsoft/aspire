@@ -171,7 +171,7 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
     /// </summary>
     public async Task<ProjectsAgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
     {
-        return await DeployAsync(project, context.CancellationToken).ConfigureAwait(false);
+        return await DeployAsync(project, context, context.CancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -181,13 +181,13 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
     /// <returns>The deployed agent version.</returns>
     public async Task<ProjectsAgentVersion> DeployAsync(CancellationToken cancellationToken = default)
     {
-        return await DeployAsync(Project, cancellationToken).ConfigureAwait(false);
+        return await DeployAsync(Project, context: null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Deploys the prompt agent to the given Microsoft Foundry project.
     /// </summary>
-    internal async Task<ProjectsAgentVersion> DeployAsync(AzureCognitiveServicesProjectResource project, CancellationToken cancellationToken)
+    internal async Task<ProjectsAgentVersion> DeployAsync(AzureCognitiveServicesProjectResource project, PipelineStepContext? context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -197,7 +197,7 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid endpoint.");
         }
 
-        var config = await ToPromptAgentConfigurationAsync(cancellationToken).ConfigureAwait(false);
+        var config = await ToPromptAgentConfigurationAsync(context, cancellationToken).ConfigureAwait(false);
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
         var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
@@ -211,7 +211,7 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
     /// <summary>
     /// Builds the agent configuration, resolving all tool definitions at deploy time.
     /// </summary>
-    internal async Task<PromptAgentConfiguration> ToPromptAgentConfigurationAsync(CancellationToken cancellationToken)
+    internal async Task<PromptAgentConfiguration> ToPromptAgentConfigurationAsync(PipelineStepContext? context, CancellationToken cancellationToken)
     {
         var config = new PromptAgentConfiguration(Model, Instructions)
         {
@@ -221,13 +221,13 @@ public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWit
 
         foreach (var tool in _tools)
         {
-            var agentTool = await tool.ToAgentToolAsync(null, cancellationToken).ConfigureAwait(false);
+            var agentTool = await tool.ToAgentToolAsync(context, cancellationToken).ConfigureAwait(false);
             config.Tools.Add(agentTool);
         }
 
         foreach (var customTool in CustomTools)
         {
-            var agentTool = await customTool.ToAgentToolAsync(null, cancellationToken).ConfigureAwait(false);
+            var agentTool = await customTool.ToAgentToolAsync(context, cancellationToken).ConfigureAwait(false);
             config.Tools.Add(agentTool);
         }
 

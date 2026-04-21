@@ -66,7 +66,8 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 var keyVaultConn = aspireResource.Parent.KeyVaultConn.AddAsExistingResource(infrastructure);
                 connection.DependsOn.Add(keyVaultConn);
             }
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = connection.Id });
+            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = connection.Name });
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = connection.Id });
         }
         var connectionResource = new AzureCognitiveServicesProjectConnectionResource(name, configureInfrastructure, builder.Resource);
         return builder.ApplicationBuilder.AddResource(connectionResource);

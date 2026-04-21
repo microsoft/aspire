@@ -60,19 +60,19 @@ public class AzureAISearchToolResource : FoundryToolResource
                 "Call .WithReference(searchResource) to link it to an Azure AI Search resource.");
         }
 
-        // The connection name output is resolved after infrastructure provisioning
-        var connectionNameRef = new BicepOutputReference("name", Connection);
-        var connectionName = await connectionNameRef.GetValueAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrEmpty(connectionName))
+        // The connection ID output is resolved after infrastructure provisioning
+        var connectionIdRef = new BicepOutputReference("id", Connection);
+        var connectionId = await connectionIdRef.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(connectionId))
         {
             throw new InvalidOperationException(
-                $"Failed to resolve connection name for Azure AI Search tool '{Name}'. " +
+                $"Failed to resolve connection ID for Azure AI Search tool '{Name}'. " +
                 "The Foundry project connection may not have been provisioned correctly.");
         }
 
         var index = new AzureAISearchToolIndex
         {
-            ProjectConnectionId = connectionName,
+            ProjectConnectionId = connectionId,
             IndexName = IndexName
         };
         var options = new AzureAISearchToolOptions([index]);
