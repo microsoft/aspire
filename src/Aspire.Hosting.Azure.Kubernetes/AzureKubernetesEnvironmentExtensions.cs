@@ -100,17 +100,14 @@ public static class AzureKubernetesEnvironmentExtensions
         // The publishing context will wire this as a parameter in main.bicep.
         resource.Parameters["acrName"] = defaultRegistry.Resource.NameOutputReference;
 
-        // Provision Azure Application Gateway for Containers (AGC) as the default
-        // ingress controller. This creates a trafficController + frontend + association
-        // alongside the AKS cluster.
-        var agc = builder.AddBicepTemplateString($"{name}-agc", GenerateAgcBicep());
-
-        // Store the AGC resource ID so the ingress annotation can reference it
-        resource.AgcResourceId = new BicepOutputReference("agcId", agc.Resource);
-        resource.AgcFrontendFqdn = new BicepOutputReference("agcFrontendFqdn", agc.Resource);
-
-        // Configure default ingress for external HTTP endpoints using AGC.
+        // Configure default ingress for external HTTP endpoints.
         // This generates Kubernetes Ingress resources with the AGC ingress class.
+        // NOTE: The AGC Azure resource (trafficController + frontend + association)
+        // requires a dedicated subnet in a VNet. The Bicep provisioning is not
+        // included by default — it will be added when the user calls
+        // WithApplicationGateway() which ensures a VNet/subnet is configured.
+        // The Ingress YAML is still generated so users who install their own
+        // ingress controller (or AGC manually) get working ingress rules.
         k8sEnvBuilder.WithIngress(ConfigureAksDefaultIngress);
 
         // Ensure push steps wait for ALL Azure provisioning to complete. Push steps
