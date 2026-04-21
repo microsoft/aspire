@@ -111,8 +111,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
                     "This indicates multiple apphosts were incorrectly detected.");
             }
 
-            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.")
-                || s.ContainsText("Press CTRL+C to stop the apphost and exit.");
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
         }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (aspire run started)");
 
         // Step 7: Stop the apphost
@@ -247,8 +246,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
                     "This indicates multiple apphosts were incorrectly detected.");
             }
 
-            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.")
-                || s.ContainsText("Press CTRL+C to stop the apphost and exit.");
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
         }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (aspire run started)");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
