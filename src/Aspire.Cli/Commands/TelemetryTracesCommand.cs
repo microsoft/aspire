@@ -315,12 +315,9 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             }
         }
 
-        var shortTraceId = OtlpHelpers.ToShortenedId(traceId);
-        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, shortTraceId);
-
         if (spans.Count == 0)
         {
-            _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
+            _interactionService.DisplayMarkupLine($"[bold]Trace: {traceId}[/]");
             _interactionService.DisplayMarkupLine("[dim]No spans found[/]");
             return;
         }
@@ -330,6 +327,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var totalDuration = rootSpans.Count > 0 ? rootSpans.Max(s => s.Duration) : spans.Max(s => s.Duration);
 
         // Header
+        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, traceId);
         _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
         _interactionService.DisplayMarkupLine($"[bold]Duration:[/] {TelemetryCommandHelpers.FormatDuration(totalDuration)}  [bold]Spans:[/] {spans.Count}");
         _interactionService.DisplayEmptyLine();
