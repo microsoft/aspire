@@ -1,4 +1,8 @@
 import {
+    AksNodeVmSizes,
+    AzureServiceTags,
+    WellKnownPipelineSteps,
+    WellKnownPipelineTags,
     createBuilder,
     CertificateTrustScope,
     IconVariant,
@@ -140,6 +144,18 @@ await builtConnectionString.withConnectionProperty("Mode", "Development");
 const envConnectionString = await builder.addConnectionString("envcs");
 
 // ===================================================================
+// Azure network and AKS exported value catalogs
+// ===================================================================
+
+const vnet = await builder.addAzureVirtualNetwork("vnet", { addressPrefix: "10.0.0.0/16" });
+const subnet = await vnet.addSubnet("web", "10.0.1.0/24");
+await subnet.allowInbound({ port: "443", from: AzureServiceTags.AzureLoadBalancer });
+await subnet.denyInbound({ from: AzureServiceTags.Internet });
+
+const aks = await builder.addAzureKubernetesEnvironment("aks");
+await aks.addNodePool("system", { vmSize: AksNodeVmSizes.GeneralPurpose.StandardD2sV5 });
+
+// ===================================================================
 // Application pipeline on builder
 // ===================================================================
 
@@ -149,13 +165,12 @@ await pipeline.addStep("custom-builder-step", async (stepContext) => {
     const summary = await stepContext.summary.get();
     await summary.add("BuilderPipelineStep", "Validated");
 }, {
-    dependsOn: ["build"],
-    requiredBy: ["publish"],
+    dependsOn: [WellKnownPipelineSteps.Build],
+    requiredBy: [WellKnownPipelineSteps.Publish],
 });
 
 await pipeline.configure(async (configContext) => {
     const _allSteps = await configContext.steps.get();
-    const _builderTaggedSteps = await configContext.getStepsByTag("custom-build");
 });
 
 // ===================================================================
@@ -305,9 +320,9 @@ await container.withPipelineStepFactory("custom-build-step", async (stepContext)
     const cacheUriExpression = await cache.uriExpression.get();
     const _cacheUri = await cacheUriExpression.getValue(cancellationToken);
 }, {
-    dependsOn: ["build"],
-    requiredBy: ["deploy"],
-    tags: ["custom-build"],
+    dependsOn: [WellKnownPipelineSteps.Build],
+    requiredBy: [WellKnownPipelineSteps.Deploy],
+    tags: [WellKnownPipelineTags.BuildCompute],
     description: "Custom pipeline step"
 });
 
@@ -321,23 +336,23 @@ await container.withPipelineConfiguration(async (configContext) => {
     await configLogger.logInformation("Pipeline configuration logger");
 
     const allSteps = await configContext.steps.get();
-    const taggedSteps = await configContext.getStepsByTag("custom-build");
+    const taggedSteps = await configContext.getStepsByTag(WellKnownPipelineTags.BuildCompute);
 
     const _stepName: string = await allSteps[0].name.get();
     const _description: string = await allSteps[0].description.get();
 
     await allSteps[0].tags.add("validated");
     await allSteps[0].dependsOnSteps.add("restore");
-    await taggedSteps[0].requiredBySteps.add("publish");
-    await taggedSteps[0].requiredBy("publish");
-    await allSteps[0].dependsOn("build");
+    await taggedSteps[0].requiredBySteps.add(WellKnownPipelineSteps.Publish);
+    await taggedSteps[0].requiredBy(WellKnownPipelineSteps.Publish);
+    await allSteps[0].dependsOn(WellKnownPipelineSteps.Build);
 });
 
 await container.withPipelineConfiguration(async (configContext) => {
     const _configServices = await configContext.services.get();
     const _configModel = await configContext.model.get();
     const _resourceSteps = await configContext.steps.get();
-    const _taggedSteps = await configContext.getStepsByTag("custom-build");
+    const _taggedSteps = await configContext.getStepsByTag(WellKnownPipelineTags.BuildCompute);
 });
 
 // ===================================================================

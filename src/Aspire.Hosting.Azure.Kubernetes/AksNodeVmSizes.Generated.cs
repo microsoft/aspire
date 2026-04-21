@@ -23,56 +23,67 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D2s_v5 — 2 vCPUs, 8 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD2sV5 = "Standard_D2s_v5";
 
         /// <summary>
         /// Standard_D4s_v5 — 4 vCPUs, 16 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD4sV5 = "Standard_D4s_v5";
 
         /// <summary>
         /// Standard_D8s_v5 — 8 vCPUs, 32 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD8sV5 = "Standard_D8s_v5";
 
         /// <summary>
         /// Standard_D16s_v5 — 16 vCPUs, 64 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD16sV5 = "Standard_D16s_v5";
 
         /// <summary>
         /// Standard_D32s_v5 — 32 vCPUs, 128 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD32sV5 = "Standard_D32s_v5";
 
         /// <summary>
         /// Standard_D2s_v6 — 2 vCPUs, 8 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD2sV6 = "Standard_D2s_v6";
 
         /// <summary>
         /// Standard_D4s_v6 — 4 vCPUs, 16 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD4sV6 = "Standard_D4s_v6";
 
         /// <summary>
         /// Standard_D8s_v6 — 8 vCPUs, 32 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD8sV6 = "Standard_D8s_v6";
 
         /// <summary>
         /// Standard_D2as_v5 — 2 vCPUs, 8 GB RAM, Premium SSD, AMD processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD2asV5 = "Standard_D2as_v5";
 
         /// <summary>
         /// Standard_D4as_v5 — 4 vCPUs, 16 GB RAM, Premium SSD, AMD processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD4asV5 = "Standard_D4as_v5";
 
         /// <summary>
         /// Standard_D8as_v5 — 8 vCPUs, 32 GB RAM, Premium SSD, AMD processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD8asV5 = "Standard_D8as_v5";
     }
 
@@ -84,21 +95,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F2s_v2 — 2 vCPUs, 4 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardF2sV2 = "Standard_F2s_v2";
 
         /// <summary>
         /// Standard_F4s_v2 — 4 vCPUs, 8 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardF4sV2 = "Standard_F4s_v2";
 
         /// <summary>
         /// Standard_F8s_v2 — 8 vCPUs, 16 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardF8sV2 = "Standard_F8s_v2";
 
         /// <summary>
         /// Standard_F16s_v2 — 16 vCPUs, 32 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardF16sV2 = "Standard_F16s_v2";
     }
 
@@ -110,31 +125,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E2s_v5 — 2 vCPUs, 16 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardE2sV5 = "Standard_E2s_v5";
 
         /// <summary>
         /// Standard_E4s_v5 — 4 vCPUs, 32 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardE4sV5 = "Standard_E4s_v5";
 
         /// <summary>
         /// Standard_E8s_v5 — 8 vCPUs, 64 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardE8sV5 = "Standard_E8s_v5";
 
         /// <summary>
         /// Standard_E16s_v5 — 16 vCPUs, 128 GB RAM, Premium SSD.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardE16sV5 = "Standard_E16s_v5";
 
         /// <summary>
         /// Standard_E2as_v5 — 2 vCPUs, 16 GB RAM, Premium SSD, AMD processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardE2asV5 = "Standard_E2as_v5";
 
         /// <summary>
         /// Standard_E4as_v5 — 4 vCPUs, 32 GB RAM, Premium SSD, AMD processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardE4asV5 = "Standard_E4as_v5";
     }
 
@@ -146,41 +167,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NC6s_v3 — 6 vCPUs, 112 GB RAM, 1 GPU (NVIDIA V100).
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardNC6sV3 = "Standard_NC6s_v3";
 
         /// <summary>
         /// Standard_NC12s_v3 — 12 vCPUs, 224 GB RAM, 2 GPUs (NVIDIA V100).
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardNC12sV3 = "Standard_NC12s_v3";
 
         /// <summary>
         /// Standard_NC24s_v3 — 24 vCPUs, 448 GB RAM, 4 GPUs (NVIDIA V100).
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardNC24sV3 = "Standard_NC24s_v3";
 
         /// <summary>
         /// Standard_NC4as_T4_v3 — 4 vCPUs, 28 GB RAM, 1 GPU (NVIDIA T4).
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardNC4asT4V3 = "Standard_NC4as_T4_v3";
 
         /// <summary>
         /// Standard_NC8as_T4_v3 — 8 vCPUs, 56 GB RAM, 1 GPU (NVIDIA T4).
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardNC8asT4V3 = "Standard_NC8as_T4_v3";
 
         /// <summary>
         /// Standard_NC16as_T4_v3 — 16 vCPUs, 110 GB RAM, 1 GPU (NVIDIA T4).
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardNC16asT4V3 = "Standard_NC16as_T4_v3";
 
         /// <summary>
         /// Standard_NC24ads_A100_v4 — 24 vCPUs, 220 GB RAM, 1 GPU (NVIDIA A100 80GB).
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardNC24adsA100V4 = "Standard_NC24ads_A100_v4";
 
         /// <summary>
         /// Standard_NC48ads_A100_v4 — 48 vCPUs, 440 GB RAM, 2 GPUs (NVIDIA A100 80GB).
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardNC48adsA100V4 = "Standard_NC48ads_A100_v4";
     }
 
@@ -192,16 +221,19 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_L8s_v3 — 8 vCPUs, 64 GB RAM, Premium SSD, high local NVMe storage.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardL8sV3 = "Standard_L8s_v3";
 
         /// <summary>
         /// Standard_L16s_v3 — 16 vCPUs, 128 GB RAM, Premium SSD, high local NVMe storage.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardL16sV3 = "Standard_L16s_v3";
 
         /// <summary>
         /// Standard_L32s_v3 — 32 vCPUs, 256 GB RAM, Premium SSD, high local NVMe storage.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardL32sV3 = "Standard_L32s_v3";
     }
 
@@ -213,26 +245,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_B2s — 2 vCPUs, 4 GB RAM.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardB2s = "Standard_B2s";
 
         /// <summary>
         /// Standard_B4ms — 4 vCPUs, 16 GB RAM.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardB4ms = "Standard_B4ms";
 
         /// <summary>
         /// Standard_B8ms — 8 vCPUs, 32 GB RAM.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardB8ms = "Standard_B8ms";
 
         /// <summary>
         /// Standard_B2s_v2 — 2 vCPUs, 8 GB RAM.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardB2sV2 = "Standard_B2s_v2";
 
         /// <summary>
         /// Standard_B4s_v2 — 4 vCPUs, 16 GB RAM.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardB4sV2 = "Standard_B4s_v2";
     }
 
@@ -244,31 +281,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D2pds_v5 — 2 vCPUs, 8 GB RAM, Ampere Altra Arm processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD2pdsV5 = "Standard_D2pds_v5";
 
         /// <summary>
         /// Standard_D4pds_v5 — 4 vCPUs, 16 GB RAM, Ampere Altra Arm processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD4pdsV5 = "Standard_D4pds_v5";
 
         /// <summary>
         /// Standard_D8pds_v5 — 8 vCPUs, 32 GB RAM, Ampere Altra Arm processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD8pdsV5 = "Standard_D8pds_v5";
 
         /// <summary>
         /// Standard_D16pds_v5 — 16 vCPUs, 64 GB RAM, Ampere Altra Arm processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardD16pdsV5 = "Standard_D16pds_v5";
 
         /// <summary>
         /// Standard_E2pds_v5 — 2 vCPUs, 16 GB RAM, Ampere Altra Arm processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardE2pdsV5 = "Standard_E2pds_v5";
 
         /// <summary>
         /// Standard_E4pds_v5 — 4 vCPUs, 32 GB RAM, Ampere Altra Arm processor.
         /// </summary>
+        [global::Aspire.Hosting.AspireValue("AksNodeVmSizes")]
         public const string StandardE4pdsV5 = "Standard_E4pds_v5";
     }
 }

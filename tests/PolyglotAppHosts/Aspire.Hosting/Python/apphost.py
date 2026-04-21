@@ -1,7 +1,7 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import ReferenceExpression, create_builder
+from aspire_app import AksNodeVmSizes, AzureServiceTags, ReferenceExpression, WellKnownPipelineSteps, WellKnownPipelineTags, create_builder
 
 
 with create_builder() as builder:
@@ -93,6 +93,12 @@ with create_builder() as builder:
     built_connection_string = builder.add_connection_string_builder("connection-string", lambda *_args, **_kwargs: None)
     built_connection_string.with_connection_property("Key", "Value")
     built_connection_string.with_connection_property_value("Key", "Value")
+    vnet = builder.add_azure_virtual_network("vnet", address_prefix="10.0.0.0/16")
+    subnet = vnet.add_subnet("web", "10.0.1.0/24")
+    subnet.allow_inbound(port="443", from_=AzureServiceTags.AzureLoadBalancer)
+    subnet.deny_inbound(from_=AzureServiceTags.Internet)
+    aks = builder.add_azure_kubernetes_environment("aks")
+    aks.add_node_pool("system", vm_size=AksNodeVmSizes.GeneralPurpose.StandardD2sV5)
     # builder-level pipeline APIs
     pipeline = builder.pipeline
 
@@ -102,13 +108,12 @@ with create_builder() as builder:
     pipeline.add_step(
         "custom-builder-step",
         configure_builder_step,
-        depends_on=["build"],
-        required_by=["publish"],
+        depends_on=[WellKnownPipelineSteps.Build],
+        required_by=[WellKnownPipelineSteps.Publish],
     )
 
     def configure_builder_pipeline(config_context):
         _all_steps = config_context.steps
-        _builder_tagged_steps = config_context.get_steps_by_tag("custom-build")
 
     pipeline.configure(configure_builder_pipeline)
     # withEnvironment - EndpointReference
@@ -171,7 +176,14 @@ with create_builder() as builder:
     # publishAsDockerFile
     tool.publish_as_docker_file()
     # ===================================================================
-    container.with_pipeline_step_factory("step", lambda *_args, **_kwargs: None)
+    container.with_pipeline_step_factory(
+        "step",
+        lambda *_args, **_kwargs: None,
+        depends_on=[WellKnownPipelineSteps.Build],
+        required_by=[WellKnownPipelineSteps.Deploy],
+        tags=[WellKnownPipelineTags.BuildCompute],
+        description="Custom pipeline step",
+    )
     container.with_pipeline_configuration(lambda *_args, **_kwargs: None)
     container.with_pipeline_configuration(lambda *_args, **_kwargs: None)
     # ===================================================================
