@@ -165,16 +165,36 @@ jobs:
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
           # Verify the CLI dotnet-tool nupkg (size, binary file type, pointer package).
+          # Run functional tests only for RIDs that can execute on the build agent.
           - pwsh: |
               $ErrorActionPreference = 'Stop'
-              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" `
-                -PackagesDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)" `
-                -Rid "${{ targetRid }}"
+              $runFunctional = ('${{ targetRid }}' -eq 'osx-arm64' -and '${{ parameters.agentOs }}' -eq 'macos') -or `
+                               ('${{ targetRid }}' -eq 'linux-x64' -and '${{ parameters.agentOs }}' -eq 'linux')
+              $args = @(
+                '-PackagesDir', "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)",
+                '-Rid', '${{ targetRid }}'
+              )
+              if ($runFunctional) { $args += '-RunFunctionalTests' }
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @args
               if ($LASTEXITCODE -ne 0) {
                 Write-Host "##[error]CLI tool nupkg verification failed for ${{ targetRid }}"
                 exit 1
               }
             displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
+            condition: succeeded()
+
+          # Remove the pointer package before publishing native artifacts.
+          # The pointer package is identical from every platform and is published
+          # only from the Windows/BuildAndTest job to avoid duplication.
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $pointerPkgs = Get-ChildItem -Path "$(Build.Arcade.ArtifactsPath)packages/" -Recurse -Filter "Aspire.Cli.*.nupkg" |
+                Where-Object { $_.Name -notmatch 'Aspire\.Cli\.(win|linux|osx|musl)-' }
+              foreach ($pkg in $pointerPkgs) {
+                Write-Host "Removing pointer package: $($pkg.Name)"
+                Remove-Item $pkg.FullName -Force
+              }
+            displayName: 🟣Remove pointer nupkg from native artifacts
             condition: succeeded()
 
           - task: 1ES.PublishBuildArtifacts@1

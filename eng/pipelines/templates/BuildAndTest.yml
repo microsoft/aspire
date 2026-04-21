@@ -117,9 +117,13 @@ steps:
     - ${{ each targetRid in parameters.targetRids }}:
       - pwsh: |
           $ErrorActionPreference = 'Stop'
-          & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" `
-            -PackagesDir "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}" `
-            -Rid "${{ targetRid }}"
+          $runFunctional = '${{ targetRid }}' -eq 'win-x64'
+          $args = @(
+            '-PackagesDir', "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}",
+            '-Rid', '${{ targetRid }}'
+          )
+          if ($runFunctional) { $args += '-RunFunctionalTests' }
+          & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @args
           if ($LASTEXITCODE -ne 0) {
             Write-Host "##[error]CLI tool nupkg verification failed for ${{ targetRid }}"
             exit 1
