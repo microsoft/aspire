@@ -52,9 +52,9 @@ The single source of truth for all MTP diagnostic and timeout arguments. Contain
 |-----|---------|
 | `--ignore-exit-code 8` | Don't fail the test run when zero tests match filters ([MTP exit codes](https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-exit-codes)) |
 | `--crashdump` | Collect crash dumps on test host crash |
-| `--hangdump` | Enable hang dump collection |
-| `--hangdump-type none` | Don't collect a dump by default (timeout triggers collection) |
-| `--hangdump-timeout <T>` | Per-test hang timeout (from `TestHangTimeout`, default `10m`) |
+| `--hangdump` | Enable hang detection and hang dump handling |
+| `--hangdump-type none` | Disable hang dump file creation; hang detection and timeout handling still occur, but no dump file is generated |
+| `--hangdump-timeout <T>` | Per-test hang timeout (from `TestHangTimeout`, default `10m`); when reached, the hang is detected and the run aborts/fails |
 | `--timeout <S>` | Overall session timeout (from `TestSessionTimeout`, default `20m`) |
 
 ### Timeout properties
@@ -134,4 +134,4 @@ MTP MSBuild integration injects `TestingPlatformCommandLineArguments` automatica
 
 ## Backward compatibility
 
-The `run-tests.yml` `mtpBaseArgs` input has a default value matching the current args including default timeouts. Callers that don't pass `mtpBaseArgs` get the same behavior as before.
+The `run-tests.yml` `mtpBaseArgs` input has a default value that includes diagnostic flags (crashdump, hangdump, exit-code handling) but does not include timeout arguments. Timeout values are baked into `mtpBaseArgs` at build time by MSBuild (via `eng/Testing.props`) and flow through the test matrix metadata. Callers that bypass the matrix and don't pass `mtpBaseArgs` should include the timeout arguments explicitly if needed.
