@@ -1992,7 +1992,7 @@ public class DistributedApplicationTests
         using var testProgram = CreateTestProgram(testName);
         
         var containerResourceName = testName;
-        var container = testProgram.AppBuilder.AddContainer(containerResourceName, "alpine")
+        _ = testProgram.AppBuilder.AddContainer(containerResourceName, "alpine")
             .WithEntrypoint("sh")
             .WithArgs("-c", $"echo Hello World;exit {exitCode}");
 
