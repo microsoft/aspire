@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Docker.Resources.ServiceNodes;
-using Aspire.Hosting;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Docker.Resources.ComposeNodes;

@@ -12,7 +12,7 @@ with create_builder() as builder:
     api.with_http_endpoint(name="http", target_port=80)
     api_endpoint = api.get_endpoint("http")
     host_address_expression = compose.get_host_address_expression(api_endpoint)
-    _host_address_value_expression = host_address_expression.value_expression.get()
+    _host_address_value_expression = repr(host_address_expression)
 
     def configure_environment(environment):
         environment.default_network_name = "validation-network"

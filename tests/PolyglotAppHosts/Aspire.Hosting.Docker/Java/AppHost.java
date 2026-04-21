@@ -9,7 +9,7 @@ void main() throws Exception {
         api.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         var apiEndpoint = api.getEndpoint("http");
         var hostAddressExpression = compose.getHostAddressExpression(apiEndpoint);
-        var _hostAddressValueExpression = hostAddressExpression.valueExpression();
+        var _hostAddressValueExpression = hostAddressExpression.getValue();
         compose.withProperties((environment) -> {
             environment.setDefaultNetworkName("validation-network");
             var _defaultNetworkName = environment.defaultNetworkName();
