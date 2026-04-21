@@ -179,6 +179,7 @@ internal sealed class RunCommand : BaseCommand
         }
 
         AppHostProjectContext? context = null;
+        Activity? runActivity = null;
 
         try
         {
@@ -199,6 +200,12 @@ internal sealed class RunCommand : BaseCommand
                 InteractionService.DisplayError("Unrecognized app host type.");
                 return ExitCodeConstants.FailedToFindProject;
             }
+
+            // Start a reported telemetry activity for the app host run
+            runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
+            runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
+            runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
+            runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
             // Check for running instance — even if we fail to stop we won't
             // block the apphost starting to make sure we don't ever break flow.
@@ -240,6 +247,7 @@ internal sealed class RunCommand : BaseCommand
             var buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
             if (!buildSuccess)
             {
+                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "build_failed");
                 // Build failed - display captured output and return exit code
                 if (context.OutputCollector is { } outputCollector)
                 {
@@ -375,15 +383,18 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (ProjectLocatorException ex)
         {
+            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
             return HandleProjectLocatorException(ex, InteractionService, Telemetry);
         }
         catch (AppHostIncompatibleException ex)
         {
+            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "incompatible_version");
             Telemetry.RecordError(ex.Message, ex);
             return InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability);
         }
         catch (CertificateServiceException ex)
         {
+            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "certificate_trust_failed");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
@@ -391,6 +402,7 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
+            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
@@ -406,12 +418,17 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (Exception ex)
         {
+            runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, ex.GetType().FullName);
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
             // Don't display raw output - it's already in the log file
             InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
             return ExitCodeConstants.FailedToDotnetRunAppHost;
+        }
+        finally
+        {
+            runActivity?.Dispose();
         }
     }
 

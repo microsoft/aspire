@@ -11,6 +11,7 @@ using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -240,6 +241,9 @@ internal sealed class AppHostLauncher(
 
         try
         {
+            // Set detached mode env var so the child RunCommand records it in telemetry
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliRunDetached, "true");
+
             childProcess = DetachedProcessLauncher.Start(
                 executablePath,
                 childArgs,
@@ -250,6 +254,11 @@ internal sealed class AppHostLauncher(
         {
             logger.LogError(ex, "Failed to start child CLI process");
             return new LaunchResult(null, null, null, false, 0);
+        }
+        finally
+        {
+            // Clear the detached env var in the parent process to avoid affecting future launches
+            Environment.SetEnvironmentVariable(KnownConfigNames.CliRunDetached, null);
         }
 
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
