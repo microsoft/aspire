@@ -479,26 +479,36 @@ public class DocsIndexServiceTests
     }
 
     [Fact]
-    public async Task EnsureIndexedAsync_UsesCachedIndexAcrossInstancesWithoutFetching()
+    public async Task EnsureIndexedAsync_RevalidatesCachedIndexAcrossInstances()
     {
         var cache = new MemoryDocsCache();
-        var firstService = CreateService(
-            CreateMockFetcher(
-            """
+        const string content = """
             # Redis Integration
             > Connect to Redis.
 
             Redis content.
-            """),
+            """;
+
+        var firstService = CreateService(
+            CreateMockFetcher(content),
             cache);
 
         await firstService.EnsureIndexedAsync();
 
-        var secondService = CreateService(new ThrowingDocsFetcher(new InvalidOperationException("Should not fetch.")), cache);
+        var fetchCount = 0;
+        var secondService = CreateService(
+            new CountingDocsFetcher(() =>
+            {
+                fetchCount++;
+                return content;
+            }),
+            cache);
+
         var docs = await secondService.ListDocumentsAsync();
 
         var doc = Assert.Single(docs);
         Assert.Equal("Redis Integration", doc.Title);
+        Assert.Equal(1, fetchCount);
     }
 
     [Fact]
@@ -522,7 +532,64 @@ public class DocsIndexServiceTests
 
         var doc = Assert.Single(docs);
         Assert.Equal("Redis Integration", doc.Title);
+    }
 
+    [Fact]
+    public async Task EnsureIndexedAsync_RefreshesCachedIndexWhenSourceContentChanges()
+    {
+        var cache = new MemoryDocsCache();
+        var firstService = CreateService(
+            CreateMockFetcher(
+                """
+                # Redis Integration
+                > Connect to Redis.
+
+                Redis content.
+                """),
+            cache);
+
+        await firstService.EnsureIndexedAsync();
+
+        var secondService = CreateService(
+            CreateMockFetcher(
+                """
+                # PostgreSQL Integration
+                > Connect to PostgreSQL.
+
+                PostgreSQL content.
+                """),
+            cache);
+
+        var docs = await secondService.ListDocumentsAsync();
+
+        var doc = Assert.Single(docs);
+        Assert.Equal("PostgreSQL Integration", doc.Title);
+
+        var thirdService = CreateService(CreateMockFetcher(null), cache);
+        var cachedDocs = await thirdService.ListDocumentsAsync();
+
+        Assert.Equal("PostgreSQL Integration", Assert.Single(cachedDocs).Title);
+    }
+
+    [Fact]
+    public async Task GetDocumentAsync_NormalizesMinifiedInlineTables()
+    {
+        var content = """
+            # Deploy to Azure
+            > Learn how Azure deployment works in Aspire.
+
+            After authentication succeeds, `aspire deploy` still needs a small set of shared Azure settings. | Setting | Environment variable | Purpose | | ---------------------- | ----------------------- | ---------------------------------------------- | | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription | | `Azure:Location` | `Azure__Location` | Default Azure region for provisioned resources | ### Local settings [Section titled "Local settings"](#local-settings) Continue here.
+            """;
+
+        var service = CreateService(CreateMockFetcher(content));
+
+        var document = await service.GetDocumentAsync("deploy-to-azure");
+        Assert.NotNull(document);
+
+        var normalized = document.Content.Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains("\n| Setting | Environment variable | Purpose |\n", normalized);
+        Assert.Contains("\n| `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |\n", normalized);
+        Assert.Contains("\n### Local settings\n", normalized);
     }
 
     [Fact]

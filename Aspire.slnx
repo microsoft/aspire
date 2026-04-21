@@ -91,6 +91,7 @@
     <Project Path="src/Aspire.Hosting.Azure.ContainerRegistry/Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.Azure.CosmosDB.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.EventHubs.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.FrontDoor/Aspire.Hosting.Azure.FrontDoor.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Functions/Aspire.Hosting.Azure.Functions.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.KeyVault/Aspire.Hosting.Azure.KeyVault.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.csproj" />

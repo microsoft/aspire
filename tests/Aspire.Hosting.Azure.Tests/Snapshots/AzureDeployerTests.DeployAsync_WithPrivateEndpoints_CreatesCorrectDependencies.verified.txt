@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 43
+Total steps defined: 44
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -16,47 +16,48 @@ Steps with no dependencies run first, followed by steps that depend on them.
 
   1. process-parameters
   2. build-prereq
-  3. deploy-prereq
-  4. build-api
-  5. build
-  6. validate-azure-login
-  7. create-provisioning-context
-  8. provision-api-identity
-  9. provision-cosmos
- 10. provision-api-roles-cosmos
- 11. provision-sql-nsg
- 12. provision-vnet
- 13. provision-privatelink-file-core-windows-net
- 14. provision-sql-store
- 15. provision-pe-subnet-files-pe
- 16. provision-privatelink-database-windows-net
- 17. provision-sql
- 18. provision-pe-subnet-sql-pe
- 19. provision-api-roles-sql
- 20. provision-env-acr
- 21. provision-env
- 22. provision-privatelink-documents-azure-com
- 23. provision-pe-subnet-cosmos-pe
- 24. login-to-acr-env-acr
- 25. push-prereq
- 26. push-api
- 27. provision-api-containerapp
- 28. print-api-summary
- 29. provision-sql-admin-identity
- 30. provision-sql-admin-identity-roles-sql-store
- 31. provision-azure-bicep-resources
- 32. print-dashboard-url-env
- 33. deploy
- 34. deploy-api
- 35. destroy-prereq
- 36. destroy-azure-azure634f9
- 37. destroy
- 38. diagnostics
- 39. publish-prereq
- 40. publish-azure634f9
- 41. publish
- 42. publish-manifest
- 43. push
+  3. check-container-runtime
+  4. deploy-prereq
+  5. build-api
+  6. build
+  7. validate-azure-login
+  8. create-provisioning-context
+  9. provision-api-identity
+ 10. provision-cosmos
+ 11. provision-api-roles-cosmos
+ 12. provision-sql-nsg
+ 13. provision-vnet
+ 14. provision-privatelink-file-core-windows-net
+ 15. provision-sql-store
+ 16. provision-pe-subnet-files-pe
+ 17. provision-privatelink-database-windows-net
+ 18. provision-sql
+ 19. provision-pe-subnet-sql-pe
+ 20. provision-api-roles-sql
+ 21. provision-env-acr
+ 22. provision-env
+ 23. provision-privatelink-documents-azure-com
+ 24. provision-pe-subnet-cosmos-pe
+ 25. login-to-acr-env-acr
+ 26. push-prereq
+ 27. push-api
+ 28. provision-api-containerapp
+ 29. print-api-summary
+ 30. provision-sql-admin-identity
+ 31. provision-sql-admin-identity-roles-sql-store
+ 32. provision-azure-bicep-resources
+ 33. print-dashboard-url-env
+ 34. deploy
+ 35. deploy-api
+ 36. destroy-prereq
+ 37. destroy-azure-azure634f9
+ 38. destroy
+ 39. diagnostics
+ 40. publish-prereq
+ 41. publish-azure634f9
+ 42. publish
+ 43. publish-manifest
+ 44. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -69,13 +70,17 @@ Step: build
 
 Step: build-api
     Description: Builds the container image for the api project.
-    Dependencies: ✓ build-prereq, ✓ deploy-prereq
+    Dependencies: ✓ build-prereq, ✓ check-container-runtime, ✓ deploy-prereq
     Resource: api (ProjectResource)
     Tags: build-compute
 
 Step: build-prereq
     Description: Prerequisite step that runs before any build operations.
     Dependencies: ✓ process-parameters
+
+Step: check-container-runtime
+    Description: Checks whether the container runtime (Docker/Podman) is running.
+    Dependencies: none
 
 Step: create-provisioning-context
     Description: Creates the Azure provisioning context for infrastructure deployment.
@@ -302,18 +307,18 @@ Steps at the same level can run concurrently.
 ─────────────────────────────────────────────────────────────────────────────
 If targeting 'build':
   Direct dependencies: build-api
-  Total steps: 5
+  Total steps: 6
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api
     [3] build
 
 If targeting 'build-api':
-  Direct dependencies: build-prereq, deploy-prereq
-  Total steps: 4
+  Direct dependencies: build-prereq, check-container-runtime, deploy-prereq
+  Total steps: 5
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api
 
@@ -323,6 +328,12 @@ If targeting 'build-prereq':
   Execution order:
     [0] process-parameters
     [1] build-prereq
+
+If targeting 'check-container-runtime':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] check-container-runtime
 
 If targeting 'create-provisioning-context':
   Direct dependencies: deploy-prereq, validate-azure-login
@@ -335,9 +346,9 @@ If targeting 'create-provisioning-context':
 
 If targeting 'deploy':
   Direct dependencies: build-api, create-provisioning-context, print-api-summary, print-dashboard-url-env, provision-azure-bicep-resources, validate-azure-login
-  Total steps: 32
+  Total steps: 33
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -353,9 +364,9 @@ If targeting 'deploy':
 
 If targeting 'deploy-api':
   Direct dependencies: print-api-summary
-  Total steps: 28
+  Total steps: 29
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -415,9 +426,9 @@ If targeting 'login-to-acr-env-acr':
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-containerapp
-  Total steps: 27
+  Total steps: 28
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -431,9 +442,9 @@ If targeting 'print-api-summary':
 
 If targeting 'print-dashboard-url-env':
   Direct dependencies: provision-azure-bicep-resources, provision-env
-  Total steps: 30
+  Total steps: 31
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -454,9 +465,9 @@ If targeting 'process-parameters':
 
 If targeting 'provision-api-containerapp':
   Direct dependencies: create-provisioning-context, provision-api-identity, provision-api-roles-cosmos, provision-api-roles-sql, provision-cosmos, provision-env, provision-pe-subnet-cosmos-pe, provision-pe-subnet-sql-pe, provision-sql, push-api
-  Total steps: 26
+  Total steps: 27
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -504,9 +515,9 @@ If targeting 'provision-api-roles-sql':
 
 If targeting 'provision-azure-bicep-resources':
   Direct dependencies: create-provisioning-context, deploy-prereq, provision-api-containerapp, provision-api-identity, provision-api-roles-cosmos, provision-api-roles-sql, provision-cosmos, provision-env, provision-env-acr, provision-pe-subnet-cosmos-pe, provision-pe-subnet-files-pe, provision-pe-subnet-sql-pe, provision-privatelink-database-windows-net, provision-privatelink-documents-azure-com, provision-privatelink-file-core-windows-net, provision-sql, provision-sql-admin-identity, provision-sql-admin-identity-roles-sql-store, provision-sql-nsg, provision-sql-store, provision-vnet
-  Total steps: 29
+  Total steps: 30
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -720,9 +731,9 @@ If targeting 'publish-prereq':
 
 If targeting 'push':
   Direct dependencies: push-api, push-prereq
-  Total steps: 11
+  Total steps: 12
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -734,9 +745,9 @@ If targeting 'push':
 
 If targeting 'push-api':
   Direct dependencies: build-api, push-prereq
-  Total steps: 10
+  Total steps: 11
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context

@@ -378,21 +378,18 @@ internal sealed class ResourceContainerImageManager(
         }
 #pragma warning restore ASPIREDOCKERFILEBUILDER001
 
-        var buildOutput = new BuildOutputCapture();
-
         var spec = new ProcessSpec("dotnet")
         {
             Arguments = arguments,
             ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
             OnOutputData = output =>
             {
                 logger.LogDebug("dotnet publish {ProjectPath} (stdout): {Output}", projectMetadata.ProjectPath, output);
-                buildOutput.Add(output);
             },
             OnErrorData = error =>
             {
                 logger.LogDebug("dotnet publish {ProjectPath} (stderr): {Error}", projectMetadata.ProjectPath, error);
-                buildOutput.Add(error);
             }
         };
 
@@ -414,8 +411,8 @@ internal sealed class ResourceContainerImageManager(
                 throw new ProcessFailedException(
                     $"Failed to build container image for resource '{resource.Name}' from project '{projectMetadata.ProjectPath}' with exit code {processResult.ExitCode}.",
                     processResult.ExitCode,
-                    buildOutput.ToArray(),
-                    buildOutput.TotalLineCount);
+                    processResult.ProcessOutput,
+                    processResult.TotalProcessOutputLineCount);
             }
             else
             {

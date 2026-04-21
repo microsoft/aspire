@@ -23,25 +23,23 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15882")]
     public async Task CreateAndDeployToDockerCompose()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        // PrepareEnvironment
-        await auto.PrepareEnvironmentAsync(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (isCI)
+        if (strategy.Mode == CliInstallMode.PullRequest)
         {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireCliEnvironmentAsync(counter);
+            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
@@ -58,14 +56,7 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
         await auto.EnterAsync();
 
-        // In CI, aspire add shows a version selection prompt (unlike aspire new which auto-selects when channel is set)
-        if (isCI)
-        {
-            await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync(); // select first version (PR build)
-        }
-
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
         // Step 4: Modify AppHost's main file to add Docker Compose environment
         // Note: Aspire templates use AppHost.cs as the main entry point, not Program.cs
@@ -124,9 +115,8 @@ builder.Build().Run();
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 10: Make a web request to verify the application is working
-        // We'll use curl to make the request
-        await auto.TypeAsync("curl -s -o /dev/null -w '%{http_code}' http://localhost:$(docker ps --format '{{.Ports}}' --filter 'name=webfrontend' | grep -oE '0\\.0\\.0\\.0:[0-9]+->8080' | head -1 | cut -d: -f2 | cut -d'-' -f1) 2>/dev/null || echo 'request-failed'");
+        // Step 10: Verify the frontend responds from inside its own network namespace.
+        await auto.TypeAsync("container=$(docker ps --filter 'name=webfrontend' --format '{{.ID}}' | head -1) && docker run --rm --network container:$container curlimages/curl:8.12.1 -s -o /dev/null -w '%{http_code}' http://localhost:8080 2>/dev/null || echo 'request-failed'");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -144,25 +134,23 @@ builder.Build().Run();
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/15871")]
     public async Task CreateAndDeployToDockerComposeInteractive()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        // PrepareEnvironment
-        await auto.PrepareEnvironmentAsync(workspace, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (isCI)
+        if (strategy.Mode == CliInstallMode.PullRequest)
         {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireCliEnvironmentAsync(counter);
+            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
@@ -179,14 +167,7 @@ builder.Build().Run();
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
         await auto.EnterAsync();
 
-        // In CI, aspire add shows a version selection prompt (unlike aspire new which auto-selects when channel is set)
-        if (isCI)
-        {
-            await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-            await auto.EnterAsync(); // select first version (PR build)
-        }
-
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
         // Step 4: Modify AppHost's main file to add Docker Compose environment
         // Note: Aspire templates use AppHost.cs as the main entry point, not Program.cs
@@ -246,9 +227,8 @@ builder.Build().Run();
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 10: Make a web request to verify the application is working
-        // We'll use curl to make the request
-        await auto.TypeAsync("curl -s -o /dev/null -w '%{http_code}' http://localhost:$(docker ps --format '{{.Ports}}' --filter 'name=webfrontend' | grep -oE '0\\.0\\.0\\.0:[0-9]+->8080' | head -1 | cut -d: -f2 | cut -d'-' -f1) 2>/dev/null || echo 'request-failed'");
+        // Step 10: Verify the frontend responds from inside its own network namespace.
+        await auto.TypeAsync("container=$(docker ps --filter 'name=webfrontend' --format '{{.ID}}' | head -1) && docker run --rm --network container:$container curlimages/curl:8.12.1 -s -o /dev/null -w '%{http_code}' http://localhost:8080 2>/dev/null || echo 'request-failed'");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 

@@ -107,9 +107,18 @@ jobs:
           ARTIFACT_DIR="${{ github.workspace }}/cli-artifacts"
           mkdir -p "$ARTIFACT_DIR/bin"
           mkdir -p "$ARTIFACT_DIR/packages"
+          mkdir -p "$ARTIFACT_DIR/managed"
 
           # Copy CLI binary and dependencies
           cp -r "${{ github.workspace }}/artifacts/bin/Aspire.Cli/Release/net10.0/"* "$ARTIFACT_DIR/bin/"
+
+          # Copy managed AppHost server (required for bundle-dependent commands like aspire new/init for TypeScript/Python)
+          MANAGED_DIR="${{ github.workspace }}/artifacts/bin/Aspire.Managed/Release/net10.0"
+          if [ -d "$MANAGED_DIR" ]; then
+            cp -r "$MANAGED_DIR/"* "$ARTIFACT_DIR/managed/"
+          else
+            echo "⚠️ Aspire.Managed build output not found at $MANAGED_DIR"
+          fi
 
           # Copy NuGet packages
           PACKAGES_DIR="${{ github.workspace }}/artifacts/packages/Release/Shipping"
@@ -119,6 +128,8 @@ jobs:
 
           echo "CLI artifacts prepared:"
           ls -la "$ARTIFACT_DIR/bin/"
+          echo "Managed artifacts:"
+          ls -la "$ARTIFACT_DIR/managed/" 2>/dev/null || echo "(none)"
           echo "Package count: $(find "$ARTIFACT_DIR/packages" -name "*.nupkg" | wc -l)"
 
       - name: Upload CLI artifacts
@@ -178,6 +189,16 @@ jobs:
           # Add to PATH for this job
           echo "$ASPIRE_HOME/bin" >> $GITHUB_PATH
 
+          # Copy managed AppHost server (required for bundle layout discovery)
+          if [ -d "${{ github.workspace }}/cli-artifacts/managed" ]; then
+            mkdir -p "$ASPIRE_HOME/managed"
+            cp -r "${{ github.workspace }}/cli-artifacts/managed/"* "$ASPIRE_HOME/managed/"
+            chmod +x "$ASPIRE_HOME/managed/aspire-managed" 2>/dev/null || true
+          fi
+
+          # Create dcp directory stub (required for layout discovery validation)
+          mkdir -p "$ASPIRE_HOME/dcp"
+
           # Set up NuGet hive for local packages
           HIVE_DIR="$ASPIRE_HOME/hives/local/packages"
           mkdir -p "$HIVE_DIR"
@@ -188,6 +209,9 @@ jobs:
 
           echo "✅ Aspire CLI installed:"
           "$ASPIRE_HOME/bin/aspire" --version
+          echo "Layout:"
+          ls -la "$ASPIRE_HOME/managed/" 2>/dev/null || echo "  (no managed)"
+          ls -la "$ASPIRE_HOME/dcp/" 2>/dev/null || echo "  (no dcp)"
 
       - name: Azure Login (OIDC)
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1

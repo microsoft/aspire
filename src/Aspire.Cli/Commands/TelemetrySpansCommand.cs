@@ -93,7 +93,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -116,31 +116,31 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         string dashboardUrl,
         CancellationToken cancellationToken)
     {
-        using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
-
-        // Resolve resource name to specific instances (handles replicas)
-        var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
-        var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
-
-        // Pre-resolve colors so assignment is deterministic regardless of data order
-        TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
-
-        // If a resource was specified but not found, return error
-        if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
-        {
-            _interactionService.DisplayError($"Resource '{resource}' not found.");
-            return ExitCodeConstants.InvalidCommand;
-        }
-
-        // Build URL with query parameters
-        int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
-
-        var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, traceId: traceId, hasError: hasError, limit: effectiveLimit, follow: follow ? true : null);
-
-        _logger.LogDebug("Fetching spans from {Url}", url);
-
         try
         {
+            using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
+
+            // Resolve resource name to specific instances (handles replicas)
+            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
+            var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
+
+            // Pre-resolve colors so assignment is deterministic regardless of data order
+            TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
+
+            // If a resource was specified but not found, return error
+            if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
+            {
+                _interactionService.DisplayError($"Resource '{resource}' not found.");
+                return ExitCodeConstants.InvalidCommand;
+            }
+
+            // Build URL with query parameters
+            int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
+
+            var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, traceId: traceId, hasError: hasError, limit: effectiveLimit, follow: follow ? true : null);
+
+            _logger.LogDebug("Fetching spans from {Url}", url);
+
             if (follow)
             {
                 return await StreamSpansAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
@@ -153,8 +153,8 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch spans from Dashboard API");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
             return ExitCodeConstants.DashboardFailure;
         }
     }

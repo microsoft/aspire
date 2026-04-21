@@ -654,6 +654,7 @@ internal class DotNetTemplateFactory(
         }
 
         IEnumerable<PackageChannel> channels;
+        var hasPrHives = executionContext.GetPrHiveCount() > 0;
         bool hasChannelSetting = !string.IsNullOrEmpty(channelName);
 
         if (hasChannelSetting)
@@ -671,8 +672,7 @@ internal class DotNetTemplateFactory(
         {
             // If there are hives (PR build directories), include all channels.
             // Otherwise, only use the implicit/default channel to avoid prompting.
-            var hasHives = executionContext.GetPrHiveCount() > 0;
-            channels = hasHives
+            channels = hasPrHives
                 ? allChannels
                 : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
         }
@@ -708,6 +708,16 @@ internal class DotNetTemplateFactory(
             {
                 return explicitPackageFromChannel;
             }
+        }
+
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            orderedPackagesFromChannels,
+            p => p.Package.Version,
+            out var cliVersionPackageFromChannel,
+            channelName: channelName,
+            hasPrHives: hasPrHives))
+        {
+            return cliVersionPackageFromChannel;
         }
 
         // If channel was specified via --channel option or global setting (but no --version),

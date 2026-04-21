@@ -22,6 +22,7 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
     /// no duplicate storage accounts were created (default naming unchanged).
     /// </summary>
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/16332")]
     public async Task UpgradeFromGaToDevDoesNotDuplicateStorageAccounts()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -48,6 +49,18 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
             else
             {
                 Assert.Skip("Azure authentication not available. Run 'az login' to authenticate.");
+            }
+        }
+
+        CliInstallStrategy? localCurrentBuildStrategy = null;
+        if (!DeploymentE2ETestHelpers.IsRunningInCI)
+        {
+            localCurrentBuildStrategy = DeploymentE2ETestHelpers.GetCurrentBuildCliInstallStrategy();
+            if (localCurrentBuildStrategy.Mode is CliInstallMode.InstallScript &&
+                localCurrentBuildStrategy.Quality is null &&
+                localCurrentBuildStrategy.Version is null)
+            {
+                Assert.Skip("Local upgrade testing requires an explicit current-build CLI strategy. Set ASPIRE_E2E_ARCHIVE to a localhive archive or configure ASPIRE_E2E_QUALITY, ASPIRE_E2E_VERSION, or GITHUB_PR_NUMBER.");
             }
         }
 
@@ -80,15 +93,11 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
             output.WriteLine("Step 2: Backing up dev CLI and installing GA Aspire CLI...");
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.TypeAsync("cp ~/.aspire/bin/aspire /tmp/aspire-dev-backup && cp -r ~/.aspire/hives /tmp/aspire-hives-backup 2>/dev/null; echo 'dev CLI backed up'");
+                await auto.TypeAsync("cp ~/.aspire/bin/aspire /tmp/aspire-dev-backup && cp -r ~/.aspire/hives /tmp/aspire-hives-backup 2>/dev/null && cp -r ~/.aspire/managed /tmp/aspire-managed-backup 2>/dev/null && cp -r ~/.aspire/dcp /tmp/aspire-dcp-backup 2>/dev/null; echo 'dev CLI backed up'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
             }
-            await auto.InstallAspireCliReleaseAsync(counter);
-
-            // Step 3: Source CLI environment
-            output.WriteLine("Step 3: Configuring CLI environment...");
-            await auto.SourceAspireCliEnvironmentAsync(counter);
+            await auto.InstallAspireCliAsync(CliInstallStrategy.FromQuality(CliInstallQuality.Release), counter);
 
             // Step 4: Log the GA CLI version
             output.WriteLine("Step 4: Logging GA CLI version...");
@@ -253,12 +262,13 @@ builder.Build().Run();
             // Phase 2: Upgrade to dev CLI and redeploy
             // ============================================================
 
-            // Step 11: Install the dev (PR) CLI, overwriting the GA installation
+            // Step 11: Install the dev CLI, overwriting the GA installation
+            string updateCommand;
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
                 output.WriteLine("Step 11: Restoring dev CLI from backup...");
                 // Restore the dev CLI and hive that we backed up before GA install
-                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null; echo 'dev CLI restored'");
+                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null && cp -rf /tmp/aspire-managed-backup/* ~/.aspire/managed/ 2>/dev/null && cp -rf /tmp/aspire-dcp-backup/* ~/.aspire/dcp/ 2>/dev/null; echo 'dev CLI restored'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
 
@@ -269,62 +279,35 @@ builder.Build().Run();
 
                 // Re-source environment to pick up the dev CLI
                 await auto.SourceAspireCliEnvironmentAsync(counter);
-
-                // Run aspire update to upgrade the #:package directives in apphost.cs
-                // from the GA version to the dev build version. This ensures the actual
-                // deployment logic (naming, bicep generation) comes from the dev packages.
-                // aspire update shows 3 interactive prompts — handle each explicitly.
-                output.WriteLine("Step 11b: Updating project packages to dev version...");
-                await auto.TypeAsync("aspire update --channel local");
-                await auto.EnterAsync();
-                await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromMinutes(2));
-                await auto.EnterAsync();
-                await auto.WaitUntilTextAsync("NuGet.config file?", timeout: TimeSpan.FromMinutes(2));
-                await auto.EnterAsync();
-                await auto.WaitUntilTextAsync("Apply these changes", timeout: TimeSpan.FromMinutes(2));
-                await auto.EnterAsync();
-                await auto.WaitUntilTextAsync("Update successful", timeout: TimeSpan.FromMinutes(2));
-                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+                updateCommand = "aspire update --channel local";
             }
             else
             {
-                // For local testing, use the PR install script if GITHUB_PR_NUMBER is set
-                var prNumber = DeploymentE2ETestHelpers.GetPrNumber();
-                if (prNumber > 0)
-                {
-                    output.WriteLine($"Step 11: Upgrading to dev CLI from PR #{prNumber}...");
-                    await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-                    await auto.SourceAspireCliEnvironmentAsync(counter);
+                var installStrategy = await auto.InstallAspireCliAsync(localCurrentBuildStrategy!, counter, output, "Step 11");
 
-                    // Update project packages to the PR version
-                    output.WriteLine("Step 11b: Updating project packages to dev version...");
-                    await auto.TypeAsync($"aspire update --channel pr-{prNumber}");
-                    await auto.EnterAsync();
-                    await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromMinutes(2));
-                    await auto.EnterAsync();
-                    await auto.WaitUntilTextAsync("NuGet.config file?", timeout: TimeSpan.FromMinutes(2));
-                    await auto.EnterAsync();
-                    await auto.WaitUntilTextAsync("Apply these changes", timeout: TimeSpan.FromMinutes(2));
-                    await auto.EnterAsync();
-                    await auto.WaitUntilTextAsync("Update successful", timeout: TimeSpan.FromMinutes(2));
-                    await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-                }
-                else
+                updateCommand = installStrategy.Mode switch
                 {
-                    output.WriteLine("Step 11: No PR number available, using current CLI as 'dev'...");
-                    // Still run aspire update to pick up whatever local packages are available
-                    await auto.TypeAsync("aspire update");
-                    await auto.EnterAsync();
-                    await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromMinutes(2));
-                    await auto.EnterAsync();
-                    await auto.WaitUntilTextAsync("NuGet.config file?", timeout: TimeSpan.FromMinutes(2));
-                    await auto.EnterAsync();
-                    await auto.WaitUntilTextAsync("Apply these changes", timeout: TimeSpan.FromMinutes(2));
-                    await auto.EnterAsync();
-                    await auto.WaitUntilTextAsync("Update successful", timeout: TimeSpan.FromMinutes(2));
-                    await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-                }
+                    CliInstallMode.LocalHive or CliInstallMode.Preinstalled => "aspire update --channel local",
+                    CliInstallMode.PullRequest => $"aspire update --channel pr-{DeploymentE2ETestHelpers.GetPrNumber()}",
+                    _ => "aspire update",
+                };
             }
+
+            // Run aspire update to upgrade the #:package directives in apphost.cs
+            // from the GA version to the dev build version. This ensures the actual
+            // deployment logic (naming, bicep generation) comes from the dev packages.
+            // aspire update shows 3 interactive prompts — handle each explicitly.
+            output.WriteLine("Step 11b: Updating project packages to dev version...");
+            await auto.TypeAsync(updateCommand);
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromMinutes(2));
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("NuGet.config file?", timeout: TimeSpan.FromMinutes(2));
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Apply these changes", timeout: TimeSpan.FromMinutes(2));
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Update successful", timeout: TimeSpan.FromMinutes(2));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // Step 12: Log the dev CLI version and verify packages were updated
             output.WriteLine("Step 12: Logging dev CLI version and verifying package update...");

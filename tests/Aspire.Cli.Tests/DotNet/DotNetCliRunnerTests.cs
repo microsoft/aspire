@@ -1376,6 +1376,64 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, executor.AttemptCount); // Should have attempted only once
     }
 
+    [Fact]
+    public async Task InstallTemplateAsync_UsesLocalPackagePathForLocalFolderSource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var packageVersion = "13.3.0-local.1";
+        var packagesDirectory = workspace.WorkspaceRoot.CreateSubdirectory("packages");
+        var packagePath = Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{packageVersion}.nupkg");
+        await File.WriteAllTextAsync(packagePath, string.Empty);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var provider = services.BuildServiceProvider();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var invocationCount = 0;
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, workingDirectory, _) =>
+            {
+                invocationCount++;
+                Assert.Equal(workspace.WorkspaceRoot.FullName, workingDirectory.FullName);
+                Assert.Equal("new", args[0]);
+
+                switch (invocationCount)
+                {
+                    case 1:
+                        Assert.Equal("uninstall", args[1]);
+                        Assert.Equal("Aspire.ProjectTemplates", args[2]);
+                        Assert.DoesNotContain("--force", args);
+                        Assert.DoesNotContain("--nuget-source", args);
+                        break;
+                    case 2:
+                        Assert.Equal("install", args[1]);
+                        Assert.Equal(packagePath, args[2]);
+                        Assert.DoesNotContain("--force", args);
+                        Assert.DoesNotContain("--nuget-source", args);
+                        break;
+                    default:
+                        Assert.Fail($"Unexpected dotnet invocation {invocationCount}.");
+                        break;
+                }
+            },
+            0);
+
+        var result = await runner.InstallTemplateAsync(
+            "Aspire.ProjectTemplates",
+            packageVersion,
+            nugetConfigFile: null,
+            nugetSource: "packages",
+            force: true,
+            new ProcessInvocationOptions(),
+            CancellationToken.None);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(packageVersion, result.TemplateVersion);
+        Assert.Equal(2, invocationCount);
+    }
+
     [Theory]
     [InlineData("Success: Aspire.ProjectTemplates@13.2.0-preview.1.26101.12 installed the following templates:", true, "13.2.0-preview.1.26101.12")] // New .NET 10.0 SDK format with @ separator
     [InlineData("Success: Aspire.ProjectTemplates::13.2.0-preview.1.26101.12 installed the following templates:", true, "13.2.0-preview.1.26101.12")] // Old SDK format with :: separator
