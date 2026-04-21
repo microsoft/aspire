@@ -37,6 +37,9 @@ public static class AzureEnvironmentResourceExtensions
         // but exclude it from the manifest so that it is not treated
         // as a publishable resource by components that process the manifest
         // for elements.
+        // We need to always add the resource because the AzureEnvironmentResource
+        // needs to show up in the app model during run mode so that we can discover
+        // the pipeline step annotations on it but it needs to be hidden from the end-user.
         return builder.AddResource(resource)
             .ExcludeFromManifest()
             .WithInitialState(new()

@@ -871,6 +871,10 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         var stepsByName = steps.ToDictionary(s => s.Name, StringComparer.Ordinal);
         ValidateDependencyGraph(steps, stepsByName);
 
+        // Compute parent/level hierarchy so reported steps render nested in the activity reporter,
+        // matching the behavior of ExecuteStepsAsTaskDag.
+        var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
+
         // Get topological order
         var orderedSteps = GetTopologicalOrder(steps);
 
@@ -878,7 +882,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         foreach (var step in orderedSteps)
         {
             var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
-            var reportingStep = await activityReporter.CreateStepAsync(step.Name, context.CancellationToken).ConfigureAwait(false);
+            var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
+            var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
 
             await using (reportingStep.ConfigureAwait(false))
             {
