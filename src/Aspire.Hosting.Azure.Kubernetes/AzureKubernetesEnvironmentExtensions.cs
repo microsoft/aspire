@@ -596,15 +596,9 @@ public static class AzureKubernetesEnvironmentExtensions
 
             // Enable the ALB controller on the AKS cluster via ingressProfile.
             // Uses a preview API version that supports applicationLoadBalancer.
-            // This installs the ALB controller pods and creates the azure-alb-external
-            // GatewayClass automatically.
-            resource aksCluster 'Microsoft.ContainerService/managedClusters@2025-10-02-preview' existing = {
-              name: aksClusterName
-            }
-
             resource aksAlbUpdate 'Microsoft.ContainerService/managedClusters@2025-10-02-preview' = {
               name: aksClusterName
-              location: aksCluster.location
+              location: location
               properties: {
                 ingressProfile: {
                   applicationLoadBalancer: {
@@ -612,8 +606,13 @@ public static class AzureKubernetesEnvironmentExtensions
                   }
                 }
               }
-              identity: aksCluster.identity
-              sku: aksCluster.sku
+              identity: {
+                type: 'SystemAssigned'
+              }
+              sku: {
+                name: 'Base'
+                tier: 'Free'
+              }
             }
 
             // Provision the AGC traffic controller, frontend, and subnet association.
