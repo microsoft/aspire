@@ -795,8 +795,13 @@ public class AzureContainerAppsTests
 
         using var app = builder.Build();
 
-        var outer = await Assert.ThrowsAsync<InvalidOperationException>(async () => await ExecuteBeforeStartHooksAsync(app, default));
-        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = container.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget as AzureBicepResource;
+
+        Assert.NotNull(target);
+
+        var ex = Assert.Throws<NotSupportedException>(() => target.GetBicepTemplateFile());
 
         Assert.Equal("Automatic Key vault generation is not supported in this environment. Please create a key vault resource directly.", ex.Message);
     }
@@ -1875,10 +1880,15 @@ public class AzureContainerAppsTests
             .PublishAsAzureContainerAppJob();
 
         using var app = builder.Build();
-        var outer = await Assert.ThrowsAsync<InvalidOperationException>(async () => await ExecuteBeforeStartHooksAsync(app, default));
-        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
+        await ExecuteBeforeStartHooksAsync(app, default);
 
-        Assert.Equal("Azure Container App Jobs are not supported with Azure Functions.", ex.Message);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var funcjob = model.Resources.Single(r => r.Name == "funcjob");
+        funcjob.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+        Assert.NotNull(resource);
+
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await GetManifestWithBicep(resource));
     }
 
     private sealed class TestFunctionsProject : IProjectMetadata

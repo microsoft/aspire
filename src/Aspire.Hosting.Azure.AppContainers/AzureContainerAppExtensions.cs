@@ -18,7 +18,6 @@ using Azure.Provisioning.OperationalInsights;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using FileShare = Azure.Provisioning.Storage.FileShare;
 
 namespace Aspire.Hosting;
@@ -41,18 +40,21 @@ public static class AzureContainerAppExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         // ensure AzureProvisioning is added first so the AzureResourcePreparer pipeline step
-        // runs before the prepare-azure-container-apps step (which depends on it).
+        // runs before the per-environment prepare-azure-container-apps-{name} steps that depend on it.
         builder.AddAzureProvisioning();
 
-        // AzureContainerAppsInfrastructure will handle adding role assignments,
+        // The per-environment prepare-azure-container-apps-{name} steps handle role assignments,
         // so Azure resources don't need to add the default role assignments themselves
         builder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
-
-        builder.Services.TryAddSingleton<AzureContainerAppsInfrastructure>();
 
         // Register the pipeline step idempotently. AddAzureContainerAppsInfrastructureCore can be
         // called more than once (e.g. when AddAzureContainerAppEnvironment is called for multiple
         // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating ContainerApp resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on AzureContainerAppEnvironmentResource.
+        // This global step only validates that no resource has a PublishAs* annotation when there are
+        // no AzureContainerAppEnvironmentResource instances in the model.
         if (builder.Services.All(d => d.ServiceType != typeof(ContainerAppsPipelineStepMarker)))
         {
             builder.Services.AddSingleton<ContainerAppsPipelineStepMarker>();
@@ -60,12 +62,24 @@ public static class AzureContainerAppExtensions
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             builder.Pipeline.AddStep(
                 name: ContainerAppsPipelineStepMarker.StepName,
-                action: async ctx =>
+                action: ctx =>
                 {
-                    var infra = ctx.Services.GetRequiredService<AzureContainerAppsInfrastructure>();
-                    await infra.PrepareDeploymentTargetsAsync(ctx.Model, ctx.Services, ctx.CancellationToken).ConfigureAwait(false);
+                    if (!ctx.Model.Resources.OfType<AzureContainerAppEnvironmentResource>().Any())
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<AzureContainerAppCustomizationAnnotation>() ||
+#pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+                                r.HasAnnotationOfType<AzureContainerAppJobCustomizationAnnotation>())
+#pragma warning restore ASPIREAZURE002
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as an Azure Container App, but there are no '{nameof(AzureContainerAppEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddAzureContainerAppEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
                 },
-                dependsOn: AzureEnvironmentResource.PrepareResourcesStepName,
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
 #pragma warning restore ASPIREPIPELINES001
         }
@@ -75,7 +89,7 @@ public static class AzureContainerAppExtensions
 
     private sealed class ContainerAppsPipelineStepMarker
     {
-        public const string StepName = "prepare-azure-container-apps";
+        public const string StepName = "validate-azure-container-apps";
     }
 
     /// <summary>
