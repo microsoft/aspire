@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Foundry;
 /// SharePoint connections must be configured in the Foundry project beforehand.
 /// This tool references existing connections by their Foundry project connection IDs.
 /// </remarks>
+[AspireExport]
 public sealed class SharePointToolResource : FoundryToolResource
 {
     /// <summary>
@@ -58,6 +59,7 @@ public sealed class SharePointToolResource : FoundryToolResource
 /// Fabric connections must be configured in the Foundry project beforehand.
 /// This tool references existing connections by their Foundry project connection IDs.
 /// </remarks>
+[AspireExport]
 public sealed class FabricToolResource : FoundryToolResource
 {
     /// <summary>

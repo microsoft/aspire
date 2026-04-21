@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Foundry;
 /// This tool requires no Azure provisioning or project connections.
 /// It is automatically available in all Foundry projects.
 /// </remarks>
+[AspireExport]
 public sealed class CodeInterpreterToolResource : FoundryToolResource
 {
     /// <summary>
@@ -44,6 +45,7 @@ public sealed class CodeInterpreterToolResource : FoundryToolResource
 /// This tool requires no Azure provisioning or project connections.
 /// Vector store IDs can optionally be configured for specific document collections.
 /// </remarks>
+[AspireExport]
 public sealed class FileSearchToolResource : FoundryToolResource
 {
     /// <summary>
@@ -76,6 +78,7 @@ public sealed class FileSearchToolResource : FoundryToolResource
 /// This is the recommended way to add web grounding to an agent.
 /// No Azure provisioning is required — the tool is provided by the Foundry Agent Service.
 /// </remarks>
+[AspireExport]
 public sealed class WebSearchToolResource : FoundryToolResource
 {
     /// <summary>
@@ -102,6 +105,7 @@ public sealed class WebSearchToolResource : FoundryToolResource
 /// This is an experimental feature and may change in future releases.
 /// </remarks>
 [Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class ImageGenerationToolResource : FoundryToolResource
 {
     /// <summary>
@@ -130,6 +134,7 @@ public sealed class ImageGenerationToolResource : FoundryToolResource
 /// The computer tool requires specifying the display dimensions and environment.
 /// </remarks>
 [Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class ComputerToolResource : FoundryToolResource
 {
     /// <summary>

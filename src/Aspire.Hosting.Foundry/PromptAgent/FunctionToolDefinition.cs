@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Foundry;
 /// and parameter schema, then returns a structured function call request that the
 /// application handles.
 /// </remarks>
+[AspireExport]
 public sealed class FunctionToolResource : FoundryToolResource
 {
     /// <summary>

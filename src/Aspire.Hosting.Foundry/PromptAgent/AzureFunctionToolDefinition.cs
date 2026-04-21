@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Foundry;
 /// The function definition includes the function name, parameters schema,
 /// and input/output bindings for Azure Storage queues.
 /// </remarks>
+[AspireExport]
 public sealed class AzureFunctionToolResource : FoundryToolResource
 {
     /// <summary>
