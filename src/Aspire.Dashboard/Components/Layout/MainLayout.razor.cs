@@ -187,7 +187,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private bool ShouldShowUnsecuredApiMessage()
     {
         // Only show warning if API is enabled and unsecured
-        return Options.CurrentValue.Api.Enabled.GetValueOrDefault() &&
+        return !Options.CurrentValue.Api.Disabled.GetValueOrDefault() &&
                Options.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured;
     }
 

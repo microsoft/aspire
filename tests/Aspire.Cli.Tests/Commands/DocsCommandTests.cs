@@ -178,6 +178,22 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void WrapMarkdownForConsole_DoesNotWrapTableRows()
+    {
+        var markdown = """
+            | Setting | Environment variable | Purpose |
+            | ---------------------- | ----------------------- | ---------------------------------------------- |
+            | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
+            """;
+
+        var wrapped = Aspire.Cli.Commands.DocsGetCommand.WrapMarkdownForConsole(markdown, width: 40);
+
+        Assert.Contains("| Setting | Environment variable | Purpose |", wrapped);
+        Assert.Contains("| ---------------------- | ----------------------- | ---------------------------------------------- |", wrapped);
+        Assert.Contains("| `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |", wrapped);
+    }
+
+    [Fact]
     public async Task DocsGetCommand_WithInvalidSlug_ReturnsError()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

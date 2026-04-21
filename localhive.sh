@@ -315,6 +315,13 @@ fi
 if [[ $SKIP_BUNDLE -eq 0 ]]; then
   BUNDLE_PROJ="$REPO_ROOT/eng/Bundle.proj"
 
+  # Clean stale managed publish output so dotnet publish doesn't skip due to incremental builds
+  STALE_MANAGED_DIR="$REPO_ROOT/artifacts/bundle/$BUNDLE_RID/managed"
+  if [[ -d "$STALE_MANAGED_DIR" ]]; then
+    log "Cleaning stale managed publish output at $STALE_MANAGED_DIR"
+    rm -rf "$STALE_MANAGED_DIR"
+  fi
+
   if [[ $NATIVE_AOT -eq 1 ]]; then
     log "Building bundle (aspire-managed + DCP + native AOT CLI)..."
     dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:TargetRid=$BUNDLE_RID"

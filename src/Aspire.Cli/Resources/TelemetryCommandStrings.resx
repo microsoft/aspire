@@ -156,8 +156,11 @@
   <data name="LimitMustBePositive" xml:space="preserve">
     <value>The --limit value must be a positive number.</value>
   </data>
-  <data name="DashboardApiNotAvailable" xml:space="preserve">
-    <value>Dashboard API is not available. Ensure the AppHost is running with Dashboard enabled.</value>
+  <data name="DashboardNotAvailable" xml:space="preserve">
+    <value>Could not fetch telemetry data from the dashboard. The dashboard is not available.</value>
+  </data>
+  <data name="DashboardNotAvailableHint" xml:space="preserve">
+    <value>Ensure the AppHost is running with the dashboard enabled.</value>
   </data>
   <data name="FailedToFetchTelemetry" xml:space="preserve">
     <value>Failed to fetch telemetry: {0}</value>
@@ -187,7 +190,7 @@
     <value>Status</value>
   </data>
   <data name="DashboardUrlOptionDescription" xml:space="preserve">
-    <value>URL of a standalone Aspire Dashboard to connect to directly (bypasses AppHost discovery)</value>
+    <value>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</value>
   </data>
   <data name="ApiKeyOptionDescription" xml:space="preserve">
     <value>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</value>
@@ -196,18 +199,45 @@
     <value>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</value>
   </data>
   <data name="DashboardAuthFailed" xml:space="preserve">
-    <value>Authentication denied by the dashboard. Use --api-key to specify a valid API key that matches the dashboard's configured API key (Dashboard:Api:PrimaryApiKey).</value>
+    <value>Could not fetch telemetry data from the dashboard. Authentication failed.</value>
+  </data>
+  <data name="DashboardAuthFailedHint" xml:space="preserve">
+    <value>Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</value>
+  </data>
+  <data name="DashboardAuthFailedAnonymousHint" xml:space="preserve">
+    <value>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</value>
   </data>
   <data name="DashboardUrlNotReachable" xml:space="preserve">
-    <value>The specified --dashboard-url '{0}' does not appear to be a valid Aspire Dashboard. Verify the URL is correct.</value>
+    <value>Could not fetch telemetry data from the dashboard. The specified URL '{0}' does not appear to be a valid dashboard address.</value>
+  </data>
+  <data name="DashboardUrlNotReachableHint" xml:space="preserve">
+    <value>Verify the URL is correct.</value>
   </data>
   <data name="DashboardApiNotEnabled" xml:space="preserve">
-    <value>The dashboard at '{0}' does not have the telemetry API enabled. Configure the dashboard with Dashboard:Api:Enabled set to true.</value>
+    <value>Could not fetch telemetry data from the dashboard. The dashboard at '{0}' does not have the telemetry API enabled.</value>
+  </data>
+  <data name="DashboardApiNotEnabledHint" xml:space="preserve">
+    <value>Start the dashboard with 'aspire dashboard run' or set Dashboard:Api:Enabled to true.</value>
   </data>
   <data name="DashboardConnectionFailed" xml:space="preserve">
-    <value>Could not connect to the dashboard at '{0}'. Verify the dashboard is running and the URL is correct.</value>
+    <value>Could not fetch telemetry data from the dashboard. Unable to connect to '{0}'.</value>
+  </data>
+  <data name="DashboardConnectionFailedHint" xml:space="preserve">
+    <value>Verify the dashboard is running and the URL is correct.</value>
   </data>
   <data name="DashboardUrlInvalid" xml:space="preserve">
-    <value>The value '{0}' is not a valid URL. Specify an absolute URL like 'http://localhost:18888'.</value>
+    <value>Could not fetch telemetry data from the dashboard. The value '{0}' is not a valid URL.</value>
+  </data>
+  <data name="DashboardUrlInvalidHint" xml:space="preserve">
+    <value>Specify an absolute URL like 'http://localhost:18888'.</value>
+  </data>
+  <data name="DashboardLoginTokenFailed" xml:space="preserve">
+    <value>Could not fetch telemetry data from the dashboard. The login token in the URL is invalid or expired.</value>
+  </data>
+  <data name="DashboardLoginTokenFailedHint" xml:space="preserve">
+    <value>Ensure you are using the login URL from the currently running dashboard instance.</value>
+  </data>
+  <data name="DashboardLoginTokenFailedAnonymousHint" xml:space="preserve">
+    <value>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</value>
   </data>
 </root>

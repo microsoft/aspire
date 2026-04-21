@@ -386,12 +386,11 @@ public static class AzureKubernetesEnvironmentExtensions
         };
 
         // Create the AKS managed cluster
-        var aks = new ContainerServiceManagedCluster(aksResource.GetBicepIdentifier(),
-            ContainerServiceManagedCluster.ResourceVersions.V2025_03_01)
+        var aks = new ContainerServiceManagedCluster(aksResource.GetBicepIdentifier())
         {
             ClusterIdentity = new ManagedClusterIdentity
             {
-                ResourceIdentityType = ManagedServiceIdentityType.SystemAssigned
+                IdentityType = ManagedServiceIdentityType.SystemAssigned
             },
             Sku = new ManagedClusterSku
             {
@@ -445,7 +444,7 @@ public static class AzureKubernetesEnvironmentExtensions
                 MinCount = pool.MinCount,
                 MaxCount = pool.MaxCount,
                 Count = pool.MinCount,
-                EnableAutoScaling = true,
+                IsAutoScalingEnabled = true,
                 Mode = mode,
                 OSType = ContainerServiceOSType.Linux,
             };
@@ -486,7 +485,7 @@ public static class AzureKubernetesEnvironmentExtensions
         {
             aks.ApiServerAccessProfile = new ManagedClusterApiServerAccessProfile
             {
-                EnablePrivateCluster = true
+                IsPrivateClusterEnabled = true
             };
         }
 

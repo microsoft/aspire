@@ -9,10 +9,11 @@ using Xunit;
 namespace Aspire.Deployment.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests for deploying Aspire starter template with Redis to AKS.
-/// This validates that the starter template with Redis cache works out-of-the-box on Kubernetes.
+/// End-to-end tests for deploying Aspire starter template with Redis to AKS using manual Helm chart generation.
+/// This validates that the starter template with Redis cache works out-of-the-box on Kubernetes
+/// via <c>aspire publish</c> + <c>helm install</c>.
 /// </summary>
-public sealed class AksStarterWithRedisDeploymentTests(ITestOutputHelper output)
+public sealed class AksStarterWithRedisHelmDeploymentTests(ITestOutputHelper output)
 {
     // Timeout set to 45 minutes to allow for AKS provisioning (~10-15 min) plus deployment.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);

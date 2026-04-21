@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
@@ -105,5 +106,107 @@ public class PackageChannelTests
         // Assert
         Assert.Equal(PackagingStrings.BasedOnNuGetConfig, channel.SourceDetails);
         Assert.Equal(PackageChannelType.Explicit, channel.Type);
+    }
+
+    [Fact]
+    public void CreateScopedChannelForPackage_PrHiveExpandsToTransitivePackagesInHive()
+    {
+        var cache = new FakeNuGetPackageCache();
+        var tempDir = Directory.CreateTempSubdirectory();
+        try
+        {
+            CreatePackage(tempDir.FullName, "Aspire.Hosting.Redis", "13.3.0-pr.16125.g5bef2f2f", "Aspire.Hosting");
+            CreatePackage(tempDir.FullName, "Aspire.Hosting", "13.3.0-pr.16125.g5bef2f2f");
+            CreatePackage(tempDir.FullName, "Aspire.Hosting.AppHost", "13.3.0-pr.16125.g5bef2f2f");
+
+            var mappings = new[]
+            {
+                new PackageMapping("Aspire*", tempDir.FullName.Replace('\\', '/')),
+                new PackageMapping("*", "https://api.nuget.org/v3/index.json")
+            };
+
+            var channel = PackageChannel.CreateExplicitChannel("pr-16125", PackageChannelQuality.Prerelease, mappings, cache);
+
+            var scopedChannel = channel.CreateScopedChannelForPackage("Aspire.Hosting.Redis");
+
+            var packageFilters = scopedChannel.Mappings!.Select(mapping => mapping.PackageFilter).ToArray();
+            Assert.Contains("Aspire.Hosting.Redis", packageFilters);
+            Assert.Contains("Aspire.Hosting", packageFilters);
+            Assert.DoesNotContain("Aspire.Hosting.AppHost", packageFilters);
+            Assert.Contains("*", packageFilters);
+            Assert.DoesNotContain("Aspire*", packageFilters);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CreateScopedChannelForPackages_PrHiveIncludesExplicitRootPackages()
+    {
+        var cache = new FakeNuGetPackageCache();
+        var tempDir = Directory.CreateTempSubdirectory();
+        try
+        {
+            CreatePackage(tempDir.FullName, "Aspire.Hosting.Redis", "13.3.0-pr.16125.g5bef2f2f", "Aspire.Hosting");
+            CreatePackage(tempDir.FullName, "Aspire.Hosting", "13.3.0-pr.16125.g5bef2f2f");
+            CreatePackage(tempDir.FullName, "Aspire.AppHost.Sdk", "13.3.0-pr.16125.g5bef2f2f");
+            CreatePackage(tempDir.FullName, "Aspire.Hosting.AppHost", "13.3.0-pr.16125.g5bef2f2f");
+
+            var mappings = new[]
+            {
+                new PackageMapping("Aspire*", tempDir.FullName.Replace('\\', '/')),
+                new PackageMapping("*", "https://api.nuget.org/v3/index.json")
+            };
+
+            var channel = PackageChannel.CreateExplicitChannel("pr-16125", PackageChannelQuality.Prerelease, mappings, cache);
+
+            var scopedChannel = channel.CreateScopedChannelForPackages(["Aspire.Hosting.Redis", "Aspire.AppHost.Sdk"]);
+
+            var packageFilters = scopedChannel.Mappings!.Select(mapping => mapping.PackageFilter).ToArray();
+            Assert.Contains("Aspire.Hosting.Redis", packageFilters);
+            Assert.Contains("Aspire.Hosting", packageFilters);
+            Assert.Contains("Aspire.AppHost.Sdk", packageFilters);
+            Assert.DoesNotContain("Aspire.Hosting.AppHost", packageFilters);
+            Assert.Contains("*", packageFilters);
+            Assert.DoesNotContain("Aspire*", packageFilters);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    private static void CreatePackage(string directory, string packageId, string version, params string[] dependencies)
+    {
+        var packagePath = Path.Combine(directory, $"{packageId}.{version}.nupkg");
+        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
+        var nuspecEntry = archive.CreateEntry($"{packageId}.nuspec");
+        using var writer = new StreamWriter(nuspecEntry.Open());
+
+        writer.Write($$"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+              <metadata>
+                <id>{{packageId}}</id>
+                <version>{{version}}</version>
+                <dependencies>
+            """);
+
+        foreach (var dependency in dependencies)
+        {
+            writer.Write($$"""
+                    <group targetFramework="net10.0">
+                      <dependency id="{{dependency}}" version="[{{version}}]" />
+                    </group>
+                """);
+        }
+
+        writer.Write("""
+                </dependencies>
+              </metadata>
+            </package>
+            """);
     }
 }

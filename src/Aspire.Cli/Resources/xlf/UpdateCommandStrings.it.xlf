@@ -157,6 +157,11 @@
         <target state="translated">Impossibile scrivere nella directory di installazione "{0}". Eseguire l'aggiornamento con autorizzazioni elevate, ad esempio usando sudo su Linux/macOS.</target>
         <note />
       </trans-unit>
+      <trans-unit id="PackageNotFoundInChannelWarningFormat">
+        <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
+        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">Il riferimento al pacchetto non ha l'identità.</target>
