@@ -238,4 +238,65 @@ public static class KubernetesEnvironmentExtensions
     {
         builder.Resource.DeploymentEngineStepsFactory ??= HelmDeploymentEngine.CreateStepsAsync;
     }
+
+    /// <summary>
+    /// Sets the default ingress configuration for all resources with external HTTP endpoints
+    /// deployed to this Kubernetes environment.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="configure">
+    /// A callback that configures ingress for each resource with external HTTP endpoints.
+    /// The callback typically adds <see cref="Kubernetes.Resources.Ingress"/> objects
+    /// to <see cref="KubernetesResource.AdditionalResources"/>.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This sets the environment-level default. Individual resources can override this
+    /// using <see cref="KubernetesServiceExtensions.WithKubernetesIngress{T}"/>.
+    /// The last annotation added wins (via <see cref="ResourceExtensions.TryGetLastAnnotation{T}"/>).
+    /// </remarks>
+    [AspireExport(Description = "Configures the default ingress strategy for a Kubernetes environment")]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithIngress(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        Func<KubernetesIngressContext, Task> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        return builder.WithAnnotation(new KubernetesIngressConfigurationAnnotation(configure));
+    }
+
+    /// <summary>
+    /// Enables or disables automatic ingress generation for all resources in this
+    /// Kubernetes environment.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="enabled">
+    /// <c>true</c> to leave ingress behavior as-is (no-op); <c>false</c> to suppress
+    /// any previously configured ingress annotation on this environment.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// Calling <c>WithIngress(false)</c> removes any existing
+    /// <see cref="KubernetesIngressConfigurationAnnotation"/> from the environment,
+    /// preventing automatic ingress generation for all resources.
+    /// </remarks>
+    [AspireExport(Description = "Enables or disables automatic ingress for a Kubernetes environment")]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithIngress(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        bool enabled)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (!enabled)
+        {
+            var toRemove = builder.Resource.Annotations.OfType<KubernetesIngressConfigurationAnnotation>().ToList();
+            foreach (var annotation in toRemove)
+            {
+                builder.Resource.Annotations.Remove(annotation);
+            }
+        }
+
+        return builder;
+    }
 }
