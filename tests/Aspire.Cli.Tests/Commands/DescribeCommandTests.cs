@@ -387,6 +387,62 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DescribeCommand_Follow_WhenCanceledAndBackchannelIsDisposed_DisplaysCancellationMessage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var interactionService = new TestInteractionService();
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+        ], configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+            connection.WatchResourceSnapshotsHandler = static (_, cancellationToken) => ThrowObjectDisposedAfterCancellationAsync(cancellationToken);
+        }, interactionService: interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+        await Task.Yield();
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(1, interactionService.DisplayCancellationMessageCallCount);
+        Assert.DoesNotContain(interactionService.DisplayedMessages, m => m.Message.Contains("The connection to the AppHost was lost:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_WhenBackchannelIsDisposedButAppHostStillRunning_DoesNotDisplayConnectionLostMessage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var interactionService = new TestInteractionService();
+        var rawOutput = new List<string>();
+        interactionService.DisplayRawTextCallback = rawOutput.Add;
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
+        ], configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+            connection.WatchResourceSnapshotsHandler = static (_, cancellationToken) => ThrowObjectDisposedAfterSnapshot(cancellationToken);
+        }, interactionService: interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Single(rawOutput);
+        Assert.Empty(interactionService.DisplayedMessages);
+        Assert.Equal(0, interactionService.DisplayCancellationMessageCallCount);
+    }
+
+    [Fact]
     public async Task DescribeCommand_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -591,11 +647,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         var connection = new TestAppHostAuxiliaryBackchannel
         {
             IsInScope = true,
-            AppHostInfo = new AppHostInformation
-            {
-                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
-                ProcessId = 1234
-            },
+            AppHostInfo = CreateAppHostInfo(workspace, 1234),
             ResourceSnapshots = resourceSnapshots,
             DashboardUrlsState = dashboardUrlsState
         };
@@ -614,6 +666,15 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         });
 
         return services.BuildServiceProvider();
+    }
+
+    private static AppHostInformation CreateAppHostInfo(TemporaryWorkspace workspace, int processId)
+    {
+        return new AppHostInformation
+        {
+            AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+            ProcessId = processId
+        };
     }
 
     private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterSnapshot([EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -636,5 +697,22 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         yield break;
+    }
+
+    private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterCancellationAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceSnapshot
+        {
+            Name = "redis",
+            DisplayName = "redis",
+            ResourceType = "Container",
+            State = "Running"
+        };
+
+        var waitForCancellation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(() => waitForCancellation.TrySetResult());
+        await waitForCancellation.Task;
+
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
     }
 }
