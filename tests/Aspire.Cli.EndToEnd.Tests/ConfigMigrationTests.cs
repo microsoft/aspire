@@ -38,7 +38,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     /// </returns>
     private (string AspireHomeDir, Hex1bTerminal Terminal) CreateMigrationTerminal(
         string repoRoot,
-        CliE2ETestHelpers.DockerInstallMode installMode,
+        CliInstallStrategy strategy,
         TemporaryWorkspace workspace,
         [System.Runtime.CompilerServices.CallerMemberName] string testName = "")
     {
@@ -47,7 +47,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         Directory.CreateDirectory(aspireHomeDir);
 
         var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
-            repoRoot, installMode, output,
+            repoRoot, strategy, output,
             workspace: workspace,
             additionalVolumes: [$"{aspireHomeDir}:/root/.aspire"],
             testName: testName);
@@ -108,10 +108,10 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalSettings_MigratedFromLegacyFormat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -119,7 +119,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Pre-populate legacy globalsettings.json on the host (visible in container via bind mount).
         var legacyPath = Path.Combine(aspireHomeDir, "globalsettings.json");
@@ -173,10 +173,10 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_SkipsWhenNewConfigExists()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -184,7 +184,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Pre-populate BOTH files on the host: aspire.config.json with "preview",
         // globalsettings.json with "staging".
@@ -223,10 +223,10 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_HandlesMalformedLegacyJson()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -234,7 +234,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Write malformed JSON to the legacy file.
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -282,10 +282,10 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_HandlesCommentsAndTrailingCommas()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -293,7 +293,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Write legacy JSON with comments and trailing commas.
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -352,10 +352,10 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task ConfigSetGet_CreatesNestedJsonFormat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -363,7 +363,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Ensure clean state.
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -436,10 +436,10 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_PreservesAllValueTypes()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -447,7 +447,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a comprehensive legacy globalsettings.json with all value types.
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -522,10 +522,10 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task FullUpgrade_LegacyCliToNewCli_MigratesGlobalSettings()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, installMode, workspace);
+        var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -566,7 +566,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Install the new CLI (from this PR), overwriting the legacy CLI.
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 4: Run the new CLI to trigger global migration.
         await auto.TypeAsync("aspire --version");

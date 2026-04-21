@@ -99,6 +99,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         {
             Arguments = arguments,
             StandardInputContent = password,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
             OnOutputData = output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
@@ -124,7 +125,14 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             if (processResult.ExitCode != 0)
             {
                 _logger.LogError("{RuntimeName} login to {RegistryServer} failed with exit code {ExitCode}.", Name, registryServer, processResult.ExitCode);
-                throw new DistributedApplicationException($"{Name} login failed with exit code {processResult.ExitCode}.");
+
+                var message = $"{Name} login failed with exit code {processResult.ExitCode}.";
+                if (processResult.TotalProcessOutputLineCount > 0)
+                {
+                    message = $"{message}{Environment.NewLine}{processResult.GetFormattedOutput()}";
+                }
+
+                throw new DistributedApplicationException(message);
             }
 
             _logger.LogInformation("{RuntimeName} login to {RegistryServer} succeeded.", Name, registryServer);
@@ -148,8 +156,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         CancellationToken cancellationToken,
         params object[] logArguments)
     {
-        var outputBuffer = new BuildOutputCapture();
-        var spec = CreateProcessSpec(arguments, outputBuffer);
+        var spec = CreateProcessSpec(arguments, retainOutput: true);
 
         _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
         var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
@@ -166,9 +173,9 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
                 _logger.LogError(errorLogTemplate, errorArgs);
 
                 var message = string.Format(System.Globalization.CultureInfo.InvariantCulture, exceptionMessageTemplate, processResult.ExitCode);
-                if (outputBuffer.TotalLineCount > 0)
+                if (processResult.TotalProcessOutputLineCount > 0)
                 {
-                    message = $"{message}{Environment.NewLine}{outputBuffer.GetFormattedOutput(outputDescription: "Command output")}";
+                    message = $"{message}{Environment.NewLine}{processResult.GetFormattedOutput(outputDescription: "Command output")}";
                 }
 
                 throw new DistributedApplicationException(message);
@@ -187,7 +194,6 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="logArguments">Arguments to pass to the log templates.</param>
     /// <param name="environmentVariables">Optional environment variables to set for the process.</param>
-    /// <param name="outputBuffer">Optional buffer to retain stdout/stderr lines.</param>
     /// <returns>The exit code of the process.</returns>
     protected async Task<int> ExecuteContainerCommandWithExitCodeAsync(
         string arguments,
@@ -195,39 +201,17 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         string successLogTemplate,
         CancellationToken cancellationToken,
         object[] logArguments,
-        Dictionary<string, string>? environmentVariables = null,
-        BuildOutputCapture? outputBuffer = null)
+        Dictionary<string, string>? environmentVariables = null)
     {
-        var spec = CreateProcessSpec(arguments, outputBuffer);
+        var processResult = await ExecuteContainerCommandWithResultAsync(
+            arguments,
+            errorLogTemplate,
+            successLogTemplate,
+            cancellationToken,
+            logArguments,
+            environmentVariables).ConfigureAwait(false);
 
-        // Add environment variables if provided
-        if (environmentVariables is not null)
-        {
-            foreach (var (key, value) in environmentVariables)
-            {
-                spec.EnvironmentVariables[key] = value;
-            }
-        }
-
-        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
-        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
-
-        await using (processDisposable)
-        {
-            var processResult = await pendingProcessResult
-                .WaitAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            if (processResult.ExitCode != 0)
-            {
-                var errorArgs = logArguments.Concat(new object[] { processResult.ExitCode }).ToArray();
-                _logger.LogError(errorLogTemplate, errorArgs);
-                return processResult.ExitCode;
-            }
-
-            _logger.LogDebug(successLogTemplate, logArguments);
-            return processResult.ExitCode;
-        }
+        return processResult.ExitCode;
     }
 
     /// <summary>
@@ -284,20 +268,64 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
         return !string.IsNullOrEmpty(stage) ? $" --target \"{stage}\"" : string.Empty;
     }
 
-    private ProcessSpec CreateProcessSpec(string arguments, BuildOutputCapture? outputBuffer)
+    /// <summary>
+    /// Executes a container runtime command and returns the process result without throwing for non-zero exit codes.
+    /// </summary>
+    protected async Task<ProcessResult> ExecuteContainerCommandWithResultAsync(
+        string arguments,
+        string errorLogTemplate,
+        string successLogTemplate,
+        CancellationToken cancellationToken,
+        object[] logArguments,
+        Dictionary<string, string>? environmentVariables = null,
+        bool retainOutput = false)
+    {
+        var spec = CreateProcessSpec(arguments, retainOutput);
+
+        if (environmentVariables is not null)
+        {
+            foreach (var (key, value) in environmentVariables)
+            {
+                spec.EnvironmentVariables[key] = value;
+            }
+        }
+
+        _logger.LogDebug("Running {RuntimeName} with arguments: {ArgumentList}", Name, spec.Arguments);
+        var (pendingProcessResult, processDisposable) = ProcessUtil.Run(spec);
+
+        await using (processDisposable)
+        {
+            var processResult = await pendingProcessResult
+                .WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            if (processResult.ExitCode != 0)
+            {
+                var errorArgs = logArguments.Concat(new object[] { processResult.ExitCode }).ToArray();
+                _logger.LogError(errorLogTemplate, errorArgs);
+            }
+            else
+            {
+                _logger.LogDebug(successLogTemplate, logArguments);
+            }
+
+            return processResult;
+        }
+    }
+
+    private ProcessSpec CreateProcessSpec(string arguments, bool retainOutput = false)
     {
         return new ProcessSpec(RuntimeExecutable)
         {
             Arguments = arguments,
+            RetainedOutputLineCount = retainOutput ? ProcessSpec.DefaultRetainedOutputLineCount : null,
             OnOutputData = output =>
             {
                 _logger.LogDebug("{RuntimeName} (stdout): {Output}", RuntimeExecutable, output);
-                outputBuffer?.Add(output);
             },
             OnErrorData = error =>
             {
                 _logger.LogDebug("{RuntimeName} (stderr): {Error}", RuntimeExecutable, error);
-                outputBuffer?.Add(error);
             },
             ThrowOnNonZeroReturnCode = false,
             InheritEnv = true
@@ -319,6 +347,7 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
             Arguments = arguments,
             WorkingDirectory = context.WorkingDirectory,
             ThrowOnNonZeroReturnCode = false,
+            RetainedOutputLineCount = ProcessSpec.DefaultRetainedOutputLineCount,
             InheritEnv = true,
             OnOutputData = output =>
             {
@@ -344,10 +373,17 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
                     ? $"The container runtime is configured via ASPIRE_CONTAINER_RUNTIME (current: '{RuntimeExecutable}')."
                     : $"The container runtime was auto-detected as '{RuntimeExecutable}'. Set ASPIRE_CONTAINER_RUNTIME to override (e.g., 'docker' or 'podman').";
 
-                throw new DistributedApplicationException(
+                var message =
                     $"'{RuntimeExecutable} compose up' failed with exit code {processResult.ExitCode}. " +
                     $"Ensure '{RuntimeExecutable}' is installed and available on PATH. " +
-                    envHint);
+                    envHint;
+
+                if (processResult.TotalProcessOutputLineCount > 0)
+                {
+                    message = $"{message}{Environment.NewLine}{processResult.GetFormattedOutput()}";
+                }
+
+                throw new DistributedApplicationException(message);
             }
         }
     }

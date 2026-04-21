@@ -18,6 +18,7 @@ public sealed class AppServicePythonDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/16229")]
     public async Task DeployPythonFastApiTemplateToAzureAppService()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -75,19 +76,10 @@ public sealed class AppServicePythonDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
+            // Step 2: Set up CLI environment
             // Python apphosts need the full bundle because
             // the prebuilt AppHost server is required for aspire new with Python templates.
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                var prNumber = DeploymentE2ETestHelpers.GetPrNumber();
-                if (prNumber > 0)
-                {
-                    output.WriteLine($"Step 2: Installing Aspire bundle from PR #{prNumber}...");
-                    await auto.InstallAspireBundleFromPullRequestAsync(prNumber, counter);
-                }
-                await auto.SourceAspireBundleEnvironmentAsync(counter);
-            }
+            await auto.InstallCurrentBuildAspireBundleAsync(counter, output);
 
             // Step 3: Create Python FastAPI project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating Python FastAPI project...");

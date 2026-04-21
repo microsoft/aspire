@@ -1961,4 +1961,69 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var completedSteps = mockActivityReporter.CompletedSteps;
         Assert.Contains(completedSteps, s => s.CompletionText.Contains("--yes", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public async Task DeployAsync_FailingTokenCredential_ShowsLoginMessage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy);
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+
+        ConfigureTestServices(builder, activityReporter: mockActivityReporter);
+
+        // Override AFTER ConfigureTestServices so our failing provider wins
+        builder.Services.AddSingleton<ITokenCredentialProvider>(new FailingTokenCredentialProvider());
+
+        builder.AddAzureEnvironment();
+        builder.AddAzureContainerAppEnvironment("aca");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var completedSteps = mockActivityReporter.CompletedSteps;
+        var loginStep = completedSteps.FirstOrDefault(s => s.StepTitle == "validate-azure-login");
+
+        Assert.Equal(CompletionState.CompletedWithError, loginStep.CompletionState);
+        Assert.Contains("az login", loginStep.CompletionText);
+    }
+
+    [Fact]
+    public async Task DeployAsync_ValidTokenCredential_ShowsSuccessMessage()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: WellKnownPipelineSteps.Deploy);
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+
+        ConfigureTestServices(builder, activityReporter: mockActivityReporter, bicepProvisioner: new NoOpBicepProvisioner());
+
+        builder.AddAzureEnvironment();
+        builder.AddAzureContainerAppEnvironment("aca");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var completedSteps = mockActivityReporter.CompletedSteps;
+        var loginStep = completedSteps.FirstOrDefault(s => s.StepTitle == "validate-azure-login");
+
+        Assert.Equal(CompletionState.Completed, loginStep.CompletionState);
+        Assert.Contains("validated successfully", loginStep.CompletionText);
+    }
+
+    private sealed class FailingTokenCredentialProvider : ITokenCredentialProvider
+    {
+        public global::Azure.Core.TokenCredential TokenCredential => new FailingTokenCredential();
+    }
+
+    private sealed class FailingTokenCredential : global::Azure.Core.TokenCredential
+    {
+        public override global::Azure.Core.AccessToken GetToken(global::Azure.Core.TokenRequestContext requestContext, CancellationToken cancellationToken = default)
+        {
+            throw new global::Azure.Identity.CredentialUnavailableException("No credential available. Run 'az login' to authenticate.");
+        }
+
+        public override ValueTask<global::Azure.Core.AccessToken> GetTokenAsync(global::Azure.Core.TokenRequestContext requestContext, CancellationToken cancellationToken = default)
+        {
+            throw new global::Azure.Identity.CredentialUnavailableException("No credential available. Run 'az login' to authenticate.");
+        }
+    }
 }

@@ -13,6 +13,7 @@ using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -109,7 +110,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -221,7 +222,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -360,7 +361,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Services we need for project updater.
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
@@ -404,6 +405,120 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 Assert.Equal(webAppProjectFile.FullName, item.ProjectFile.FullName);
             }
         );
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_PackageNotInChannel_LogsWarningAndContinues()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
+        var testSink = new TestSink();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>();
+
+                        var matchedPackage = query switch
+                        {
+                            "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
+                            "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
+                            // Third-party or otherwise unpublished Aspire.Hosting.* package - returns nothing.
+                            "Aspire.Hosting.ThirdParty" => null,
+                            _ => throw new InvalidOperationException($"Unexpected package query: {query}."),
+                        };
+
+                        if (matchedPackage is not null)
+                        {
+                            packages.Add(matchedPackage);
+                        }
+
+                        return (0, packages.ToArray());
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+
+                        if (projectFile.FullName == appHostProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithSdkVersion("9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.ThirdParty", "1.0.0");
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Unexpected project file.");
+                        }
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    },
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
+                    {
+                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));
+                        return 0;
+                    }
+                };
+            };
+
+            config.InteractionServiceFactory = (s) =>
+            {
+                var interactionService = new TestInteractionService();
+                return interactionService;
+            };
+        });
+        services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "daily");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        // Should NOT throw even though Aspire.Hosting.ThirdParty is not in the channel.
+        var updateResult = await projectUpdater.UpdateProjectAsync(appHostProjectFile, selectedChannel).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+        // Aspire.Hosting.Redis should still be updated; Aspire.Hosting.ThirdParty should be skipped with a warning.
+        // Aspire.Hosting.AppHost is not updated because it's removed during SDK migration.
+        Assert.Collection(
+            packagesAddsExecuted,
+            item =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", item.PackageId);
+                Assert.Equal("9.5.0-preview.1", item.PackageVersion);
+                Assert.Equal(appHostProjectFile.FullName, item.ProjectFile.FullName);
+            }
+        );
+
+        // A warning should have been logged for the missing package.
+        Assert.Contains(
+            testSink.Writes,
+            w => w.LogLevel == LogLevel.Warning
+                && w.Message is not null
+                && w.Message.Contains("Aspire.Hosting.ThirdParty")
+                && w.Message.Contains("daily"));
     }
 
     [Fact]
@@ -513,7 +628,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -656,7 +771,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -761,7 +876,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -864,7 +979,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1007,7 +1122,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1130,7 +1245,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1244,7 +1359,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1354,7 +1469,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1452,7 +1567,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1554,7 +1669,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1633,7 +1748,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1715,7 +1830,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1794,7 +1909,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1877,7 +1992,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -1965,7 +2080,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
@@ -2047,7 +2162,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -2126,7 +2241,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -2217,7 +2332,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var packagingService = provider.GetRequiredService<IPackagingService>();
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
@@ -2344,7 +2459,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 return interactionService;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var logger = provider.GetRequiredService<ILogger<ProjectUpdater>>();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();

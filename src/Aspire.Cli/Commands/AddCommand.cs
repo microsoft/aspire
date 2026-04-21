@@ -207,7 +207,40 @@ internal sealed class AddCommand : BaseCommand
                 _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
             };
 
-            // Add the package using the appropriate project handler
+            // When installing from a PR channel, ensure the project has access to
+            // the PR hive as a NuGet source so `dotnet add package` can resolve the
+            // PR-version package. We add the hive source to the project's nuget.config
+            // WITHOUT package source mapping restrictions, so that transitive deps
+            // (including RID-specific and stable-versioned packages) can still resolve
+            // from NuGet.org via the normal NuGet source hierarchy.
+            if (string.IsNullOrEmpty(source) && VersionHelper.IsPrChannel(selectedNuGetPackage.Channel.Name))
+            {
+                var mappings = selectedNuGetPackage.Channel.Mappings;
+                if (mappings is { Length: > 0 })
+                {
+                    var hiveSources = mappings
+                        .Select(m => m.Source)
+                        .Where(s => !s.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        .Distinct(StringComparer.OrdinalIgnoreCase);
+
+                    var projectDir = effectiveAppHostProjectFile.Directory!;
+                    var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
+                    if (!File.Exists(nugetConfigPath))
+                    {
+                        projectDir.Create(); // ensure directory exists
+                        var configXml = new System.Xml.Linq.XDocument(
+                            new System.Xml.Linq.XElement("configuration",
+                                new System.Xml.Linq.XElement("packageSources",
+                                    hiveSources.Select(s =>
+                                        new System.Xml.Linq.XElement("add",
+                                            new System.Xml.Linq.XAttribute("key", s),
+                                            new System.Xml.Linq.XAttribute("value", s))))));
+                        configXml.Save(nugetConfigPath);
+                        InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+                    }
+                }
+            }
+
             context = new AddPackageContext
             {
                 AppHostFile = effectiveAppHostProjectFile,
@@ -294,7 +327,7 @@ internal sealed class AddCommand : BaseCommand
             _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
         };
 
-        var packageVersions = possiblePackages.Where(p => p.Package.Id == selectedPackage.Package.Id);
+        var packageVersions = possiblePackages.Where(p => p.Package.Id == selectedPackage.Package.Id).ToArray();
 
         // If any of the package versions are an exact match for the preferred version
         // then we can skip the version prompt and just use that version.
@@ -302,6 +335,22 @@ internal sealed class AddCommand : BaseCommand
         {
             var preferredVersionPackage = packageVersions.First(p => p.Package.Version == preferredVersion);
             return preferredVersionPackage;
+        }
+
+        // When PR hives are present, prefer the package that exactly matches the installed
+        // CLI/SDK version so template- and add-generated projects stay on the same build.
+        var prChannelPackageVersions = packageVersions
+            .Where(p => VersionHelper.IsPrChannel(p.Channel.Name))
+            .ToArray();
+
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            prChannelPackageVersions,
+            p => p.Package.Version,
+            out var cliVersionPackage,
+            channelName: null,
+            hasPrHives: ExecutionContext.GetPrHiveCount() > 0))
+        {
+            return cliVersionPackage;
         }
 
         // In non-interactive mode, prefer the implicit/default channel first to keep

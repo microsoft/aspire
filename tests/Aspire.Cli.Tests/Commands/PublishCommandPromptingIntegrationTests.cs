@@ -42,7 +42,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -88,7 +88,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -140,7 +140,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -187,7 +187,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -233,7 +233,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -291,7 +291,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -370,7 +370,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -438,7 +438,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -490,7 +490,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -545,7 +545,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -616,7 +616,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act - use the --debug flag
@@ -660,7 +660,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act
@@ -703,7 +703,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         services.AddSingleton<IInteractionService>(consoleService);
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var command = serviceProvider.GetRequiredService<RootCommand>();
 
         // Act

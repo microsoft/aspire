@@ -35,7 +35,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent init");
 
@@ -73,7 +73,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("agent init");
 

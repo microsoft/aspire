@@ -1,20 +1,11 @@
 ﻿---
 apiVersion: "v1"
-kind: "Service"
+kind: "ConfigMap"
 metadata:
-  name: "myapp-service"
+  name: "myapp-config"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
-spec:
-  type: "ClusterIP"
-  selector:
-    app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "myapp"
-    app.kubernetes.io/instance: "{{ .Release.Name }}"
-  ports:
-    - name: "http"
-      protocol: "TCP"
-      port: 8080
-      targetPort: 8080
+data:
+  ASPNETCORE_ENVIRONMENT: "{{ .Values.config.myapp.ASPNETCORE_ENVIRONMENT }}"

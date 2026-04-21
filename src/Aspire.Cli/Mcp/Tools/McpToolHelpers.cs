@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Web;
 using Aspire.Cli.Backchannel;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -56,5 +57,31 @@ internal static class McpToolHelpers
         }
 
         return url;
+    }
+
+    /// <summary>
+    /// Extracts the browser token (<c>t</c> query parameter) from a dashboard login URL.
+    /// Returns <c>null</c> if the URL does not contain a login token.
+    /// </summary>
+    internal static string? ExtractLoginToken(string? url)
+    {
+        if (url is null)
+        {
+            return null;
+        }
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+            uri.AbsolutePath.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
+        {
+            // Parse query string to find 't' parameter
+            var queryParams = HttpUtility.ParseQueryString(uri.Query);
+            var token = queryParams["t"];
+            if (!string.IsNullOrEmpty(token))
+            {
+                return token;
+            }
+        }
+
+        return null;
     }
 }

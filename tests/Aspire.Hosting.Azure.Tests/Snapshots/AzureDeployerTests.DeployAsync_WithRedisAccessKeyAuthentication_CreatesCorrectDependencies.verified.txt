@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 38
+Total steps defined: 39
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -16,42 +16,43 @@ Steps with no dependencies run first, followed by steps that depend on them.
 
   1. process-parameters
   2. build-prereq
-  3. deploy-prereq
-  4. build-api
-  5. build
-  6. validate-azure-login
-  7. create-provisioning-context
-  8. provision-api-identity
-  9. provision-cache-kv
- 10. provision-api-roles-cache-kv
- 11. provision-cosmos-kv
- 12. provision-api-roles-cosmos-kv
- 13. provision-pg-kv
- 14. provision-api-roles-pg-kv
- 15. provision-cache
- 16. provision-cosmos
- 17. provision-env-acr
- 18. provision-env
- 19. provision-pg
- 20. login-to-acr-env-acr
- 21. push-prereq
- 22. push-api
- 23. provision-api-website
- 24. print-api-summary
- 25. provision-azure-bicep-resources
- 26. print-dashboard-url-env
- 27. deploy
- 28. deploy-api
- 29. destroy-prereq
- 30. destroy-azure-azure634f9
- 31. destroy
- 32. diagnostics
- 33. publish-prereq
- 34. publish-azure634f9
- 35. validate-appservice-config-env
- 36. publish
- 37. publish-manifest
- 38. push
+  3. check-container-runtime
+  4. deploy-prereq
+  5. build-api
+  6. build
+  7. validate-azure-login
+  8. create-provisioning-context
+  9. provision-api-identity
+ 10. provision-cache-kv
+ 11. provision-api-roles-cache-kv
+ 12. provision-cosmos-kv
+ 13. provision-api-roles-cosmos-kv
+ 14. provision-pg-kv
+ 15. provision-api-roles-pg-kv
+ 16. provision-cache
+ 17. provision-cosmos
+ 18. provision-env-acr
+ 19. provision-env
+ 20. provision-pg
+ 21. login-to-acr-env-acr
+ 22. push-prereq
+ 23. push-api
+ 24. provision-api-website
+ 25. print-api-summary
+ 26. provision-azure-bicep-resources
+ 27. print-dashboard-url-env
+ 28. deploy
+ 29. deploy-api
+ 30. destroy-prereq
+ 31. destroy-azure-azure634f9
+ 32. destroy
+ 33. diagnostics
+ 34. publish-prereq
+ 35. publish-azure634f9
+ 36. validate-appservice-config-env
+ 37. publish
+ 38. publish-manifest
+ 39. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -64,13 +65,17 @@ Step: build
 
 Step: build-api
     Description: Builds the container image for the api project.
-    Dependencies: ✓ build-prereq, ✓ deploy-prereq
+    Dependencies: ✓ build-prereq, ✓ check-container-runtime, ✓ deploy-prereq
     Resource: api (ProjectResource)
     Tags: build-compute
 
 Step: build-prereq
     Description: Prerequisite step that runs before any build operations.
     Dependencies: ✓ process-parameters
+
+Step: check-container-runtime
+    Description: Checks whether the container runtime (Docker/Podman) is running.
+    Dependencies: none
 
 Step: create-provisioning-context
     Description: Creates the Azure provisioning context for infrastructure deployment.
@@ -266,18 +271,18 @@ Steps at the same level can run concurrently.
 ─────────────────────────────────────────────────────────────────────────────
 If targeting 'build':
   Direct dependencies: build-api
-  Total steps: 5
+  Total steps: 6
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api
     [3] build
 
 If targeting 'build-api':
-  Direct dependencies: build-prereq, deploy-prereq
-  Total steps: 4
+  Direct dependencies: build-prereq, check-container-runtime, deploy-prereq
+  Total steps: 5
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api
 
@@ -287,6 +292,12 @@ If targeting 'build-prereq':
   Execution order:
     [0] process-parameters
     [1] build-prereq
+
+If targeting 'check-container-runtime':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] check-container-runtime
 
 If targeting 'create-provisioning-context':
   Direct dependencies: deploy-prereq, validate-azure-login
@@ -299,9 +310,9 @@ If targeting 'create-provisioning-context':
 
 If targeting 'deploy':
   Direct dependencies: build-api, create-provisioning-context, print-api-summary, print-dashboard-url-env, provision-azure-bicep-resources, validate-azure-login
-  Total steps: 26
+  Total steps: 27
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -316,9 +327,9 @@ If targeting 'deploy':
 
 If targeting 'deploy-api':
   Direct dependencies: print-api-summary
-  Total steps: 24
+  Total steps: 25
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -377,9 +388,9 @@ If targeting 'login-to-acr-env-acr':
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-website
-  Total steps: 23
+  Total steps: 24
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -392,9 +403,9 @@ If targeting 'print-api-summary':
 
 If targeting 'print-dashboard-url-env':
   Direct dependencies: provision-azure-bicep-resources, provision-env
-  Total steps: 24
+  Total steps: 25
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -457,9 +468,9 @@ If targeting 'provision-api-roles-pg-kv':
 
 If targeting 'provision-api-website':
   Direct dependencies: create-provisioning-context, provision-api-identity, provision-api-roles-cache-kv, provision-api-roles-cosmos-kv, provision-api-roles-pg-kv, provision-cache, provision-cache-kv, provision-cosmos, provision-cosmos-kv, provision-env, provision-pg, provision-pg-kv, push-api
-  Total steps: 22
+  Total steps: 23
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -471,9 +482,9 @@ If targeting 'provision-api-website':
 
 If targeting 'provision-azure-bicep-resources':
   Direct dependencies: create-provisioning-context, deploy-prereq, provision-api-identity, provision-api-roles-cache-kv, provision-api-roles-cosmos-kv, provision-api-roles-pg-kv, provision-api-website, provision-cache, provision-cache-kv, provision-cosmos, provision-cosmos-kv, provision-env, provision-env-acr, provision-pg, provision-pg-kv
-  Total steps: 23
+  Total steps: 24
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -600,9 +611,9 @@ If targeting 'publish-prereq':
 
 If targeting 'push':
   Direct dependencies: push-api, push-prereq
-  Total steps: 11
+  Total steps: 12
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context
@@ -614,9 +625,9 @@ If targeting 'push':
 
 If targeting 'push-api':
   Direct dependencies: build-api, push-prereq
-  Total steps: 10
+  Total steps: 11
   Execution order:
-    [0] process-parameters
+    [0] check-container-runtime | process-parameters (parallel)
     [1] build-prereq | deploy-prereq (parallel)
     [2] build-api | validate-azure-login (parallel)
     [3] create-provisioning-context

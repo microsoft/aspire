@@ -237,7 +237,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         return Task.CompletedTask;
     }
 
-    private async Task<NuGetPackageCli> GetLatestVersionOfPackageAsync(UpdateContext context, string packageId, CancellationToken cancellationToken)
+    private async Task<NuGetPackageCli?> GetLatestVersionOfPackageAsync(UpdateContext context, string packageId, CancellationToken cancellationToken, bool throwIfNotFound = true)
     {
         var cacheKey = $"LatestPackage-{packageId}";
         var latestPackage = await cache.GetOrCreateAsync(cacheKey, async entry =>
@@ -251,7 +251,18 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             return latestPackage;
         });
 
-        return latestPackage ?? throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.NoPackageFoundFormat, packageId, context.Channel.Name));
+        if (latestPackage is null)
+        {
+            if (throwIfNotFound)
+            {
+                throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.NoPackageFoundFormat, packageId, context.Channel.Name));
+            }
+
+            logger.LogWarning(UpdateCommandStrings.PackageNotFoundInChannelWarningFormat, packageId, context.Channel.Name);
+            return null;
+        }
+
+        return latestPackage;
     }
 
     private async Task AnalyzeAppHostSdkAsync(UpdateContext context, CancellationToken cancellationToken)
@@ -708,22 +719,28 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task AnalyzePackageForTraditionalManagementAsync(string packageId, string packageVersion, FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
     {
-        var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, cancellationToken);
+        var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, cancellationToken, throwIfNotFound: false);
+
+        if (latestPackage is null)
+        {
+            // Package was not found in the channel; a warning has already been logged. Skip this package.
+            return;
+        }
 
         // Treat unparseable versions (including range expressions) like wildcards - always update them
         // Only skip if the version is a valid semantic version that matches the latest
-        if (IsValidSemanticVersion(packageVersion) && packageVersion == latestPackage?.Version)
+        if (IsValidSemanticVersion(packageVersion) && packageVersion == latestPackage.Version)
         {
             logger.LogInformation("Package '{PackageId}' is up to date.", packageId);
             return;
         }
 
         var updateStep = new PackageUpdateStep(
-            string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, packageId, packageVersion, latestPackage!.Version),
+            string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, packageId, packageVersion, latestPackage.Version),
             () => UpdatePackageReferenceInProject(projectFile, latestPackage, cancellationToken),
             packageId,
             packageVersion,
-            latestPackage!.Version,
+            latestPackage.Version,
             projectFile);
         context.UpdateSteps.Enqueue(updateStep);
     }
@@ -738,22 +755,28 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             return;
         }
 
-        var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, cancellationToken);
+        var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, cancellationToken, throwIfNotFound: false);
+
+        if (latestPackage is null)
+        {
+            // Package was not found in the channel; a warning has already been logged. Skip this package.
+            return;
+        }
 
         // Treat unparseable versions (including range expressions) like wildcards - always update them
         // Only skip if the version is a valid semantic version that matches the latest
-        if (IsValidSemanticVersion(currentVersion) && currentVersion == latestPackage?.Version)
+        if (IsValidSemanticVersion(currentVersion) && currentVersion == latestPackage.Version)
         {
             logger.LogInformation("Package '{PackageId}' is up to date.", packageId);
             return;
         }
 
         var updateStep = new PackageUpdateStep(
-            string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, packageId, currentVersion, latestPackage!.Version),
-            () => UpdatePackageVersionInDirectoryPackagesProps(packageId, latestPackage!.Version, directoryPackagesPropsFile),
+            string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, packageId, currentVersion, latestPackage.Version),
+            () => UpdatePackageVersionInDirectoryPackagesProps(packageId, latestPackage.Version, directoryPackagesPropsFile),
             packageId,
             currentVersion,
-            latestPackage!.Version,
+            latestPackage.Version,
             projectFile);
         context.UpdateSteps.Enqueue(updateStep);
     }

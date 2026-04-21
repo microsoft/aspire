@@ -9,10 +9,11 @@ using Xunit;
 namespace Aspire.Deployment.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests for deploying Aspire starter template with Redis to AKS.
-/// This validates that the starter template with Redis cache works out-of-the-box on Kubernetes.
+/// End-to-end tests for deploying Aspire starter template with Redis to AKS using manual Helm chart generation.
+/// This validates that the starter template with Redis cache works out-of-the-box on Kubernetes
+/// via <c>aspire publish</c> + <c>helm install</c>.
 /// </summary>
-public sealed class AksStarterWithRedisDeploymentTests(ITestOutputHelper output)
+public sealed class AksStarterWithRedisHelmDeploymentTests(ITestOutputHelper output)
 {
     // Timeout set to 45 minutes to allow for AKS provisioning (~10-15 min) plus deployment.
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
@@ -155,12 +156,8 @@ public sealed class AksStarterWithRedisDeploymentTests(ITestOutputHelper output)
 
             // ===== PHASE 2: Create Aspire Project with Redis and Generate Helm Charts =====
 
-            // Step 10: Set up CLI environment (in CI)
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 10: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            // Step 10: Set up CLI environment
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output, "Step 10");
 
             // Step 11: Create starter project with Redis enabled
             output.WriteLine("Step 11: Creating Aspire starter project with Redis...");
@@ -177,13 +174,7 @@ public sealed class AksStarterWithRedisDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync(); // select first version (PR build)
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 14: Modify AppHost.cs to add Kubernetes environment
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);

@@ -11,6 +11,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -49,7 +50,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act
@@ -97,11 +98,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
             options.PackagingServiceFactory = (sp) =>
             {
-                return new TestPackagingService();
+                return new ImplicitChannelPackagingService();
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act
@@ -200,7 +201,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act - Invoke init command
@@ -278,11 +279,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             // Mock packaging service
             options.PackagingServiceFactory = (sp) =>
             {
-                return new TestPackagingService();
+                return new ImplicitChannelPackagingService();
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act - Invoke init command
@@ -374,11 +375,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             // Mock packaging service to return fake channels
             options.PackagingServiceFactory = (sp) =>
             {
-                return new TestPackagingService();
+                return new ImplicitChannelPackagingService();
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         // Act - Invoke init command
@@ -426,8 +427,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
-    // Test implementation of IPackagingService
-    private sealed class TestPackagingService : IPackagingService
+    private sealed class ImplicitChannelPackagingService : IPackagingService
     {
         public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
         {
@@ -511,7 +511,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<InitCommand>();
         var result = command.Parse("init --channel stable");
@@ -521,6 +521,179 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.Equal(0, exitCode);
         Assert.Equal("stable", channelNameUsed);
+        Assert.False(promptedForVersion);
+    }
+
+    [Fact]
+    public async Task InitCommandWithPrChannelPrefersCurrentCliVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        string? selectedVersion = null;
+        bool promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForTemplatesVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt for version when a PR channel contains the current CLI version.");
+                };
+
+                return prompter;
+            };
+
+            options.PackagingServiceFactory = (sp) =>
+            {
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = (ct) =>
+                    {
+                        var fakeCache = new CallbackNuGetPackageCache(
+                            (dir, prerelease, nugetConfig, ct) =>
+                            {
+                                var packages = new[]
+                                {
+                                    new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = cliVersion },
+                                    new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "99.0.0" },
+                                };
+
+                                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(packages);
+                            });
+
+                        var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache);
+                        return Task.FromResult<IEnumerable<PackageChannel>>([prChannel]);
+                    }
+                };
+            };
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                {
+                    selectedVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    var appHostFile = Path.Combine(outputPath, "apphost.cs");
+                    File.WriteAllText(appHostFile, "// Test apphost file");
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<InitCommand>();
+        var result = command.Parse("init --channel pr-12345");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(cliVersion, selectedVersion);
+        Assert.False(promptedForVersion);
+    }
+
+    [Fact]
+    public async Task InitCommandWithPrHivePrefersCurrentCliVersionWithoutChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        hivesDir.Create();
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        string? selectedVersion = null;
+        bool promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForTemplatesVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt for version when PR hives contain the current CLI version.");
+                };
+
+                return prompter;
+            };
+
+            options.PackagingServiceFactory = _ =>
+            {
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ =>
+                    {
+                        var implicitCache = new CallbackNuGetPackageCache(
+                            (dir, prerelease, nugetConfig, ct) =>
+                            {
+                                var packages = new[]
+                                {
+                                    new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "99.0.0" },
+                                };
+
+                                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(packages);
+                            });
+                        var prCache = new CallbackNuGetPackageCache(
+                            (dir, prerelease, nugetConfig, ct) =>
+                            {
+                                var packages = new[]
+                                {
+                                    new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = cliVersion },
+                                    new Aspire.Shared.NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "98.0.0" },
+                                };
+
+                                return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(packages);
+                            });
+
+                        return Task.FromResult<IEnumerable<PackageChannel>>(
+                        [
+                            PackageChannel.CreateImplicitChannel(implicitCache),
+                            PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], prCache)
+                        ]);
+                    }
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetSource, force, invocationOptions, ct) =>
+                {
+                    selectedVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
+                {
+                    var appHostFile = Path.Combine(outputPath, "apphost.cs");
+                    File.WriteAllText(appHostFile, "// Test apphost file");
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<InitCommand>();
+        var result = command.Parse("init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(cliVersion, selectedVersion);
         Assert.False(promptedForVersion);
     }
 
@@ -536,7 +709,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return new TestPackagingServiceWithChannelTracking(_ => { });
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<InitCommand>();
         var result = command.Parse("init --channel invalid-channel");
@@ -581,11 +754,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             };
             options.PackagingServiceFactory = (sp) =>
             {
-                return new TestPackagingService();
+                return new ImplicitChannelPackagingService();
             };
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         var parseResult = initCommand.Parse("init");
@@ -636,7 +809,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             }
         });
 
-        var serviceProvider = services.BuildServiceProvider();
+        using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
         var parseResult = initCommand.Parse("init");

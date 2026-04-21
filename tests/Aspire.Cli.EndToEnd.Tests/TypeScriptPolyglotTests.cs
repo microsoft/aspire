@@ -35,7 +35,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -111,7 +111,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
                     "This indicates multiple apphosts were incorrectly detected.");
             }
 
-            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.")
+                || s.ContainsText("Press CTRL+C to stop the apphost and exit.");
         }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (aspire run started)");
 
         // Step 7: Stop the apphost
@@ -149,6 +150,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
+        await auto.EnablePolyglotSupportAsync(counter);
 
         // Create brownfield Vite project
         await auto.TypeAsync("mkdir brownfield && cd brownfield");
@@ -245,7 +247,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
                     "This indicates multiple apphosts were incorrectly detected.");
             }
 
-            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.");
+            return s.ContainsText("Press CTRL+C to stop the AppHost and exit.")
+                || s.ContainsText("Press CTRL+C to stop the apphost and exit.");
         }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (aspire run started)");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);

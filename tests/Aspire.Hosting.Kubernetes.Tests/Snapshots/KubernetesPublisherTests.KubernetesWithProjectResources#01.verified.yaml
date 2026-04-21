@@ -1,12 +1,9 @@
-﻿parameters:
+parameters:
   project1:
     port_http: 8080
     project1_image: "project1:latest"
 secrets: {}
 config:
-  env_dashboard:
-    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
-    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
   project1:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"

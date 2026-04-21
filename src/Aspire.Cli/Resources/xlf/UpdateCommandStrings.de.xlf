@@ -157,6 +157,11 @@
         <target state="translated">Schreiben in das Installationsverzeichnis „{0}“ ist nicht möglich. Führen Sie das Update mit erhöhten Berechtigungen aus (zum Beispiel mit sudo unter Linux/macOS).</target>
         <note />
       </trans-unit>
+      <trans-unit id="PackageNotFoundInChannelWarningFormat">
+        <source>No package found with ID '{0}' in channel '{1}'. Skipping.</source>
+        <target state="new">No package found with ID '{0}' in channel '{1}'. Skipping.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PackageReferenceNoIdentity">
         <source>Package reference does not have Identity.</source>
         <target state="translated">Der Paketverweis hat keine Identität.</target>

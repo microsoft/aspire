@@ -25,25 +25,18 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
     [QuarantinedTest("https://github.com/microsoft/aspire/issues/16188")]
     public async Task AllPublishMethodsBuildDockerImages()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-        var isCI = CliE2ETestHelpers.IsRunningInCI;
-        using var terminal = CliE2ETestHelpers.CreateTestTerminal();
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
-        await auto.PrepareEnvironmentAsync(workspace, counter);
-
-        if (isCI)
-        {
-            await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
-            await auto.SourceAspireCliEnvironmentAsync(counter);
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create TS AppHost and add packages
         await auto.TypeAsync("aspire init");

@@ -19,6 +19,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(45);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/16330")]
     public async Task DeployFoundryHostedAgentToAzure()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -75,12 +76,8 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            // Step 2: Set up CLI environment
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create starter project using aspire new (for basic AppHost scaffold)
             output.WriteLine("Step 3: Creating starter project...");
@@ -97,14 +94,8 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Foundry");
             await auto.EnterAsync();
 
-            // In CI, aspire add shows a version selection prompt
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync(); // select first version (PR build)
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            // aspire add may show a version selection prompt
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 6: Create a dedicated .NET hosted agent project
             // PublishAsHostedAgent requires a proper agent application, not a standard apiservice.
@@ -131,7 +122,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     <PackageReference Include="Azure.AI.AgentServer.AgentFramework" Version="1.0.0-beta.11" />
                     <PackageReference Include="Azure.AI.Projects" Version="1.2.0-beta.4" />
                     <PackageReference Include="Azure.AI.OpenAI" Version="2.5.0-beta.1" />
-                    <PackageReference Include="Azure.Identity" Version="1.13.2" />
+                    <PackageReference Include="Azure.Identity" Version="1.18.0" />
                     <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.1.0" />
                     <PackageReference Include="Microsoft.Extensions.AI" Version="10.4.0" />
                     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.4.0" />

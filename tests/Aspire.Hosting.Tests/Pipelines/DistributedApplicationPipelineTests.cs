@@ -730,7 +730,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WithDependencyFailure_ReportsFailedDependency()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
@@ -750,7 +750,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         {
             dependentStepExecuted = true;
             await Task.CompletedTask;
-        }, dependsOn: "failing-dependency");
+        }, dependsOn: "failing-dependency", requiredBy: "deploy");
 
         var context = CreateDeployingContext(builder.Build());
 
@@ -812,7 +812,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     public async Task ExecuteAsync_WithFailure_PreventsOtherStepsFromStarting()
     {
         // Test that when one step fails, other steps that haven't started yet don't start
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
@@ -832,7 +832,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         {
             step2Started = true;
             await Task.CompletedTask;
-        }, dependsOn: "step1");
+        }, dependsOn: "step1", requiredBy: "deploy");
 
         var context = CreateDeployingContext(builder.Build());
 
@@ -840,6 +840,116 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         // Step 2 should never start because its dependency failed
         Assert.False(step2Started, "Step depending on failed step should not start");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_IndependentStepContinuesWhenSiblingFails()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
+
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        var pipeline = new DistributedApplicationPipeline();
+
+        var independentStepExecuted = false;
+        var failingStepStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Step that will fail
+        pipeline.AddStep("failing-step", (context) =>
+        {
+            failingStepStarted.SetResult();
+            throw new InvalidOperationException("This step fails");
+        }, requiredBy: "deploy");
+
+        // Independent step — no dependency on failing-step, waits for it to start
+        pipeline.AddStep("independent-step", async (context) =>
+        {
+            await failingStepStarted.Task.ConfigureAwait(false);
+            independentStepExecuted = true;
+        }, requiredBy: "deploy");
+
+        var context = CreateDeployingContext(builder.Build());
+
+        await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context)).DefaultTimeout();
+
+        // The independent step should have executed despite the sibling failure
+        Assert.True(independentStepExecuted, "Independent step should execute even when a sibling step fails");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_IndependentStepIsNotCancelledWhenSiblingFails()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
+
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        var pipeline = new DistributedApplicationPipeline();
+
+        var wasCancelled = false;
+        var failingStepCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Step that fails
+        pipeline.AddStep("failing-step", (context) =>
+        {
+            failingStepCompleted.SetResult();
+            throw new InvalidOperationException("Immediate failure");
+        }, requiredBy: "deploy");
+
+        // Independent step that checks cancellation after the failing step has completed
+        pipeline.AddStep("long-running-step", async (context) =>
+        {
+            await failingStepCompleted.Task.ConfigureAwait(false);
+            wasCancelled = context.CancellationToken.IsCancellationRequested;
+        }, requiredBy: "deploy");
+
+        var context = CreateDeployingContext(builder.Build());
+
+        await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context)).DefaultTimeout();
+
+        // The long-running step's cancellation token should NOT have been triggered by the sibling failure
+        Assert.False(wasCancelled, "Independent step should not be cancelled when a sibling step fails");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_DependentStepSkippedButIndependentContinues()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "deploy").WithTestAndResourceLogging(testOutputHelper);
+
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+        var pipeline = new DistributedApplicationPipeline();
+
+        var dependentExecuted = false;
+        var independentExecuted = false;
+        var failingStepCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // Step that fails
+        pipeline.AddStep("failing-step", (context) =>
+        {
+            failingStepCompleted.SetResult();
+            throw new InvalidOperationException("Build failed");
+        }, requiredBy: "deploy");
+
+        // Dependent step — should NOT run
+        pipeline.AddStep("dependent-step", async (context) =>
+        {
+            dependentExecuted = true;
+            await Task.CompletedTask;
+        }, dependsOn: "failing-step", requiredBy: "deploy");
+
+        // Independent step — SHOULD run, waits for failing step to complete
+        pipeline.AddStep("independent-step", async (context) =>
+        {
+            await failingStepCompleted.Task.ConfigureAwait(false);
+            independentExecuted = true;
+        }, requiredBy: "deploy");
+
+        var context = CreateDeployingContext(builder.Build());
+
+        await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context)).DefaultTimeout();
+
+        Assert.False(dependentExecuted, "Dependent step should not execute when dependency fails");
+        Assert.True(independentExecuted, "Independent step should execute even when other steps fail");
     }
 
     [Fact]
@@ -878,7 +988,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
     [Fact]
     public async Task ExecuteAsync_WhenStepThrowsProcessFailedException_RethrowsWithoutWrapping()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "failing-step").WithTestAndResourceLogging(testOutputHelper);
 
         builder.Services.AddSingleton(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
@@ -1448,7 +1558,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         await pipeline.ExecuteAsync(context).DefaultTimeout();
 
         Assert.True(callbackExecuted);
-        Assert.Equal(14, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, push, push-prereq, publish, publish-prereq, diagnostics, destroy, destroy-prereq + step1, step2
+        Assert.Equal(15, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, check-container-runtime, push, push-prereq, publish, publish-prereq, diagnostics, destroy, destroy-prereq + step1, step2
         Assert.Contains(capturedSteps, s => s.Name == "deploy");
         Assert.Contains(capturedSteps, s => s.Name == "process-parameters");
         Assert.Contains(capturedSteps, s => s.Name == "deploy-prereq");

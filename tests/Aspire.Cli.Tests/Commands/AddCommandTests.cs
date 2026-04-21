@@ -7,6 +7,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 using Microsoft.AspNetCore.InternalTesting;
@@ -20,7 +21,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("add --help");
@@ -85,7 +86,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add");
@@ -160,7 +161,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add docker");
@@ -243,7 +244,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add docker --version 9.2.0");
@@ -324,7 +325,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add red");
@@ -393,7 +394,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<AddCommand>();
@@ -433,7 +434,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add");
@@ -509,7 +510,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         var result = command.Parse("add nonexistentpackage");
@@ -562,7 +563,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return mockInteraction;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
         var prompter = new AddCommandPrompter(interactionService);
@@ -610,7 +611,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return mockInteraction;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
         var prompter = new AddCommandPrompter(interactionService);
@@ -658,7 +659,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 return mockInteraction;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var interactionService = provider.GetRequiredService<IInteractionService>();
 
         var prompter = new AddCommandPrompter(interactionService);
@@ -733,7 +734,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             };
         });
         
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Act - without hives, should automatically select from implicit channel without prompting
         var command = provider.GetRequiredService<AddCommand>();
@@ -801,7 +802,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<AddCommand>();
@@ -811,6 +812,81 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.Equal(0, exitCode);
         Assert.Equal("13.2.0-pr.12345.gabc", selectedPackageVersion);
+    }
+
+    [Fact]
+    public async Task AddCommand_WithPrHive_PrefersCurrentCliVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        hivesDir.Create();
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        var selectedPackageVersion = string.Empty;
+        var promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt when the current CLI version is available in a PR hive.");
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
+                {
+                    var implicitPackage = new NuGetPackage
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "implicit",
+                        Version = "13.2.2"
+                    };
+
+                    var prHivePackage = new NuGetPackage
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "pr-hive",
+                        Version = cliVersion
+                    };
+
+                    return nugetSource is null
+                        ? (0, new[] { implicitPackage })
+                        : (0, new[] { prHivePackage });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
+                {
+                    selectedPackageVersion = packageVersion;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForVersion);
+        Assert.Equal(cliVersion, selectedPackageVersion);
     }
 }
 
@@ -906,7 +982,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         // Use "postgre" instead of "postgresql" - should still find it via fuzzy search
@@ -991,7 +1067,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         // Use "sql" - should match both PostgreSQL and MySql, but not Redis or RabbitMQ
@@ -1061,7 +1137,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<AddCommand>();
         // Use "azureapp" (Azure AppContainers) - should find Azure.AppContainers via fuzzy search

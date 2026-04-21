@@ -307,9 +307,28 @@ internal class ConsoleInteractionService : IInteractionService
     public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
     {
         var effectiveConsole = consoleOverride ?? Console;
+        if (ShouldDisplayMarkdownAsPlainText(effectiveConsole))
+        {
+            var plainText = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
+            DisplayRawText(plainText, effectiveConsole);
+            return;
+        }
+
         var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
         var spectreMarkup = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
         target.MarkupLine(spectreMarkup);
+    }
+
+    private bool ShouldDisplayMarkdownAsPlainText(ConsoleOutput effectiveConsole)
+    {
+        if (!_hostEnvironment.SupportsInteractiveOutput)
+        {
+            return true;
+        }
+
+        return effectiveConsole == ConsoleOutput.Error
+            ? System.Console.IsErrorRedirected
+            : System.Console.IsOutputRedirected;
     }
 
     public void DisplayMarkupLine(string markup)
