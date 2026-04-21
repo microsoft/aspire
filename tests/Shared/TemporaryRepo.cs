@@ -56,7 +56,14 @@ internal sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directo
 
         outputHelper.WriteLine($"Disposing temporary workspace at: {repoDirectory.FullName}");
 
-        DeleteDirectoryWithRetries(repoDirectory);
+        try
+        {
+            DeleteDirectoryWithRetries(repoDirectory);
+        }
+        catch (IOException ex)
+        {
+            outputHelper.WriteLine($"Failed to delete temporary workspace '{repoDirectory.FullName}': {ex.Message}");
+        }
     }
 
     private static void DeleteDirectoryWithRetries(DirectoryInfo directory)
