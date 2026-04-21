@@ -96,8 +96,9 @@
 
   <!-- Pack the NativeAOT binary as a dotnet global tool nupkg.
        Runs after _PublishProject so the binary exists, and produces the nupkg in
-       artifacts/packages/<Config>/Shipping/ where Arcade signing can find it. -->
-  <Target Name="_PackCliTool" AfterTargets="_PublishProject">
+       artifacts/packages/<Config>/Shipping/ where Arcade signing can find it.
+       Opt-in only: pass /p:PackCliTool=true to enable. -->
+  <Target Name="_PackCliTool" AfterTargets="_PublishProject" Condition="'$(PackCliTool)' == 'true'">
     <ItemGroup>
       <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
       <_PackToolProperties Include="PreBuiltCliBinaryPath=$(_NativeBinaryPath)" />

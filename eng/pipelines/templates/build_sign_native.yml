@@ -125,11 +125,6 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout
 
-          # The CLI tool nupkg is now built by _PackCliTool inside clipack
-          # (Common.projitems), so no standalone pack step is needed here.
-          # The nupkg lands in artifacts/packages/<Config>/Shipping/ and gets
-          # signed by Arcade's --sign step below.
-
           - script: >-
               $(Build.SourcesDirectory)/$(scriptName)
               --ci
@@ -137,6 +132,7 @@ jobs:
               --restore
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
+              /p:PackCliTool=true
               /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
               $(_buildArgs)
               ${{ parameters.extraBuildArgs }}
@@ -169,12 +165,15 @@ jobs:
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
           # Verify the CLI dotnet-tool nupkg (size, binary file type, pointer package).
-          - script: |
-              set -euo pipefail
-              chmod +x "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.sh"
-              "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.sh" \
-                "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)" \
-                "${{ targetRid }}"
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" `
+                -PackagesDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)" `
+                -Rid "${{ targetRid }}"
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "##[error]CLI tool nupkg verification failed for ${{ targetRid }}"
+                exit 1
+              }
             displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
             condition: succeeded()
 

@@ -93,12 +93,9 @@ jobs:
           /p:ContinuousIntegrationBuild=true
           /p:SkipManagedBuild=true
           /p:TargetRids=${{ matrix.targets.rids }}
+          /p:PackCliTool=true
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
           ${{ inputs.versionOverrideArg }}
-
-      # The CLI tool nupkg is now built by _PackCliTool inside clipack
-      # (Common.projitems), which runs as part of the "Build CLI packages" step above.
-      # No standalone pack step is needed here.
 
       # Upload DCP, Dashboard, and CLI tool NuGets so test/polyglot jobs can download them
       - name: Upload RID-specific NuGets

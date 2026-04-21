@@ -45,8 +45,6 @@ steps:
     # Step 1: dotnet publish produces the self-contained single-file aspire-managed binary.
     # Step 2: build.cmd -sign runs Arcade's signing, which picks up the binary via ItemsToSign in Signing.props.
     # Step 3: Bundle.proj creates the bundle layout and archive using the signed binary.
-    # The CLI tool nupkg is now built by _PackCliTool inside clipack (Common.projitems),
-    # which runs as part of the main build step. No standalone pack step is needed here.
     - ${{ each targetRid in parameters.targetRids }}:
       - script: ${{ parameters.dotnetScript }}
                 publish
@@ -89,6 +87,7 @@ steps:
               $(_OfficialBuildIdArgs)
               $(_InternalBuildArgs)
               /p:TargetRids=${{ join(':', parameters.targetRids) }}
+              /p:PackCliTool=true
               /p:SkipTestProjects=true
               /p:BuildExtension=true
       displayName: 🟣Build
