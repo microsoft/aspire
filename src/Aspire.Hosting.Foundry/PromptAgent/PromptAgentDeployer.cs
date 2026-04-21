@@ -3,10 +3,12 @@
 
 // These using directives are flagged as unnecessary by the analyzer but are required for compilation.
 #pragma warning disable IDE0005
+using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 #pragma warning restore IDE0005
 
@@ -23,7 +25,8 @@ namespace Aspire.Hosting.Foundry;
 internal sealed class PromptAgentDeployer(
     ResourceNotificationService notificationService,
     ResourceLoggerService loggerService,
-    DistributedApplicationExecutionContext executionContext
+    DistributedApplicationExecutionContext executionContext,
+    IConfiguration configuration
 ) : IDistributedApplicationEventingSubscriber
 {
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext _, CancellationToken cancellationToken)
@@ -42,6 +45,16 @@ internal sealed class PromptAgentDeployer(
         if (agents.Count == 0)
         {
             return;
+        }
+
+        // Collect all unique tools across agents and set initial state
+        var allTools = agents.SelectMany(a => a.Tools).Distinct().ToList();
+        foreach (var tool in allTools)
+        {
+            await notificationService.PublishUpdateAsync(tool, s => s with
+            {
+                State = new("Waiting", KnownResourceStateStyles.Info)
+            }).ConfigureAwait(false);
         }
 
         // Fire-and-forget: deploy each agent after its project becomes available
@@ -105,9 +118,41 @@ internal sealed class PromptAgentDeployer(
 
             logger.LogInformation("Successfully deployed prompt agent '{AgentName}' (version {Version})", agent.Name, version.Version);
 
+            // Mark all tools attached to this agent as running
+            foreach (var tool in agent.Tools)
+            {
+                await notificationService.PublishUpdateAsync(tool, s => s with
+                {
+                    State = new("Running", KnownResourceStateStyles.Success)
+                }).ConfigureAwait(false);
+            }
+
+            // Build the Foundry portal URL for this agent
+            var portalUrls = ImmutableArray<UrlSnapshot>.Empty;
+            var subscriptionId = configuration["Azure:SubscriptionId"];
+            var resourceGroupName = configuration["Azure:ResourceGroup"];
+            if (!string.IsNullOrEmpty(subscriptionId) && !string.IsNullOrEmpty(resourceGroupName))
+            {
+                // Use NameOutputReference to get the actual provisioned Azure names (not the Aspire resource names)
+                var foundryAccountName = await project.Parent.NameOutputReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+                var projectNameOutput = await project.NameOutputReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+
+                if (!string.IsNullOrEmpty(foundryAccountName) && !string.IsNullOrEmpty(projectNameOutput))
+                {
+                    // Project name output is "accountName/projectName" — extract just the project name
+                    var projectName = projectNameOutput.Contains('/')
+                        ? projectNameOutput[(projectNameOutput.LastIndexOf('/') + 1)..]
+                        : projectNameOutput;
+                    var encodedSubscriptionId = AzureCognitiveServicesProjectResource.EncodeSubscriptionId(subscriptionId);
+                    var portalUrl = $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId},{resourceGroupName},,{foundryAccountName},{projectName}/build/agents/{agent.Name}/build";
+                    portalUrls = [new UrlSnapshot(Name: "Foundry Portal", Url: portalUrl, IsInternal: false)];
+                }
+            }
+
             await notificationService.PublishUpdateAsync(agent, s => s with
             {
-                State = new("Running", KnownResourceStateStyles.Success)
+                State = new("Running", KnownResourceStateStyles.Success),
+                Urls = portalUrls
             }).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

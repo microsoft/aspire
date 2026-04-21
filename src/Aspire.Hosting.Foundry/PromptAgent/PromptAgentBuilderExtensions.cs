@@ -1,11 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable OPENAI001 // Responses API is experimental
+
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Lifecycle;
+using Azure.AI.Extensions.OpenAI;
+using Azure.AI.Projects;
+using Azure.Identity;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -75,6 +81,80 @@ public static class PromptAgentBuilderExtensions
             agent.AddTool(tool.Resource);
             agentBuilder.WithReferenceRelationship(tool);
         }
+
+        // Add "Send Message" command to the dashboard (like hosted agents)
+        agentBuilder.WithCommand(
+            name: "send-message",
+            displayName: "Send Message",
+            executeCommand: async ctx =>
+            {
+                var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
+                var inputResult = await interactionService.PromptInputAsync(
+                    title: "Prompt Agent",
+                    message: $"Enter a message to send to '{name}'.",
+                    inputLabel: "Message",
+                    placeHolder: "Hello, what can you do?",
+                    cancellationToken: ctx.CancellationToken
+                ).ConfigureAwait(false);
+
+                if (inputResult.Canceled || string.IsNullOrWhiteSpace(inputResult.Data.Value))
+                {
+                    return new ExecuteCommandResult { Success = true };
+                }
+
+                try
+                {
+                    var endpoint = await agent.Project.Endpoint.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrEmpty(endpoint))
+                    {
+                        throw new InvalidOperationException("Project endpoint is not available.");
+                    }
+
+                    var projectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
+                    var agentRef = new AgentReference(name: name);
+                    var responseClient = projectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(agentRef);
+                    var response = await responseClient.CreateResponseAsync(inputResult.Data.Value, cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
+                    var outputText = response.Value.GetOutputText();
+
+                    await interactionService.PromptMessageBoxAsync(
+                        title: $"Response from '{name}'",
+                        message: outputText,
+                        options: new()
+                        {
+                            Intent = MessageIntent.Success,
+                            EnableMessageMarkdown = true,
+                            PrimaryButtonText = "OK"
+                        },
+                        cancellationToken: ctx.CancellationToken
+                    ).ConfigureAwait(false);
+
+                    return new ExecuteCommandResult { Success = true };
+                }
+                catch (Exception ex)
+                {
+                    await interactionService.PromptMessageBoxAsync(
+                        title: "Error",
+                        message: $"Failed to invoke agent: {ex.Message}",
+                        options: new()
+                        {
+                            Intent = MessageIntent.Error,
+                            PrimaryButtonText = "OK"
+                        },
+                        cancellationToken: ctx.CancellationToken
+                    ).ConfigureAwait(false);
+                    return new ExecuteCommandResult { Success = false };
+                }
+            },
+            commandOptions: new()
+            {
+                IconName = "Agents",
+                IconVariant = IconVariant.Regular,
+                IsHighlighted = true,
+            }
+        );
+
+        // Add Foundry portal URL for the agent (populated after deployment when subscription info is available)
+        // The actual URL is set by the PromptAgentDeployer after provisioning completes.
 
         return agentBuilder;
     }
