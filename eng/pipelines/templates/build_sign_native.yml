@@ -125,22 +125,10 @@ jobs:
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout
 
-          # Pack the CLI as a dotnet global tool nupkg containing the NativeAOT binary.
-          # This runs BEFORE the native packages build so the nupkg lands in the
-          # packages directory and gets signed by the --sign step in Build native packages.
-          - script: >-
-              $(Build.SourcesDirectory)/$(dotnetScript)
-              pack
-              $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
-              -c $(_BuildConfig)
-              -r ${{ targetRid }}
-              /p:ContinuousIntegrationBuild=true
-              /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
-              ${{ parameters.extraBuildArgs }}
-              /bl:$(Build.Arcade.LogsPath)PackCliTool.binlog
-            displayName: 🟣Pack CLI dotnet-tool (${{ targetRid }})
-            env:
-              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+          # The CLI tool nupkg is now built by _PackCliTool inside clipack
+          # (Common.projitems), so no standalone pack step is needed here.
+          # The nupkg lands in artifacts/packages/<Config>/Shipping/ and gets
+          # signed by Arcade's --sign step below.
 
           - script: >-
               $(Build.SourcesDirectory)/$(scriptName)

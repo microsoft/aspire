@@ -96,18 +96,9 @@ jobs:
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
           ${{ inputs.versionOverrideArg }}
 
-      # Pack the CLI as a dotnet global tool nupkg. This produces a NativeAOT tool
-      # package for the current RID so `dotnet tool install Aspire.Cli` gets a native binary.
-      - name: Pack CLI dotnet-tool
-        shell: ${{ runner.os == 'Windows' && 'pwsh' || 'bash' }}
-        run: >
-          ${{ env.DOTNET_SCRIPT }} pack src/Aspire.Cli/Aspire.Cli.Tool.csproj
-          -c ${{ inputs.configuration }}
-          -r ${{ matrix.targets.rids }}
-          /p:ContinuousIntegrationBuild=true
-          /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/PackCliTool.binlog
-          ${{ inputs.versionOverrideArg }}
+      # The CLI tool nupkg is now built by _PackCliTool inside clipack
+      # (Common.projitems), which runs as part of the "Build CLI packages" step above.
+      # No standalone pack step is needed here.
 
       # Upload DCP, Dashboard, and CLI tool NuGets so test/polyglot jobs can download them
       - name: Upload RID-specific NuGets

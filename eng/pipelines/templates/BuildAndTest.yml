@@ -45,8 +45,8 @@ steps:
     # Step 1: dotnet publish produces the self-contained single-file aspire-managed binary.
     # Step 2: build.cmd -sign runs Arcade's signing, which picks up the binary via ItemsToSign in Signing.props.
     # Step 3: Bundle.proj creates the bundle layout and archive using the signed binary.
-    # Step 4: dotnet pack creates the CLI dotnet-tool nupkg (lands in Shipping so the
-    #         main build's -sign step signs it alongside all other packages).
+    # The CLI tool nupkg is now built by _PackCliTool inside clipack (Common.projitems),
+    # which runs as part of the main build step. No standalone pack step is needed here.
     - ${{ each targetRid in parameters.targetRids }}:
       - script: ${{ parameters.dotnetScript }}
                 publish
@@ -78,19 +78,6 @@ steps:
                 /p:ContinuousIntegrationBuild=true
                 /bl:${{ parameters.repoLogPath }}/BundleLayout-${{ targetRid }}.binlog
         displayName: 🟣Create bundle layout (${{ targetRid }})
-
-      # Pack the CLI dotnet tool before the main build so the nupkg lands in
-      # Shipping and gets signed together with all other packages.
-      - script: ${{ parameters.dotnetScript }}
-                pack
-                $(Build.SourcesDirectory)/src/Aspire.Cli/Aspire.Cli.Tool.csproj
-                -c ${{ parameters.buildConfig }}
-                -r ${{ targetRid }}
-                /p:ContinuousIntegrationBuild=true
-                /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
-                $(_OfficialBuildIdArgs)
-                /bl:${{ parameters.repoLogPath }}/PackCliTool-${{ targetRid }}.binlog
-        displayName: 🟣Pack CLI dotnet-tool (${{ targetRid }})
 
     - script: ${{ parameters.buildScript }}
               -restore -build

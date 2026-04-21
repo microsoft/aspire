@@ -40,6 +40,34 @@
     <RuntimeIdentifiers></RuntimeIdentifiers>
   </PropertyGroup>
 
+  <!-- When packing with a pre-built NativeAOT binary (from clipack), skip the SDK's Publish
+       step and instead copy the binary into PublishDir for PackTool to glob.
+       This avoids NativeAOT cross-compilation failures (e.g. packing linux-arm64 on x64 host). -->
+  <PropertyGroup Condition="'$(PreBuiltCliBinaryPath)' != '' and '$(IsCliToolProject)' == 'true'">
+    <!-- Prevent the SDK from running Publish during Pack. The binary is already built. -->
+    <IsPublishable>false</IsPublishable>
+    <!-- NativeAOT binaries are fully self-contained; they don't need deps.json or
+         runtimeconfig.json. Clear paths so PackToolImplementation doesn't try to
+         include non-existent files in the nupkg. -->
+    <PublishDepsFilePath></PublishDepsFilePath>
+    <PublishRuntimeConfigFilePath></PublishRuntimeConfigFilePath>
+  </PropertyGroup>
+
+  <!-- Copy the pre-built NativeAOT binary to PublishDir before PackTool globs it.
+       BeforeTargets="PackTool" ensures this runs before PackTool's body (which does
+       _PublishFiles Include="$(PublishDir)/**/*") but after PackTool's DependsOnTargets
+       (which generates DotnetToolSettings.xml and validates properties). -->
+  <Target Name="_CopyPreBuiltCliBinary"
+          BeforeTargets="PackTool"
+          Condition="'$(PreBuiltCliBinaryPath)' != '' and '$(IsCliToolProject)' == 'true'">
+    <Error Condition="!Exists('$(PreBuiltCliBinaryPath)')"
+           Text="PreBuiltCliBinaryPath '$(PreBuiltCliBinaryPath)' does not exist." />
+    <!-- Clean PublishDir to prevent stale files from prior builds being globbed into the nupkg. -->
+    <RemoveDir Directories="$(PublishDir)" />
+    <MakeDir Directories="$(PublishDir)" />
+    <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+  </Target>
+
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
     <LinkerArg Condition="'$(RuntimeIdentifier)' == 'linux-musl-x64'" Include="--target=x86_64-alpine-linux-musl" />
   </ItemGroup>

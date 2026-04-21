@@ -94,6 +94,36 @@
     <Error Condition="!Exists('$(_NativeBinaryPath)')" Text="Could not find expected `aspire` binary at $(_NativeBinaryPath)" />
   </Target>
 
+  <!-- Pack the NativeAOT binary as a dotnet global tool nupkg.
+       Runs after _PublishProject so the binary exists, and produces the nupkg in
+       artifacts/packages/<Config>/Shipping/ where Arcade signing can find it. -->
+  <Target Name="_PackCliTool" AfterTargets="_PublishProject">
+    <ItemGroup>
+      <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
+      <_PackToolProperties Include="PreBuiltCliBinaryPath=$(_NativeBinaryPath)" />
+      <!-- Empty BundlePayloadPath prevents the managed IL compile (which runs as part of
+           Pack→Build) from embedding the bundle archive as an EmbeddedResource. The
+           pre-built NativeAOT binary already has the bundle embedded. -->
+      <_PackToolProperties Include="BundlePayloadPath=" />
+      <_PackToolProperties Include="Configuration=Release" />
+      <_PackToolProperties Include="ContinuousIntegrationBuild=true" />
+      <_PackToolProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_PackToolProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+    </ItemGroup>
+
+    <!-- Restore with the target RID to resolve runtime-specific packages. -->
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <!-- Pack produces the nupkg containing only the pre-built binary + DotnetToolSettings.xml. -->
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+  </Target>
+
   <Target Name="_ValidateNativeBinaryFileSignatureOnUnix" Condition="'$(_CheckFileSignature)' == 'true'">
     <Error Condition="$(FileSignatureRegex) == ''" Text="Property %24(FileSignatureRegex) is unset." />
 
