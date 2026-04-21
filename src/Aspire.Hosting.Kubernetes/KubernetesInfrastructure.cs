@@ -73,6 +73,9 @@ internal sealed class KubernetesInfrastructure(
                 var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
                 serviceResource.AddPrintSummaryStep();
 
+                // Configure ingress for resources with external HTTP endpoints.
+                await ConfigureIngressAsync(r, serviceResource, environment).ConfigureAwait(false);
+
                 // Add deployment target annotation to the resource.
                 // Use the resource's actual compute environment (which may be a parent
                 // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
@@ -130,6 +133,44 @@ internal sealed class KubernetesInfrastructure(
                 return Task.CompletedTask;
             }));
         }
+    }
+
+    private static async Task ConfigureIngressAsync(
+        IResource resource,
+        KubernetesResource kubernetesResource,
+        KubernetesEnvironmentResource environment)
+    {
+        // Collect external HTTP/HTTPS endpoints from the resource's endpoint annotations.
+        var externalHttpEndpoints = resource.Annotations
+            .OfType<EndpointAnnotation>()
+            .Where(e => e.IsExternal && e.UriScheme is "http" or "https")
+            .ToList();
+
+        if (externalHttpEndpoints.Count == 0)
+        {
+            return;
+        }
+
+        // Check for a resource-level ingress annotation first, then fall back to environment-level.
+        if (!resource.TryGetLastAnnotation<KubernetesIngressConfigurationAnnotation>(out var ingressAnnotation))
+        {
+            environment.TryGetLastAnnotation<KubernetesIngressConfigurationAnnotation>(out ingressAnnotation);
+        }
+
+        if (ingressAnnotation is null)
+        {
+            return;
+        }
+
+        var context = new KubernetesIngressContext
+        {
+            KubernetesResource = kubernetesResource,
+            Resource = resource,
+            Environment = environment,
+            ExternalHttpEndpoints = externalHttpEndpoints
+        };
+
+        await ingressAnnotation.Configure(context).ConfigureAwait(false);
     }
 
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
