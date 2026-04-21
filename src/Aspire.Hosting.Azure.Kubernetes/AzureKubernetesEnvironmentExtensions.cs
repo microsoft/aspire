@@ -594,9 +594,13 @@ public static class AzureKubernetesEnvironmentExtensions
             @description('The name of the AKS cluster.')
             param aksClusterName string
 
-            // Enable the Gateway API and ALB controller on the AKS cluster.
+            // Enable the managed Gateway API and ALB controller on the AKS cluster.
             // Uses 2026-02-02-preview which supports both gatewayAPI and
             // applicationLoadBalancer under ingressProfile.
+            // Prerequisites:
+            //   az feature register --namespace "Microsoft.ContainerService" --name "ManagedGatewayAPIPreview"
+            //   az feature register --namespace "Microsoft.ContainerService" --name "ApplicationLoadBalancerPreview"
+            //   az provider register --namespace Microsoft.ContainerService
             resource aksAlbUpdate 'Microsoft.ContainerService/managedClusters@2026-02-02-preview' = {
               name: aksClusterName
               location: location
