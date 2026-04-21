@@ -559,6 +559,8 @@ public class DistributedApplication : IHost, IAsyncDisposable
                 await lifecycleHook.BeforeStartAsync(appModel, cancellationToken).ConfigureAwait(false);
             }
 
+            EnsureComputeEnvironmentAnnotationsApplied(appModel);
+
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             // Execute the before-start pipeline step
             var pipeline = _host.Services.GetRequiredService<IDistributedApplicationPipeline>();
@@ -581,6 +583,47 @@ public class DistributedApplication : IHost, IAsyncDisposable
         finally
         {
             AspireEventSource.Instance.AppBeforeStartHooksStop();
+        }
+    }
+
+    /// <summary>
+    /// When the model contains exactly one compute environment, applies a
+    /// <see cref="ComputeEnvironmentAnnotation"/> pointing to that environment to every
+    /// <see cref="IComputeResource"/> that doesn't already have one.
+    /// </summary>
+    /// <remarks>
+    /// This implements the "single compute environment is the default" convention: when only one
+    /// compute environment is present (e.g., a single <c>AzureContainerAppEnvironmentResource</c>),
+    /// developers don't need to call <c>WithComputeEnvironment(...)</c> on every compute resource —
+    /// the unique environment is auto-assigned here. Resources that have been explicitly bound to a
+    /// compute environment (via <c>WithComputeEnvironment</c> or otherwise) are left untouched.
+    ///
+    /// When zero or more than one compute environment is present we deliberately do nothing.
+    /// - With zero compute environments there is no default to apply.
+    /// - With multiple compute environments there is no unambiguous default; the developer must pick one explicitly per
+    /// resource.
+    ///
+    /// Doing this once here, before the before-start pipeline runs, guarantees downstream
+    /// consumers (per-environment prepare steps, deployment-target inspection helpers, etc.) see
+    /// a consistent <see cref="ComputeEnvironmentAnnotation"/> on every compute resource that has
+    /// a target environment — without each consumer needing to re-implement the "single env wins"
+    /// fallback.
+    /// </remarks>
+    private static void EnsureComputeEnvironmentAnnotationsApplied(DistributedApplicationModel appModel)
+    {
+        var computeEnvironments = appModel.Resources.OfType<IComputeEnvironmentResource>().ToList();
+        if (computeEnvironments.Count == 1)
+        {
+            var environment = computeEnvironments[0];
+            foreach (var computeResource in appModel.Resources.OfType<IComputeResource>())
+            {
+                // Skip resources that already have an explicit compute environment binding so we
+                // never override a developer's intentional choice.
+                if (computeResource.GetComputeEnvironment() is null)
+                {
+                    computeResource.Annotations.Add(new ComputeEnvironmentAnnotation(environment));
+                }
+            }
         }
     }
 

@@ -417,11 +417,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             foreach (var kv in EnvironmentVariables)
             {
-                if (kv.Value is null)
-                {
-                    continue;
-                }
-
                 var (val, secretType) = ProcessValue(kv.Value);
 
                 var argValue = ResolveValue(val);
@@ -480,11 +475,6 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
 
             foreach (var arg in Args)
             {
-                if (arg is null)
-                {
-                    continue;
-                }
-
                 var (val, _) = ProcessValue(arg);
 
                 var argValue = ResolveValue(val);
