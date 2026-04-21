@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Foundry;
 /// reusability across agents, and consistent lifecycle management. Create tool instances using
 /// the <c>Add*Tool</c> extension methods on <see cref="AzureCognitiveServicesProjectResource"/>.
 /// </remarks>
+[AspireExport]
 public abstract class FoundryToolResource : Resource, IFoundryTool
 {
     /// <summary>
