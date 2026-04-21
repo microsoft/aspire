@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003
+
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Utils;
 
@@ -165,11 +167,17 @@ public class AzureKubernetesIngressTests
     }
 
     [Fact]
-    public void AddAzureKubernetesEnvironment_ProvisionesAgcBicepResource()
+    public void WithApplicationGateway_ExplicitSubnet_ProvisionesAgcBicepResource()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var aksSubnet = vnet.AddSubnet("aks-subnet", "10.0.0.0/22");
+        var agcSubnet = vnet.AddSubnet("agc-subnet", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSubnet(aksSubnet)
+            .WithApplicationGateway(agcSubnet);
 
         // Verify the AGC Bicep resource was added to the model
         var agcResource = builder.Resources
@@ -177,15 +185,56 @@ public class AzureKubernetesIngressTests
             .FirstOrDefault(r => r.Name == "aks-agc");
         Assert.NotNull(agcResource);
 
-        // Verify the Bicep template contains the traffic controller
+        // Verify the Bicep template contains the traffic controller and association
         var bicep = agcResource.GetBicepTemplateString();
         Assert.Contains("Microsoft.ServiceNetworking/trafficControllers", bicep);
         Assert.Contains("Microsoft.ServiceNetworking/trafficControllers/frontends", bicep);
+        Assert.Contains("Microsoft.ServiceNetworking/trafficControllers/associations", bicep);
         Assert.Contains("output agcId string", bicep);
         Assert.Contains("output agcFrontendFqdn string", bicep);
+        Assert.Contains("param subnetId string", bicep);
 
         // Verify AGC resource ID is stored on the AKS resource
         Assert.NotNull(aks.Resource.AgcResourceId);
         Assert.NotNull(aks.Resource.AgcFrontendFqdn);
+    }
+
+    [Fact]
+    public void WithApplicationGateway_AutoSubnet_CreatesAgcSubnet()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var aksSubnet = vnet.AddSubnet("aks-subnet", "10.0.0.0/22");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSubnet(aksSubnet)
+            .WithApplicationGateway();
+
+        // Verify the AGC subnet was auto-created
+        var agcSubnet = builder.Resources
+            .OfType<AzureSubnetResource>()
+            .FirstOrDefault(r => r.Name == "agc-subnet");
+        Assert.NotNull(agcSubnet);
+
+        // Verify the AGC Bicep resource was added
+        var agcResource = builder.Resources
+            .OfType<AzureBicepResource>()
+            .FirstOrDefault(r => r.Name == "aks-agc");
+        Assert.NotNull(agcResource);
+
+        Assert.NotNull(aks.Resource.AgcResourceId);
+    }
+
+    [Fact]
+    public void WithApplicationGateway_NoSubnet_ThrowsInvalidOperationException()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+#pragma warning disable IDE0200
+        Assert.Throws<InvalidOperationException>(() => aks.WithApplicationGateway());
+#pragma warning restore IDE0200
     }
 }

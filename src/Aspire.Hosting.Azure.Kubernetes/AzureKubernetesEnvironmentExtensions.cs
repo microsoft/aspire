@@ -361,6 +361,114 @@ public static class AzureKubernetesEnvironmentExtensions
     }
 
     /// <summary>
+    /// Provisions an Azure Application Gateway for Containers (AGC) instance and configures it
+    /// as the ingress controller for this AKS environment. A dedicated subnet for AGC is
+    /// automatically created in the same VNet as the AKS cluster.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// This method requires that the AKS environment has a VNet subnet configured via
+    /// <see cref="WithSubnet(IResourceBuilder{AzureKubernetesEnvironmentResource}, IResourceBuilder{AzureSubnetResource})"/>.
+    /// An AGC-dedicated subnet (<c>agc-subnet</c>) is automatically created in the same VNet.
+    /// </para>
+    /// <para>
+    /// The AGC traffic controller and frontend are provisioned via Bicep, and the generated
+    /// Kubernetes Ingress resources include the <c>alb.networking.azure.io/alb-id</c> annotation
+    /// pointing to the provisioned AGC instance.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+    /// var aksSubnet = vnet.AddSubnet("aks-subnet", "10.0.0.0/22");
+    ///
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks")
+    ///     .WithSubnet(aksSubnet)
+    ///     .WithApplicationGateway();
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Provisions Azure Application Gateway for Containers as the ingress controller")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithApplicationGateway(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // Find the AKS subnet to discover the parent VNet
+        if (!builder.Resource.TryGetLastAnnotation<AksSubnetAnnotation>(out var subnetAnnotation))
+        {
+            throw new InvalidOperationException(
+                $"WithApplicationGateway() requires a VNet subnet. " +
+                $"Call WithSubnet() before WithApplicationGateway(), or use " +
+                $"WithApplicationGateway(subnet) to specify the AGC subnet explicitly.");
+        }
+
+        // The AKS subnet ID is a BicepOutputReference like "{vnet.outputs.aksSubnet_Id}".
+        // We need to find the parent VNet resource in the app model to add a new subnet.
+        var vnetResource = builder.ApplicationBuilder.Resources
+            .OfType<AzureVirtualNetworkResource>()
+            .FirstOrDefault();
+
+        if (vnetResource is null)
+        {
+            throw new InvalidOperationException(
+                $"Could not find an AzureVirtualNetworkResource in the app model. " +
+                $"Use WithApplicationGateway(subnet) to specify the AGC subnet explicitly.");
+        }
+
+        // Auto-create a dedicated subnet for AGC in the same VNet
+        var vnetBuilder = builder.ApplicationBuilder.CreateResourceBuilder(vnetResource);
+        var agcSubnet = vnetBuilder.AddSubnet("agc-subnet", "10.0.4.0/24");
+
+        return builder.WithApplicationGateway(agcSubnet);
+    }
+
+    /// <summary>
+    /// Provisions an Azure Application Gateway for Containers (AGC) instance in the specified
+    /// subnet and configures it as the ingress controller for this AKS environment.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="subnet">The dedicated subnet for the AGC instance. This subnet must not be shared with other resources.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// The AGC traffic controller, frontend, and subnet association are provisioned via Bicep.
+    /// The generated Kubernetes Ingress resources include the <c>alb.networking.azure.io/alb-id</c>
+    /// annotation pointing to the provisioned AGC instance.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+    /// var aksSubnet = vnet.AddSubnet("aks-subnet", "10.0.0.0/22");
+    /// var agcSubnet = vnet.AddSubnet("agc-subnet", "10.0.4.0/24");
+    ///
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks")
+    ///     .WithSubnet(aksSubnet)
+    ///     .WithApplicationGateway(agcSubnet);
+    /// </code>
+    /// </example>
+    [AspireExport("withApplicationGatewaySubnet", Description = "Provisions Azure Application Gateway for Containers with an explicit subnet")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithApplicationGateway(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        IResourceBuilder<AzureSubnetResource> subnet)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(subnet);
+
+        var name = builder.Resource.Name;
+
+        // Provision AGC via inline Bicep
+        var agc = builder.ApplicationBuilder.AddBicepTemplateString($"{name}-agc", GenerateAgcBicep());
+        agc.Resource.Parameters["subnetId"] = subnet.Resource.Id;
+
+        // Store the AGC outputs on the AKS resource
+        builder.Resource.AgcResourceId = new BicepOutputReference("agcId", agc.Resource);
+        builder.Resource.AgcFrontendFqdn = new BicepOutputReference("agcFrontendFqdn", agc.Resource);
+
+        return builder;
+    }
+
+    /// <summary>
     /// Enables or disables workload identity on the AKS environment, allowing pods to authenticate
     /// to Azure services using federated credentials.
     /// </summary>
@@ -464,6 +572,9 @@ public static class AzureKubernetesEnvironmentExtensions
             @description('The Azure region for the Application Gateway for Containers resources.')
             param location string = resourceGroup().location
 
+            @description('The resource ID of the dedicated subnet for AGC.')
+            param subnetId string
+
             resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2023-11-01' = {
               name: 'aspire-agc'
               location: location
@@ -475,6 +586,18 @@ public static class AzureKubernetesEnvironmentExtensions
               name: 'default'
               location: location
               properties: {}
+            }
+
+            resource association 'Microsoft.ServiceNetworking/trafficControllers/associations@2023-11-01' = {
+              parent: trafficController
+              name: 'default'
+              location: location
+              properties: {
+                associationType: 'subnets'
+                subnet: {
+                  id: subnetId
+                }
+              }
             }
 
             output agcId string = trafficController.id
