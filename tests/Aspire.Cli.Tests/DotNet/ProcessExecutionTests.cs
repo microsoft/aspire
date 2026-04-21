@@ -30,8 +30,8 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         var stdoutBuilder = new StringBuilder();
         var stderrBuilder = new StringBuilder();
-        var firstLineSeen = new TaskCompletionSource();
-        var releaseCallback = new TaskCompletionSource();
+        var firstLineSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var releaseTask = Task.Run(async () =>
         {
@@ -96,8 +96,8 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         var stdoutBuilder = new StringBuilder();
         var stderrBuilder = new StringBuilder();
-        var firstLineSeen = new TaskCompletionSource();
-        var releaseCallback = new TaskCompletionSource();
+        var firstLineSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var releaseTask = Task.Run(async () =>
         {
