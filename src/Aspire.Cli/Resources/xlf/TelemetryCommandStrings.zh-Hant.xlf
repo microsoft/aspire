@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailed">
-        <source>Could not fetch telemetry data from the dashboard. Authentication was denied.</source>
-        <target state="new">Could not fetch telemetry data from the dashboard. Authentication was denied.</target>
+        <source>Could not fetch telemetry data from the dashboard. Authentication failed.</source>
+        <target state="new">Could not fetch telemetry data from the dashboard. Authentication failed.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailedAnonymousHint">
@@ -28,8 +28,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardAuthFailedHint">
-        <source>Authenticate with the dashboard using a --dashboard-url value that includes a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or specify --api-key with a key matching the dashboard's configured API key.</source>
-        <target state="new">Authenticate with the dashboard using a --dashboard-url value that includes a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or specify --api-key with a key matching the dashboard's configured API key.</target>
+        <source>Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</source>
+        <target state="new">Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardConnectionFailed">
@@ -93,8 +93,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlOptionDescription">
-        <source>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized</source>
-        <target state="new">Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized</target>
+        <source>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</source>
+        <target state="new">Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">

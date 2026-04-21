@@ -73,16 +73,12 @@ internal static class McpToolHelpers
         if (Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
             uri.AbsolutePath.EndsWith("/login", StringComparison.OrdinalIgnoreCase))
         {
-            var query = uri.Query;
-            if (query.Length > 0)
+            // Parse query string to find 't' parameter
+            var queryParams = HttpUtility.ParseQueryString(uri.Query);
+            var token = queryParams["t"];
+            if (!string.IsNullOrEmpty(token))
             {
-                // Parse query string to find 't' parameter
-                var queryParams = HttpUtility.ParseQueryString(query);
-                var token = queryParams["t"];
-                if (!string.IsNullOrEmpty(token))
-                {
-                    return token;
-                }
+                return token;
             }
         }
 

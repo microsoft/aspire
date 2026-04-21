@@ -190,7 +190,7 @@
     <value>Status</value>
   </data>
   <data name="DashboardUrlOptionDescription" xml:space="preserve">
-    <value>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized</value>
+    <value>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</value>
   </data>
   <data name="ApiKeyOptionDescription" xml:space="preserve">
     <value>API key for authenticating with the dashboard (optional, for dashboards with API key authentication)</value>
@@ -199,10 +199,10 @@
     <value>The --dashboard-url and --apphost options cannot be used together. Specify one or the other.</value>
   </data>
   <data name="DashboardAuthFailed" xml:space="preserve">
-    <value>Could not fetch telemetry data from the dashboard. Authentication was denied.</value>
+    <value>Could not fetch telemetry data from the dashboard. Authentication failed.</value>
   </data>
   <data name="DashboardAuthFailedHint" xml:space="preserve">
-    <value>Authenticate with the dashboard using a --dashboard-url value that includes a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or specify --api-key with a key matching the dashboard's configured API key.</value>
+    <value>Authenticate with the dashboard either with a --dashboard-url including a valid login token (e.g. http://localhost:18888/login?t=TOKEN), or with an --api-key matching the dashboard's configured API key.</value>
   </data>
   <data name="DashboardAuthFailedAnonymousHint" xml:space="preserve">
     <value>Alternatively, allow anonymous access with 'aspire dashboard run --allow-anonymous' or by setting the ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS environment variable to true.</value>
