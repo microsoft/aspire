@@ -6,9 +6,10 @@ description: |
   updates are required, it creates a draft PR with the changes following the
   doc-writer skill conventions. The draft PR targets the aspire.dev branch
   resolved from the source PR's release reasoning (PR milestone, linked-issue
-  milestone, then source PR base), creating a release/* branch from
-  aspire.dev main when needed. It also comments on the original PR with a
-  link to the draft PR (or a "no docs needed" message).
+  milestone, then source PR base), using the matching release/* branch when it
+  already exists and falling back to aspire.dev main otherwise. It also
+  comments on the original PR with a link to the draft PR (or a "no docs
+  needed" message).
 
 on:
   pull_request:
@@ -153,10 +154,11 @@ needed, create a draft PR with the actual documentation changes.
 > checkout of the merged PR contents to remain available.
 >
 > After you resolve the target docs branch, use the local
-> `microsoft/aspire.dev` workspace to ensure that branch exists (creating it
-> from `main` when needed) and make all documentation edits against that
-> branch. The `create_pull_request` safe output is configured to accept an
-> explicit `base` override for `main` and `release/*`; use it.
+> `microsoft/aspire.dev` workspace to check whether that branch already exists.
+> If the resolved release branch does not exist on `aspire.dev`, fall back to
+> `main` for both the docs edits and the draft PR base. The
+> `create_pull_request` safe output is configured to accept an explicit `base`
+> override for `main` and `release/*`; use it.
 >
 > For security, this workflow only auto-activates for merged PRs whose head
 > repository is `microsoft/aspire`. Unlike the old `pull_request_target` hook,
@@ -208,22 +210,22 @@ Normalize milestone titles with the regex `^v?(\d+)\.(\d+)(?:\.(\d+))?`:
 The result of this step is a single **target branch** string, either `main` or
 `release/X.Y[.Z]`.
 
-## Step 3: Ensure the Target Branch Exists and Base the Workspace on It
+## Step 3: Use an Existing Target Branch, Otherwise Fall Back to `main`
 
 Use the local `microsoft/aspire.dev` workspace for this step.
 
-1. If the resolved target branch is `main`, fetch `origin/main` and make sure
-   the current workspace is based on `main` before writing documentation.
+1. If the resolved target branch is `main`, use `main`.
 2. If the resolved target branch is `release/X.Y[.Z]`, check whether
-   `origin/release/X.Y[.Z]` already exists.
-3. If the release branch does **not** exist, create it from the current tip of
-   `origin/main` and push it to `origin`. Configure a standard Git identity
-   first if needed (`github-actions[bot]`).
-4. Fetch the resolved target branch and switch the current workspace to that
+   `origin/release/X.Y[.Z]` already exists on `microsoft/aspire.dev`.
+3. If that release branch exists, use it as the effective target branch.
+4. If that release branch does **not** exist, fall back to `main` as the
+   effective target branch.
+5. Fetch the effective target branch and switch the current workspace to that
    branch before editing docs.
 
-Do not rewrite or replace an existing remote release branch. Only create it
-when it is missing.
+Do **not** create or push new branches in this step. This step only chooses an
+existing `microsoft/aspire.dev` branch to use for documentation edits and for
+the draft PR base.
 
 ## Step 4: Detect Significant Changes and Decide Whether a Docs PR Is Required
 
@@ -320,11 +322,11 @@ Ensure all changes follow the doc-writer skill guidelines from Step 6. Include:
 
 Create a draft pull request on `microsoft/aspire.dev` with:
 
-**Base branch**: the target branch resolved in Step 2 and ensured to exist in
-Step 3. When emitting the `create_pull_request` safe output, set its `base`
-field to this branch (for example, `release/13.3`, `release/13.2.1`, or
-`main`). Do **not** default to `main` unless that is the explicitly resolved
-target.
+**Base branch**: the effective target branch chosen in Step 3. When emitting
+the `create_pull_request` safe output, set its `base` field to that branch
+(for example, `release/13.3`, `release/13.2.1`, or `main`). If Step 3 fell
+back to `main` because the resolved release branch does not exist on
+`microsoft/aspire.dev`, use `main` here and say so in the PR description.
 
 **Title**: A clear, concise title describing the documentation work
 (the `[docs]` prefix will be added automatically)
@@ -332,8 +334,9 @@ target.
 **Description** that includes:
 - A prominent link to the source PR: `Documents changes from microsoft/aspire#<number>`
 - The PR author mention: `@<author>`
-- The resolved target branch and how it was chosen (for example, "Targeting
-  `release/13.3` based on the source PR milestone `13.3`.")
+- The effective target branch and how it was chosen (for example, "Targeting
+  `release/13.3` based on the source PR milestone `13.3`." or "Falling back to
+  `main` because `release/13.3` does not exist on `microsoft/aspire.dev`.")
 - Why this PR is needed (the significant change and the docs gap it addresses)
 - A summary of what documentation was added or changed
 - A list of files modified or created
