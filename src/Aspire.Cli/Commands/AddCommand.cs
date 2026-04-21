@@ -223,9 +223,11 @@ internal sealed class AddCommand : BaseCommand
                         .Where(s => !s.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                         .Distinct(StringComparer.OrdinalIgnoreCase);
 
-                    var nugetConfigPath = Path.Combine(effectiveAppHostProjectFile.Directory!.FullName, "nuget.config");
+                    var projectDir = effectiveAppHostProjectFile.Directory!;
+                    var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
                     if (!File.Exists(nugetConfigPath))
                     {
+                        projectDir.Create(); // ensure directory exists
                         var configXml = new System.Xml.Linq.XDocument(
                             new System.Xml.Linq.XElement("configuration",
                                 new System.Xml.Linq.XElement("packageSources",
