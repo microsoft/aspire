@@ -590,7 +590,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<InitCommand>();
         var result = command.Parse("init --channel pr-12345");
@@ -685,7 +685,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<InitCommand>();
         var result = command.Parse("init");

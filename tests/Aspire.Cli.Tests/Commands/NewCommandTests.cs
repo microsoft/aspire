@@ -523,7 +523,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                 return runner;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
         var result = command.Parse("new aspire-starter --channel pr-12345 --use-redis-cache --test-framework None");
