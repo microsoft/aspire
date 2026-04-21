@@ -299,7 +299,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                                 # Add ServiceDefaults reference to selected projects?
 
                                 Do you want to add a reference to the ServiceDefaults project to
-                                the executable projects that will be added to the AppHost? The 
+                                the executable projects that will be added to the AppHost? The
                                 ServiceDefaults project contains helper code to make it easier
                                 for you to configure telemetry and service discovery in Aspire.
                                 """;
@@ -784,6 +784,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             throw new InvalidOperationException("No template versions found");
         }
 
+        var hasPrHives = _executionContext.GetPrHiveCount() > 0;
         var orderedPackagesFromChannels = packagesFromChannels.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
 
         // Check for explicit version specified via command line
@@ -796,7 +797,17 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             }
         }
 
-        // If channel was specified via --channel option or global setting (but no --version), 
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            orderedPackagesFromChannels,
+            p => p.Package.Version,
+            out var cliVersionPackageFromChannel,
+            channelName: channelName,
+            hasPrHives: hasPrHives))
+        {
+            return cliVersionPackageFromChannel;
+        }
+
+        // If channel was specified via --channel option or global setting (but no --version),
         // automatically select the highest version from that channel without prompting
         if (hasChannelSetting)
         {

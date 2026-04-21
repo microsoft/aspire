@@ -14,6 +14,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DashboardFileConfigDirectoryName = new(KnownConfigNames.DashboardFileConfigDirectory);
     public static readonly ConfigName DashboardAIDisabledName = new(KnownConfigNames.DashboardAIDisabled);
     public static readonly ConfigName DashboardAspireApiEnabledName = new(KnownConfigNames.DashboardApiEnabled);
+    public static readonly ConfigName DashboardAspireApiDisabledName = new(KnownConfigNames.DashboardApiDisabled);
     public static readonly ConfigName ResourceServiceUrlName = new(KnownConfigNames.ResourceServiceEndpointUrl);
     public static readonly ConfigName ForwardedHeaders = new(KnownConfigNames.DashboardForwardedHeadersEnabled);
 
@@ -23,6 +24,7 @@ internal static class DashboardConfigNames
 
     // Dashboard API Authentication - used for Telemetry API
     public static readonly ConfigName DashboardApiEnabledName = new("Dashboard:Api:Enabled", "DASHBOARD__API__ENABLED");
+    public static readonly ConfigName DashboardApiDisabledName = new("Dashboard:Api:Disabled", "DASHBOARD__API__DISABLED");
     public static readonly ConfigName DashboardApiAuthModeName = new("Dashboard:Api:AuthMode", "DASHBOARD__API__AUTHMODE");
     public static readonly ConfigName DashboardApiPrimaryApiKeyName = new("Dashboard:Api:PrimaryApiKey", "DASHBOARD__API__PRIMARYAPIKEY");
     public static readonly ConfigName DashboardApiSecondaryApiKeyName = new("Dashboard:Api:SecondaryApiKey", "DASHBOARD__API__SECONDARYAPIKEY");

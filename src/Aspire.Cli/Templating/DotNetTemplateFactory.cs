@@ -643,19 +643,20 @@ internal class DotNetTemplateFactory(
     private async Task<(NuGetPackage Package, PackageChannel Channel)> GetProjectTemplatesVersionAsync(TemplateInputs inputs, CancellationToken cancellationToken)
     {
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
-        
+
         // Check if channel was provided via inputs (highest priority)
         var channelName = inputs.Channel;
-        
+
         // If no channel in inputs, check for global channel setting
         if (string.IsNullOrEmpty(channelName))
         {
             channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
         }
-        
+
         IEnumerable<PackageChannel> channels;
+        var hasPrHives = executionContext.GetPrHiveCount() > 0;
         bool hasChannelSetting = !string.IsNullOrEmpty(channelName);
-        
+
         if (hasChannelSetting)
         {
             // If --channel option is provided or global channel setting exists, find the matching channel
@@ -671,9 +672,8 @@ internal class DotNetTemplateFactory(
         {
             // If there are hives (PR build directories), include all channels.
             // Otherwise, only use the implicit/default channel to avoid prompting.
-            var hasHives = executionContext.GetPrHiveCount() > 0;
-            channels = hasHives 
-                ? allChannels 
+            channels = hasPrHives
+                ? allChannels
                 : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
         }
 
@@ -710,7 +710,17 @@ internal class DotNetTemplateFactory(
             }
         }
 
-        // If channel was specified via --channel option or global setting (but no --version), 
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            orderedPackagesFromChannels,
+            p => p.Package.Version,
+            out var cliVersionPackageFromChannel,
+            channelName: channelName,
+            hasPrHives: hasPrHives))
+        {
+            return cliVersionPackageFromChannel;
+        }
+
+        // If channel was specified via --channel option or global setting (but no --version),
         // automatically select the highest version from that channel without prompting
         if (hasChannelSetting)
         {

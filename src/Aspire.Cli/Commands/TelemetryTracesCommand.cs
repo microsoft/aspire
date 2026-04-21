@@ -91,7 +91,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -112,8 +112,8 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch traces from Dashboard API");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
             return ExitCodeConstants.DashboardFailure;
         }
     }
@@ -315,9 +315,12 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             }
         }
 
+        var shortTraceId = OtlpHelpers.ToShortenedId(traceId);
+        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, shortTraceId);
+
         if (spans.Count == 0)
         {
-            _interactionService.DisplayMarkupLine($"[bold]Trace: {traceId}[/]");
+            _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
             _interactionService.DisplayMarkupLine("[dim]No spans found[/]");
             return;
         }
@@ -327,7 +330,6 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var totalDuration = rootSpans.Count > 0 ? rootSpans.Max(s => s.Duration) : spans.Max(s => s.Duration);
 
         // Header
-        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, traceId);
         _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
         _interactionService.DisplayMarkupLine($"[bold]Duration:[/] {TelemetryCommandHelpers.FormatDuration(totalDuration)}  [bold]Spans:[/] {spans.Count}");
         _interactionService.DisplayEmptyLine();

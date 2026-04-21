@@ -51,11 +51,6 @@ internal sealed class DashboardRunCommand : BaseCommand
         Description = DashboardCommandStrings.AllowAnonymousOptionDescription
     };
 
-    private static readonly Option<bool> s_enableApiOption = new("--enable-api")
-    {
-        Description = DashboardCommandStrings.EnableApiOptionDescription
-    };
-
     private static readonly Option<string?> s_configFilePathOption = new("--config-file-path")
     {
         Description = DashboardCommandStrings.ConfigFilePathOptionDescription
@@ -83,7 +78,6 @@ internal sealed class DashboardRunCommand : BaseCommand
         Options.Add(s_otlpGrpcUrlOption);
         Options.Add(s_otlpHttpUrlOption);
         Options.Add(s_allowAnonymousOption);
-        Options.Add(s_enableApiOption);
         Options.Add(s_configFilePathOption);
         TreatUnmatchedTokensAsErrors = false;
     }
@@ -113,19 +107,29 @@ internal sealed class DashboardRunCommand : BaseCommand
         AddOptionArgs(parseResult, dashboardArgs, unmatchedTokens, ExecutionContext);
 
         // Set a browser token for frontend auth unless anonymous access is enabled.
-        // The token is passed via environment variable (not command-line arg) to
-        // avoid exposing it in process listings (e.g. ps, Task Manager).
+        // Tokens and keys are passed via environment variables (not command-line args)
+        // to avoid exposing them in process listings (e.g. ps, Task Manager).
         string? browserToken = null;
-        Dictionary<string, string>? environmentVariables = null;
-        if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, ExecutionContext, "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS"))
+        var environmentVariables = new Dictionary<string, string>();
+        if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, ExecutionContext, KnownConfigNames.DashboardUnsecuredAllowAnonymous))
         {
-            if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, "DASHBOARD__FRONTEND__BROWSERTOKEN"))
+            if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardFrontendBrowserTokenName.EnvVarName))
             {
                 browserToken = TokenGenerator.GenerateToken();
-                environmentVariables = new Dictionary<string, string>
+                environmentVariables[DashboardConfigNames.DashboardFrontendBrowserTokenName.EnvVarName] = browserToken;
+            }
+
+            // Enable API key authentication for the telemetry API so that only
+            // callers who possess the key (or the browser token) can query it.
+            if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardApiPrimaryApiKeyName.EnvVarName))
+            {
+                var apiKey = TokenGenerator.GenerateToken();
+                environmentVariables[DashboardConfigNames.DashboardApiPrimaryApiKeyName.EnvVarName] = apiKey;
+
+                if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardApiAuthModeName.EnvVarName))
                 {
-                    ["DASHBOARD__FRONTEND__BROWSERTOKEN"] = browserToken
-                };
+                    environmentVariables[DashboardConfigNames.DashboardApiAuthModeName.EnvVarName] = "ApiKey";
+                }
             }
         }
 
@@ -139,12 +143,20 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     private static void AddOptionArgs(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens, CliExecutionContext executionContext)
     {
-        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_frontendUrlOption, "ASPNETCORE_URLS", defaultValue: "http://localhost:18888");
-        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpGrpcUrlOption, "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", defaultValue: "http://localhost:4317");
-        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpHttpUrlOption, "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL", defaultValue: "http://localhost:4318");
-        AddBoolOptionArg(parseResult, args, unmatchedTokens, executionContext, s_allowAnonymousOption, "ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS");
-        AddBoolOptionArg(parseResult, args, unmatchedTokens, executionContext, s_enableApiOption, "ASPIRE_DASHBOARD_API_ENABLED");
-        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_configFilePathOption, "ASPIRE_DASHBOARD_CONFIG_FILE_PATH", defaultValue: null);
+        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_frontendUrlOption, KnownConfigNames.AspNetCoreUrls, defaultValue: "http://localhost:18888");
+        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpGrpcUrlOption, KnownConfigNames.DashboardOtlpGrpcEndpointUrl, defaultValue: "http://localhost:4317");
+        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpHttpUrlOption, KnownConfigNames.DashboardOtlpHttpEndpointUrl, defaultValue: "http://localhost:4318");
+        AddBoolOptionArg(parseResult, args, unmatchedTokens, executionContext, s_allowAnonymousOption, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
+
+        // Always enable the telemetry API so CLI commands (e.g. aspire otel) can query the dashboard,
+        // unless the user has explicitly configured either the enabled or disabled setting.
+        if (!ConfigSettingHasValue(unmatchedTokens, executionContext, KnownConfigNames.DashboardApiEnabled) &&
+            !ConfigSettingHasValue(unmatchedTokens, executionContext, KnownConfigNames.DashboardApiDisabled))
+        {
+            args.Add($"--{KnownConfigNames.DashboardApiEnabled}=true");
+        }
+
+        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_configFilePathOption, KnownConfigNames.DashboardConfigFilePath, defaultValue: null);
     }
 
     private static void AddStringOptionArg(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens,
@@ -166,7 +178,7 @@ internal sealed class DashboardRunCommand : BaseCommand
     }
 
     private static void AddBoolOptionArg(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens,
-        CliExecutionContext executionContext, Option<bool> option, string envVarName)
+        CliExecutionContext executionContext, Option<bool> option, string envVarName, bool? defaultValue = null)
     {
         if (ConfigSettingHasValue(unmatchedTokens, executionContext, envVarName))
         {
@@ -175,14 +187,18 @@ internal sealed class DashboardRunCommand : BaseCommand
 
         var result = parseResult.GetResult(option);
 
-        // Skip when the result comes from the option's default value rather than
-        // explicit user input. Without the Implicit check, Option<bool> defaults
-        // (e.g. false) would always emit "--ALLOW_ANONYMOUS=false" even when the
-        // user never specified --allow-anonymous.
+        // When the user explicitly specified the option, use their value.
+        // When a defaultValue is provided and the user did not specify the option, use the default.
+        // Without a defaultValue, skip when the result comes from the option's default value rather
+        // than explicit user input, to avoid always emitting e.g. "--ALLOW_ANONYMOUS=false".
         if (result is not null && !result.Implicit)
         {
             var value = parseResult.GetValue(option);
             args.Add($"--{envVarName}={value.ToString().ToLowerInvariant()}");
+        }
+        else if (defaultValue is not null)
+        {
+            args.Add($"--{envVarName}={defaultValue.Value.ToString().ToLowerInvariant()}");
         }
     }
 
@@ -219,9 +235,9 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     internal static DashboardInfo ResolveDashboardInfo(List<string> dashboardArgs, IReadOnlyList<string> unmatchedTokens, CliExecutionContext executionContext, string? browserToken)
     {
-        var frontendUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, "ASPNETCORE_URLS") ?? "http://localhost:18888";
-        var otlpGrpcUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL") ?? "http://localhost:4317";
-        var otlpHttpUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL") ?? "http://localhost:4318";
+        var frontendUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, KnownConfigNames.AspNetCoreUrls) ?? "http://localhost:18888";
+        var otlpGrpcUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, KnownConfigNames.DashboardOtlpGrpcEndpointUrl) ?? "http://localhost:4317";
+        var otlpHttpUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, KnownConfigNames.DashboardOtlpHttpEndpointUrl) ?? "http://localhost:4318";
 
         // Take the first URL if multiple are specified (semicolon-separated).
         var parts = frontendUrl.Split(';', StringSplitOptions.RemoveEmptyEntries);

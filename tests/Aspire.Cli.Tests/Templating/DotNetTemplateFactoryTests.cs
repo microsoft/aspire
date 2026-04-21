@@ -525,7 +525,11 @@ public class DotNetTemplateFactoryTests
     private sealed class TestCertificateService : ICertificateService
     {
         public Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new EnsureCertificatesTrustedResult { EnvironmentVariables = new Dictionary<string, string>() });
+            => Task.FromResult(new EnsureCertificatesTrustedResult
+            {
+                EnvironmentVariables = new Dictionary<string, string>(),
+                Success = true
+            });
     }
 
     private sealed class TestPackagingService : IPackagingService

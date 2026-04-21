@@ -318,9 +318,21 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
 
-                var packages = await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken);
-                var package = packages
+                var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
                     .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
+                    .ToArray();
+                var hasPrHives = ExecutionContext.GetPrHiveCount() > 0;
+
+                NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
+                    packages,
+                    p => p.Version,
+                    out var cliVersionPackage,
+                    channelName: selectedChannel.Name,
+                    hasPrHives: hasPrHives)
+                    ? cliVersionPackage
+                    : null;
+
+                package ??= packages
                     .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
                     .FirstOrDefault();
 

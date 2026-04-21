@@ -167,6 +167,8 @@ internal static class TelemetryCommandHelpers
     /// </summary>
     /// <param name="connectionResolver">The connection resolver for AppHost discovery.</param>
     /// <param name="interactionService">The interaction service for displaying messages.</param>
+    /// <param name="httpClientFactory">The HTTP client factory for making API calls.</param>
+    /// <param name="logger">The logger for diagnostic messages.</param>
     /// <param name="projectFile">The optional AppHost project file.</param>
     /// <param name="dashboardUrl">The optional direct dashboard URL (mutually exclusive with <paramref name="projectFile"/>).</param>
     /// <param name="apiKey">The optional API key for dashboard authentication.</param>
@@ -174,15 +176,19 @@ internal static class TelemetryCommandHelpers
     /// When <c>true</c>, a missing Dashboard API is a hard error.
     /// When <c>false</c>, a missing Dashboard API is non-fatal and the method returns success with <c>null</c> base URL and token.
     /// </param>
+    /// <param name="logFilePath">The path to the current session's log file, displayed alongside errors.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="DashboardApiResult"/> with the resolved connection and dashboard API info.</returns>
     public static async Task<DashboardApiResult> GetDashboardApiAsync(
         AppHostConnectionResolver connectionResolver,
         IInteractionService interactionService,
+        IHttpClientFactory httpClientFactory,
+        ILogger logger,
         FileInfo? projectFile,
         string? dashboardUrl,
         string? apiKey,
         bool requireDashboard,
+        string logFilePath,
         CancellationToken cancellationToken)
     {
         // Validate mutual exclusivity of --apphost and --dashboard-url
@@ -195,10 +201,49 @@ internal static class TelemetryCommandHelpers
         // Direct dashboard URL mode — bypass AppHost discovery
         if (dashboardUrl is not null)
         {
+            // Extract login token before normalizing the URL
+            var loginToken = McpToolHelpers.ExtractLoginToken(dashboardUrl);
+
+            // Normalize login URLs (e.g., http://localhost:18888/login?t=abc) to base URL
+            dashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl));
+                DisplayTelemetryError(
+                    interactionService,
+                    new TelemetryErrorInfo(
+                        string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl),
+                        TelemetryCommandStrings.DashboardUrlInvalidHint),
+                    logFilePath);
                 return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+            }
+
+            // If no explicit --api-key was provided but a login token was found in the URL,
+            // exchange the login token for an API key via the dashboard.
+            if (apiKey is null && loginToken is not null)
+            {
+                var exchangeResult = await ExchangeLoginTokenForApiKeyAsync(httpClientFactory, dashboardUrl, loginToken, logger, cancellationToken).ConfigureAwait(false);
+
+                if (!exchangeResult.Success)
+                {
+                    var errorInfo = exchangeResult.FailureKind switch
+                    {
+                        TokenExchangeFailureKind.ConnectionError => new TelemetryErrorInfo(
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardUrl),
+                            TelemetryCommandStrings.DashboardConnectionFailedHint),
+                        TokenExchangeFailureKind.ApiNotEnabled => new TelemetryErrorInfo(
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardUrl),
+                            TelemetryCommandStrings.DashboardApiNotEnabledHint),
+                        _ => new TelemetryErrorInfo(
+                            TelemetryCommandStrings.DashboardLoginTokenFailed,
+                            TelemetryCommandStrings.DashboardLoginTokenFailedHint,
+                            TelemetryCommandStrings.DashboardLoginTokenFailedAnonymousHint),
+                    };
+                    DisplayTelemetryError(interactionService, errorInfo, logFilePath);
+                    return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                }
+
+                apiKey = exchangeResult.ApiKey;
             }
 
             var token = apiKey ?? string.Empty;
@@ -224,7 +269,12 @@ internal static class TelemetryCommandHelpers
         {
             if (requireDashboard)
             {
-                interactionService.DisplayError(TelemetryCommandStrings.DashboardApiNotAvailable);
+                DisplayTelemetryError(
+                    interactionService,
+                    new TelemetryErrorInfo(
+                        TelemetryCommandStrings.DashboardNotAvailable,
+                        TelemetryCommandStrings.DashboardNotAvailableHint),
+                    logFilePath);
                 return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
             }
 
@@ -260,10 +310,28 @@ internal static class TelemetryCommandHelpers
     }
 
     /// <summary>
+    /// Displays a telemetry error with a structured format: error message, optional hint, and log file path.
+    /// </summary>
+    public static void DisplayTelemetryError(
+        IInteractionService interactionService,
+        TelemetryErrorInfo errorInfo,
+        string logFilePath)
+    {
+        interactionService.DisplayError(errorInfo.Error);
+
+        foreach (var hint in errorInfo.Hints)
+        {
+            interactionService.DisplayMessage(KnownEmojis.Information, hint);
+        }
+
+        interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, logFilePath));
+    }
+
+    /// <summary>
     /// Formats an error message for a telemetry HTTP failure, using dashboard-specific diagnostics
     /// when a direct dashboard URL was provided, or a generic message otherwise.
     /// </summary>
-    public static async Task<string> FormatTelemetryErrorMessageAsync(
+    public static async Task<TelemetryErrorInfo> FormatTelemetryErrorAsync(
         HttpRequestException ex,
         string baseUrl,
         bool dashboardOnly,
@@ -273,16 +341,16 @@ internal static class TelemetryCommandHelpers
     {
         if (dashboardOnly)
         {
-            return await GetDashboardApiErrorMessageAsync(ex, baseUrl, httpClientFactory, logger, cancellationToken);
+            return await GetDashboardApiErrorAsync(ex, baseUrl, httpClientFactory, logger, cancellationToken);
         }
 
-        return string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry, ex.Message);
+        return new TelemetryErrorInfo(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry, ex.Message));
     }
 
     /// <summary>
-    /// Produces a user-friendly error message for dashboard API failures when using --dashboard-url.
+    /// Produces a user-friendly error for dashboard API failures when using --dashboard-url.
     /// </summary>
-    public static async Task<string> GetDashboardApiErrorMessageAsync(
+    public static async Task<TelemetryErrorInfo> GetDashboardApiErrorAsync(
         HttpRequestException ex,
         string dashboardBaseUrl,
         IHttpClientFactory httpClientFactory,
@@ -291,7 +359,7 @@ internal static class TelemetryCommandHelpers
     {
         if (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
-            return TelemetryCommandStrings.DashboardAuthFailed;
+            return new TelemetryErrorInfo(TelemetryCommandStrings.DashboardAuthFailed, TelemetryCommandStrings.DashboardAuthFailedHint, TelemetryCommandStrings.DashboardAuthFailedAnonymousHint);
         }
 
         if (ex.StatusCode == HttpStatusCode.NotFound)
@@ -304,8 +372,10 @@ internal static class TelemetryCommandHelpers
 
                 if (probeResponse.IsSuccessStatusCode)
                 {
-                    // Dashboard is reachable but the API endpoint returned 404 — API not enabled
-                    return string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardBaseUrl);
+                    // API is not enabled
+                    return new TelemetryErrorInfo(
+                        string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardBaseUrl),
+                        TelemetryCommandStrings.DashboardApiNotEnabledHint);
                 }
             }
             catch (Exception probeEx)
@@ -314,16 +384,78 @@ internal static class TelemetryCommandHelpers
             }
 
             // Dashboard base URL is also not reachable — wrong URL
-            return string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlNotReachable, dashboardBaseUrl);
+            return new TelemetryErrorInfo(
+                string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlNotReachable, dashboardBaseUrl),
+                TelemetryCommandStrings.DashboardUrlNotReachableHint);
         }
 
         if (ex.StatusCode is null)
         {
             // No HTTP status — connection refused or network error
-            return string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardBaseUrl);
+            return new TelemetryErrorInfo(
+                string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardBaseUrl),
+                TelemetryCommandStrings.DashboardConnectionFailedHint);
         }
 
-        return string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry, ex.Message);
+        return new TelemetryErrorInfo(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.FailedToFetchTelemetry, ex.Message));
+    }
+
+    /// <summary>
+    /// Returns a combined error message string for dashboard API failures.
+    /// Used by MCP tools that return error text rather than using interactive display.
+    /// </summary>
+    public static async Task<string> GetDashboardApiErrorMessageAsync(
+        HttpRequestException ex,
+        string dashboardBaseUrl,
+        IHttpClientFactory httpClientFactory,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var errorInfo = await GetDashboardApiErrorAsync(ex, dashboardBaseUrl, httpClientFactory, logger, cancellationToken);
+        return errorInfo.Hints.Length > 0
+            ? $"{errorInfo.Error} {string.Join(" ", errorInfo.Hints)}"
+            : errorInfo.Error;
+    }
+
+    /// <summary>
+    /// Exchanges a frontend login token for an API key by calling the dashboard's
+    /// <c>POST /api/telemetry/validateToken</c> endpoint.
+    /// </summary>
+    /// <returns>A <see cref="TokenExchangeResult"/> indicating success or failure, with the API key when available.</returns>
+    internal static async Task<TokenExchangeResult> ExchangeLoginTokenForApiKeyAsync(
+        IHttpClientFactory httpClientFactory,
+        string dashboardBaseUrl,
+        string loginToken,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var client = httpClientFactory.CreateClient();
+            var url = DashboardUrls.TelemetryApiKeyUrl(dashboardBaseUrl);
+
+            var request = new TelemetryValidateTokenRequest(loginToken);
+            var response = await client.PostAsJsonAsync(url, request, OtlpJsonSerializerContext.Default.TelemetryValidateTokenRequest, cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogDebug("Login token exchange failed with status {StatusCode}", response.StatusCode);
+                return TokenExchangeResult.FromStatusCode(response.StatusCode);
+            }
+
+            var result = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryValidateTokenResponse, cancellationToken).ConfigureAwait(false);
+            return new TokenExchangeResult(true, result?.ApiKey);
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogDebug(ex, "Failed to exchange login token for API key at {Url}", dashboardBaseUrl);
+            return TokenExchangeResult.ConnectionError;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to exchange login token for API key at {Url}", dashboardBaseUrl);
+            return TokenExchangeResult.Failed;
+        }
     }
 
     public static bool TryResolveResourceNames(
@@ -545,3 +677,56 @@ internal sealed record DashboardApiResult(
     public static DashboardApiResult Failure(int exitCode)
         => new(false, null, null, null, null, exitCode);
 }
+
+/// <summary>
+/// Describes the kind of failure that occurred during a login token exchange.
+/// </summary>
+internal enum TokenExchangeFailureKind
+{
+    /// <summary>No failure (exchange succeeded).</summary>
+    None,
+    /// <summary>The token was invalid or rejected by the dashboard (401).</summary>
+    TokenRejected,
+    /// <summary>The telemetry API is not enabled on the dashboard (404).</summary>
+    ApiNotEnabled,
+    /// <summary>The dashboard was not reachable (connection error).</summary>
+    ConnectionError,
+    /// <summary>An unexpected HTTP status code was returned.</summary>
+    Other,
+}
+
+/// <summary>
+/// Result of exchanging a frontend login token for an API key via the dashboard.
+/// </summary>
+/// <param name="Success">Whether the exchange succeeded. When <c>false</c>, the token was invalid or the endpoint was unreachable.</param>
+/// <param name="ApiKey">The API key returned by the dashboard, or <c>null</c> if the dashboard API is unsecured.</param>
+/// <param name="FailureKind">The kind of failure when <paramref name="Success"/> is <c>false</c>.</param>
+internal sealed record TokenExchangeResult(bool Success, string? ApiKey, TokenExchangeFailureKind FailureKind = TokenExchangeFailureKind.None)
+{
+    /// <summary>
+    /// A failed token exchange result due to an invalid or rejected token.
+    /// </summary>
+    public static readonly TokenExchangeResult Failed = new(false, null, TokenExchangeFailureKind.TokenRejected);
+
+    /// <summary>
+    /// A failed token exchange result due to a connection error.
+    /// </summary>
+    public static readonly TokenExchangeResult ConnectionError = new(false, null, TokenExchangeFailureKind.ConnectionError);
+
+    /// <summary>
+    /// Creates a failed result from an HTTP status code.
+    /// </summary>
+    public static TokenExchangeResult FromStatusCode(HttpStatusCode statusCode) => statusCode switch
+    {
+        HttpStatusCode.NotFound => new(false, null, TokenExchangeFailureKind.ApiNotEnabled),
+        HttpStatusCode.Unauthorized => new(false, null, TokenExchangeFailureKind.TokenRejected),
+        _ => new(false, null, TokenExchangeFailureKind.Other),
+    };
+}
+
+/// <summary>
+/// Structured error information for telemetry commands, containing the error message and optional remediation hints.
+/// </summary>
+/// <param name="Error">The error message describing what went wrong.</param>
+/// <param name="Hints">Optional hints describing how to fix the problem. Each hint is displayed on a separate line.</param>
+internal sealed record TelemetryErrorInfo(string Error, params string[] Hints);
