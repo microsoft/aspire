@@ -176,7 +176,18 @@ public static class OtlpConfigurationExtensions
     /// </remarks>
     private static (EndpointReference Endpoint, string Protocol)? ResolveOtlpEndpointFromDashboard(EnvironmentCallbackContext context, OtlpProtocol? requiredProtocol)
     {
-        var model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+        DistributedApplicationModel? model;
+        try
+        {
+            model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+        }
+        catch (InvalidOperationException)
+        {
+            // ServiceProvider may not be available if the container hasn't been built yet
+            // (e.g. env var evaluation during testing without a fully built host).
+            return null;
+        }
+
         if (model is null)
         {
             return null;
