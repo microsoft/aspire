@@ -618,8 +618,10 @@ public static class AzureKubernetesEnvironmentExtensions
             }
 
             // Provision the AGC traffic controller, frontend, and subnet association.
+            var agcName = take('agc-${uniqueString(resourceGroup().id)}', 63)
+
             resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2025-01-01' = {
-              name: 'aspire-agc'
+              name: agcName
               location: location
               properties: {}
               dependsOn: [aksAlbUpdate]
