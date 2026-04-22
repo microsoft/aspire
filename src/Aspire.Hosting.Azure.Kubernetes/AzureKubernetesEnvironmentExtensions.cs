@@ -594,14 +594,15 @@ public static class AzureKubernetesEnvironmentExtensions
             @description('The name of the AKS cluster.')
             param aksClusterName string
 
-            // Enable the ALB controller on the AKS cluster.
-            // Requires the managed Gateway API CRDs to already be installed on the cluster
-            // (via az aks update --enable-gateway-api or az aks create --enable-gateway-api).
+            // Enable the managed Gateway API and ALB controller on the AKS cluster.
             resource aksAlbUpdate 'Microsoft.ContainerService/managedClusters@2026-02-02-preview' = {
               name: aksClusterName
               location: location
               properties: {
                 ingressProfile: {
+                  gatewayApi: {
+                    installation: 'Standard'
+                  }
                   applicationLoadBalancer: {
                     enabled: true
                   }
