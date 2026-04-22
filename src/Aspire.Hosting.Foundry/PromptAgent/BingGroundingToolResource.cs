@@ -19,7 +19,7 @@ namespace Aspire.Hosting.Foundry;
 /// </para>
 /// <para>
 /// After creating the tool with <see cref="PromptAgentBuilderExtensions.AddBingGroundingTool"/>,
-/// link it using <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{BingGroundingToolResource}, object)"/>
+/// link it using one of the <c>WithReference</c> overloads on <see cref="PromptAgentBuilderExtensions"/>
 /// with one of the following:
 /// <list type="bullet">
 /// <item>A <see cref="BingGroundingConnectionResource"/> created by

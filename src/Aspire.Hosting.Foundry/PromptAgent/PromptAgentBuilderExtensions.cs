@@ -360,7 +360,7 @@ public static class PromptAgentBuilderExtensions
     /// ground their responses using Bing Search results.
     /// </summary>
     /// <remarks>
-    /// After creating the tool, call <see cref="WithReference(IResourceBuilder{BingGroundingToolResource}, object)"/>
+    /// After creating the tool, call one of the <c>WithReference</c> overloads
     /// to link it to a Bing Search resource.
     /// </remarks>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
@@ -380,37 +380,60 @@ public static class PromptAgentBuilderExtensions
     }
 
     /// <summary>
-    /// Links a Bing Grounding tool to a Bing Search resource, automatically creating the Foundry
-    /// project connection with the correct authentication and metadata when needed.
+    /// Links a Bing Grounding tool to a Foundry project connection for the Bing Search service.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// This method accepts one of the following reference types:
-    /// <list type="bullet">
-    /// <item>An <see cref="IResourceBuilder{T}"/> for <see cref="BingGroundingConnectionResource"/>
-    /// — uses an existing Bing grounding connection created by
-    /// <see cref="AzureCognitiveServicesProjectConnectionsBuilderExtensions.AddBingGroundingConnection(IResourceBuilder{AzureCognitiveServicesProjectResource}, string, string)"/>.</item>
-    /// <item>A <see cref="string"/> — the full Azure resource ID of a Bing Search resource
-    /// (e.g., <c>/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}</c>).
-    /// A Foundry project connection is created automatically.</item>
-    /// <item>An <see cref="IResourceBuilder{T}"/> for <see cref="ParameterResource"/>
-    /// — a parameter containing the Bing Search Azure resource ID. The value is resolved at
-    /// deployment time. A Foundry project connection is created automatically.</item>
-    /// </list>
-    /// </para>
-    /// <para>
-    /// The Bing Search resource (<c>Microsoft.Bing/accounts</c>) must be created manually in
-    /// the <a href="https://portal.azure.com">Azure portal</a> before using this method.
-    /// </para>
-    /// </remarks>
     /// <param name="tool">The Bing Grounding tool resource builder.</param>
-    /// <param name="bingReference">
-    /// A reference to the Bing Search resource. Can be a Bing grounding connection, a string
-    /// resource ID, or a parameter resource containing the resource ID.
+    /// <param name="bingConnection">The Foundry project connection for the Bing Search service,
+    /// created by <see cref="AzureCognitiveServicesProjectConnectionsBuilderExtensions.AddBingGroundingConnection(IResourceBuilder{AzureCognitiveServicesProjectResource}, string, string)"/>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
+    public static IResourceBuilder<BingGroundingToolResource> WithReference(
+        this IResourceBuilder<BingGroundingToolResource> tool,
+        IResourceBuilder<BingGroundingConnectionResource> bingConnection)
+    {
+        ArgumentNullException.ThrowIfNull(bingConnection);
+        return tool.WithReference((object)bingConnection);
+    }
+
+    /// <summary>
+    /// Links a Bing Grounding tool to a Bing Search resource using its Azure resource ID,
+    /// automatically creating the Foundry project connection.
+    /// </summary>
+    /// <param name="tool">The Bing Grounding tool resource builder.</param>
+    /// <param name="bingResourceId">
+    /// The full Azure resource ID of the Bing Search resource
+    /// (e.g., <c>/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}</c>).
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
     public static IResourceBuilder<BingGroundingToolResource> WithReference(
+        this IResourceBuilder<BingGroundingToolResource> tool,
+        string bingResourceId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(bingResourceId);
+        return tool.WithReference((object)bingResourceId);
+    }
+
+    /// <summary>
+    /// Links a Bing Grounding tool to a Bing Search resource using a parameter for the Azure
+    /// resource ID, automatically creating the Foundry project connection.
+    /// </summary>
+    /// <param name="tool">The Bing Grounding tool resource builder.</param>
+    /// <param name="bingResourceId">
+    /// A parameter resource containing the full Azure resource ID of the Bing Search resource.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
+    public static IResourceBuilder<BingGroundingToolResource> WithReference(
+        this IResourceBuilder<BingGroundingToolResource> tool,
+        IResourceBuilder<ParameterResource> bingResourceId)
+    {
+        ArgumentNullException.ThrowIfNull(bingResourceId);
+        return tool.WithReference((object)bingResourceId);
+    }
+
+    [AspireExport]
+    internal static IResourceBuilder<BingGroundingToolResource> WithReference(
         this IResourceBuilder<BingGroundingToolResource> tool,
         [AspireUnion(
             typeof(IResourceBuilder<BingGroundingConnectionResource>),
