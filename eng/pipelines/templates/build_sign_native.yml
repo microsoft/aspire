@@ -174,7 +174,7 @@ jobs:
                 ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
-          - ${{ if ne(parameters.agentOs, 'windows') }}:
+          - ${{ if and(ne(parameters.agentOs, 'windows'), not(contains(targetRid, 'musl'))) }}:
             - script: |
                 set -euo pipefail
                 echo "Finding CLI archive for ${{ targetRid }}..."
