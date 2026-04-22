@@ -134,7 +134,7 @@ internal sealed partial class CliTemplateFactory
 
         if (useRedisCache)
         {
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, TemplatingStrings.UseRedisCache_UsingRedisCache);
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseRedisCache_UsingRedisCache);
         }
 
         return useRedisCache;

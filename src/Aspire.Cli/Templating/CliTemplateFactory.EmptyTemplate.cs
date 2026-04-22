@@ -121,7 +121,7 @@ internal sealed partial class CliTemplateFactory
 
         if (useLocalhostTld)
         {
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, TemplatingStrings.UseLocalhostTld_UsingLocalhostTld);
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseLocalhostTld_UsingLocalhostTld);
         }
 
         return useLocalhostTld;

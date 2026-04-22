@@ -419,7 +419,7 @@ internal class ConsoleInteractionService : IInteractionService
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
     {
-        DisplayMessage(KnownEmojis.CheckMark, message, allowMarkup);
+        DisplayMessage(KnownEmojis.CheckMarkButton, message, allowMarkup);
     }
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)

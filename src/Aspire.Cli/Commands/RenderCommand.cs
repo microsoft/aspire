@@ -326,7 +326,7 @@ internal sealed class RenderCommand : BaseCommand
             binding: PromptBinding.CreateDefault<string?>("hello"),
             cancellationToken: cancellationToken);
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"You entered: {name}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"You entered: {name}");
 
         var confirmed = await InteractionService.PromptConfirmAsync(
             "Do you want to continue?",
