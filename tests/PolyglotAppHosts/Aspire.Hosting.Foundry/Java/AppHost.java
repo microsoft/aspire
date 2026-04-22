@@ -53,9 +53,11 @@ void main() throws Exception {
         aiSearchTool.withReference(search);
         var bingTool = project.addBingGroundingTool("bing-tool");
         bingTool.withBingConnectionReference(_searchConnection);
-        bingTool.withBingResourceIdReference("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing");
+        var bingTool2 = project.addBingGroundingTool("bing-tool-2");
+        bingTool2.withBingResourceIdReference("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing");
         var bingParam = builder.addParameter("bing-resource-id");
-        bingTool.withBingParameterReference(bingParam);
+        var bingTool3 = project.addBingGroundingTool("bing-tool-3");
+        bingTool3.withBingParameterReference(bingParam);
         var sharepoint = project.addSharePointTool("sharepoint-tool", new String[] { "https://contoso.sharepoint.com", "MySite" });
         var fabric = project.addFabricTool("fabric-tool", new String[] { "workspace-id" });
         var azFunc = project.addAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q");
