@@ -20,6 +20,9 @@ internal class ConsoleInteractionService : IInteractionService
     private static readonly Style s_errorMessageStyle = new Style(foreground: Color.Red, background: null, decoration: Decoration.Bold);
     private static readonly Style s_searchHighlightStyle = new Style(foreground: Color.Black, background: Color.Cyan1, decoration: Decoration.None);
 
+    internal const string AllChoice = "all";
+    internal const string NoneChoice = "none";
+
     private readonly IAnsiConsole _outConsole;
     private readonly IAnsiConsole _errorConsole;
     private readonly CliExecutionContext _executionContext;
@@ -549,12 +552,12 @@ internal class ConsoleInteractionService : IInteractionService
 
     internal static IReadOnlyList<T>? MatchChoices<T>(string commaSeparatedValues, IReadOnlyList<T> choices, Func<T, string> choiceFormatter) where T : notnull
     {
-        if (string.Equals(commaSeparatedValues, "all", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(commaSeparatedValues, AllChoice, StringComparison.OrdinalIgnoreCase))
         {
             return choices;
         }
 
-        if (string.Equals(commaSeparatedValues, "none", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(commaSeparatedValues, NoneChoice, StringComparison.OrdinalIgnoreCase))
         {
             return [];
         }

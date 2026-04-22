@@ -18,15 +18,7 @@ internal sealed partial class CliTemplateFactory
         if (string.IsNullOrWhiteSpace(projectName))
         {
             var defaultName = _executionContext.WorkingDirectory.Name;
-
-            if (!_hostEnvironment.SupportsInteractiveInput)
-            {
-                projectName = defaultName;
-            }
-            else
-            {
-                projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
-            }
+            projectName = await _prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
         if (string.IsNullOrWhiteSpace(inputs.Version))
@@ -40,15 +32,7 @@ internal sealed partial class CliTemplateFactory
         if (string.IsNullOrWhiteSpace(outputPath))
         {
             var defaultOutputPath = $"./{projectName}";
-
-            if (!_hostEnvironment.SupportsInteractiveInput)
-            {
-                outputPath = defaultOutputPath;
-            }
-            else
-            {
-                outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, cancellationToken);
-            }
+            outputPath = await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, cancellationToken);
         }
         outputPath = Path.GetFullPath(outputPath, _executionContext.WorkingDirectory.FullName);
 

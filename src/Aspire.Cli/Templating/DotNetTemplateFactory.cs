@@ -582,12 +582,6 @@ internal class DotNetTemplateFactory(
         if (inputs.Name is not { } name || !ProjectNameValidator.IsProjectNameValid(name))
         {
             var defaultName = executionContext.WorkingDirectory.Name;
-
-            if (!hostEnvironment.SupportsInteractiveInput)
-            {
-                return defaultName;
-            }
-
             name = await prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
@@ -599,15 +593,7 @@ internal class DotNetTemplateFactory(
         if (inputs.Output is not { } outputPath)
         {
             var defaultPath = pathDeriver(projectName);
-
-            if (!hostEnvironment.SupportsInteractiveInput)
-            {
-                outputPath = defaultPath;
-            }
-            else
-            {
-                outputPath = await prompter.PromptForOutputPath(defaultPath, parseResult, cancellationToken);
-            }
+            outputPath = await prompter.PromptForOutputPath(defaultPath, parseResult, cancellationToken);
         }
 
         outputPath = Path.GetFullPath(outputPath);

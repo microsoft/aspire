@@ -412,7 +412,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Comma-separated list of skill locations to install (e.g. standard,claudecode,github,opencode), 'all', or 'none'.
+        ///   Looks up a localized string similar to Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'.
         /// </summary>
         internal static string InitCommand_SkillLocationsOptionDescription {
             get {
@@ -421,7 +421,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Comma-separated list of skills to install (e.g. aspire,playwright-cli,dotnet-inspect), 'all', or 'none'.
+        ///   Looks up a localized string similar to Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'.
         /// </summary>
         internal static string InitCommand_SkillsOptionDescription {
             get {

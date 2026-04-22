@@ -63,13 +63,13 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillLocationsOptionDescription">
-        <source>Comma-separated list of skill locations to install (e.g. standard,claudecode,github,opencode), 'all', or 'none'</source>
-        <target state="new">Comma-separated list of skill locations to install (e.g. standard,claudecode,github,opencode), 'all', or 'none'</target>
+        <source>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated list of skills to install (e.g. aspire,playwright-cli,dotnet-inspect), 'all', or 'none'</source>
-        <target state="new">Comma-separated list of skills to install (e.g. aspire,playwright-cli,dotnet-inspect), 'all', or 'none'</target>
+        <source>Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">

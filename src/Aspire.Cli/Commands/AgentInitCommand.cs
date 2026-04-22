@@ -71,12 +71,18 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
     private static readonly Option<string?> s_skillLocationsOption = new("--skill-locations")
     {
-        Description = AgentCommandStrings.InitCommand_SkillLocationsOptionDescription
+        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillLocationsOptionDescription,
+            string.Join(",", SkillLocation.All.Select(l => l.Id)),
+            ConsoleInteractionService.AllChoice,
+            ConsoleInteractionService.NoneChoice)
     };
 
     private static readonly Option<string?> s_skillsOption = new("--skills")
     {
-        Description = AgentCommandStrings.InitCommand_SkillsOptionDescription
+        Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillsOptionDescription,
+            string.Join(",", SkillDefinition.All.Select(s => s.Name)),
+            ConsoleInteractionService.AllChoice,
+            ConsoleInteractionService.NoneChoice)
     };
 
     protected override bool UpdateNotificationsEnabled => false;
