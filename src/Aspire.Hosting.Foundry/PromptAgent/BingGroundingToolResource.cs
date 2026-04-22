@@ -19,13 +19,8 @@ namespace Aspire.Hosting.Foundry;
 /// </para>
 /// <para>
 /// After creating the tool with <see cref="PromptAgentBuilderExtensions.AddBingGroundingTool"/>,
-/// link it using one of the <c>WithReference</c> overloads:
-/// <list type="bullet">
-/// <item><see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{BingGroundingToolResource}, IResourceBuilder{AzureCognitiveServicesProjectConnectionResource})"/>
-/// to use an existing project connection.</item>
-/// <item><see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{BingGroundingToolResource}, string)"/>
-/// to auto-create a connection from a Bing resource ID.</item>
-/// </list>
+/// link it using <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{BingGroundingToolResource}, object)"/>
+/// with a Bing grounding connection, a resource ID string, or a parameter.
 /// </para>
 /// </remarks>
 [AspireExport]

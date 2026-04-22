@@ -52,12 +52,12 @@ void main() throws Exception {
         var aiSearchTool = project.addAISearchTool("ai-search-tool");
         aiSearchTool.withReference(search);
         var bingTool = project.addBingGroundingTool("bing-tool");
-        bingTool.withBingConnectionReference(_searchConnection);
+        bingTool.withReference(_searchConnection);
         var bingTool2 = project.addBingGroundingTool("bing-tool-2");
-        bingTool2.withBingResourceIdReference("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing");
+        bingTool2.withReference("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing");
         var bingParam = builder.addParameter("bing-resource-id");
         var bingTool3 = project.addBingGroundingTool("bing-tool-3");
-        bingTool3.withBingParameterReference(bingParam);
+        bingTool3.withReference(bingParam);
         var sharepoint = project.addSharePointTool("sharepoint-tool", new String[] { "https://contoso.sharepoint.com", "MySite" });
         var fabric = project.addFabricTool("fabric-tool", new String[] { "workspace-id" });
         var azFunc = project.addAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q");
