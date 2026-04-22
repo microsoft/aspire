@@ -742,6 +742,11 @@ export interface WithBindMountOptions {
     isReadOnly?: boolean;
 }
 
+export interface WithBrowserLogsOptions {
+    browser?: string;
+    profile?: string;
+}
+
 export interface WithCommandOptions {
     commandOptions?: CommandOptions;
 }
@@ -9998,6 +10003,7 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
 
 export interface ContainerResource {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): ContainerResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     withBindMount(source: string, target: string, options?: WithBindMountOptions): ContainerResourcePromise;
     withEntrypoint(entrypoint: string): ContainerResourcePromise;
@@ -10111,6 +10117,7 @@ export interface ContainerResource {
 }
 
 export interface ContainerResourcePromise extends PromiseLike<ContainerResource> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): ContainerResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     withBindMount(source: string, target: string, options?: WithBindMountOptions): ContainerResourcePromise;
     withEntrypoint(entrypoint: string): ContainerResourcePromise;
@@ -10230,6 +10237,25 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
 class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle> implements ContainerResource {
     constructor(handle: ContainerResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): ContainerResourcePromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new ContainerResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -12162,6 +12188,11 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
+    }
+
     /** Configures a resource to use a container registry */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
@@ -12732,6 +12763,7 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
 export interface CSharpAppResource {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): CSharpAppResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
@@ -12829,6 +12861,7 @@ export interface CSharpAppResource {
 }
 
 export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): CSharpAppResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
@@ -12932,6 +12965,25 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
 class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle> implements CSharpAppResource {
     constructor(handle: CSharpAppResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): CSharpAppResourcePromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new CSharpAppResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -14605,6 +14657,11 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
+    }
+
     /** Configures a resource to use a container registry */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
@@ -15095,6 +15152,7 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
 
 export interface DotnetToolResource {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): DotnetToolResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     withToolPackage(packageId: string): DotnetToolResourcePromise;
@@ -15198,6 +15256,7 @@ export interface DotnetToolResource {
 }
 
 export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResource> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): DotnetToolResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise;
     withToolPackage(packageId: string): DotnetToolResourcePromise;
@@ -15307,6 +15366,25 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
 class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandle> implements DotnetToolResource {
     constructor(handle: DotnetToolResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): DotnetToolResourcePromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new DotnetToolResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -17067,6 +17145,11 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
+    }
+
     /** Configures a resource to use a container registry */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
@@ -17587,6 +17670,7 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
 
 export interface ExecutableResource {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): ExecutableResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     publishAsDockerFile(): ExecutableResourcePromise;
@@ -17684,6 +17768,7 @@ export interface ExecutableResource {
 }
 
 export interface ExecutableResourcePromise extends PromiseLike<ExecutableResource> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): ExecutableResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     publishAsDockerFile(): ExecutableResourcePromise;
@@ -17787,6 +17872,25 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
 class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandle> implements ExecutableResource {
     constructor(handle: ExecutableResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): ExecutableResourcePromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new ExecutableResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -19455,6 +19559,11 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
     }
 
     /** Configures a resource to use a container registry */
@@ -22281,6 +22390,7 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
 
 export interface ProjectResource {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): ProjectResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
@@ -22378,6 +22488,7 @@ export interface ProjectResource {
 }
 
 export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): ProjectResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
@@ -22481,6 +22592,25 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
 class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> implements ProjectResource {
     constructor(handle: ProjectResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): ProjectResourcePromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new ProjectResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -24154,6 +24284,11 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
+    }
+
     /** Configures a resource to use a container registry */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
@@ -24644,6 +24779,7 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
 
 export interface TestDatabaseResource {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestDatabaseResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestDatabaseResourcePromise;
     withEntrypoint(entrypoint: string): TestDatabaseResourcePromise;
@@ -24757,6 +24893,7 @@ export interface TestDatabaseResource {
 }
 
 export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseResource> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestDatabaseResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestDatabaseResourcePromise;
     withEntrypoint(entrypoint: string): TestDatabaseResourcePromise;
@@ -24876,6 +25013,25 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
 class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceHandle> implements TestDatabaseResource {
     constructor(handle: TestDatabaseResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestDatabaseResourcePromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new TestDatabaseResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -26808,6 +26964,11 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
+    }
+
     /** Configures a resource to use a container registry */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
@@ -27378,6 +27539,7 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
 export interface TestRedisResource {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestRedisResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestRedisResourcePromise;
     withEntrypoint(entrypoint: string): TestRedisResourcePromise;
@@ -27507,6 +27669,7 @@ export interface TestRedisResource {
 }
 
 export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestRedisResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestRedisResourcePromise;
     withEntrypoint(entrypoint: string): TestRedisResourcePromise;
@@ -27642,6 +27805,25 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
 class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle> implements TestRedisResource {
     constructor(handle: TestRedisResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestRedisResourcePromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new TestRedisResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -29802,6 +29984,11 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
+    }
+
     /** Configures a resource to use a container registry */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
@@ -30452,6 +30639,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
 export interface TestVaultResource {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestVaultResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestVaultResourcePromise;
     withEntrypoint(entrypoint: string): TestVaultResourcePromise;
@@ -30566,6 +30754,7 @@ export interface TestVaultResource {
 }
 
 export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestVaultResourcePromise;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ConnectionStringResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestVaultResourcePromise;
     withEntrypoint(entrypoint: string): TestVaultResourcePromise;
@@ -30686,6 +30875,25 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
 class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle> implements TestVaultResource {
     constructor(handle: TestVaultResourceHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestVaultResourcePromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new TestVaultResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -32631,6 +32839,11 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
     }
 
     /** Configures a resource to use a container registry */
@@ -34873,6 +35086,7 @@ class ResourceWithContainerFilesPromiseImpl implements ResourceWithContainerFile
 
 export interface ResourceWithEndpoints {
     toJSON(): MarshalledHandle;
+    withBrowserLogs(options?: WithBrowserLogsOptions): ResourceWithEndpointsPromise;
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     withEndpointCallback(endpointName: string, callback: (obj: EndpointUpdateContext) => Promise<void>, options?: WithEndpointCallbackOptions): ResourceWithEndpointsPromise;
     withHttpEndpointCallback(callback: (obj: EndpointUpdateContext) => Promise<void>, options?: WithHttpEndpointCallbackOptions): ResourceWithEndpointsPromise;
@@ -34891,6 +35105,7 @@ export interface ResourceWithEndpoints {
 }
 
 export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEndpoints> {
+    withBrowserLogs(options?: WithBrowserLogsOptions): ResourceWithEndpointsPromise;
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     withEndpointCallback(endpointName: string, callback: (obj: EndpointUpdateContext) => Promise<void>, options?: WithEndpointCallbackOptions): ResourceWithEndpointsPromise;
     withHttpEndpointCallback(callback: (obj: EndpointUpdateContext) => Promise<void>, options?: WithHttpEndpointCallbackOptions): ResourceWithEndpointsPromise;
@@ -34915,6 +35130,25 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
 class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpointsHandle> implements ResourceWithEndpoints {
     constructor(handle: IResourceWithEndpointsHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (browser !== undefined) rpcArgs.browser = browser;
+        if (profile !== undefined) rpcArgs.profile = profile;
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting/withBrowserLogs',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): ResourceWithEndpointsPromise {
+        const browser = options?.browser;
+        const profile = options?.profile;
+        return new ResourceWithEndpointsPromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
     }
 
     /** @internal */
@@ -35249,6 +35483,11 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
     ): PromiseLike<TResult1 | TResult2> {
         return this._promise.then(onfulfilled, onrejected);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    withBrowserLogs(options?: WithBrowserLogsOptions): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withBrowserLogs(options)), this._client);
     }
 
     /** Configures an MCP server endpoint on the resource */

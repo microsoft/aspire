@@ -430,7 +430,7 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
                 string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SelectAVersionOfPackage, firstPackage.Package.Id),
                 choices,
                 c => c.Label,
-                ct);
+                cancellationToken: ct);
 
             return selection.Result;
         }
@@ -497,7 +497,7 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SelectAVersionOfPackage, firstPackage.Package.Id),
             rootChoices,
             c => c.Label,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return await topSelection.Action(cancellationToken);
     }
@@ -514,7 +514,7 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             AddCommandStrings.SelectAnIntegrationToAdd,
             filteredPackages,
             PackageNameWithFriendlyNameIfAvailable,
-            cancellationToken);
+            cancellationToken: cancellationToken);
         return selectedIntegration;
     }
 

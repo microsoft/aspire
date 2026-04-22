@@ -401,5 +401,32 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PlaywrightCliInstaller_InstalledWithMirrorWarnings", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Path to the workspace root directory.
+        /// </summary>
+        internal static string InitCommand_WorkspaceRootOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_WorkspaceRootOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'.
+        /// </summary>
+        internal static string InitCommand_SkillLocationsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillLocationsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'.
+        /// </summary>
+        internal static string InitCommand_SkillsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
+            }
+        }
     }
 }

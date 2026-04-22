@@ -203,6 +203,12 @@
   <data name="AppHostConnectionLost" xml:space="preserve">
     <value>The connection to the AppHost was lost: {0}.</value>
   </data>
+  <data name="AppHostConnectionLostGeneric" xml:space="preserve">
+    <value>The connection to the application was lost.</value>
+  </data>
+  <data name="AppHostShutDown" xml:space="preserve">
+    <value>The application shut down.</value>
+  </data>
   <data name="UnexpectedErrorOccurred" xml:space="preserve">
     <value>An unexpected error occurred: {0}</value>
     <comment>{0} is the exception message</comment>
@@ -233,6 +239,18 @@
     <value>Other (specify next)</value>
   </data>
   <data name="InteractiveInputNotSupported" xml:space="preserve">
-    <value>Interactive input is not supported in this environment. Use the --non-interactive flag or ensure the CLI is running in an interactive terminal.</value>
+    <value>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</value>
+  </data>
+  <data name="NonInteractiveOptionRequired" xml:space="preserve">
+    <value>The {0} option must be specified when running in non-interactive mode.</value>
+    <comment>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</comment>
+  </data>
+  <data name="NonInteractiveInvalidValue" xml:space="preserve">
+    <value>The value '{0}' is not valid for {1}.</value>
+    <comment>{0} is the provided value. {1} is the option/argument display name.</comment>
+  </data>
+  <data name="NonInteractiveAvailableValues" xml:space="preserve">
+    <value>Available values: {0}</value>
+    <comment>{0} is a comma-separated list of valid values</comment>
   </data>
 </root>

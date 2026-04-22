@@ -106,6 +106,24 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Open the app in a tracked browser session and stream browser logs to this resource..
+        /// </summary>
+        internal static string OpenTrackedBrowserDescription {
+            get {
+                return ResourceManager.GetString("OpenTrackedBrowserDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open tracked browser.
+        /// </summary>
+        internal static string OpenTrackedBrowserName {
+            get {
+                return ResourceManager.GetString("OpenTrackedBrowserName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes..
         /// </summary>
         internal static string RebuildDescription {

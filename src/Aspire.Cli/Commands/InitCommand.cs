@@ -107,6 +107,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
+        Options.Add(NewCommand.s_suppressAgentInitOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(features, configuration);
@@ -129,6 +130,8 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
+
+        var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
 
         // Get the language selection (from command line, config, or prompt).
         var explicitLanguage = parseResult.GetValue(_languageOption);
@@ -155,7 +158,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 return polyglotResult;
             }
 
-            return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, polyglotResult, _executionContext.WorkingDirectory, cancellationToken);
+            return await _agentInitCommand.PromptAndChainAsync(InteractionService, polyglotResult, _executionContext.WorkingDirectory, agentInitBinding, cancellationToken);
         }
 
         // For C#, we need the .NET SDK
@@ -195,7 +198,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return initResult;
         }
 
-        return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, initResult, workspaceRoot, cancellationToken);
+        return await _agentInitCommand.PromptAndChainAsync(InteractionService, initResult, workspaceRoot, agentInitBinding, cancellationToken);
     }
 
     private async Task<int> InitializeExistingSolutionAsync(InitContext initContext, ParseResult parseResult, CancellationToken cancellationToken)
@@ -255,7 +258,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         if (initContext.AlreadyHasAppHost)
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMark, InitCommandStrings.SolutionAlreadyInitialized);
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, InitCommandStrings.SolutionAlreadyInitialized);
             return ExitCodeConstants.Success;
         }
 
@@ -319,7 +322,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     "Add ServiceDefaults reference?",
                     serviceDefaultsActions,
                     (action) => action.Value,
-                    cancellationToken
+                    cancellationToken: cancellationToken
                 );
 
                 switch (selection.Key)
@@ -592,7 +595,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
             if (File.Exists(appHostPath))
             {
-                InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"{appHostFileName} already exists in this directory.");
+                InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists in this directory.");
                 return ExitCodeConstants.Success;
             }
         }

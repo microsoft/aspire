@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pl" original="../SharedCommandStrings.resx">
     <body>
+      <trans-unit id="AgentInitOptionDescription">
+        <source>Suppress AI agent environment configuration after project creation</source>
+        <target state="new">Suppress AI agent environment configuration after project creation</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostNotRunning">
         <source>No running AppHost found. Use 'aspire run' to start one first.</source>
         <target state="new">No running AppHost found. Use 'aspire run' to start one first.</target>

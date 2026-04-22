@@ -1190,7 +1190,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         if (updates.Count == 0 && newSdkVersion is null)
         {
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, UpdateCommandStrings.ProjectUpToDateMessage);
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
             return new UpdatePackagesResult { UpdatesApplied = false };
         }
 
@@ -1207,7 +1207,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _interactionService.DisplayEmptyLine();
 
         // Confirm with user
-        if (!await _interactionService.ConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, true, cancellationToken))
+        if (!await _interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
         {
             return new UpdatePackagesResult { UpdatesApplied = false };
         }

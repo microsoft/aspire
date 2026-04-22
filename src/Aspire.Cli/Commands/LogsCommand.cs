@@ -198,7 +198,29 @@ internal sealed class LogsCommand : BaseCommand
 
         if (follow)
         {
-            return await ExecuteWatchAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, cancellationToken);
+            try
+            {
+                return await ExecuteWatchAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, cancellationToken);
+            }
+            catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
+            {
+                return ExitCodeConstants.Success;
+            }
+            catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return ExitCodeConstants.Success;
+                }
+
+                // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
+                // logs --follow is active. Treat the lost stream as a normal end of stream
+                // rather than surfacing it as an unexpected CLI failure. Emit the status
+                // message on stderr so JSON output on stdout remains parseable.
+                AppHostFollowDisconnectHelpers.WriteStatusMessage(_interactionService, connection);
+
+                return ExitCodeConstants.Success;
+            }
         }
         else
         {

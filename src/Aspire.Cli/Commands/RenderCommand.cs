@@ -114,7 +114,7 @@ internal sealed class RenderCommand : BaseCommand
                 "What do you want to test?",
                 s_choices.Keys,
                 key => s_choices[key],
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             var exitCode = await ExecuteChoiceAsync(choice, parseResult.GetValue(s_consoleWidthOption), cancellationToken);
             if (choice == "exit" || exitCode != ExitCodeConstants.Success)
@@ -271,7 +271,7 @@ internal sealed class RenderCommand : BaseCommand
             "Select a [bold blue]package[/] to install:",
             packages,
             p => $"{p.Item1.EscapeMarkup()} [dim]v{p.Item2}[/] ({p.Item3})",
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         InteractionService.DisplayMessage(KnownEmojis.Package, $"Selected: {selected.Item1} v{selected.Item2}");
         return ExitCodeConstants.Success;
@@ -285,7 +285,7 @@ internal sealed class RenderCommand : BaseCommand
             "Select a target environment:",
             environments,
             e => e,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         InteractionService.DisplayMessage(KnownEmojis.Rocket, $"Deploying to {selected}...");
         return ExitCodeConstants.Success;
@@ -323,14 +323,14 @@ internal sealed class RenderCommand : BaseCommand
 
         var name = await InteractionService.PromptForStringAsync(
             "Enter a test value",
-            defaultValue: "hello",
+            binding: PromptBinding.CreateDefault<string?>("hello"),
             cancellationToken: cancellationToken);
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"You entered: {name}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"You entered: {name}");
 
-        var confirmed = await InteractionService.ConfirmAsync(
+        var confirmed = await InteractionService.PromptConfirmAsync(
             "Do you want to continue?",
-            defaultValue: true,
+            binding: PromptBinding.CreateDefault(true),
             cancellationToken: cancellationToken);
 
         if (confirmed)
