@@ -1187,8 +1187,8 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
         => _innerService.PromptForStringAsync(promptText, validator, isSecret, required, binding, cancellationToken);
     public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
         => _innerService.PromptForFilePathAsync(promptText, validator, directory, required, binding, cancellationToken);
-    public Task<bool> ConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) 
-        => _innerService.ConfirmAsync(promptText, binding, cancellationToken);
+    public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) 
+        => _innerService.PromptConfirmAsync(promptText, binding, cancellationToken);
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull 
         => _innerService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, cancellationToken);
     public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull 

@@ -931,7 +931,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         return Task.FromResult<IReadOnlyList<T>>(choices.ToList());
     }
 
-    public Task<bool> ConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
+    public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
         var defaultValue = binding?.DefaultValue ?? false;
         BooleanPromptCalls.Add(new BooleanPromptCall(promptText, defaultValue));

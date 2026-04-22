@@ -168,7 +168,7 @@ public class ExtensionGuestLauncherTests
         public void DisplaySuccess(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) => throw new NotImplementedException();
         public void DisplayCancellationMessage() => throw new NotImplementedException();
-        public Task<bool> ConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public void DisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayEmptyLine() => throw new NotImplementedException();
         public void DisplayPlainText(string text) => throw new NotImplementedException();

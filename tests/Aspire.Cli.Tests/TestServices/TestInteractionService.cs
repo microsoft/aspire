@@ -192,7 +192,7 @@ internal sealed class TestInteractionService : IInteractionService
     {
     }
 
-    public Task<bool> ConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
+    public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided)

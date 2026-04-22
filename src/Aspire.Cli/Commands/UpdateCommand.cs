@@ -225,7 +225,7 @@ internal sealed class UpdateCommand : BaseCommand
                 _updateNotifier.IsUpdateAvailable() &&
                 !string.IsNullOrEmpty(channel.CliDownloadBaseUrl))
             {
-                var shouldUpdateCli = await InteractionService.ConfirmAsync(
+                var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                     UpdateCommandStrings.UpdateCliAfterProjectUpdatePrompt,
                     binding: confirmBinding,
                     cancellationToken: cancellationToken);
@@ -259,7 +259,7 @@ internal sealed class UpdateCommand : BaseCommand
                 // Only prompt for self-update if not running as dotnet tool and downloader is available
                 if (_cliDownloader is not null)
                 {
-                    var shouldUpdateCli = await InteractionService.ConfirmAsync(
+                    var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,
                         binding: PromptBinding.Create(parseResult, s_yesOption, false),
                         cancellationToken: cancellationToken);

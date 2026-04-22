@@ -112,7 +112,7 @@ internal static class PromptBinding
     /// When not provided in non-interactive mode, defaults to <paramref name="defaultValue"/>.
     /// </summary>
     public static PromptBinding<bool> CreateInvertedBoolConfirm(ParseResult parseResult, Option<bool?> option, bool defaultValue) =>
-        new(parseResult, FormatOptionName(option), BuildInvertedBoolConfirmResolver(option), defaultValue, hasExplicitDefault: true);
+        new(parseResult, FormatOptionName(option), BuildResolver<bool?, bool>(option, value => value != true), defaultValue, hasExplicitDefault: true);
 
     /// <summary>
     /// Creates a <see cref="PromptBinding{T}"/> for a <c>bool?</c> option that maps to Yes/No selection choices.
@@ -123,46 +123,24 @@ internal static class PromptBinding
     {
         trueValue ??= TemplatingStrings.Yes;
         falseValue ??= TemplatingStrings.No;
-        return new(parseResult, FormatOptionName(option), BuildBoolAsSelectionResolver(option, trueValue, falseValue), falseValue, hasExplicitDefault: true);
+        return new(parseResult, FormatOptionName(option), BuildResolver<bool?, string?>(option, value => value == true ? trueValue : falseValue), falseValue, hasExplicitDefault: true);
     }
 
     private static string FormatOptionName<T>(Option<T> option) => $"'{option.Name}'";
 
+    private static Func<ParseResult, (bool, TResult?)> BuildResolver<TOption, TResult>(
+        Option<TOption> option, Func<TOption?, TResult?> transform) =>
+        parseResult =>
+        {
+            var result = parseResult.GetResult(option);
+            if (result is not null && !result.Implicit)
+            {
+                return (true, transform(parseResult.GetValue(option)));
+            }
+
+            return (false, default);
+        };
+
     private static Func<ParseResult, (bool, T?)> BuildOptionResolver<T>(Option<T> option) =>
-        parseResult =>
-        {
-            var result = parseResult.GetResult(option);
-            if (result is not null && !result.Implicit)
-            {
-                return (true, parseResult.GetValue(option));
-            }
-
-            return (false, default);
-        };
-
-    private static Func<ParseResult, (bool, string?)> BuildBoolAsSelectionResolver(Option<bool?> option, string trueValue, string falseValue) =>
-        parseResult =>
-        {
-            var result = parseResult.GetResult(option);
-            if (result is not null && !result.Implicit)
-            {
-                var value = parseResult.GetValue(option);
-                return (true, value == true ? trueValue : falseValue);
-            }
-
-            return (false, default);
-        };
-
-    private static Func<ParseResult, (bool, bool)> BuildInvertedBoolConfirmResolver(Option<bool?> option) =>
-        parseResult =>
-        {
-            var result = parseResult.GetResult(option);
-            if (result is not null && !result.Implicit)
-            {
-                var value = parseResult.GetValue(option);
-                return (true, value != true);
-            }
-
-            return (false, default);
-        };
+        BuildResolver<T, T>(option, static value => value);
 }

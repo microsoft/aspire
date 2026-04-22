@@ -464,7 +464,7 @@ internal class ConsoleInteractionService : IInteractionService
         DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true);
     }
 
-    public async Task<bool> ConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
+    public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
         var (wasProvided, value, defaultValue) = PromptBinding.Resolve(binding);
         if (wasProvided)

@@ -106,7 +106,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             return previousResultExitCode;
         }
 
-        var runAgentInit = await interactionService.ConfirmAsync(
+        var runAgentInit = await interactionService.PromptConfirmAsync(
             SharedCommandStrings.PromptRunAgentInit,
             binding: agentInitBinding,
             cancellationToken: cancellationToken);

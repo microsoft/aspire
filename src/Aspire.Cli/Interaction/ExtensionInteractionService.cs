@@ -214,7 +214,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         return await _consoleInteractionService.PromptForFilePathAsync(promptText, validator, directory, required, binding, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<bool> ConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
+    public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided)
@@ -247,7 +247,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.ConfirmAsync(promptText, binding, cancellationToken);
+            return await _consoleInteractionService.PromptConfirmAsync(promptText, binding, cancellationToken);
         }
     }
 

@@ -293,7 +293,7 @@ public class ConsoleInteractionServiceTests
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            interactionService.ConfirmAsync("Confirm?", cancellationToken: CancellationToken.None));
+            interactionService.PromptConfirmAsync("Confirm?", cancellationToken: CancellationToken.None));
         Assert.Contains(InteractionServiceStrings.InteractiveInputNotSupported, exception.Message);
     }
 
@@ -844,7 +844,7 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console);
 
         // Act
-        await interactionService.ConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
+        await interactionService.PromptConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
 
         // Assert - the output should contain the [Y/n] or [y/N] suffix
         var outputString = output.ToString();
@@ -862,7 +862,7 @@ public class ConsoleInteractionServiceTests
         var interactionService = CreateInteractionService(console);
 
         // Act
-        var result = await interactionService.ConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
+        var result = await interactionService.PromptConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
 
         // Assert - pressing Enter should accept the default value
         Assert.Equal(defaultValue, result);
@@ -944,7 +944,7 @@ public class ConsoleInteractionServiceTests
         var binding = PromptBinding.Create(parseResult, option);
 
         await Assert.ThrowsAsync<NonInteractiveException>(() =>
-            interactionService.ConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None));
+            interactionService.PromptConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None));
     }
 
     [Fact]
@@ -956,7 +956,7 @@ public class ConsoleInteractionServiceTests
 
         var binding = PromptBinding.CreateDefault(true);
 
-        var result = await interactionService.ConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None);
+        var result = await interactionService.PromptConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None);
 
         Assert.True(result);
     }
@@ -1076,7 +1076,7 @@ public class ConsoleInteractionServiceTests
         var console = CreateInteractiveConsoleWithInput(output, "\n");
         var interactionService = CreateInteractionService(console);
 
-        var result = await interactionService.ConfirmAsync("Proceed?", binding: null, cancellationToken: CancellationToken.None);
+        var result = await interactionService.PromptConfirmAsync("Proceed?", binding: null, cancellationToken: CancellationToken.None);
 
         Assert.True(result);
         Assert.Contains("[Y/n]", output.ToString());
