@@ -14,11 +14,17 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class OtelLogsTests(ITestOutputHelper output)
 {
-    [InlineData(false)]
-    [InlineData(true)]
-    [Theory]
+    [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task OtelLogsReturnsStructuredLogsFromStarterApp(bool isolated)
+    public Task OtelLogsReturnsStructuredLogsFromStarterApp()
+        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: false);
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task OtelLogsReturnsStructuredLogsFromStarterAppIsolated()
+        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: true);
+
+    private async Task OtelLogsReturnsStructuredLogsFromStarterAppCore(bool isolated)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect();
