@@ -119,7 +119,7 @@
   <Target Name="_ValidateNativeBinaryPEMachineOnWindows" Condition="'$(_CheckPEMachine)' == 'true'">
     <Error Condition="'$(PEExpectedMachine)' == ''" Text="Property %24(PEExpectedMachine) is unset for $(CliRuntime)." />
 
-    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;$b=[System.IO.File]::ReadAllBytes('$(_NativeBinaryPath)'); $p=[BitConverter]::ToInt32($b,0x3C); Write-Host ([BitConverter]::ToUInt16($b,$p+4)).ToString('X4')&quot;"
+    <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;$b=[System.IO.File]::ReadAllBytes('$(_NativeBinaryPath)'); $p=[BitConverter]::ToInt32($b,0x3C); [Console]::Write(([BitConverter]::ToUInt16($b,$p+4)).ToString('X4'))&quot;"
           ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="_PEMachineHex" />
     </Exec>

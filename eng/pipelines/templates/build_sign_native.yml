@@ -17,7 +17,7 @@ jobs:
       enableTelemetry: true
       # Publish build logs
       enablePublishBuildArtifacts: true
-      ${{ if ne(parameters.agentOs, 'windows') }}:
+      ${{ if eq(parameters.agentOs, 'linux') }}:
         container: ${{ replace(targetRid, '-', '_') }}
 
       jobs:
@@ -75,7 +75,7 @@ jobs:
           # Build, publish, and sign aspire-managed before creating the bundle layout.
           # This ensures aspire-managed is signed before CreateLayout packs it into the bundle archive.
           # Step 1: dotnet publish produces the self-contained single-file binary.
-          # Step 2: build.sh --sign runs Arcade's signing (only when codeSign is enabled).
+          # Step 2: build.sh -sign runs Arcade's signing (only when codeSign is enabled).
           # Step 3: Bundle.proj creates the bundle layout and archive using the signed binary.
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
