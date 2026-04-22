@@ -626,7 +626,7 @@ public static class AzureKubernetesEnvironmentExtensions
 
             // AppGw for Containers Configuration Manager role
             resource agcConfigManagerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-              name: guid(resourceGroup().id, 'agc-config-manager', albPrincipalId)
+              name: guid(resourceGroup().id, 'agc-config-manager')
               properties: {
                 roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'fbc52c3f-28ad-4303-a892-8a056630b8f1')
                 principalId: albPrincipalId
@@ -636,7 +636,7 @@ public static class AzureKubernetesEnvironmentExtensions
 
             // Reader role on the resource group
             resource agcReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-              name: guid(resourceGroup().id, 'agc-reader', albPrincipalId)
+              name: guid(resourceGroup().id, 'agc-reader')
               properties: {
                 roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
                 principalId: albPrincipalId
@@ -646,7 +646,7 @@ public static class AzureKubernetesEnvironmentExtensions
 
             // Network Contributor on the AGC subnet
             resource agcNetworkContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-              name: guid(subnetId, 'agc-network-contributor', albPrincipalId)
+              name: guid(subnetId, 'agc-network-contributor')
               properties: {
                 roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7')
                 principalId: albPrincipalId
