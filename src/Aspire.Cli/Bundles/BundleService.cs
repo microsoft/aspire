@@ -66,6 +66,9 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
         BundleDiscovery.DcpDirectoryName
     ];
 
+    private static readonly TimeSpan s_lockedLayoutDirectoryRetryDelay = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan s_lockedLayoutDirectoryTimeout = TimeSpan.FromSeconds(30);
+
     /// <inheritdoc/>
     public async Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
     {
@@ -188,7 +191,7 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
 
         // Clean existing layout directories before extraction to avoid file conflicts
         logger.LogDebug("Cleaning existing layout directories in {Path}.", destinationPath);
-        CleanLayoutDirectories(destinationPath);
+        await CleanLayoutDirectoriesAsync(destinationPath, cancellationToken).ConfigureAwait(false);
 
         // Publish the in-progress marker before unpacking files so any concurrent or
         // future discovery can distinguish "rewrite interrupted" from "legacy layout
@@ -253,10 +256,23 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     /// Preserves the bin/ directory (which contains the CLI binary itself).
     /// If a directory cannot be deleted (e.g. a process is still using files
     /// inside it), it is renamed to {dir}.old.{timestamp} so extraction can
-    /// proceed. The stale directory will be cleaned up on the next successful
-    /// extraction.
+    /// proceed. If the directory cannot be deleted or renamed because it is
+    /// still locked, extraction waits briefly for the active process to exit
+    /// before surfacing a specific error.
     /// </summary>
     internal static void CleanLayoutDirectories(string layoutPath)
+        => CleanLayoutDirectoriesAsync(layoutPath, CancellationToken.None).GetAwaiter().GetResult();
+
+    private Task CleanLayoutDirectoriesAsync(string layoutPath, CancellationToken cancellationToken)
+        => CleanLayoutDirectoriesAsync(
+            layoutPath,
+            cancellationToken,
+            onFirstBlocked: path => logger.LogWarning("Bundle layout directory {Path} is still in use by another process. Waiting before extraction continues.", path));
+
+    internal static async Task CleanLayoutDirectoriesAsync(
+        string layoutPath,
+        CancellationToken cancellationToken,
+        Action<string>? onFirstBlocked = null)
     {
         foreach (var dir in s_layoutDirectories)
         {
@@ -264,11 +280,65 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
             FileDeleteHelper.TryCleanupOldItems(layoutPath, dir);
 
             var fullPath = Path.Combine(layoutPath, dir);
-            FileDeleteHelper.TryDeleteDirectory(fullPath);
+            await EnsureDirectoryReadyForExtractionAsync(
+                fullPath,
+                cancellationToken,
+                onFirstBlocked: onFirstBlocked)
+                .ConfigureAwait(false);
         }
 
         DeleteVersionMarker(layoutPath);
         DeleteExtractionInProgressMarker(layoutPath);
+    }
+
+    internal static async Task EnsureDirectoryReadyForExtractionAsync(
+        string path,
+        CancellationToken cancellationToken,
+        Func<string, FileDeleteHelper.DeleteDirectoryResult>? tryDeleteDirectory = null,
+        Action<string>? onFirstBlocked = null,
+        TimeSpan? retryDelay = null,
+        TimeSpan? timeout = null)
+    {
+        if (!Directory.Exists(path))
+        {
+            return;
+        }
+
+        tryDeleteDirectory ??= FileDeleteHelper.TryDeleteDirectory;
+        retryDelay ??= s_lockedLayoutDirectoryRetryDelay;
+        timeout ??= s_lockedLayoutDirectoryTimeout;
+
+        var startedAt = Stopwatch.GetTimestamp();
+        var reportedBlocked = false;
+
+        while (true)
+        {
+            switch (tryDeleteDirectory(path))
+            {
+                case FileDeleteHelper.DeleteDirectoryResult.NotFound:
+                case FileDeleteHelper.DeleteDirectoryResult.Deleted:
+                case FileDeleteHelper.DeleteDirectoryResult.Renamed:
+                    return;
+
+                case FileDeleteHelper.DeleteDirectoryResult.Blocked:
+                    if (!reportedBlocked)
+                    {
+                        onFirstBlocked?.Invoke(path);
+                        reportedBlocked = true;
+                    }
+
+                    if (Stopwatch.GetElapsedTime(startedAt) >= timeout.Value)
+                    {
+                        throw new IOException($"Bundle layout directory '{path}' is still locked by another process. Stop the running Aspire command and retry extraction.");
+                    }
+
+                    await Task.Delay(retryDelay.Value, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                default:
+                    throw new UnreachableException();
+            }
+        }
     }
 
     /// <summary>

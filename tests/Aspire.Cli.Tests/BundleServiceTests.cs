@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Tests;
@@ -122,7 +123,7 @@ public class BundleServiceTests
     }
 
     [Fact]
-    public void CleanLayoutDirectories_RemovesExtractionMarkers()
+    public async Task CleanLayoutDirectoriesAsync_RemovesExtractionMarkers()
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-test");
         try
@@ -130,7 +131,7 @@ public class BundleServiceTests
             BundleService.WriteVersionMarker(tempDir.FullName, "13.2.0-dev");
             BundleService.WriteExtractionInProgressMarker(tempDir.FullName, "13.2.0-dev");
 
-            BundleService.CleanLayoutDirectories(tempDir.FullName);
+            await BundleService.CleanLayoutDirectoriesAsync(tempDir.FullName, CancellationToken.None);
 
             Assert.Null(BundleService.ReadVersionMarker(tempDir.FullName));
             Assert.False(BundleService.HasExtractionInProgressMarker(tempDir.FullName));
@@ -182,6 +183,56 @@ public class BundleServiceTests
             var secondVersion = BundleService.GetCurrentVersion(processPath);
 
             Assert.NotEqual(firstVersion, secondVersion);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureDirectoryReadyForExtractionAsync_RetriesUntilDirectoryCanBeReplaced()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            var managedPath = tempDir.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName).FullName;
+            var attempts = 0;
+
+            await BundleService.EnsureDirectoryReadyForExtractionAsync(
+                managedPath,
+                CancellationToken.None,
+                tryDeleteDirectory: _ => ++attempts < 3
+                    ? FileDeleteHelper.DeleteDirectoryResult.Blocked
+                    : FileDeleteHelper.DeleteDirectoryResult.Deleted,
+                retryDelay: TimeSpan.Zero,
+                timeout: TimeSpan.FromSeconds(1));
+
+            Assert.Equal(3, attempts);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureDirectoryReadyForExtractionAsync_ThrowsWhenDirectoryRemainsLocked()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            var managedPath = tempDir.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName).FullName;
+
+            var exception = await Assert.ThrowsAsync<IOException>(
+                () => BundleService.EnsureDirectoryReadyForExtractionAsync(
+                    managedPath,
+                    CancellationToken.None,
+                    tryDeleteDirectory: _ => FileDeleteHelper.DeleteDirectoryResult.Blocked,
+                    retryDelay: TimeSpan.Zero,
+                    timeout: TimeSpan.Zero));
+
+            Assert.Contains("still locked by another process", exception.Message);
         }
         finally
         {

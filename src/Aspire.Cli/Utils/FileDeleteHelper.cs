@@ -18,23 +18,31 @@ namespace Aspire.Cli.Utils;
 /// </summary>
 internal static class FileDeleteHelper
 {
+    internal enum DeleteDirectoryResult
+    {
+        NotFound,
+        Deleted,
+        Renamed,
+        Blocked
+    }
+
     /// <summary>
     /// Attempts to delete a directory recursively. If deletion fails because
     /// a file inside the directory is locked by another process, the directory
     /// is renamed to <c>{path}.old.{tickcount}</c> so the caller can create a
-    /// fresh replacement. Returns <see langword="true"/> if the directory was
-    /// deleted or renamed, <see langword="false"/> if it did not exist.
+    /// fresh replacement.
     /// </summary>
-    internal static bool TryDeleteDirectory(string path)
+    internal static DeleteDirectoryResult TryDeleteDirectory(string path)
     {
         if (!Directory.Exists(path))
         {
-            return false;
+            return DeleteDirectoryResult.NotFound;
         }
 
         try
         {
             Directory.Delete(path, recursive: true);
+            return DeleteDirectoryResult.Deleted;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -45,16 +53,13 @@ internal static class FileDeleteHelper
             {
                 var renamedPath = $"{path}.old.{Environment.TickCount64}";
                 Directory.Move(path, renamedPath);
+                return DeleteDirectoryResult.Renamed;
             }
             catch (Exception)
             {
-                // Rename also failed — nothing more we can do.
-                // The caller's extraction will fail and surface a
-                // "run aspire setup --force" message.
+                return DeleteDirectoryResult.Blocked;
             }
         }
-
-        return true;
     }
 
     /// <summary>
