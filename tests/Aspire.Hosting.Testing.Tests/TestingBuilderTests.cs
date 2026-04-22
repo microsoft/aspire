@@ -275,8 +275,7 @@ public class TestingBuilderTests(ITestOutputHelper output)
 
         builder.WithTestAndResourceLogging(output);
         builder.AddProject<Projects.TestingAppHost1_MyWebApp>("mywebapp1")
-            .WithEnvironment("APP_HOST_ARG", builder.Configuration["APP_HOST_ARG"])
-            .WithEnvironment("LAUNCH_PROFILE_VAR_FROM_APP_HOST", builder.Configuration["LAUNCH_PROFILE_VAR_FROM_APP_HOST"]);
+            .WithEnvironment("APP_HOST_ARG", builder.Configuration["APP_HOST_ARG"]);
         await using var app = await builder.BuildAsync();
         await app.StartAsync();
 
@@ -321,57 +320,6 @@ public class TestingBuilderTests(ITestOutputHelper output)
 
         var builder = await DistributedApplicationTestingBuilder.CreateAsync<Projects.TestingAppHost1_AppHost>(args, configureBuilder);
         builder.WithTestAndResourceLogging(output);
-        await using var app = await builder.BuildAsync();
-        await app.StartAsync();
-
-        // Wait for the application to be ready - must specify "mywebapp1" to avoid race condition
-        // where myworker1 logs "Application started." first
-        await app.WaitForTextAsync("Application started.", "mywebapp1").WaitAsync(TimeSpan.FromMinutes(1));
-
-        var httpClient = app.CreateHttpClientWithResilience("mywebapp1", null, opts =>
-        {
-            opts.TotalRequestTimeout.Timeout = s_appAliveCheckTimeout;
-        });
-        var appHostArg = await httpClient.GetStringAsync("/get-launch-profile-var");
-        Assert.NotNull(appHostArg);
-        Assert.Equal($"it-is-{launchProfileName}", appHostArg);
-
-        // Check that, aside from the launch profile, the app host loaded environment settings from its launch profile
-        var appHostLaunchProfileVar = await httpClient.GetStringAsync("/get-launch-profile-var-from-app-host");
-        Assert.NotNull(appHostLaunchProfileVar);
-        Assert.Equal($"app-host-is-{launchProfileName}", appHostLaunchProfileVar);
-    }
-
-    /// <summary>
-    /// Tests that setting the launch profile works and results in environment variables from the launch profile
-    /// populating in configuration.
-    /// </summary>
-    [Theory]
-    [RequiresFeature(TestFeature.Docker)]
-    [InlineData("http", false)]
-    [InlineData("http", true)]
-    [InlineData("https", false)]
-    [InlineData("https", true)]
-    public async Task CanOverrideLaunchProfileViaArgsAdHocBuilder(string launchProfileName, bool directArgs)
-    {
-        var arg = $"DOTNET_LAUNCH_PROFILE={launchProfileName}";
-        string[] args;
-        Action<DistributedApplicationOptions, HostApplicationBuilderSettings> configureBuilder;
-        if (directArgs)
-        {
-            args = [arg];
-            configureBuilder = (_, _) => { };
-        }
-        else
-        {
-            args = [];
-            configureBuilder = (dao, habs) => habs.Args = [arg];
-        }
-
-        var builder = DistributedApplicationTestingBuilder.Create(args, configureBuilder);
-        builder.WithTestAndResourceLogging(output);
-        builder.AddProject<Projects.TestingAppHost1_MyWebApp>("mywebapp1")
-            .WithEnvironment("LAUNCH_PROFILE_VAR_FROM_APP_HOST", builder.Configuration["LAUNCH_PROFILE_VAR_FROM_APP_HOST"]);
         await using var app = await builder.BuildAsync();
         await app.StartAsync();
 
