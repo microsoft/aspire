@@ -585,7 +585,16 @@ public class DistributedApplication : IHost, IAsyncDisposable
             // container registries from the model, etc. The model and its resource annotation
             // collections are not thread-safe, so concurrent step execution would race on those
             // mutations.
-            await pipelineImpl.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
+            //
+            // We also run BeforeStart against a clone of the pipeline so that step-graph
+            // mutations performed during step resolution (e.g. NormalizeRequiredByToDependsOn
+            // appending entries to built-in steps' DependsOnSteps) don't leak into the
+            // singleton pipeline. Without the clone, model changes made by BeforeStart
+            // steps (such as removing an unused default container registry) leave behind
+            // stale dependency edges on the singleton, causing a later publish-time
+            // ResolveStepsAsync to fail with "depends on unknown step" errors.
+            var beforeStartPipeline = pipelineImpl.Clone();
+            await beforeStartPipeline.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
 #pragma warning restore ASPIREPIPELINES001
         }
         finally

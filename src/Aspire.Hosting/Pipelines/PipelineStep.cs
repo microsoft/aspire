@@ -97,6 +97,26 @@ public class PipelineStep
         RequiredBySteps.Add(step.Name);
     }
 
+    /// <summary>
+    /// Creates a shallow clone of this step with fresh copies of its
+    /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, and
+    /// <see cref="Tags"/> lists. Used by <see cref="DistributedApplicationPipeline"/>
+    /// when isolating step-graph mutations during a phase such as BeforeStart.
+    /// </summary>
+    internal PipelineStep Clone()
+    {
+        return new PipelineStep
+        {
+            Name = Name,
+            Description = Description,
+            Action = Action,
+            DependsOnSteps = [.. DependsOnSteps],
+            RequiredBySteps = [.. RequiredBySteps],
+            Tags = [.. Tags],
+            Resource = Resource,
+        };
+    }
+
     private string DebuggerToString()
     {
         var dependsOnSteps = DependsOnSteps.Count > 0 ? string.Join(',', DependsOnSteps.Select(s => $@"""{s}""")) : "None";

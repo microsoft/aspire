@@ -447,6 +447,31 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         _configurationCallbacks.Add(callback);
     }
 
+    /// <summary>
+    /// Creates a clone of this pipeline whose built-in steps are independent
+    /// copies (with fresh <see cref="PipelineStep.DependsOnSteps"/> /
+    /// <see cref="PipelineStep.RequiredBySteps"/> lists). Configuration callbacks
+    /// are shallow-copied — the same delegates are reused.
+    /// </summary>
+    /// <remarks>
+    /// Used by <c>DistributedApplication</c> to run the BeforeStart phase against
+    /// a throwaway pipeline instance so that step-graph mutations performed by
+    /// <see cref="ResolveStepsAsync"/> (e.g. <see cref="NormalizeRequiredByToDependsOn"/>
+    /// appending entries to <see cref="PipelineStep.DependsOnSteps"/> on built-in
+    /// steps) do not leak into the singleton pipeline used later for publish.
+    /// </remarks>
+    internal DistributedApplicationPipeline Clone()
+    {
+        var clone = new DistributedApplicationPipeline();
+        clone._steps.Clear();
+        foreach (var step in _steps)
+        {
+            clone._steps.Add(step.Clone());
+        }
+        clone._configurationCallbacks.AddRange(_configurationCallbacks);
+        return clone;
+    }
+
     public async Task ExecuteAsync(PipelineContext context)
     {
         var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
