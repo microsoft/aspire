@@ -96,7 +96,13 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     public async Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
     {
         await EnsureExtractedAsync(cancellationToken).ConfigureAwait(false);
-        return layoutDiscovery.DiscoverLayout();
+        var layout = layoutDiscovery.DiscoverLayout();
+        if (layout is null)
+        {
+            logger.LogWarning("No usable bundle layout could be discovered. {BundleState}", GetLayoutState().Describe());
+        }
+
+        return layout;
     }
 
     /// <inheritdoc/>

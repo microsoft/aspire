@@ -89,9 +89,11 @@ internal sealed class AppHostServerProjectFactory(
                 loggerFactory.CreateLogger<PrebuiltAppHostServer>());
         }
 
-        logger.LogError("No usable Aspire AppHost server was found for {AppPath}. Repository mode was unavailable and the bundled layout did not provide a usable managed executable. {BundleState}",
+        var bundleState = bundleService.GetLayoutState(layout?.LayoutPath);
+        logger.LogError("No usable Aspire AppHost server was found for {AppPath}. Repository mode was unavailable. {FailureReason} {BundleState}",
             appPath,
-            bundleService.GetLayoutState(layout?.LayoutPath).Describe());
+            DescribeBundleFailureReason(layout, serverPath, bundleState),
+            bundleState.Describe());
 
         throw new InvalidOperationException(
             "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
@@ -102,5 +104,20 @@ internal sealed class AppHostServerProjectFactory(
     {
         serverPath = layout?.GetManagedPath();
         return serverPath is not null && File.Exists(serverPath);
+    }
+
+    private static string DescribeBundleFailureReason(LayoutConfiguration? layout, string? serverPath, BundleLayoutState bundleState)
+    {
+        if (layout is null)
+        {
+            return $"Bundled layout discovery did not return a usable layout ({bundleState.DescribeAvailability()}).";
+        }
+
+        if (serverPath is null)
+        {
+            return $"The bundled layout did not resolve a managed executable path ({bundleState.DescribeAvailability()}).";
+        }
+
+        return $"The bundled layout did not provide a usable managed executable at '{serverPath}' ({bundleState.DescribeAvailability()}).";
     }
 }

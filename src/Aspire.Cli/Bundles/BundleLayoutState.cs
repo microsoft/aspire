@@ -31,7 +31,47 @@ internal readonly record struct BundleLayoutState(
                $"ManagedExe={HasManagedExecutable}, " +
                $"DcpDir={HasDcpDirectory}, " +
                $"VersionMarker={HasVersionMarker}, " +
-               $"ExtractionInProgressMarker={HasExtractionInProgressMarker}";
+               $"ExtractionInProgressMarker={HasExtractionInProgressMarker}, " +
+               $"Availability={DescribeAvailability()}";
+    }
+
+    public string DescribeAvailability()
+    {
+        if (!HasKnownLayoutPath)
+        {
+            return "bundle root could not be determined";
+        }
+
+        if (HasExtractionInProgressMarker)
+        {
+            return "layout is marked as extraction in progress";
+        }
+
+        List<string> missingItems = [];
+
+        if (!HasManagedDirectory)
+        {
+            missingItems.Add($"{BundleDiscovery.ManagedDirectoryName}/");
+        }
+
+        if (HasManagedDirectory && !HasManagedExecutable)
+        {
+            missingItems.Add($"{BundleDiscovery.ManagedDirectoryName}/{BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)}");
+        }
+
+        if (!HasDcpDirectory)
+        {
+            missingItems.Add($"{BundleDiscovery.DcpDirectoryName}/");
+        }
+
+        if (missingItems.Count > 0)
+        {
+            return $"layout is missing required content: {string.Join(", ", missingItems)}";
+        }
+
+        return HasVersionMarker
+            ? "layout is complete"
+            : "layout is complete but missing the version marker (legacy layout)";
     }
 
     public static BundleLayoutState Inspect(string? layoutPath)

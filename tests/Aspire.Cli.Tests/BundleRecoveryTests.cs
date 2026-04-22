@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
@@ -9,6 +10,7 @@ using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests;
@@ -178,6 +180,123 @@ public class BundleRecoveryTests
         }
     }
 
+    [Fact]
+    public async Task EnsureExtractedAndGetLayoutAsync_LogsWarningWhenNoLayoutCanBeDiscovered()
+    {
+        using var output = new StringWriter();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new SpectreConsoleLoggerProvider(output)));
+        var bundleService = new BundleService(new UnavailableLayoutDiscovery(), loggerFactory.CreateLogger<BundleService>());
+
+        var layout = await bundleService.EnsureExtractedAndGetLayoutAsync(CancellationToken.None);
+
+        Assert.Null(layout);
+        var logOutput = output.ToString();
+        Assert.Contains("No usable bundle layout could be discovered.", logOutput);
+        Assert.Contains("Availability=", logOutput);
+    }
+
+    [Fact]
+    public async Task AppHostServerProjectFactory_LogsSpecificReasonWhenManagedExecutableIsMissing()
+    {
+#if DEBUG
+        ForceRepositoryDetectionResult(null);
+#endif
+
+        var appDirectory = Directory.CreateTempSubdirectory("aspire-app-");
+        var brokenLayout = CreateLayout(includeManagedExecutable: false);
+
+        try
+        {
+            using var output = new StringWriter();
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new SpectreConsoleLoggerProvider(output)));
+
+            var bundleService = new StaticLayoutBundleService(new LayoutConfiguration { LayoutPath = brokenLayout.FullName });
+
+            var bundleNuGetService = new BundleNuGetService(
+                bundleService,
+                new LayoutProcessRunner(new TestProcessExecutionFactory()),
+                new TestFeatures(),
+                TestExecutionContextFactory.CreateTestContext(),
+                NullLogger<BundleNuGetService>.Instance);
+
+            var factory = new AppHostServerProjectFactory(
+                new TestDotNetCliRunner(),
+                new MockPackagingService(),
+                new TestConfigurationService(),
+                bundleService,
+                bundleNuGetService,
+                new TestDotNetSdkInstaller(),
+                loggerFactory,
+                loggerFactory.CreateLogger<AppHostServerProjectFactory>());
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => factory.CreateAsync(appDirectory.FullName, CancellationToken.None));
+
+            var logOutput = output.ToString();
+            Assert.Contains("did not provide a usable managed executable at", logOutput);
+            Assert.Contains(BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName), logOutput);
+            Assert.Contains("Availability=layout is missing required content: managed/", logOutput);
+        }
+        finally
+        {
+            DeleteDirectory(appDirectory);
+            DeleteDirectory(brokenLayout);
+#if DEBUG
+            AspireRepositoryDetector.ResetCache();
+#endif
+        }
+    }
+
+    [Fact]
+    public async Task AppHostServerProjectFactory_LogsSpecificReasonWhenLayoutDiscoveryReturnsNull()
+    {
+#if DEBUG
+        ForceRepositoryDetectionResult(null);
+#endif
+
+        var appDirectory = Directory.CreateTempSubdirectory("aspire-app-");
+        var incompleteLayout = Directory.CreateTempSubdirectory("aspire-layout-");
+
+        try
+        {
+            BundleService.WriteExtractionInProgressMarker(incompleteLayout.FullName, "test-version");
+
+            using var output = new StringWriter();
+            using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new SpectreConsoleLoggerProvider(output)));
+
+            var bundleService = new UnavailableLayoutBundleService(incompleteLayout.FullName);
+            var bundleNuGetService = new BundleNuGetService(
+                bundleService,
+                new LayoutProcessRunner(new TestProcessExecutionFactory()),
+                new TestFeatures(),
+                TestExecutionContextFactory.CreateTestContext(),
+                NullLogger<BundleNuGetService>.Instance);
+
+            var factory = new AppHostServerProjectFactory(
+                new TestDotNetCliRunner(),
+                new MockPackagingService(),
+                new TestConfigurationService(),
+                bundleService,
+                bundleNuGetService,
+                new TestDotNetSdkInstaller(),
+                loggerFactory,
+                loggerFactory.CreateLogger<AppHostServerProjectFactory>());
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => factory.CreateAsync(appDirectory.FullName, CancellationToken.None));
+
+            var logOutput = output.ToString();
+            Assert.Contains("Bundled layout discovery did not return a usable layout", logOutput);
+            Assert.Contains("Availability=layout is marked as extraction in progress", logOutput);
+        }
+        finally
+        {
+            DeleteDirectory(appDirectory);
+            DeleteDirectory(incompleteLayout);
+#if DEBUG
+            AspireRepositoryDetector.ResetCache();
+#endif
+        }
+    }
+
     private static DirectoryInfo CreateLayout(bool includeManagedExecutable)
     {
         var root = Directory.CreateTempSubdirectory("aspire-layout-");
@@ -237,5 +356,54 @@ public class BundleRecoveryTests
 
         public Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(_repaired ? repairedLayout : initialLayout);
+    }
+
+    private sealed class UnavailableLayoutBundleService(string layoutPath) : IBundleService
+    {
+        public bool IsBundle => true;
+
+        public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
+            => Task.FromResult(BundleExtractResult.ExtractionFailed);
+
+        public BundleLayoutState GetLayoutState(string? destinationPath = null)
+            => BundleLayoutState.Inspect(destinationPath ?? layoutPath);
+
+        public Task<BundleExtractResult> RepairAsync(string? destinationPath = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(BundleExtractResult.ExtractionFailed);
+
+        public Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult<LayoutConfiguration?>(null);
+    }
+
+    private sealed class StaticLayoutBundleService(LayoutConfiguration? layout) : IBundleService
+    {
+        public bool IsBundle => true;
+
+        public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
+            => Task.FromResult(BundleExtractResult.AlreadyUpToDate);
+
+        public BundleLayoutState GetLayoutState(string? destinationPath = null)
+            => BundleLayoutState.Inspect(destinationPath ?? layout?.LayoutPath);
+
+        public Task<BundleExtractResult> RepairAsync(string? destinationPath = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(BundleExtractResult.AlreadyUpToDate);
+
+        public Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(layout);
+    }
+
+    private sealed class UnavailableLayoutDiscovery : ILayoutDiscovery
+    {
+        public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null) => null;
+
+        public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null) => null;
+
+        public bool IsBundleModeAvailable(string? projectDirectory = null) => false;
     }
 }
