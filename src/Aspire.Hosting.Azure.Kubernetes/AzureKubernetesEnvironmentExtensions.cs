@@ -499,6 +499,76 @@ public static class AzureKubernetesEnvironmentExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Installs cert-manager and configures a Let's Encrypt ClusterIssuer for automatic
+    /// TLS certificate management. Use with <see cref="KubernetesServiceExtensions.WithCustomDomain{T}"/>
+    /// to enable HTTPS on individual resources.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    [AspireExport(Description = "Installs cert-manager for automatic TLS certificate management")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithCertManager(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder)
+    {
+        return builder.WithCertManager("noreply@aspire.azure.com");
+    }
+
+    /// <summary>
+    /// Installs cert-manager and configures a Let's Encrypt ClusterIssuer for automatic
+    /// TLS certificate management with the specified contact email.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="email">The email address for Let's Encrypt ACME registration (used for certificate expiry notifications).</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    [AspireExport("withCertManagerEmail", Description = "Installs cert-manager with a specific contact email")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithCertManager(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        string email)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(email);
+
+        var k8sEnvBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.KubernetesEnvironment);
+
+        // Install cert-manager Helm chart
+        k8sEnvBuilder.WithHelmChart("cert-manager", options =>
+        {
+            options.Chart = "oci://quay.io/jetstack/charts/cert-manager";
+            options.Version = "v1.17.2";
+            options.Namespace = "cert-manager";
+            options.Values["crds.enabled"] = "true";
+        });
+
+        // Store the issuer name for use by WithCustomDomain
+        const string issuerName = "letsencrypt-aspire";
+        builder.Resource.CertManagerIssuerName = issuerName;
+
+        // Add a ClusterIssuer via KubernetesServiceCustomizationAnnotation.
+        // It gets added to the first compute resource's AdditionalResources
+        // so it's included in the Helm chart output.
+        k8sEnvBuilder.Resource.Annotations.Add(new KubernetesServiceCustomizationAnnotation(kubeResource =>
+        {
+            var issuer = new Kubernetes.Resources.ClusterIssuer
+            {
+                Metadata = { Name = issuerName }
+            };
+            issuer.Spec.Acme.Email = email;
+            issuer.Spec.Acme.Solvers.Add(new Kubernetes.Resources.AcmeSolver
+            {
+                Http01 = new Kubernetes.Resources.Http01Solver
+                {
+                    Ingress = new Kubernetes.Resources.Http01IngressSolver
+                    {
+                        IngressClassName = "azure-alb-external"
+                    }
+                }
+            });
+            kubeResource.AdditionalResources.Add(issuer);
+        }));
+
+        return builder;
+    }
+
     private static Task ConfigureAksDefaultIngress(KubernetesIngressContext ctx)
     {
         var serviceName = ctx.Resource.Name.ToServiceName();
@@ -527,6 +597,18 @@ public static class AzureKubernetesEnvironmentExtensions
         var primaryEndpoint = ctx.ExternalHttpEndpoints[0];
         var backendPortName = primaryEndpoint.Name;
 
+        // Check for a custom domain on this resource
+        string? customDomain = null;
+        string? certManagerIssuer = null;
+        if (ctx.Resource.TryGetLastAnnotation<KubernetesCustomDomainAnnotation>(out var domainAnnotation))
+        {
+            customDomain = domainAnnotation.Hostname;
+            if (ctx.Environment.OwningComputeEnvironment is AzureKubernetesEnvironmentResource aks)
+            {
+                certManagerIssuer = aks.CertManagerIssuerName;
+            }
+        }
+
         var ingress = new Ingress
         {
             Metadata =
@@ -541,6 +623,7 @@ public static class AzureKubernetesEnvironmentExtensions
                 {
                     new IngressRuleV1
                     {
+                        Host = customDomain!,
                         Http = new HttpIngressRuleValueV1
                         {
                             Paths =
@@ -564,6 +647,17 @@ public static class AzureKubernetesEnvironmentExtensions
                 }
             }
         };
+
+        // If a custom domain is configured with cert-manager, add TLS section
+        if (customDomain is not null && certManagerIssuer is not null)
+        {
+            ingress.Metadata.Annotations["cert-manager.io/cluster-issuer"] = certManagerIssuer;
+            ingress.Spec.Tls.Add(new IngressTLSV1
+            {
+                SecretName = $"{ctx.Resource.Name.ToKubernetesResourceName()}-tls",
+                Hosts = { customDomain }
+            });
+        }
 
         // Wire the AGC resource ID as an annotation so the ALB controller
         // knows which Application Gateway for Containers instance to use.

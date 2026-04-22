@@ -130,4 +130,9 @@ public class AzureKubernetesEnvironmentResource(
     /// Gets or sets the FQDN of the AGC frontend.
     /// </summary>
     internal BicepOutputReference? AgcFrontendFqdn { get; set; }
+
+    /// <summary>
+    /// Gets or sets the cert-manager ClusterIssuer name, if configured.
+    /// </summary>
+    internal string? CertManagerIssuerName { get; set; }
 }
