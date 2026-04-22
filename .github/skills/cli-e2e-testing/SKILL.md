@@ -139,7 +139,7 @@ ASPIRE_E2E_ARCHIVE=/tmp/aspire-e2e.tar.gz \
   -- --filter-method "*.YourTestName"
 
 # 4. If it fails, check the asciinema recording
-#    Recordings are saved to $TMPDIR/aspire-cli-e2e/recordings/
+#    Recordings are saved under the test output TestResults/recordings/ directory
 #    Play with: asciinema play /path/to/YourTestName.cast
 
 # 5. Fix and repeat from step 1 or 2

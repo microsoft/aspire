@@ -147,6 +147,7 @@ kill <pid>
 * Copy existing style in nearby files for test method names and capitalization.
 * Do not leave newly-added tests commented out. All added tests should be building and passing.
 * Do not use Directory.SetCurrentDirectory in tests as it can cause side effects when tests execute concurrently.
+* Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
 
 ## Running tests
 

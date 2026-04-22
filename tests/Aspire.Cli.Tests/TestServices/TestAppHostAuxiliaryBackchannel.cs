@@ -57,6 +57,12 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public Func<bool, CancellationToken, IAsyncEnumerable<ResourceSnapshot>>? WatchResourceSnapshotsHandler { get; set; }
 
+    /// <summary>
+    /// Gets or sets the function to call when GetResourceLogsAsync is invoked.
+    /// If null, yields the LogLines list.
+    /// </summary>
+    public Func<string?, bool, CancellationToken, IAsyncEnumerable<ResourceLogLine>>? GetResourceLogsHandler { get; set; }
+
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(DashboardUrlsState);
@@ -103,6 +109,15 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         bool follow = false,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (GetResourceLogsHandler is not null)
+        {
+            await foreach (var line in GetResourceLogsHandler(resourceName, follow, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return line;
+            }
+            yield break;
+        }
+
         var lines = resourceName is null
             ? LogLines
             : LogLines.Where(l => string.Equals(l.ResourceName, resourceName, StringComparison.OrdinalIgnoreCase)

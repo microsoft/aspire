@@ -50,8 +50,9 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS runtime
 # --- Common tooling (shared between dotnet and polyglot variants) ---
 
 # Install gh CLI (needed by get-aspire-cli-pr.sh to download PR artifacts).
+# Install Docker CLI plus the buildx/compose plugins used by publish and deploy flows.
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends gpg docker.io && \
+    apt-get install -y --no-install-recommends gpg docker.io docker-buildx docker-compose-v2 && \
     curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
       | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \

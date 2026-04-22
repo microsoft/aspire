@@ -28,7 +28,7 @@ internal class PublishCommandPrompter(IInteractionService interactionService) : 
             PublishCommandStrings.SelectAPublisher,
             publishers,
             p => p.EscapeMarkup(),
-            cancellationToken
+            cancellationToken: cancellationToken
         );
     }
 }

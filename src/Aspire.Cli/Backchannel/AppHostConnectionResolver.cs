@@ -191,7 +191,7 @@ internal sealed class AppHostConnectionResolver(
             selectPrompt,
             choices.Select(c => c.Display).ToArray(),
             c => c.EscapeMarkup(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         var selectedConnection = choices.FirstOrDefault(c => c.Display == selectedDisplay).Connection;
 

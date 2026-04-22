@@ -156,9 +156,6 @@
   <data name="AllowAnonymousOptionDescription" xml:space="preserve">
     <value>Allow anonymous access to the dashboard</value>
   </data>
-  <data name="EnableApiOptionDescription" xml:space="preserve">
-    <value>Enable the telemetry API endpoint on the dashboard</value>
-  </data>
   <data name="ConfigFilePathOptionDescription" xml:space="preserve">
     <value>The path for a JSON configuration file</value>
   </data>

@@ -43,17 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DeleteParameterMessage">
-        <source>Are you sure you want to delete the value for parameter `{0}`? </source>
-        <target state="translated">¿Está seguro de que desea eliminar el valor del parámetro "{0}"? </target>
-        <note>Contains markdown. {0} is the parameter name.</note>
-      </trans-unit>
-      <trans-unit id="DeleteParameterMessageWithUserSecrets">
-        <source>Are you sure you want to delete the value for parameter `{0}`?
-
-The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there.</source>
-        <target state="needs-review-translation">¿Está seguro de que desea eliminar el valor del parámetro "{0}"?
-
-El valor se guarda actualmente en [secretos de usuario](https://learn.microsoft.com/aspnet/core/security/app-secrets). También puede eliminarla desde allí.</target>
+        <source>Are you sure you want to delete the value for parameter `{0}`?</source>
+        <target state="needs-review-translation">¿Está seguro de que desea eliminar el valor del parámetro "{0}"? </target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -101,6 +92,11 @@ El valor se guarda actualmente en [secretos de usuario](https://learn.microsoft.
         <target state="translated">Parámetros sin resolver</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParametersInputsDeleteDescription">
+        <source>The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets).</source>
+        <target state="new">The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets).</target>
+        <note>Contains markdown</note>
+      </trans-unit>
       <trans-unit id="ParametersInputsDeleteLabel">
         <source>Delete from user secrets</source>
         <target state="translated">Eliminar de los secretos del usuario</target>
@@ -126,10 +122,15 @@ El valor se guarda actualmente en [secretos de usuario](https://learn.microsoft.
         <target state="translated">Guardar</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParametersInputsRememberDescriptionConfigured">
+        <source>Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</source>
+        <target state="new">Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</target>
+        <note>Contains markdown</note>
+      </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
         <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
         <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
-        <note />
+        <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
         <source>Save to user secrets</source>
@@ -162,9 +163,7 @@ El valor se guarda actualmente en [secretos de usuario](https://learn.microsoft.
         <note />
       </trans-unit>
       <trans-unit id="SetParameterMessage">
-        <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
-
-New parameter values may not be used until dependent resources are restarted.</source>
+        <source>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</source>
         <target state="needs-review-translation">Proporcione un valor para el parámetro. El parámetro se puede guardar en [secretos de usuario](https://learn.microsoft.com/aspnet/core/security/app-secrets) para su uso futuro.
 
 Los nuevos valores de los parámetros no se pueden utilizar hasta que se reinicien los recursos dependientes.</target>

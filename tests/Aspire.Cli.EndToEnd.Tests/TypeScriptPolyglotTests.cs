@@ -20,10 +20,10 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
     public async Task CreateTypeScriptAppHostWithViteApp()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -32,7 +32,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 1: Create TypeScript AppHost using aspire init with interactive language selection
         await auto.TypeAsync("aspire init");
@@ -102,13 +102,10 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
     public async Task InitTypeScriptAppHost_AugmentsExistingViteRepoAtRoot()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
-        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, workspace, installMode,
-            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
-        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -122,11 +119,9 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         await auto.EnablePolyglotSupportAsync(counter);
-
-        await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
 
         // Create brownfield Vite project
         await auto.TypeAsync("mkdir brownfield && cd brownfield");
@@ -146,13 +141,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         originalPreviewScript = scripts["preview"]?.GetValue<string>();
         originalTsConfig = File.ReadAllText(Path.Combine(projectRoot, "tsconfig.json"));
 
-        if (localChannel is not null)
-        {
-            CliE2ETestHelpers.WriteLocalChannelSettings(projectRoot, localChannel.SdkVersion);
-        }
-
         // Run aspire init in brownfield mode
-        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
+        await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);

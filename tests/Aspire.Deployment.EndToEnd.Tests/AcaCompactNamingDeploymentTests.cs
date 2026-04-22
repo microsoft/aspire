@@ -74,11 +74,7 @@ public sealed class AcaCompactNamingDeploymentTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create single-file AppHost
             output.WriteLine("Step 3: Creating single-file AppHost...");
@@ -89,13 +85,7 @@ public sealed class AcaCompactNamingDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5: Modify apphost.cs with a long environment name and a container with volume.
             // Use WithCompactResourceNaming() so the storage account name preserves the uniqueString.

@@ -16,21 +16,16 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper output)
 {
     [Fact]
+    [CaptureWorkspaceOnFailure]
     public async Task StartAndWaitForTypeScriptSqlServerAppHostWithNativeAssets()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
         var workspace = TemporaryWorkspace.Create(output);
-        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(
-            repoRoot,
-            workspace,
-            installMode,
-            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.SqlServer."]);
-        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
             repoRoot,
-            installMode,
+            strategy,
             output,
             variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
             mountDockerSocket: true,
@@ -42,15 +37,9 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
-        await auto.MountLocalChannelPackagesAsync(localChannel, workspace, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (localChannel is not null)
-        {
-            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
-        }
-
-        await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
+        await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);

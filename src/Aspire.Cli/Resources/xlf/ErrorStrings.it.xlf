@@ -42,6 +42,16 @@
         <target state="translated">I certificati per sviluppatori potrebbero non essere completamente attendibili (codice di uscita attendibilità: {0}).</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificatesNotTrustedNonInteractive">
+        <source>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CertificatesPartiallyTrustedNonInteractive">
+        <source>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">Questo comando non è ancora supportato con AppHost a file singolo.</target>

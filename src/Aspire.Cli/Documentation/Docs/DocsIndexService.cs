@@ -153,20 +153,34 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             _logger.LogDebug("Loading aspire.dev documentation");
 
             var cachedDocuments = await _docsCache.GetIndexAsync(cancellationToken).ConfigureAwait(false);
-            if (cachedDocuments is not null)
+            var cachedFingerprint = await _docsCache.GetIndexSourceFingerprintAsync(cancellationToken).ConfigureAwait(false);
+
+            var content = await _docsFetcher.FetchDocsAsync(cancellationToken).ConfigureAwait(false);
+            if (content is null)
+            {
+                if (cachedDocuments is not null)
+                {
+                    _indexedDocuments = [.. cachedDocuments.Select(static d => new IndexedDocument(d))];
+
+                    _logger.LogWarning(
+                        "Failed to refresh Aspire documentation. Using cached index with {Count} documents.",
+                        cachedDocuments.Length);
+
+                    return;
+                }
+
+                _logger.LogWarning("Failed to fetch documentation");
+
+                return;
+            }
+
+            var currentFingerprint = SourceContentFingerprint.Compute(content);
+            if (cachedDocuments is not null && string.Equals(cachedFingerprint, currentFingerprint, StringComparison.Ordinal))
             {
                 _indexedDocuments = [.. cachedDocuments.Select(static d => new IndexedDocument(d))];
 
                 var cacheElapsedTime = Stopwatch.GetElapsedTime(startTimestamp);
                 _logger.LogInformation("Loaded {Count} documents from cache in {ElapsedTime:ss\\.fff} seconds.", _indexedDocuments.Count, cacheElapsedTime);
-                return;
-            }
-
-            var content = await _docsFetcher.FetchDocsAsync(cancellationToken).ConfigureAwait(false);
-            if (content is null)
-            {
-                _logger.LogWarning("Failed to fetch documentation");
-
                 return;
             }
 
@@ -177,7 +191,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
             // Cache the parsed documents for next time
             await _docsCache.SetIndexAsync([.. documents], cancellationToken).ConfigureAwait(false);
-            await _docsCache.SetIndexSourceFingerprintAsync(SourceContentFingerprint.Compute(content), cancellationToken).ConfigureAwait(false);
+            await _docsCache.SetIndexSourceFingerprintAsync(currentFingerprint, cancellationToken).ConfigureAwait(false);
 
             var elapsedTime = Stopwatch.GetElapsedTime(startTimestamp);
 
@@ -547,6 +561,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         content = SectionTitledBookmarkRegex().Replace(content, "\n\n");
         content = InlineOrderedListRegex().Replace(content, "\n$1");
         content = InlineUnorderedListRegex().Replace(content, "\n* ");
+        content = InlineTableStartRegex().Replace(content, "$1\n$2");
+        content = InlineTableRowBoundaryRegex().Replace(content, "\n");
+        content = InlineTableEndRegex().Replace(content, "$1\n$2");
         content = LeadingWhitespaceRegex().Replace(content, "");
 
         return content;
@@ -614,6 +631,15 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
     [GeneratedRegex(@"(?<=\S)\s+\*\s+")]
     private static partial Regex InlineUnorderedListRegex();
+
+    [GeneratedRegex(@"(\S)\s+(\|(?:[^|\n]*\|){2,})")]
+    private static partial Regex InlineTableStartRegex();
+
+    [GeneratedRegex(@"(?<=\|)\s+(?=\|)")]
+    private static partial Regex InlineTableRowBoundaryRegex();
+
+    [GeneratedRegex(@"(\|(?:[^|\n]*\|){2,})\s+([^\s|][^|\n]*)$", RegexOptions.Multiline)]
+    private static partial Regex InlineTableEndRegex();
 
     [GeneratedRegex(@"[ \t]+\n")]
     private static partial Regex TrailingWhitespaceBeforeNewlineRegex();

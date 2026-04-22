@@ -1,0 +1,53 @@
+# Container image for CLI E2E Podman tests.
+#
+# Runs a nested Podman runtime inside a privileged Docker container so Podman-specific
+# deploy flows can be tested without depending on host Podman state.
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        ca-certificates \
+        gpg \
+        podman \
+        podman-compose \
+        fuse-overlayfs \
+        slirp4netns \
+        uidmap \
+        containernetworking-plugins && \
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      | gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list && \
+    apt-get update -qq && \
+    apt-get install -y --no-install-recommends gh && \
+    rm -rf /var/lib/apt/lists/*
+
+# Rootful Podman-in-container is reliable here when it uses a dedicated vfs-backed storage root.
+# Apply the flags centrally so the CLI and podman-compose can invoke plain `podman`.
+RUN cat > /usr/local/bin/podman <<'SCRIPT'
+#!/bin/bash
+common=(--root /var/lib/containers/storage-vfs --runroot /run/containers/storage-vfs --storage-driver=vfs --cgroup-manager=cgroupfs)
+if [ "$#" -gt 0 ] && { [ "$1" = "run" ] || [ "$1" = "create" ]; }; then
+  cmd="$1"
+  shift
+  exec /usr/bin/podman "${common[@]}" "$cmd" --cgroups=disabled "$@"
+else
+  exec /usr/bin/podman "${common[@]}" "$@"
+fi
+SCRIPT
+RUN chmod +x /usr/local/bin/podman
+
+COPY eng/scripts/get-aspire-cli.sh /opt/aspire-scripts/
+COPY eng/scripts/get-aspire-cli-pr.sh /opt/aspire-scripts/
+RUN chmod +x /opt/aspire-scripts/*.sh
+
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
+ENV PATH="/root/.aspire/bin:/root/.aspire:/usr/local/bin:${PATH}"
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+ENV DOTNET_GENERATE_ASPNET_CERTIFICATE=false
+ENV ASPIRE_PLAYGROUND=true
+ENV TERM=xterm

@@ -42,6 +42,16 @@
         <target state="translated">개발자 인증서를 완전히 신뢰할 수 없습니다(신뢰 종료 코드: {0}).</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificatesNotTrustedNonInteractive">
+        <source>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CertificatesPartiallyTrustedNonInteractive">
+        <source>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">이 명령은 단일 파일 AppHosts에서 아직 지원되지 않습니다.</target>

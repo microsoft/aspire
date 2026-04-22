@@ -1982,6 +1982,34 @@ public class DistributedApplicationTests
         await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
 
+    [Theory]
+    [RequiresFeature(TestFeature.Docker)]
+    [InlineData(0)] // Success exit code
+    [InlineData(100)] // Failing (non-zero) exit code
+    public async Task ContainerExitsImmediatelyAfterStart(int exitCode)
+    {
+        const string testName = "container-exits-immediately";
+        using var testProgram = CreateTestProgram(testName);
+        
+        var containerResourceName = testName;
+        _ = testProgram.AppBuilder.AddContainer(containerResourceName, "alpine")
+            .WithEntrypoint("sh")
+            .WithArgs("-c", $"echo Hello World;exit {exitCode}");
+
+        using var app = testProgram.Build();
+        var rns = app.Services.GetRequiredService<ResourceNotificationService>();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.ExtraLongTimeoutDuration);
+        var token = cts.Token;
+
+        var startTask = app.StartAsync(cts.Token);
+
+        // Should reach Exited state, not FailedToStart.
+        await rns.WaitForResourceAsync(containerResourceName, KnownResourceStates.Exited, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+
+        await startTask.DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+        await app.StopAsync(token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+    }
+
     private static async Task EnsureLogLines(Stream stream, CancellationToken ct, long nlines, Func<long, bool>? validateLineNumber = default)
     {
         using var reader = new StreamReader(stream);

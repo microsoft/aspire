@@ -1441,7 +1441,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
-    public async Task DockerBuildFailureIncludesBuildOutputInException()
+    public async Task DockerBuildFailureIncludesProcessOutputInException()
     {
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
 
@@ -1469,8 +1469,12 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             () => imageBuilder.BuildImageAsync(container.Resource, cts.Token));
 
         Assert.NotEqual(0, ex.ExitCode);
-        Assert.NotEmpty(ex.BuildOutput);
-        Assert.Contains(ex.BuildOutput, line => line.Contains("nonexistent-file-12345.txt"));
+        Assert.NotEmpty(ex.ProcessOutput);
+
+        var newlineIndex = ex.Message.IndexOf(Environment.NewLine, StringComparison.Ordinal);
+        Assert.NotEqual(-1, newlineIndex);
+        Assert.Equal($"Docker build failed with exit code {ex.ExitCode}.", ex.Message[..newlineIndex]);
+        Assert.Equal(ex.GetFormattedOutput(), ex.Message[(newlineIndex + Environment.NewLine.Length)..]);
     }
 }
 

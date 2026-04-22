@@ -15,6 +15,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
 {
+    [CaptureWorkspaceOnFailure]
     [Fact]
     public async Task CreateAndRunTypeScriptStarterProject()
     {

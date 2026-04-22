@@ -934,24 +934,24 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             InputType.Text => await InteractionService.PromptForStringAsync(
                 promptText,
-                defaultValue: input.Value?.EscapeMarkup(),
+                binding: PromptBinding.CreateDefault(input.Value),
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.SecretText => await InteractionService.PromptForStringAsync(
                 promptText,
-                defaultValue: input.Value?.EscapeMarkup(),
+                binding: PromptBinding.CreateDefault(input.Value),
                 isSecret: true,
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.Choice => await HandleSelectInputAsync(input, promptText, cancellationToken),
 
-            InputType.Boolean => (await InteractionService.ConfirmAsync(promptText, defaultValue: ParseBooleanValue(input.Value), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
+            InputType.Boolean => (await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value)), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            _ => await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken)
+            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
         };
     }
 
@@ -959,7 +959,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     {
         if (input.Options is null || input.Options.Count == 0)
         {
-            return await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
 
         // If AllowCustomChoice is enabled then add an "Other" option to the list.
@@ -977,11 +977,11 @@ internal abstract class PipelineCommandBase : BaseCommand
             promptText,
             options,
             choice => choice.Value.EscapeMarkup(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         if (value == CustomChoiceValue)
         {
-            return await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
 
         AnsiConsole.MarkupLine($"{promptText} {displayText.EscapeMarkup()}");
@@ -1003,7 +1003,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         return await InteractionService.PromptForStringAsync(
             promptText,
-            defaultValue: input.Value?.EscapeMarkup(),
+            binding: PromptBinding.CreateDefault(input.Value),
             validator: Validator,
             required: input.Required,
             cancellationToken: cancellationToken);

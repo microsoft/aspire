@@ -121,7 +121,7 @@ internal sealed partial class DocsGetCommand : BaseCommand
                 continue;
             }
 
-            if (inCodeFence || string.IsNullOrWhiteSpace(trimmedLine) || IsHeading(trimmedLine))
+            if (inCodeFence || string.IsNullOrWhiteSpace(trimmedLine) || IsHeading(trimmedLine) || IsTableLine(trimmedLine))
             {
                 wrappedLines.Add(trimmedLine);
                 continue;
@@ -221,6 +221,11 @@ internal sealed partial class DocsGetCommand : BaseCommand
     private static bool IsHeading(string line)
     {
         return line.StartsWith('#');
+    }
+
+    private static bool IsTableLine(string line)
+    {
+        return line.StartsWith("|", StringComparison.Ordinal) && line.Count(static character => character == '|') >= 2;
     }
 
     private static bool IsTrailingPunctuation(string value)

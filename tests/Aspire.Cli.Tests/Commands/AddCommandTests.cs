@@ -7,6 +7,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 using Microsoft.AspNetCore.InternalTesting;
@@ -811,6 +812,81 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Assert
         Assert.Equal(0, exitCode);
         Assert.Equal("13.2.0-pr.12345.gabc", selectedPackageVersion);
+    }
+
+    [Fact]
+    public async Task AddCommand_WithPrHive_PrefersCurrentCliVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        hivesDir.Create();
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+        var selectedPackageVersion = string.Empty;
+        var promptedForVersion = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    throw new InvalidOperationException("Should not prompt when the current CLI version is available in a PR hive.");
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
+                {
+                    var implicitPackage = new NuGetPackage
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "implicit",
+                        Version = "13.2.2"
+                    };
+
+                    var prHivePackage = new NuGetPackage
+                    {
+                        Id = "Aspire.Hosting.Redis",
+                        Source = "pr-hive",
+                        Version = cliVersion
+                    };
+
+                    return nugetSource is null
+                        ? (0, new[] { implicitPackage })
+                        : (0, new[] { prHivePackage });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
+                {
+                    selectedPackageVersion = packageVersion;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add redis");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForVersion);
+        Assert.Equal(cliVersion, selectedPackageVersion);
     }
 }
 
