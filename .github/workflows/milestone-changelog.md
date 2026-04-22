@@ -13,7 +13,6 @@ description: |
 # ──────────────────────────────────────────────────────────
 
 on:
-  schedule: daily around 8am
   workflow_dispatch:
 
 if: github.repository_owner == 'microsoft'
