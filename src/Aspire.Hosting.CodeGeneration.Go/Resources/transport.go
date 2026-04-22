@@ -1,14 +1,16 @@
-// Package aspire provides the ATS transport layer for JSON-RPC communication.
+// Package aspire provides the ATS transport layer for JSON-RPC, Handle, errors, callbacks
 package aspire
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -17,34 +19,57 @@ import (
 	"time"
 )
 
-// AtsErrorCodes contains standard ATS error codes.
-var AtsErrorCodes = struct {
-	CapabilityNotFound string
-	HandleNotFound     string
-	TypeMismatch       string
-	InvalidArgument    string
-	ArgumentOutOfRange string
-	CallbackError      string
-	InternalError      string
-}{
-	CapabilityNotFound: "CAPABILITY_NOT_FOUND",
-	HandleNotFound:     "HANDLE_NOT_FOUND",
-	TypeMismatch:       "TYPE_MISMATCH",
-	InvalidArgument:    "INVALID_ARGUMENT",
-	ArgumentOutOfRange: "ARGUMENT_OUT_OF_RANGE",
-	CallbackError:      "CALLBACK_ERROR",
-	InternalError:      "INTERNAL_ERROR",
+// AtsErrorCode contains standard ATS error codes.
+type AtsErrorCode string
+
+const (
+	CapabilityNotFound = "CAPABILITY_NOT_FOUND"
+	HandleNotFound     = "HANDLE_NOT_FOUND"
+	TypeMismatch       = "TYPE_MISMATCH"
+	InvalidArgument    = "INVALID_ARGUMENT"
+	ArgumentOutOfRange = "ARGUMENT_OUT_OF_RANGE"
+	CallbackError      = "CALLBACK_ERROR"
+	InternalError      = "INTERNAL_ERROR"
+)
+
+// AtsErrorDetails Error details for ATS errors.
+type AtsErrorDetails struct {
+	// The parameter that caused the error
+	Parameter *string `json:"parameter,omitempty"`
+	// The expected type or value
+	Expected *string `json:"expected,omitempty"`
+	// The actual type or value
+	Actual *string `json:"actual,omitempty"`
 }
 
-// CapabilityError represents an error returned from a capability invocation.
+// AtsError Structured error from ATS capability invocation.
+type AtsError struct {
+	Code       string           `json:"code"`
+	Message    string           `json:"message"`
+	Capability string           `json:"capability,omitempty"`
+	Details    *AtsErrorDetails `json:"details,omitempty"`
+}
+
+func (e *AtsError) Error() string {
+	return e.Message
+}
+
+// IsAtsError checks if a value is an ATS error.
+func IsAtsError(value any) bool {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return false
+	}
+	_, hasError := m["$error"]
+	return hasError
+}
+
+// CapabilityError returned when an ATS capability invocation fails.
 type CapabilityError struct {
+	error
 	Code       string `json:"code"`
 	Message    string `json:"message"`
 	Capability string `json:"capability,omitempty"`
-}
-
-func (e *CapabilityError) Error() string {
-	return e.Message
 }
 
 // Handle represents a reference to a server-side object.
@@ -76,16 +101,6 @@ func IsMarshalledHandle(value any) bool {
 	return hasHandle && hasType
 }
 
-// IsAtsError checks if a value is an ATS error.
-func IsAtsError(value any) bool {
-	m, ok := value.(map[string]any)
-	if !ok {
-		return false
-	}
-	_, hasError := m["$error"]
-	return hasError
-}
-
 // HandleWrapperFactory creates a wrapper for a handle.
 type HandleWrapperFactory func(handle *Handle, client *AspireClient) any
 
@@ -99,6 +114,13 @@ func RegisterHandleWrapper(typeID string, factory HandleWrapperFactory) {
 	handleWrapperMu.Lock()
 	defer handleWrapperMu.Unlock()
 	handleWrapperRegistry[typeID] = factory
+}
+
+func init() {
+	// Register wrapper for ReferenceExpression so server-returned expressions are typed.
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression", func(handle *Handle, client *AspireClient) any {
+		return newHandleBackedReferenceExpression(handle, client)
+	})
 }
 
 // WrapIfHandle wraps a value if it's a marshalled handle.
@@ -147,67 +169,41 @@ func UnregisterCallback(callbackID string) bool {
 	return exists
 }
 
-// CancellationToken provides cooperative cancellation.
+// CancellationToken wraps a context.Context to provide cooperative cancellation.
+// Use NewCancellationToken to create one; call Cancel() to cancel it.
+// Pass token.Context() to any standard Go library that accepts a context.
 type CancellationToken struct {
-	cancelled atomic.Bool
-	callbacks []func()
-	mu        sync.Mutex
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
-// NewCancellationToken creates a new cancellation token.
+// NewCancellationToken creates a new cancellation token backed by a cancellable context.
 func NewCancellationToken() *CancellationToken {
-	return &CancellationToken{}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &CancellationToken{ctx: ctx, cancel: cancel}
 }
 
-// Cancel cancels the token and invokes all registered callbacks.
-func (ct *CancellationToken) Cancel() {
-	if ct.cancelled.Swap(true) {
-		return // Already cancelled
-	}
-	ct.mu.Lock()
-	callbacks := ct.callbacks
-	ct.callbacks = nil
-	ct.mu.Unlock()
-	for _, cb := range callbacks {
-		cb()
-	}
-}
+// Cancel cancels the token and propagates cancellation to the underlying context.
+func (ct *CancellationToken) Cancel() { ct.cancel() }
 
 // IsCancelled returns true if the token has been cancelled.
-func (ct *CancellationToken) IsCancelled() bool {
-	return ct.cancelled.Load()
-}
+func (ct *CancellationToken) IsCancelled() bool { return ct.ctx.Err() != nil }
 
-// Register registers a callback to be invoked when cancelled.
-func (ct *CancellationToken) Register(callback func()) func() {
-	if ct.IsCancelled() {
-		callback()
-		return func() {}
-	}
-	ct.mu.Lock()
-	ct.callbacks = append(ct.callbacks, callback)
-	ct.mu.Unlock()
-	return func() {
-		ct.mu.Lock()
-		defer ct.mu.Unlock()
-		for i, cb := range ct.callbacks {
-			if &cb == &callback {
-				ct.callbacks = append(ct.callbacks[:i], ct.callbacks[i+1:]...)
-				break
-			}
-		}
-	}
-}
+// Context returns the underlying context.Context for use with standard Go APIs.
+// Example: http.NewRequestWithContext(ct.Context(), method, url, body)
+func (ct *CancellationToken) Context() context.Context { return ct.ctx }
 
-// RegisterCancellation registers a cancellation token with the client.
+// RegisterCancellation registers a cancellation token with the server and returns its ID.
+// A goroutine is spawned to notify the server when the token is cancelled.
 func RegisterCancellation(token *CancellationToken, client *AspireClient) string {
 	if token == nil {
 		return ""
 	}
-	id := fmt.Sprintf("ct_%d_%d", time.Now().UnixMilli(), time.Now().UnixNano())
-	token.Register(func() {
+	id := fmt.Sprintf("ct_%d", time.Now().UnixNano())
+	go func() {
+		<-token.ctx.Done()
 		client.CancelToken(id)
-	})
+	}()
 	return id
 }
 
@@ -283,7 +279,7 @@ func (c *connection) close(err error) {
 	c.pending = nil
 	c.mu.Unlock()
 
-	c.rawConn.Close()
+	err = c.rawConn.Close()
 	close(c.done)
 
 	if err == nil {
@@ -477,17 +473,30 @@ func NewAspireClient(socketPath string) *AspireClient {
 
 // Connect establishes the connection to the AppHost server and starts the
 // background reader and writer goroutines.
-func (c *AspireClient) Connect() error {
+func (c *AspireClient) Connect(timeout ...time.Duration) error {
 	c.mu.Lock()
 	if c.conn != nil {
 		c.mu.Unlock()
 		return nil
 	}
 
-	rawConn, err := openConnection(c.socketPath)
+	var connTimeout time.Duration
+	if len(timeout) > 0 {
+		connTimeout = timeout[0]
+	}
+
+	rawConn, err := openConnection(c.socketPath, connTimeout)
 	if err != nil {
 		c.mu.Unlock()
 		return fmt.Errorf("failed to connect to AppHost: %w", err)
+	}
+
+	// Authenticate automatically, mirroring the TypeScript SDK behavior.
+	authToken := os.Getenv("ASPIRE_REMOTE_APPHOST_TOKEN")
+	if authToken == "" {
+		rawConn.Close()
+		c.mu.Unlock()
+		return errors.New("ASPIRE_REMOTE_APPHOST_TOKEN environment variable is not set")
 	}
 
 	conn := newConnection(rawConn, c, c.onConnectionClose)
@@ -495,6 +504,13 @@ func (c *AspireClient) Connect() error {
 	c.mu.Unlock()
 
 	conn.start()
+
+	// Perform authentication after starting the connection loops.
+	if err := c.Authenticate(authToken); err != nil {
+		c.Disconnect()
+		return fmt.Errorf("failed to authenticate to AppHost: %w", err)
+	}
+
 	return nil
 }
 
@@ -508,6 +524,10 @@ func (c *AspireClient) OnDisconnect(callback func()) {
 
 // InvokeCapability invokes a capability on the server.
 func (c *AspireClient) InvokeCapability(capabilityID string, args map[string]any) (any, error) {
+	if err := validateCapabilityArgs(capabilityID, args); err != nil {
+		return nil, err
+	}
+
 	result, err := c.sendRequest("invokeCapability", []any{capabilityID, args})
 	if err != nil {
 		return nil, err
@@ -546,6 +566,16 @@ func (c *AspireClient) CancelToken(tokenID string) bool {
 	}
 	b, _ := result.(bool)
 	return b
+}
+
+// Ping sends a ping request to the server.
+func (c *AspireClient) Ping() (string, error) {
+	result, err := c.sendRequest("ping", nil)
+	if err != nil {
+		return "", err
+	}
+	s, _ := result.(string)
+	return s, nil
 }
 
 // Disconnect closes the connection. Safe to call multiple times and to race
@@ -699,7 +729,18 @@ func invokeCallback(callbackID string, args any, client *AspireClient) (any, err
 		positionalArgs = append(positionalArgs, WrapIfHandle(args, client))
 	}
 
-	return callback(positionalArgs...), nil
+	result := callback(positionalArgs...)
+
+	// DTO write-back protocol: if the callback result is nil, return the original
+	// args object. This allows the .NET host to detect property mutations made
+	// by the callback and apply them back to the original C# DTO objects.
+	// This mirrors the behavior of the TypeScript SDK.
+	if result == nil {
+		// The original args are returned, not the wrapped positionalArgs.
+		return args, nil
+	}
+
+	return result, nil
 }
 
 func getString(m map[string]any, key string) string {
@@ -711,14 +752,19 @@ func getString(m map[string]any, key string) string {
 	return ""
 }
 
-func openConnection(socketPath string) (io.ReadWriteCloser, error) {
+func openConnection(socketPath string, timeout time.Duration) (io.ReadWriteCloser, error) {
 	if runtime.GOOS == "windows" {
 		// On Windows, use named pipes
 		pipePath := `\\.\pipe\` + socketPath
+		// Note: os.OpenFile for named pipes does not support a timeout.
 		return openNamedPipe(pipePath)
 	}
 	// On Unix, use Unix domain sockets
-	return net.Dial("unix", socketPath)
+	dialer := net.Dialer{}
+	if timeout > 0 {
+		dialer.Timeout = timeout
+	}
+	return dialer.Dial("unix", socketPath)
 }
 
 // openNamedPipe opens a Windows named pipe.
@@ -729,4 +775,53 @@ func openNamedPipe(path string) (io.ReadWriteCloser, error) {
 		return nil, err
 	}
 	return f, nil
+}
+
+// validateCapabilityArgs checks for circular references in arguments before sending to the server.
+// This mirrors the validation performed by the TypeScript SDK.
+func validateCapabilityArgs(capabilityID string, args map[string]any) error {
+	if args == nil {
+		return nil
+	}
+	// The 'ancestors' map uses pointers to track visited objects.
+	ancestors := make(map[uintptr]struct{})
+	return validateValue(args, "args", ancestors, capabilityID)
+}
+
+func validateValue(value any, path string, ancestors map[uintptr]struct{}, capabilityID string) error {
+	if value == nil {
+		return nil
+	}
+
+	// Check for circular references in maps and slices.
+	val := reflect.ValueOf(value)
+	switch val.Kind() {
+	case reflect.Map, reflect.Slice, reflect.Ptr:
+		if val.IsNil() {
+			return nil
+		}
+		ptr := val.Pointer()
+		if _, ok := ancestors[ptr]; ok {
+			return fmt.Errorf("argument '%s' passed to capability '%s' contains a circular reference", path, capabilityID)
+		}
+		ancestors[ptr] = struct{}{}
+		defer delete(ancestors, ptr)
+	}
+
+	switch v := value.(type) {
+	case map[string]any:
+		for key, nestedValue := range v {
+			if err := validateValue(nestedValue, path+"."+key, ancestors, capabilityID); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for i, item := range v {
+			if err := validateValue(item, fmt.Sprintf("%s[%d]", path, i), ancestors, capabilityID); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
