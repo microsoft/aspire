@@ -605,10 +605,10 @@ public static class AzureKubernetesEnvironmentExtensions
               name: aksClusterName
               location: location
               properties: {
+                gatewayApiProfile: {
+                  mode: 'Enabled'
+                }
                 ingressProfile: {
-                  gatewayAPI: {
-                    installation: 'Standard'
-                  }
                   applicationLoadBalancer: {
                     enabled: true
                   }
