@@ -218,13 +218,7 @@ internal class ConsoleInteractionService : IInteractionService
         var (wasProvided, value, defaultValue) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
-            var match = MatchChoice(value, choicesList, choiceFormatter);
-            if (match is not null)
-            {
-                return match;
-            }
-
-            ThrowNonInteractiveInvalidValue(value, binding!.SymbolDisplayName, choicesList, choiceFormatter);
+            return MatchChoiceOrThrow(value, binding!, choicesList, choiceFormatter);
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -233,13 +227,7 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 if (defaultValue != null)
                 {
-                    var match = MatchChoice(defaultValue, choicesList, choiceFormatter);
-                    if (match is not null)
-                    {
-                        return match;
-                    }
-
-                    ThrowNonInteractiveSelectionError(binding.SymbolDisplayName, choicesList, choiceFormatter);
+                    return MatchChoiceOrThrow(defaultValue, binding, choicesList, choiceFormatter);
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -282,13 +270,7 @@ internal class ConsoleInteractionService : IInteractionService
         var (wasProvided, value, defaultValue) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
-            var matched = MatchChoices(value, choicesList, choiceFormatter);
-            if (matched is not null)
-            {
-                return matched;
-            }
-
-            ThrowNonInteractiveInvalidValue(value, binding!.SymbolDisplayName, choicesList, choiceFormatter);
+            return MatchChoicesOrThrow(value, binding!, choicesList, choiceFormatter);
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -297,13 +279,7 @@ internal class ConsoleInteractionService : IInteractionService
             {
                 if (defaultValue != null)
                 {
-                    var matched = MatchChoices(defaultValue, choicesList, choiceFormatter);
-                    if (matched is not null)
-                    {
-                        return matched;
-                    }
-
-                    ThrowNonInteractiveSelectionError(binding.SymbolDisplayName, choicesList, choiceFormatter);
+                    return MatchChoicesOrThrow(defaultValue, binding, choicesList, choiceFormatter);
                 }
 
                 ThrowNonInteractiveError(binding.SymbolDisplayName);
@@ -659,14 +635,5 @@ internal class ConsoleInteractionService : IInteractionService
 
         ThrowNonInteractiveInvalidValue(value, binding.SymbolDisplayName, choicesList, choiceFormatter);
         return default; // unreachable
-    }
-
-    [DoesNotReturn]
-    private void ThrowNonInteractiveSelectionError<T>(string symbolDisplayName, IEnumerable<T> choices, Func<T, string> choiceFormatter) where T : notnull
-    {
-        DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, symbolDisplayName));
-        var availableChoices = string.Join(", ", choices.Select(c => choiceFormatter(c)));
-        DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableChoices));
-        throw new NonInteractiveException(symbolDisplayName);
     }
 }
