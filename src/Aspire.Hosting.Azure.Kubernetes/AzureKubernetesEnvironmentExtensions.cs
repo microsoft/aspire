@@ -617,21 +617,21 @@ public static class AzureKubernetesEnvironmentExtensions
             }
 
             // Provision the AGC traffic controller, frontend, and subnet association.
-            resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2023-11-01' = {
+            resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2025-01-01' = {
               name: 'aspire-agc'
               location: location
               properties: {}
               dependsOn: [aksAlbUpdate]
             }
 
-            resource frontend 'Microsoft.ServiceNetworking/trafficControllers/frontends@2023-11-01' = {
+            resource frontend 'Microsoft.ServiceNetworking/trafficControllers/frontends@2025-01-01' = {
               parent: trafficController
               name: 'default'
               location: location
               properties: {}
             }
 
-            resource association 'Microsoft.ServiceNetworking/trafficControllers/associations@2023-11-01' = {
+            resource association 'Microsoft.ServiceNetworking/trafficControllers/associations@2025-01-01' = {
               parent: trafficController
               name: 'default'
               location: location
@@ -917,3 +917,4 @@ public static class AzureKubernetesEnvironmentExtensions
         }
     }
 }
+
