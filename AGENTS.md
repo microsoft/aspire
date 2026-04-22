@@ -414,6 +414,10 @@ Additional instructions are automatically applied when editing files matching sp
 | Pattern | Instructions File |
 |---------|-------------------|
 | `src/**/*.cs` | `.github/instructions/xmldoc.instructions.md` - XML documentation standards |
+| `src/Aspire.Hosting/**/*.cs` | `.github/instructions/hosting-core.instructions.md` - Hosting core review patterns |
+| `src/Aspire.Hosting.Azure*/**/*.cs` | `.github/instructions/hosting-azure.instructions.md` - Hosting Azure review patterns |
+| `src/Aspire.Dashboard/**/*.{cs,razor,js}` | `.github/instructions/dashboard.instructions.md` - Dashboard review patterns |
+| `src/Components/**/*.cs` | `.github/instructions/components.instructions.md` - Client integration review patterns |
 | `src/Aspire.Hosting*/README.md` | `.github/instructions/hosting-readme.instructions.md` - Hosting integration READMEs |
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
