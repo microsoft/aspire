@@ -409,7 +409,7 @@ jobs:
           HEARTBEAT_PID=$!
 
           # Run tests
-          ${{ env.DOTNET_SCRIPT }} test ${{ env.TEST_PROJECT_PATH }} \
+          ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} \
             /p:ContinuousIntegrationBuild=true \
             /p:TrxFileNamePrefix="${{ inputs.testShortName }}" \
             -bl:${{ github.workspace }}/testresults/test.binlog \
@@ -461,7 +461,7 @@ jobs:
             # Ensure UTF-8 encoding for all output on Windows
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
-            & ${{ env.DOTNET_SCRIPT }} test ${{ env.TEST_PROJECT_PATH }} `
+            & ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} `
               /p:ContinuousIntegrationBuild=true `
               /p:TrxFileNamePrefix="${{ inputs.testShortName }}" `
               -bl:${{ github.workspace }}/testresults/test.binlog `
