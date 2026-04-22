@@ -200,4 +200,68 @@ public class WithOtlpExporterTests
         Assert.Equal("http://localhost:52000", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
         Assert.Equal("grpc", config["OTEL_EXPORTER_OTLP_PROTOCOL"]);
     }
+
+    [Fact]
+    public async Task OtlpEndpointCanBeOverriddenToPointToAnotherResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "http://localhost:18889";
+
+        // Add a dashboard resource with an OTLP endpoint.
+        var dashboard = builder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
+        dashboard.Resource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: KnownEndpointNames.OtlpGrpcEndpointName, uriScheme: "http", port: 18889, isProxied: true, transport: "http2"));
+
+        // Add a collector resource with its own OTLP endpoint (similar to the OTel collector sample).
+        var collector = builder.AddResource(new ContainerResource("otel-collector"))
+            .WithEndpoint(targetPort: 4317, name: "otlp-grpc", scheme: "http");
+
+        // Add a resource that sends telemetry via OTLP.
+        var container = builder.AddResource(new ContainerResource("myapp"))
+            .WithOtlpExporter();
+
+        // Override the OTLP endpoint to point to the collector, like the aspire-samples pattern:
+        // https://github.com/microsoft/aspire-samples/blob/main/samples/Metrics/MetricsApp.AppHost/OpenTelemetryCollector/OpenTelemetryCollectorResourceBuilderExtensions.cs
+        builder.Eventing.Subscribe<BeforeStartEvent>((e, ct) =>
+        {
+            var collectorEndpoint = collector.Resource.GetEndpoint("otlp-grpc");
+            var appModel = e.Services.GetRequiredService<DistributedApplicationModel>();
+
+            foreach (var resource in appModel.Resources)
+            {
+                resource.Annotations.Add(new EnvironmentCallbackAnnotation(context =>
+                {
+                    if (context.EnvironmentVariables.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"))
+                    {
+                        context.EnvironmentVariables["OTEL_EXPORTER_OTLP_ENDPOINT"] = collectorEndpoint;
+                    }
+                }));
+            }
+
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        var serviceProvider = app.Services.GetRequiredService<IServiceProvider>();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Simulate DCP allocating endpoints.
+        var dashboardAnnotation = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        dashboardAnnotation.AllocatedEndpoint = new AllocatedEndpoint(dashboardAnnotation, "localhost", 52000);
+
+        var collectorAnnotation = collector.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "otlp-grpc");
+        collectorAnnotation.AllocatedEndpoint = new AllocatedEndpoint(collectorAnnotation, "localhost", 4317);
+
+        // Fire BeforeStartEvent so the override annotations are added.
+        var beforeStartEvent = new BeforeStartEvent(app.Services, appModel);
+        await builder.Eventing.PublishAsync(beforeStartEvent);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            container.Resource,
+            serviceProvider: serviceProvider
+            ).DefaultTimeout();
+
+        // The endpoint should point to the collector, not the dashboard.
+        Assert.Equal("http://localhost:4317", config["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+    }
 }
