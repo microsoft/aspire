@@ -39,10 +39,25 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
         ILogger<BrowserLogsSessionManager> logger,
         CancellationToken cancellationToken)
     {
-        var webSocket = new ClientWebSocket();
-        webSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
-        await webSocket.ConnectAsync(webSocketUri, cancellationToken).ConfigureAwait(false);
-        return new ChromeDevToolsConnection(webSocket, eventHandler, logger);
+        return await ConnectAsync(
+            webSocketUri,
+            eventHandler,
+            logger,
+            cancellationToken,
+            static () => new ClientWebSocketConnector()).ConfigureAwait(false);
+    }
+
+    internal static async Task<ChromeDevToolsConnection> ConnectAsync(
+        Uri webSocketUri,
+        Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserLogsSessionManager> logger,
+        CancellationToken cancellationToken,
+        Func<IClientWebSocketConnector> connectorFactory)
+    {
+        using var connector = connectorFactory();
+        connector.SetKeepAliveInterval(TimeSpan.FromSeconds(15));
+        await connector.ConnectAsync(webSocketUri, cancellationToken).ConfigureAwait(false);
+        return new ChromeDevToolsConnection(connector.DetachConnectedWebSocket(), eventHandler, logger);
     }
 
     public Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)
@@ -327,5 +342,49 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
                 _taskCompletionSource.TrySetException(ex);
             }
         }
+    }
+}
+
+internal interface IClientWebSocketConnector : IDisposable
+{
+    void SetKeepAliveInterval(TimeSpan interval);
+
+    Task ConnectAsync(Uri webSocketUri, CancellationToken cancellationToken);
+
+    ClientWebSocket DetachConnectedWebSocket();
+}
+
+internal sealed class ClientWebSocketConnector : IClientWebSocketConnector
+{
+    private ClientWebSocket? _webSocket = new();
+
+    public void SetKeepAliveInterval(TimeSpan interval)
+    {
+        GetWebSocket().Options.KeepAliveInterval = interval;
+    }
+
+    public Task ConnectAsync(Uri webSocketUri, CancellationToken cancellationToken)
+    {
+        return GetWebSocket().ConnectAsync(webSocketUri, cancellationToken);
+    }
+
+    public ClientWebSocket DetachConnectedWebSocket()
+    {
+        var webSocket = GetWebSocket();
+        _webSocket = null;
+        return webSocket;
+    }
+
+    public void Dispose()
+    {
+        _webSocket?.Dispose();
+        _webSocket = null;
+    }
+
+    private ClientWebSocket GetWebSocket()
+    {
+        var webSocket = _webSocket;
+        ObjectDisposedException.ThrowIf(webSocket is null, this);
+        return webSocket;
     }
 }
