@@ -721,6 +721,438 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Should show: [bold]Environment Name[/]
         Assert.Equal("[bold]Environment Name[/]", promptCall.PromptText);
     }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_TextPrompt_SkipsInteractivePrompt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input text-prompt-1=production");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        // The interactive prompt should not have been called
+        Assert.Empty(consoleService.StringPromptCalls);
+
+        // The provided value should have been sent back
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        var completedPrompt = promptBackchannel.CompletedPrompts[0];
+        Assert.Equal("production", completedPrompt.Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_SecretTextPrompt_SkipsInteractivePrompt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("secret-prompt-1", "Database Password", InputTypes.SecretText, "Enter password:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input secret-prompt-1=SecurePassword123!");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.StringPromptCalls);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        Assert.Equal("SecurePassword123!", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_ChoicePrompt_SkipsInteractivePrompt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        var options = new List<KeyValuePair<string, string>>
+        {
+            new("us-west-2", "US West (Oregon)"),
+            new("us-east-1", "US East (N. Virginia)"),
+            new("eu-central-1", "Europe (Frankfurt)")
+        };
+        promptBackchannel.AddPrompt("choice-prompt-1", "Deployment Region", InputTypes.Choice, "Select region:", isRequired: true, options: options);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input choice-prompt-1=us-east-1");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        Assert.Equal("us-east-1", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_ChoicePrompt_CaseInsensitiveMatch()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        var options = new List<KeyValuePair<string, string>>
+        {
+            new("us-west-2", "US West (Oregon)"),
+            new("us-east-1", "US East (N. Virginia)")
+        };
+        promptBackchannel.AddPrompt("choice-prompt-1", "Region", InputTypes.Choice, "Select region:", isRequired: true, options: options);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // Provide value with different casing
+        var result = command.Parse("publish --input choice-prompt-1=US-EAST-1");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        // Should use the canonical key from the options
+        Assert.Equal("us-east-1", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_BooleanPrompt_SkipsInteractivePrompt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("bool-prompt-1", "Enable Logging", InputTypes.Boolean, "Enable verbose logging?", isRequired: false);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input bool-prompt-1=true");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.BooleanPromptCalls);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        Assert.Equal("true", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_NumberPrompt_SkipsInteractivePrompt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("number-prompt-1", "Instance Count", InputTypes.Number, "Enter number of instances:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input number-prompt-1=3");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.StringPromptCalls);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        Assert.Equal("3", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_MultipleInputs_AllSkipped()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddMultiInputPrompt("multi-prompt-1", "Configuration Setup", "Please provide the following details:",
+            [
+                new("app-name", "Application Name", InputTypes.Text, true, null),
+                new("environment", "Environment", InputTypes.Choice, true,
+                [
+                    new("dev", "Development"),
+                    new("staging", "Staging"),
+                    new("prod", "Production")
+                ]),
+                new("enable-logging", "Enable Logging", InputTypes.Boolean, false, null)
+            ]);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input app-name=MyApp --input environment=prod --input enable-logging=false");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.StringPromptCalls);
+        Assert.Empty(consoleService.BooleanPromptCalls);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        var completedPrompt = promptBackchannel.CompletedPrompts[0];
+        Assert.Equal(3, completedPrompt.Answers.Length);
+        Assert.Equal("MyApp", completedPrompt.Answers[0].Value);
+        Assert.Equal("prod", completedPrompt.Answers[1].Value);
+        Assert.Equal("false", completedPrompt.Answers[2].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_UnmatchedName_FallsBackToPrompt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("text-prompt-1", "Environment Name", InputTypes.Text, "Enter environment name:", isRequired: true);
+
+        // Set up interactive response since --input won't match
+        consoleService.SetupStringPromptResponse("interactive-value");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // Provide --input with a name that doesn't match any prompt
+        var result = command.Parse("publish --input wrong-name=value");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        // The interactive prompt should have been called since --input didn't match
+        Assert.Single(consoleService.StringPromptCalls);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        Assert.Equal("interactive-value", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_InvalidChoiceValue_ReturnsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        var options = new List<KeyValuePair<string, string>>
+        {
+            new("us-west-2", "US West (Oregon)"),
+            new("us-east-1", "US East (N. Virginia)")
+        };
+        promptBackchannel.AddPrompt("choice-prompt-1", "Region", InputTypes.Choice, "Select region:", isRequired: true, options: options);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input choice-prompt-1=invalid-region");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        // Should fail with MissingRequiredArgument (NonInteractiveException is caught by BaseCommand)
+        Assert.NotEqual(0, exitCode);
+        Assert.NotEmpty(consoleService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_InvalidBooleanValue_ReturnsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("bool-prompt-1", "Enable Logging", InputTypes.Boolean, "Enable logging?", isRequired: false);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input bool-prompt-1=maybe");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(0, exitCode);
+        Assert.NotEmpty(consoleService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_InvalidNumberValue_ReturnsError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("number-prompt-1", "Instance Count", InputTypes.Number, "Enter count:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish --input number-prompt-1=notanumber");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(0, exitCode);
+        Assert.NotEmpty(consoleService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_ValueWithEqualsSign_ParsedCorrectly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("conn-string", "Connection String", InputTypes.Text, "Enter connection string:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // Value contains = signs (common in connection strings)
+        var result = command.Parse("publish --input conn-string=Server=localhost;Database=MyApp");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        Assert.Single(promptBackchannel.CompletedPrompts);
+        Assert.Equal("Server=localhost;Database=MyApp", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_InputOption_PartialInputs_MixesProvidedAndInteractive()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        // Two sequential prompts — one will be answered via --input, the other interactively
+        promptBackchannel.AddPrompt("text-prompt-1", "App Name", InputTypes.Text, "Enter app name:", isRequired: true);
+        promptBackchannel.AddPrompt("text-prompt-2", "Region", InputTypes.Text, "Enter region:", isRequired: true);
+
+        // Set up interactive response for the second prompt
+        consoleService.SetupStringPromptResponse("interactive-region");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        // Only provide --input for the first prompt
+        var result = command.Parse("publish --input text-prompt-1=MyApp");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        // Only the second prompt should have been interactive
+        Assert.Single(consoleService.StringPromptCalls);
+
+        Assert.Equal(2, promptBackchannel.CompletedPrompts.Count);
+        Assert.Equal("MyApp", promptBackchannel.CompletedPrompts[0].Answers[0].Value);
+        Assert.Equal("interactive-region", promptBackchannel.CompletedPrompts[1].Answers[0].Value);
+    }
 }
 
 // Test implementation of IAppHostCliBackchannel that simulates prompt interactions

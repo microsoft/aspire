@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -73,6 +75,22 @@ internal sealed class TestInteractionService : IInteractionService
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
+            if (required && string.IsNullOrEmpty(value))
+            {
+                DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, binding!.SymbolDisplayName));
+                throw new NonInteractiveException(binding.SymbolDisplayName);
+            }
+
+            if (validator is not null)
+            {
+                var result = validator(value);
+                if (!result.Successful)
+                {
+                    DisplayError(result.Message ?? string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, value, binding!.SymbolDisplayName));
+                    throw new NonInteractiveException(binding!.SymbolDisplayName);
+                }
+            }
+
             return Task.FromResult(value);
         }
 
@@ -98,15 +116,23 @@ internal sealed class TestInteractionService : IInteractionService
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
     {
+        var choicesList = choices as IReadOnlyList<T> ?? choices.ToList();
+
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
         {
-            var match = choices.FirstOrDefault(c => string.Equals(choiceFormatter(c), value, StringComparison.OrdinalIgnoreCase))
-                ?? choices.FirstOrDefault(c => string.Equals(c.ToString(), value, StringComparison.OrdinalIgnoreCase));
+            var match = choicesList.FirstOrDefault(c => string.Equals(choiceFormatter(c), value, StringComparison.OrdinalIgnoreCase))
+                ?? choicesList.FirstOrDefault(c => string.Equals(c.ToString(), value, StringComparison.OrdinalIgnoreCase));
             if (match is not null)
             {
                 return Task.FromResult(match);
             }
+
+            // No match - throw like the real ConsoleInteractionService
+            var availableChoices = string.Join(", ", choicesList.Select(c => choiceFormatter(c)));
+            DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, value, binding!.SymbolDisplayName));
+            DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableChoices));
+            throw new NonInteractiveException(binding.SymbolDisplayName);
         }
 
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
@@ -114,27 +140,27 @@ internal sealed class TestInteractionService : IInteractionService
             throw new OperationCanceledException();
         }
 
-        if (!choices.Any())
+        if (!choicesList.Any())
         {
             throw new EmptyChoicesException($"No items available for selection: {promptText}");
         }
 
         if (PromptForSelectionCallback is not null)
         {
-            var result = PromptForSelectionCallback(promptText, choices, o => choiceFormatter((T)o), cancellationToken);
+            var result = PromptForSelectionCallback(promptText, choicesList, o => choiceFormatter((T)o), cancellationToken);
             return Task.FromResult((T)result);
         }
 
         if (_responses.TryDequeue(out var response))
         {
-            var matchingChoice = choices.FirstOrDefault(c => choiceFormatter(c) == response.Response || c.ToString() == response.Response);
+            var matchingChoice = choicesList.FirstOrDefault(c => choiceFormatter(c) == response.Response || c.ToString() == response.Response);
             if (matchingChoice is not null)
             {
                 return Task.FromResult(matchingChoice);
             }
         }
 
-        return Task.FromResult(choices.First());
+        return Task.FromResult(choicesList[0]);
     }
 
     public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull

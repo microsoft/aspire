@@ -16,19 +16,22 @@ internal sealed class PromptBinding<T>
 {
     private readonly Func<ParseResult, (bool WasProvided, T? Value)> _resolver;
     private readonly ParseResult? _parseResult;
+    private readonly (bool IsSet, T? Value) _preResolved;
 
     internal PromptBinding(
         ParseResult? parseResult,
         string symbolDisplayName,
         Func<ParseResult, (bool WasProvided, T? Value)> resolver,
         T? defaultValue,
-        bool hasExplicitDefault)
+        bool hasExplicitDefault,
+        (bool IsSet, T? Value) preResolved = default)
     {
         _parseResult = parseResult;
         SymbolDisplayName = symbolDisplayName;
         _resolver = resolver;
         DefaultValue = defaultValue;
         HasExplicitDefault = hasExplicitDefault;
+        _preResolved = preResolved;
     }
 
     /// <summary>
@@ -55,6 +58,11 @@ internal sealed class PromptBinding<T>
     /// </summary>
     public (bool WasProvided, T? Value) Resolve()
     {
+        if (_preResolved.IsSet)
+        {
+            return (true, _preResolved.Value);
+        }
+
         if (_parseResult is null)
         {
             return (false, default);
@@ -67,7 +75,7 @@ internal sealed class PromptBinding<T>
     /// Creates a new <see cref="PromptBinding{T}"/> with the same resolver but a different default value.
     /// </summary>
     public PromptBinding<T> WithDefault(T? newDefault) =>
-        new(_parseResult, SymbolDisplayName, _resolver, newDefault, hasExplicitDefault: true);
+        new(_parseResult, SymbolDisplayName, _resolver, newDefault, hasExplicitDefault: true, _preResolved);
 }
 
 /// <summary>
@@ -105,6 +113,14 @@ internal static class PromptBinding
     /// </summary>
     public static PromptBinding<T> CreateDefault<T>(T defaultValue) =>
         new(null, string.Empty, static _ => (false, default), defaultValue, hasExplicitDefault: true);
+
+    /// <summary>
+    /// Creates a <see cref="PromptBinding{T}"/> that resolves as explicitly provided with the given value.
+    /// Use when a value is available from a non-option source (e.g. <c>--input name=value</c> pairs)
+    /// and should bypass interactive prompting.
+    /// </summary>
+    public static PromptBinding<T> CreateProvided<T>(T value, string symbolDisplayName) =>
+        new(null, symbolDisplayName, static _ => (false, default), value, hasExplicitDefault: true, (true, value));
 
     /// <summary>
     /// Creates a <see cref="PromptBinding{T}"/> for a <c>bool?</c> option that resolves to the inverse of its value.
