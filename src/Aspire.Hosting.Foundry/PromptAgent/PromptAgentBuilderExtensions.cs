@@ -387,7 +387,7 @@ public static class PromptAgentBuilderExtensions
     /// <para>
     /// This method accepts one of the following reference types:
     /// <list type="bullet">
-    /// <item>An <see cref="IResourceBuilder{T}"/> for <see cref="AzureCognitiveServicesProjectConnectionResource"/>
+    /// <item>An <see cref="IResourceBuilder{T}"/> for <see cref="BingGroundingConnectionResource"/>
     /// — uses an existing Bing grounding connection created by
     /// <see cref="AzureCognitiveServicesProjectConnectionsBuilderExtensions.AddBingGroundingConnection(IResourceBuilder{AzureCognitiveServicesProjectResource}, string, string)"/>.</item>
     /// <item>A <see cref="string"/> — the full Azure resource ID of a Bing Search resource
@@ -413,7 +413,7 @@ public static class PromptAgentBuilderExtensions
     public static IResourceBuilder<BingGroundingToolResource> WithReference(
         this IResourceBuilder<BingGroundingToolResource> tool,
         [AspireUnion(
-            typeof(IResourceBuilder<AzureCognitiveServicesProjectConnectionResource>),
+            typeof(IResourceBuilder<BingGroundingConnectionResource>),
             typeof(string),
             typeof(IResourceBuilder<ParameterResource>))]
         object bingReference)
@@ -429,7 +429,7 @@ public static class PromptAgentBuilderExtensions
 
         switch (bingReference)
         {
-            case IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> connectionBuilder:
+            case IResourceBuilder<BingGroundingConnectionResource> connectionBuilder:
                 tool.Resource.Connection = connectionBuilder.Resource;
                 break;
 
@@ -449,7 +449,7 @@ public static class PromptAgentBuilderExtensions
             default:
                 throw new ArgumentException(
                     $"Unsupported Bing reference type '{bingReference.GetType().Name}'. " +
-                    "Expected IResourceBuilder<AzureCognitiveServicesProjectConnectionResource>, string, or IResourceBuilder<ParameterResource>.",
+                    "Expected IResourceBuilder<BingGroundingConnectionResource>, string, or IResourceBuilder<ParameterResource>.",
                     nameof(bingReference));
         }
 
