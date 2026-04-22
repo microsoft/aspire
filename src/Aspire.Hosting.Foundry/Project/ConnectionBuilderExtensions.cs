@@ -299,7 +299,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
     [AspireExport(Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project.")]
-    public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddBingGroundingConnection(
+    public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         string name,
         string bingResourceId)
@@ -308,7 +308,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(bingResourceId);
 
-        return builder.AddConnection(name, (infra) =>
+        return builder.AddBingConnection(name, (infra) =>
         {
             return new BingGroundingConnectionProperties()
             {
@@ -348,7 +348,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
     [AspireExport("addBingGroundingConnectionFromParameter", Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project using a parameter.")]
-    public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddBingGroundingConnection(
+    public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         string name,
         IResourceBuilder<ParameterResource> bingResourceId)
@@ -357,7 +357,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(bingResourceId);
 
-        return builder.AddConnection(name, (infra) =>
+        return builder.AddBingConnection(name, (infra) =>
         {
             var resourceIdParam = bingResourceId.AsProvisioningParameter(infra);
             return new BingGroundingConnectionProperties()
@@ -378,5 +378,47 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
                 }
             };
         });
+    }
+
+    private static IResourceBuilder<BingGroundingConnectionResource> AddBingConnection(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        string name,
+        Func<AzureResourceInfrastructure, CognitiveServicesConnectionProperties> configureProperties)
+    {
+        void configureInfrastructure(AzureResourceInfrastructure infrastructure)
+        {
+            var aspireResource = (AzureCognitiveServicesProjectConnectionResource)infrastructure.AspireResource;
+            var projectBicepId = aspireResource.Parent.GetBicepIdentifier();
+            var project = aspireResource.Parent.AddAsExistingResource(infrastructure);
+
+            var connection = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(
+                infrastructure,
+                (identifier, resourceName) =>
+                {
+                    var resource = aspireResource.FromExisting(identifier);
+                    resource.Parent = project;
+                    resource.Name = resourceName;
+                    return resource;
+                },
+                infra =>
+                {
+                    var resource = new CognitiveServicesProjectConnection(aspireResource.GetBicepIdentifier())
+                    {
+                        Parent = project,
+                        Name = name,
+                        Properties = configureProperties(infra)
+                    };
+                    return resource;
+                });
+            if (aspireResource.Parent.KeyVaultConn is not null)
+            {
+                var keyVaultConn = aspireResource.Parent.KeyVaultConn.AddAsExistingResource(infrastructure);
+                connection.DependsOn.Add(keyVaultConn);
+            }
+            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = connection.Name });
+            infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = connection.Id });
+        }
+        var connectionResource = new BingGroundingConnectionResource(name, configureInfrastructure, builder.Resource);
+        return builder.ApplicationBuilder.AddResource(connectionResource);
     }
 }

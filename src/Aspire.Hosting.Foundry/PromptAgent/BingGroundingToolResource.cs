@@ -20,7 +20,14 @@ namespace Aspire.Hosting.Foundry;
 /// <para>
 /// After creating the tool with <see cref="PromptAgentBuilderExtensions.AddBingGroundingTool"/>,
 /// link it using <see cref="PromptAgentBuilderExtensions.WithReference(IResourceBuilder{BingGroundingToolResource}, object)"/>
-/// with a Bing grounding connection, a resource ID string, or a parameter.
+/// with one of the following:
+/// <list type="bullet">
+/// <item>A <see cref="BingGroundingConnectionResource"/> created by
+/// <see cref="AzureCognitiveServicesProjectConnectionsBuilderExtensions.AddBingGroundingConnection(IResourceBuilder{AzureCognitiveServicesProjectResource}, string, string)"/>.</item>
+/// <item>A Bing resource ID string to auto-create a connection.</item>
+/// <item>A <see cref="IResourceBuilder{T}"/> for <see cref="ParameterResource"/>
+/// containing the Bing resource ID.</item>
+/// </list>
 /// </para>
 /// </remarks>
 [AspireExport]
@@ -39,9 +46,9 @@ public class BingGroundingToolResource : FoundryToolResource
     }
 
     /// <summary>
-    /// Gets or sets the Foundry project connection resource for the Bing Search service.
+    /// Gets or sets the Bing grounding connection resource for the Bing Search service.
     /// </summary>
-    internal AzureCognitiveServicesProjectConnectionResource? Connection { get; set; }
+    internal BingGroundingConnectionResource? Connection { get; set; }
 
     /// <inheritdoc/>
     public override async Task<ResponseTool> ToAgentToolAsync(PipelineStepContext? context, CancellationToken cancellationToken = default)

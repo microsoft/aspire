@@ -28,6 +28,19 @@ public class AzureCognitiveServicesProjectConnectionResource(string name, Action
 }
 
 /// <summary>
+/// A Foundry project connection resource specifically for Grounding with Bing Search connections.
+/// </summary>
+/// <remarks>
+/// This type is used to distinguish Bing grounding connections from other connection types,
+/// ensuring that only connections created by <c>AddBingGroundingConnection</c>
+/// can be linked to a <see cref="BingGroundingToolResource"/>.
+/// </remarks>
+public class BingGroundingConnectionResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure, AzureCognitiveServicesProjectResource parent) :
+    AzureCognitiveServicesProjectConnectionResource(name, configureInfrastructure, parent)
+{
+}
+
+/// <summary>
 /// The connection properties for an Application Insights connection.
 ///
 /// This is overrides the category property of ApiKeyAuthConnectionProperties to

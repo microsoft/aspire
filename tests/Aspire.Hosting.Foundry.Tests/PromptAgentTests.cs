@@ -216,8 +216,8 @@ public class PromptAgentTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var search = builder.AddAzureSearch("search");
-        var connection = project.AddConnection(search);
+        var bingResourceId = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing-test";
+        var connection = project.AddBingGroundingConnection("bing-conn", bingResourceId);
 
         var tool = project.AddBingGroundingTool("bing").WithReference(connection);
 
@@ -231,9 +231,9 @@ public class PromptAgentTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
-        var search = builder.AddAzureSearch("search");
-        var conn1 = project.AddConnection(search);
-        var conn2 = project.AddConnection(search);
+        var bingResourceId = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing-test";
+        var conn1 = project.AddBingGroundingConnection("bing-conn-1", bingResourceId);
+        var conn2 = project.AddBingGroundingConnection("bing-conn-2", bingResourceId);
 
         var tool = project.AddBingGroundingTool("bing").WithReference(conn1);
 
@@ -277,7 +277,7 @@ public class PromptAgentTests
         var connection = project.AddBingGroundingConnection("bing-conn", bingResourceId);
 
         Assert.NotNull(connection);
-        Assert.IsType<AzureCognitiveServicesProjectConnectionResource>(connection.Resource);
+        Assert.IsType<BingGroundingConnectionResource>(connection.Resource);
     }
 
     [Fact]
@@ -304,7 +304,7 @@ public class PromptAgentTests
         var connection = project.AddBingGroundingConnection("bing-conn", bingResourceId);
 
         Assert.NotNull(connection);
-        Assert.IsType<AzureCognitiveServicesProjectConnectionResource>(connection.Resource);
+        Assert.IsType<BingGroundingConnectionResource>(connection.Resource);
     }
 
     [Fact]

@@ -51,8 +51,9 @@ void main() throws Exception {
         var computerUse = project.addComputerUseTool("computer-use");
         var aiSearchTool = project.addAISearchTool("ai-search-tool");
         aiSearchTool.withReference(search);
+        var bingConn = project.addBingGroundingConnection("bing-conn", "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing");
         var bingTool = project.addBingGroundingTool("bing-tool");
-        bingTool.withReference(_searchConnection);
+        bingTool.withReference(bingConn);
         var bingTool2 = project.addBingGroundingTool("bing-tool-2");
         bingTool2.withReference("/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing");
         var bingParam = builder.addParameter("bing-resource-id");
