@@ -501,7 +501,7 @@ public static class AzureKubernetesEnvironmentExtensions
 
     /// <summary>
     /// Installs cert-manager and configures a Let's Encrypt ClusterIssuer for automatic
-    /// TLS certificate management. Use with <see cref="KubernetesServiceExtensions.WithCustomDomain{T}"/>
+    /// TLS certificate management. Use with <see cref="KubernetesServiceExtensions.WithDomain{T}"/>
     /// to enable HTTPS on individual resources.
     /// </summary>
     /// <param name="builder">The AKS environment resource builder.</param>
@@ -530,22 +530,26 @@ public static class AzureKubernetesEnvironmentExtensions
 
         var k8sEnvBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.KubernetesEnvironment);
 
-        // Install cert-manager Helm chart
+        // Install cert-manager Helm chart with self-check workaround
+        // for hairpin NAT (pods can't reach external AGC FQDN from inside cluster)
         k8sEnvBuilder.WithHelmChart("cert-manager", options =>
         {
             options.Chart = "oci://quay.io/jetstack/charts/cert-manager";
             options.Version = "v1.17.2";
             options.Namespace = "cert-manager";
             options.Values["crds.enabled"] = "true";
+            options.Values["extraArgs"] = "{--acme-http01-solver-nameservers=8.8.8.8:53}";
         });
 
-        // Store the issuer name for use by WithCustomDomain
+        // Store the issuer name for use by WithDomain
         const string issuerName = "letsencrypt-aspire";
         builder.Resource.CertManagerIssuerName = issuerName;
 
         // Add a ClusterIssuer via KubernetesServiceCustomizationAnnotation.
         // It gets added to the first compute resource's AdditionalResources
         // so it's included in the Helm chart output.
+        // The ingressTemplate must include the alb-id annotation so AGC accepts
+        // the solver Ingress created during HTTP-01 challenges.
         k8sEnvBuilder.Resource.Annotations.Add(new KubernetesServiceCustomizationAnnotation(kubeResource =>
         {
             var issuer = new Kubernetes.Resources.ClusterIssuer
@@ -553,7 +557,8 @@ public static class AzureKubernetesEnvironmentExtensions
                 Metadata = { Name = issuerName }
             };
             issuer.Spec.Acme.Email = email;
-            issuer.Spec.Acme.Solvers.Add(new Kubernetes.Resources.AcmeSolver
+
+            var solver = new Kubernetes.Resources.AcmeSolver
             {
                 Http01 = new Kubernetes.Resources.Http01Solver
                 {
@@ -562,7 +567,8 @@ public static class AzureKubernetesEnvironmentExtensions
                         IngressClassName = "azure-alb-external"
                     }
                 }
-            });
+            };
+            issuer.Spec.Acme.Solvers.Add(solver);
             kubeResource.AdditionalResources.Add(issuer);
         }));
 

@@ -82,16 +82,16 @@ public static class KubernetesServiceExtensions
     }
 
     /// <summary>
-    /// Configures a custom domain for this resource's Kubernetes Ingress, enabling TLS
+    /// Configures a domain for this resource's Kubernetes Ingress, enabling TLS
     /// via cert-manager. Requires <c>WithCertManager()</c> on the AKS environment.
     /// </summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="hostname">The custom domain hostname (e.g., <c>app.contoso.com</c>).
+    /// <param name="hostname">The domain hostname (e.g., <c>app.contoso.com</c>).
     /// DNS must be configured to point to the AGC frontend FQDN.</param>
     /// <returns>The updated resource builder.</returns>
-    [AspireExport(Description = "Configures a custom domain with TLS for a Kubernetes resource")]
-    public static IResourceBuilder<T> WithCustomDomain<T>(
+    [AspireExport(Description = "Configures a domain with TLS for a Kubernetes resource")]
+    public static IResourceBuilder<T> WithDomain<T>(
         this IResourceBuilder<T> builder,
         string hostname)
         where T : IComputeResource
