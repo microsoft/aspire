@@ -135,12 +135,12 @@ public class NuGetPackagePrefetcherTests
             packagingService,
             updateNotifier);
 
-        await prefetcher.StartAsync(stoppingCts.Token);
+        await prefetcher.StartAsync(stoppingCts.Token).DefaultTimeout();
 
         // This will timeout if the expected log messages are not produced.
         await Task.WhenAll(templateTcs.Task, cliTcs.Task).DefaultTimeout();
 
-        await prefetcher.StopAsync(CancellationToken.None);
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
     }
 
     [Fact]
@@ -176,12 +176,12 @@ public class NuGetPackagePrefetcherTests
             packagingService,
             new TestCliUpdateNotifier());
 
-        await prefetcher.StartAsync(CancellationToken.None);
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
 
         // This will timeout if the expected log messages are not produced.
-        await errorTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await errorTcs.Task.DefaultTimeout();
 
-        await prefetcher.StopAsync(CancellationToken.None);
+        await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
     }
 
     private static CliExecutionContext CreateExecutionContext()
