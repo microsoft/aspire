@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Aspire.Hosting;
@@ -68,9 +69,23 @@ public static class OtlpConfigurationExtensions
                 return;
             }
 
-            var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(configuration, otlpExporterAnnotation.RequiredProtocol);
-            context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = new HostUrl(url);
-            context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
+            var dashboardEndpoint = ResolveOtlpEndpointFromDashboard(context, otlpExporterAnnotation.RequiredProtocol);
+
+            if (dashboardEndpoint is not null)
+            {
+                // Use the dashboard endpoint reference directly. This resolves to the actual allocated URL,
+                // including when ports are randomized (e.g. isolated mode).
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = dashboardEndpoint.Value.Endpoint;
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = dashboardEndpoint.Value.Protocol;
+            }
+            else
+            {
+                // Fall back to resolving from configuration. This is the case when the dashboard resource
+                // is not in the model (e.g. in tests or publish mode).
+                var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(configuration, otlpExporterAnnotation.RequiredProtocol);
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint] = new HostUrl(url);
+                context.EnvironmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol] = protocol;
+            }
 
             // Set the service name and instance id to the resource name and UID. Values are injected by DCP.
             context.EnvironmentVariables[KnownOtelConfigNames.ResourceAttributes] = "service.instance.id={{- index .Annotations \"" + CustomResource.OtelServiceInstanceIdAnnotation + "\" -}}";
@@ -147,5 +162,48 @@ public static class OtlpConfigurationExtensions
         AddOtlpEnvironment(builder.Resource, builder.ApplicationBuilder.Configuration, builder.ApplicationBuilder.Environment, protocol);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Tries to resolve the OTLP endpoint from the dashboard resource in the distributed application model.
+    /// This ensures that when ports are randomized (e.g. isolated mode), resources use the actual
+    /// allocated endpoint rather than the statically configured port.
+    /// </summary>
+    private static (EndpointReference Endpoint, string Protocol)? ResolveOtlpEndpointFromDashboard(EnvironmentCallbackContext context, OtlpProtocol? requiredProtocol)
+    {
+        var model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+
+        return ResolveOtlpEndpointFromDashboard(model, requiredProtocol, KnownNetworkIdentifiers.LocalhostNetwork);
+    }
+
+    /// <summary>
+    /// Resolves the OTLP endpoint from the dashboard resource in the distributed application model
+    /// for the specified network context and required protocol.
+    /// </summary>
+    internal static (EndpointReference Endpoint, string Protocol)? ResolveOtlpEndpointFromDashboard(DistributedApplicationModel? model, OtlpProtocol? requiredProtocol, NetworkIdentifier networkId)
+    {
+        if (model is null)
+        {
+            return null;
+        }
+
+        var dashboardResource = model.Resources.SingleOrDefault(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard)) as IResourceWithEndpoints;
+        if (dashboardResource is null)
+        {
+            return null;
+        }
+
+        var grpcEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpGrpcEndpointName, networkId);
+        var httpEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName, networkId);
+
+        return (requiredProtocol, grpcEndpoint.Exists, httpEndpoint.Exists) switch
+        {
+            (OtlpProtocol.Grpc, true, _) => (grpcEndpoint, "grpc"),
+            (OtlpProtocol.HttpProtobuf, _, true) => (httpEndpoint, "http/protobuf"),
+            (OtlpProtocol.HttpJson, _, true) => (httpEndpoint, "http/json"),
+            (_, true, _) => (grpcEndpoint, "grpc"),
+            (_, _, true) => (httpEndpoint, "http/protobuf"),
+            _ => null
+        };
     }
 }
