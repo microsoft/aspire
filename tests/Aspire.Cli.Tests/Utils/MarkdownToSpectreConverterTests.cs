@@ -242,6 +242,60 @@ public class MarkdownToSpectreConverterTests
     }
 
     [Fact]
+    public void ConvertToRenderable_WithThematicBreak_PreservesLiteralMarkdown()
+    {
+        var markdown = """
+            Before
+
+            ---
+
+            After
+            """;
+
+        var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        Assert.Contains("Before", output);
+        Assert.Contains("---", output);
+        Assert.Contains("After", output);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithRawHtml_PreservesLiteralText()
+    {
+        var markdown = "<em>hello</em>";
+
+        var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        Assert.Contains("<em>hello</em>", output);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_WithThematicBreak_PreservesLiteralMarkdown()
+    {
+        var markdown = """
+            Before
+
+            ---
+
+            After
+            """;
+
+        var output = MarkdownToSpectreConverter.ConvertToPlainText(markdown).Replace("\r\n", "\n");
+
+        Assert.Contains("Before\n---\nAfter", output);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_WithRawHtml_PreservesLiteralText()
+    {
+        var markdown = "Before <span>inline</span> after";
+
+        var output = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
+
+        Assert.Equal("Before <span>inline</span> after", output);
+    }
+
+    [Fact]
     public void ConvertToRenderable_WithQuotedStructuredContent_RendersReadableOutput()
     {
         var markdown = """

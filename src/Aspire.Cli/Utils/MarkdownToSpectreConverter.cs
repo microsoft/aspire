@@ -39,7 +39,8 @@ internal static partial class MarkdownToSpectreConverter
             return Text.Empty;
         }
 
-        var renderables = RenderBlocksToRenderables(ParseMarkdown(markdown));
+        var document = ParseMarkdown(markdown, out var normalizedMarkdown);
+        var renderables = RenderBlocksToRenderables(document, normalizedMarkdown);
         return renderables.Count switch
         {
             0 => Text.Empty,
@@ -121,22 +122,23 @@ internal static partial class MarkdownToSpectreConverter
             return markdown;
         }
 
-        return RenderBlocksToPlainText(ParseMarkdown(markdown));
+        var document = ParseMarkdown(markdown, out var normalizedMarkdown);
+        return RenderBlocksToPlainText(document, normalizedMarkdown);
     }
 
-    private static MarkdownDocument ParseMarkdown(string markdown)
+    private static MarkdownDocument ParseMarkdown(string markdown, out string normalizedMarkdown)
     {
-        var normalizedMarkdown = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
+        normalizedMarkdown = markdown.Replace("\r\n", "\n").Replace("\r", "\n");
         return Markdig.Markdown.Parse(normalizedMarkdown, s_markdownPipeline);
     }
 
-    private static List<IRenderable> RenderBlocksToRenderables(ContainerBlock container)
+    private static List<IRenderable> RenderBlocksToRenderables(ContainerBlock container, string markdown)
     {
         var renderables = new List<IRenderable>();
 
         foreach (var block in container)
         {
-            var renderable = RenderBlockToRenderable(block);
+            var renderable = RenderBlockToRenderable(block, markdown);
             if (renderable is not null)
             {
                 renderables.Add(renderable);
@@ -146,10 +148,10 @@ internal static partial class MarkdownToSpectreConverter
         return renderables;
     }
 
-    private static IRenderable? RenderBlockToRenderable(Block block) => block switch
+    private static IRenderable? RenderBlockToRenderable(Block block, string markdown) => block switch
     {
-        MarkdigTable table => RenderTableToRenderable(table),
-        _ => CreateMarkupRenderable(RenderBlockToMarkup(block))
+        MarkdigTable table => RenderTableToRenderable(table, markdown),
+        _ => CreateMarkupRenderable(RenderBlockToMarkup(block, markdown))
     };
 
     private static IRenderable? CreateMarkupRenderable(string markup)
@@ -159,13 +161,13 @@ internal static partial class MarkdownToSpectreConverter
             : new Markup(markup);
     }
 
-    private static string RenderBlocksToPlainText(ContainerBlock container)
+    private static string RenderBlocksToPlainText(ContainerBlock container, string markdown)
     {
         var blocks = new List<string>();
 
         foreach (var block in container)
         {
-            var text = RenderBlockToPlainText(block);
+            var text = RenderBlockToPlainText(block, markdown);
             if (!string.IsNullOrEmpty(text))
             {
                 blocks.Add(text);
@@ -175,35 +177,35 @@ internal static partial class MarkdownToSpectreConverter
         return string.Join("\n", blocks);
     }
 
-    private static string RenderBlockToPlainText(Block block) => block switch
+    private static string RenderBlockToPlainText(Block block, string markdown) => block switch
     {
-        ParagraphBlock paragraph => RenderInlinesToPlainText(paragraph.Inline),
-        HeadingBlock heading => RenderInlinesToPlainText(heading.Inline),
-        QuoteBlock quote => RenderBlocksToPlainText(quote),
-        ListBlock list => RenderListToPlainText(list),
+        ParagraphBlock paragraph => RenderInlinesToPlainText(paragraph.Inline, markdown),
+        HeadingBlock heading => RenderInlinesToPlainText(heading.Inline, markdown),
+        QuoteBlock quote => RenderBlocksToPlainText(quote, markdown),
+        ListBlock list => RenderListToPlainText(list, markdown),
         CodeBlock codeBlock => GetRawCodeText(codeBlock).TrimEnd('\r', '\n'),
-        MarkdigTable table => RenderTableToPlainText(table),
-        LeafBlock leaf when leaf.Inline is not null => RenderInlinesToPlainText(leaf.Inline),
-        ContainerBlock container => RenderBlocksToPlainText(container),
-        _ => string.Empty
+        MarkdigTable table => RenderTableToPlainText(table, markdown),
+        LeafBlock leaf when leaf.Inline is not null => RenderInlinesToPlainText(leaf.Inline, markdown),
+        ContainerBlock container => RenderBlocksToPlainText(container, markdown),
+        _ => GetOriginalMarkdown(block.Span, markdown)
     };
 
-    private static string RenderBlockToMarkup(Block block) => block switch
+    private static string RenderBlockToMarkup(Block block, string markdown) => block switch
     {
-        ParagraphBlock paragraph => RenderInlinesToMarkup(paragraph.Inline),
-        HeadingBlock heading => ApplyHeadingStyle(heading.Level, RenderInlinesToMarkup(heading.Inline)),
-        QuoteBlock quote => RenderQuoteToMarkup(quote),
-        ListBlock list => RenderListToMarkup(list),
+        ParagraphBlock paragraph => RenderInlinesToMarkup(paragraph.Inline, markdown),
+        HeadingBlock heading => ApplyHeadingStyle(heading.Level, RenderInlinesToMarkup(heading.Inline, markdown)),
+        QuoteBlock quote => RenderQuoteToMarkup(quote, markdown),
+        ListBlock list => RenderListToMarkup(list, markdown),
         CodeBlock codeBlock => $"[grey]{GetRawCodeText(codeBlock).TrimEnd('\r', '\n').EscapeMarkup()}[/]",
-        MarkdigTable table => RenderTableToPlainText(table).EscapeMarkup(),
-        LeafBlock leaf when leaf.Inline is not null => RenderInlinesToMarkup(leaf.Inline),
-        ContainerBlock container => RenderBlocksToMarkup(container),
-        _ => string.Empty
+        MarkdigTable table => RenderTableToPlainText(table, markdown).EscapeMarkup(),
+        LeafBlock leaf when leaf.Inline is not null => RenderInlinesToMarkup(leaf.Inline, markdown),
+        ContainerBlock container => RenderBlocksToMarkup(container, markdown),
+        _ => GetOriginalMarkdown(block.Span, markdown).EscapeMarkup()
     };
 
-    private static string RenderQuoteToMarkup(QuoteBlock quote)
+    private static string RenderQuoteToMarkup(QuoteBlock quote, string markdown)
     {
-        var quoteMarkup = RenderBlocksToMarkup(quote);
+        var quoteMarkup = RenderBlocksToMarkup(quote, markdown);
         if (string.IsNullOrEmpty(quoteMarkup))
         {
             return "[italic grey][/]";
@@ -227,7 +229,7 @@ internal static partial class MarkdownToSpectreConverter
         return builder.ToString();
     }
 
-    private static string RenderListToMarkup(ListBlock list)
+    private static string RenderListToMarkup(ListBlock list, string markdown)
     {
         var builder = new StringBuilder();
         var index = int.TryParse(list.OrderedStart, out var orderedStart) ? orderedStart : 1;
@@ -240,13 +242,13 @@ internal static partial class MarkdownToSpectreConverter
             }
 
             var prefix = list.IsOrdered ? $"{index++}. " : "* ";
-            builder.Append(RenderListItem(item, prefix.EscapeMarkup(), prefix.Length, RenderBlockToMarkup));
+            builder.Append(RenderListItem(item, prefix.EscapeMarkup(), prefix.Length, block => RenderBlockToMarkup(block, markdown)));
         }
 
         return builder.ToString();
     }
 
-    private static string RenderListToPlainText(ListBlock list)
+    private static string RenderListToPlainText(ListBlock list, string markdown)
     {
         var builder = new StringBuilder();
         var index = int.TryParse(list.OrderedStart, out var orderedStart) ? orderedStart : 1;
@@ -259,7 +261,7 @@ internal static partial class MarkdownToSpectreConverter
             }
 
             var prefix = list.IsOrdered ? $"{index++}. " : "* ";
-            builder.Append(RenderListItem(item, prefix, prefix.Length, RenderBlockToPlainText));
+            builder.Append(RenderListItem(item, prefix, prefix.Length, block => RenderBlockToPlainText(block, markdown)));
         }
 
         return builder.ToString();
@@ -346,7 +348,7 @@ internal static partial class MarkdownToSpectreConverter
         }
     }
 
-    private static string RenderInlinesToMarkup(ContainerInline? inline)
+    private static string RenderInlinesToMarkup(ContainerInline? inline, string markdown)
     {
         if (inline is null)
         {
@@ -358,29 +360,29 @@ internal static partial class MarkdownToSpectreConverter
 
         while (current is not null)
         {
-            builder.Append(RenderInlineToMarkup(current));
+            builder.Append(RenderInlineToMarkup(current, markdown));
             current = current.NextSibling;
         }
 
         return builder.ToString();
     }
 
-    private static string RenderInlineToMarkup(Inline inline) => inline switch
+    private static string RenderInlineToMarkup(Inline inline, string markdown) => inline switch
     {
         LiteralInline literal => literal.Content.ToString().EscapeMarkup(),
         CodeInline code => $"[grey][bold]{code.Content.EscapeMarkup()}[/][/]",
         LinkInline { IsImage: true } => string.Empty,
-        LinkInline link => RenderLinkToMarkup(RenderInlinesToMarkup(link), link.Url),
+        LinkInline link => RenderLinkToMarkup(RenderInlinesToMarkup(link, markdown), link.Url),
         AutolinkInline autolink => RenderLinkToMarkup(autolink.Url.EscapeMarkup(), autolink.Url),
-        EmphasisInline emphasis => RenderEmphasisToMarkup(emphasis),
+        EmphasisInline emphasis => RenderEmphasisToMarkup(emphasis, markdown),
         LineBreakInline => "\n",
-        ContainerInline container => RenderInlinesToMarkup(container),
-        _ => string.Empty
+        ContainerInline container => RenderInlinesToMarkup(container, markdown),
+        _ => GetOriginalMarkdown(inline.Span, markdown).EscapeMarkup()
     };
 
-    private static string RenderEmphasisToMarkup(EmphasisInline emphasis)
+    private static string RenderEmphasisToMarkup(EmphasisInline emphasis, string markdown)
     {
-        var content = RenderInlinesToMarkup(emphasis);
+        var content = RenderInlinesToMarkup(emphasis, markdown);
         return emphasis.DelimiterChar switch
         {
             '~' => $"[strikethrough]{content}[/]",
@@ -402,7 +404,7 @@ internal static partial class MarkdownToSpectreConverter
         return $"[cyan][link={escapedUrl}]{linkText}[/][/]";
     }
 
-    private static string RenderInlinesToPlainText(ContainerInline? inline)
+    private static string RenderInlinesToPlainText(ContainerInline? inline, string markdown)
     {
         if (inline is null)
         {
@@ -414,24 +416,24 @@ internal static partial class MarkdownToSpectreConverter
 
         while (current is not null)
         {
-            builder.Append(RenderInlineToPlainText(current));
+            builder.Append(RenderInlineToPlainText(current, markdown));
             current = current.NextSibling;
         }
 
         return builder.ToString();
     }
 
-    private static string RenderInlineToPlainText(Inline inline) => inline switch
+    private static string RenderInlineToPlainText(Inline inline, string markdown) => inline switch
     {
         LiteralInline literal => literal.Content.ToString(),
         CodeInline code => code.Content,
         LinkInline { IsImage: true } => string.Empty,
-        LinkInline link => RenderLinkToPlainText(RenderInlinesToPlainText(link), link.Url),
+        LinkInline link => RenderLinkToPlainText(RenderInlinesToPlainText(link, markdown), link.Url),
         AutolinkInline autolink => autolink.Url,
-        EmphasisInline emphasis => RenderInlinesToPlainText(emphasis),
+        EmphasisInline emphasis => RenderInlinesToPlainText(emphasis, markdown),
         LineBreakInline => "\n",
-        ContainerInline container => RenderInlinesToPlainText(container),
-        _ => string.Empty
+        ContainerInline container => RenderInlinesToPlainText(container, markdown),
+        _ => GetOriginalMarkdown(inline.Span, markdown)
     };
 
     private static string RenderLinkToPlainText(string text, string? url)
@@ -457,7 +459,7 @@ internal static partial class MarkdownToSpectreConverter
         };
     }
 
-    private static IRenderable RenderTableToRenderable(MarkdigTable markdownTable)
+    private static IRenderable RenderTableToRenderable(MarkdigTable markdownTable, string markdown)
     {
         var rows = markdownTable.OfType<MarkdigTableRow>().ToList();
         if (rows.Count == 0)
@@ -476,7 +478,7 @@ internal static partial class MarkdownToSpectreConverter
                 : null;
 
             var headerMarkup = headerCell is not null
-                ? RenderTableCellToMarkup(headerCell)
+                ? RenderTableCellToMarkup(headerCell, markdown)
                 : string.Empty;
 
             var column = new TableColumn(string.IsNullOrEmpty(headerMarkup) ? Text.Empty : new Markup(headerMarkup));
@@ -511,7 +513,7 @@ internal static partial class MarkdownToSpectreConverter
             {
                 if (i < row.Count)
                 {
-                    var markup = RenderTableCellToMarkup((MarkdigTableCell)row[i]);
+                    var markup = RenderTableCellToMarkup((MarkdigTableCell)row[i], markdown);
                     cells[i] = string.IsNullOrEmpty(markup)
                         ? Text.Empty
                         : new Markup(markup);
@@ -528,7 +530,7 @@ internal static partial class MarkdownToSpectreConverter
         return spectreTable;
     }
 
-    private static string RenderTableToPlainText(MarkdigTable markdownTable)
+    private static string RenderTableToPlainText(MarkdigTable markdownTable, string markdown)
     {
         var rows = markdownTable.OfType<MarkdigTableRow>().ToList();
         if (rows.Count == 0)
@@ -539,7 +541,7 @@ internal static partial class MarkdownToSpectreConverter
         var values = rows
             .Select(row => row
                 .OfType<MarkdigTableCell>()
-                .Select(RenderTableCellToPlainText)
+                .Select(cell => RenderTableCellToPlainText(cell, markdown))
                 .ToList())
             .ToList();
 
@@ -611,24 +613,24 @@ internal static partial class MarkdownToSpectreConverter
         }
     }
 
-    private static string RenderTableCellToMarkup(MarkdigTableCell cell)
+    private static string RenderTableCellToMarkup(MarkdigTableCell cell, string markdown)
     {
-        return RenderBlocksToMarkup(cell);
+        return RenderBlocksToMarkup(cell, markdown);
     }
 
-    private static string RenderTableCellToPlainText(MarkdigTableCell cell)
+    private static string RenderTableCellToPlainText(MarkdigTableCell cell, string markdown)
     {
-        var text = RenderBlocksToPlainText(cell);
+        var text = RenderBlocksToPlainText(cell, markdown);
         return string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private static string RenderBlocksToMarkup(ContainerBlock container)
+    private static string RenderBlocksToMarkup(ContainerBlock container, string markdown)
     {
         var blocks = new List<string>();
 
         foreach (var block in container)
         {
-            var markup = RenderBlockToMarkup(block);
+            var markup = RenderBlockToMarkup(block, markdown);
             if (!string.IsNullOrEmpty(markup))
             {
                 blocks.Add(markup);
@@ -636,6 +638,16 @@ internal static partial class MarkdownToSpectreConverter
         }
 
         return string.Join("\n", blocks);
+    }
+
+    private static string GetOriginalMarkdown(SourceSpan span, string markdown)
+    {
+        if (span.Start < 0 || span.End < span.Start || span.End >= markdown.Length)
+        {
+            return string.Empty;
+        }
+
+        return markdown.Substring(span.Start, span.End - span.Start + 1);
     }
 
     private static string GetRawCodeText(CodeBlock codeBlock)
