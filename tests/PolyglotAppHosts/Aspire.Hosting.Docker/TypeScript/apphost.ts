@@ -3,8 +3,14 @@ import { createBuilder } from './.modules/aspire.js';
 const builder = await createBuilder();
 
 const compose = await builder.addDockerComposeEnvironment("compose");
+const containerName = await builder.addParameter("container-name");
 const api = await builder.addContainer("api", "nginx:alpine");
 await api.withBindMount("/host/path/data", "/container/data");
+await api.withHttpEndpoint({ name: "http", targetPort: 80 });
+
+const apiEndpoint = await api.getEndpoint("http");
+const hostAddressExpression = await compose.getHostAddressExpression(apiEndpoint);
+const _hostAddressValueExpression: string | null = await hostAddressExpression.getValue();
 
 await compose.withProperties(async (environment) => {
     await environment.defaultNetworkName.set("validation-network");
@@ -22,6 +28,15 @@ await compose.configureEnvFile(async (envVars) => {
     const _bindMountDescription: string | null = await bindMount.description.get();
     await bindMount.defaultValue.set("./data");
     const _bindMountDefaultValue: string | null = await bindMount.defaultValue.get();
+});
+
+await compose.configureComposeFile(async (composeFile) => {
+    await composeFile.name.set("validation-compose");
+    const _composeFileName: string | null = await composeFile.name.get();
+
+    const composeApi = await composeFile.services.get("api");
+    await composeApi.pullPolicy.set("always");
+    const _composeApiPullPolicy: string | null = await composeApi.pullPolicy.get();
 });
 
 await compose.withDashboard({ enabled: false });
@@ -44,8 +59,7 @@ await compose.configureDashboard(async (dashboard) => {
 });
 
 await api.publishAsDockerComposeService(async (composeService, service) => {
-    await service.containerName.set("validation-api");
-    await service.pullPolicy.set("always");
+    await service.containerName.set(await containerName.asEnvironmentPlaceholder(composeService));
     await service.restart.set("unless-stopped");
 
     const _composeServiceName: string = await composeService.name.get();
@@ -53,7 +67,6 @@ await api.publishAsDockerComposeService(async (composeService, service) => {
     const _composeEnvironmentName: string = await composeEnvironment.name.get();
 
     const _serviceContainerName: string = await service.containerName.get();
-    const _servicePullPolicy: string = await service.pullPolicy.get();
     const _serviceRestart: string = await service.restart.get();
 });
 

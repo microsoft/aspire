@@ -474,15 +474,16 @@ internal static class Hex1bAutomatorTestHelpers
             return successSearcher.Search(s).Count > 0;
         }, timeout: effectiveTimeout, description: $"agent init prompt or success prompt [{counter.Value} OK] $");
 
-        await auto.WaitAsync(500);
+        if (!agentInitFound)
+        {
+            counter.Increment();
+            return;
+        }
 
-        // Type 'n' + Enter unconditionally:
-        // - Agent init: declines the prompt, CLI exits, success prompt appears
-        // - No agent init: 'n' runs at bash (command not found), produces error prompt
+        await auto.WaitAsync(500);
         await auto.TypeAsync("n");
         await auto.EnterAsync();
 
-        // Wait for the aspire command's success prompt
         await auto.WaitUntilAsync(s =>
         {
             var successSearcher = new CellPatternSearcher()
@@ -491,11 +492,6 @@ internal static class Hex1bAutomatorTestHelpers
             return successSearcher.Search(s).Count > 0;
         }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ after agent init");
 
-        // Increment counter correctly for both cases
-        if (!agentInitFound)
-        {
-            counter.Increment();
-        }
         counter.Increment();
     }
 

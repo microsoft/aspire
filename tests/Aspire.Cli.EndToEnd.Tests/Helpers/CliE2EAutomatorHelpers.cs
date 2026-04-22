@@ -122,6 +122,44 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Handles <c>aspire add</c> completing directly or stopping on a version selection prompt.
+    /// </summary>
+    internal static async Task WaitForAspireAddSuccessAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(180);
+        var versionPickerShown = false;
+        var versionPicker = new CellPatternSearcher()
+            .Find("(based on NuGet.config)");
+
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            if (versionPicker.Search(snapshot).Count > 0)
+            {
+                versionPickerShown = true;
+                return true;
+            }
+
+            var successPrompt = new CellPatternSearcher()
+                .FindPattern(counter.Value.ToString())
+                .RightText(" OK] $ ");
+
+            return successPrompt.Search(snapshot).Count > 0;
+        }, timeout: effectiveTimeout, description: $"aspire add completion or version picker [{counter.Value} OK] $");
+
+        if (versionPickerShown)
+        {
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
+            return;
+        }
+
+        counter.Increment();
+    }
+
+    /// <summary>
     /// Installs the Aspire CLI in a non-Docker shell using the given install strategy.
     /// </summary>
     internal static async Task InstallAspireCliInShellAsync(

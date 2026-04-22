@@ -4,7 +4,6 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -113,7 +112,11 @@ internal sealed class ScaffoldingService : IScaffoldingService
             if (fileName.Equals(PackageJsonFileName, StringComparison.OrdinalIgnoreCase) && File.Exists(filePath))
             {
                 var existingContent = await File.ReadAllTextAsync(filePath, cancellationToken);
-                contentToWrite = PackageJsonMerger.Merge(existingContent, content, _logger);
+                contentToWrite = PackageJsonMerger.Merge(
+                    existingContent,
+                    content,
+                    _logger,
+                    toolchainCommand: GetPackageManagerCommand(directory, language));
             }
 
             await File.WriteAllTextAsync(filePath, contentToWrite, cancellationToken);
@@ -176,6 +179,12 @@ internal sealed class ScaffoldingService : IScaffoldingService
         CancellationToken cancellationToken)
     {
         var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(language.LanguageId.Value, cancellationToken);
+        if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
+        {
+            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory);
+            runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+        }
+
         var runtime = new GuestRuntime(runtimeSpec, _logger);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
@@ -197,9 +206,16 @@ internal sealed class ScaffoldingService : IScaffoldingService
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();
-            if (AutomaticNpmInstallWarning.IsMatch(lines))
+            if (MissingJavaScriptToolWarning.IsMatch(lines))
             {
-                _interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.ProjectFilesCreatedButNodeToolsNotFound);
+                if (lines.Length > 0)
+                {
+                    _interactionService.DisplayLines(lines);
+                }
+
+                _interactionService.DisplayMessage(
+                    KnownEmojis.Warning,
+                    MissingJavaScriptToolWarning.GetMessage(directory, language));
                 return 0;
             }
 
@@ -264,4 +280,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
             language.LanguageId.Value.Equals(KnownLanguageId.TypeScriptAlias, StringComparison.OrdinalIgnoreCase);
     }
 
+    private static string GetPackageManagerCommand(DirectoryInfo directory, LanguageInfo language)
+    {
+        if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
+        {
+            return "npm";
+        }
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory);
+        return TypeScriptAppHostToolchainResolver.GetCommandName(toolchain);
+    }
 }
