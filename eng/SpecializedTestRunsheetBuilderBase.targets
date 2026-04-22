@@ -124,6 +124,7 @@
       <_RelativeTestProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', '%24(pwd)/'))</_RelativeTestProjectPath>
       <_RelativeTestBinLog>$([System.String]::Copy('$(_TestBinLog)').Replace('$(RepoRoot)', '%24(pwd)/'))</_RelativeTestBinLog>
 
+
       <_GithubActionsRunnerWindows>windows-latest</_GithubActionsRunnerWindows>
       <_GithubActionsRunnerWindows Condition="'$(GithubActionsRunnerWindows)' != ''">$(GithubActionsRunnerWindows)</_GithubActionsRunnerWindows>
 

@@ -13,14 +13,14 @@ on:
         # relative the repo root
         required: false
         type: string
-      # Base MTP diagnostic args (hangdump, crashdump, etc.) — sourced from eng/Testing.props MtpBaseArgs.
-      # Timeouts are baked in per-project by MSBuild; all callers should pass mtpBaseArgs from the matrix.
-      # This default is a safety fallback with diagnostic flags only (no timeouts).
-      # See docs/ci/mtp-args-pipeline.md for details.
-      mtpBaseArgs:
+      testSessionTimeout:
         required: false
         type: string
-        default: "--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none"
+        default: "20m"
+      testHangTimeout:
+        required: false
+        type: string
+        default: "10m"
       extraTestArgs:
         required: false
         type: string
@@ -50,6 +50,11 @@ jobs:
     name: ${{ inputs.testShortName }} (${{ inputs.os }})
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      # Resolve once so the fallback isn't duplicated across all four test-runner steps.
+      # The '|| default' is needed because GitHub Actions passes empty strings for
+      # unset workflow_call inputs, bypassing the input-level default: values.
+      EFFECTIVE_TEST_SESSION_TIMEOUT: ${{ inputs.testSessionTimeout || '20m' }}
+      EFFECTIVE_TEST_HANG_TIMEOUT: ${{ inputs.testHangTimeout || '10m' }}
     steps:
       - name: Validate arguments
         shell: pwsh
@@ -314,7 +319,7 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
-          GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
+          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
@@ -322,10 +327,14 @@ jobs:
 
           # Run tests
           dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll \
-            ${{ inputs.mtpBaseArgs }} \
+            --ignore-exit-code 8 \
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
+            --crashdump \
+            --hangdump \
+            --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
+            --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
             ${{ inputs.extraTestArgs }} \
             ${{ inputs.ignoreTestFailures && '|| true' || '' }}
           TEST_EXIT_CODE=$?
@@ -354,7 +363,7 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
-          GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
+          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
@@ -367,10 +376,14 @@ jobs:
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
             dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll `
-              ${{ inputs.mtpBaseArgs }} `
+              --ignore-exit-code 8 `
               --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
+              --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
               --filter-not-trait "category=failing" `
+              --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }
@@ -400,23 +413,28 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
-          GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
-          # MSBuild properties passed via env vars (new MTP dotnet test mode doesn't support /p:)
-          TrxFileNamePrefix: ${{ inputs.testShortName }}
+          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
 
-          # Run tests (using MTP-native dotnet test mode)
-          ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} \
+          # Run tests
+          ${{ env.DOTNET_SCRIPT }} test ${{ env.TEST_PROJECT_PATH }} \
+            /p:ContinuousIntegrationBuild=true \
+            /p:TrxFileNamePrefix="${{ inputs.testShortName }}" \
+            -bl:${{ github.workspace }}/testresults/test.binlog \
+            -tl:false \
             --no-restore \
             --no-build \
-            --no-launch-profile \
             -- \
-            ${{ inputs.mtpBaseArgs }} \
+            --ignore-exit-code 8 \
             --report-trx \
+            --crashdump \
+            --hangdump \
+            --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} \
             --results-directory ${{ github.workspace }}/testresults \
+            --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} \
             ${{ inputs.extraTestArgs }} \
             ${{ inputs.ignoreTestFailures && '|| true' || '' }}
           TEST_EXIT_CODE=$?
@@ -446,9 +464,7 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
-          GH_TOKEN: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.token || '' }}
-          # MSBuild properties passed via env vars (new MTP dotnet test mode doesn't support /p:)
-          TrxFileNamePrefix: ${{ inputs.testShortName }}
+          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
@@ -459,15 +475,22 @@ jobs:
           try {
             # Ensure UTF-8 encoding for all output on Windows
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-            # Run tests (using MTP-native dotnet test mode)
-            & ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} `
+            # Run tests
+            & ${{ env.DOTNET_SCRIPT }} test ${{ env.TEST_PROJECT_PATH }} `
+              /p:ContinuousIntegrationBuild=true `
+              /p:TrxFileNamePrefix="${{ inputs.testShortName }}" `
+              -bl:${{ github.workspace }}/testresults/test.binlog `
+              -tl:false `
               --no-restore `
               --no-build `
-              --no-launch-profile `
               -- `
-              ${{ inputs.mtpBaseArgs }} `
+              --ignore-exit-code 8 `
               --report-trx `
+              --crashdump `
+              --hangdump `
+              --hangdump-timeout ${{ env.EFFECTIVE_TEST_HANG_TIMEOUT }} `
               --results-directory ${{ github.workspace }}/testresults `
+              --timeout ${{ env.EFFECTIVE_TEST_SESSION_TIMEOUT }} `
               ${{ inputs.extraTestArgs }}
             $testExitCode = $LASTEXITCODE
           }
