@@ -48,6 +48,9 @@ jobs:
     name: ${{ inputs.testShortName }} (${{ inputs.os }})
     env:
       DOTNET_ROOT: ${{ github.workspace }}/.dotnet
+      # Disable MSBuild terminal logger via env var instead of -tl:false on the command line.
+      # In MTP native runner mode, -tl:false is forwarded to the test host which doesn't recognize it.
+      MSBUILDTERMINALLOGGER: "false"
       # Resolve once so the fallback isn't duplicated across all four test-runner steps.
       # The '|| default' is needed because GitHub Actions passes empty strings for
       # unset workflow_call inputs, bypassing the input-level default: values.
@@ -413,7 +416,7 @@ jobs:
             /p:ContinuousIntegrationBuild=true \
             /p:TrxFileNamePrefix="${{ inputs.testShortName }}" \
             -bl:${{ github.workspace }}/testresults/test.binlog \
-            -tl:false \
+            --no-launch-profile \
             --no-restore \
             --no-build \
             -- \
@@ -465,7 +468,7 @@ jobs:
               /p:ContinuousIntegrationBuild=true `
               /p:TrxFileNamePrefix="${{ inputs.testShortName }}" `
               -bl:${{ github.workspace }}/testresults/test.binlog `
-              -tl:false `
+              --no-launch-profile `
               --no-restore `
               --no-build `
               -- `
