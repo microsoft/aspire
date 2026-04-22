@@ -19,7 +19,7 @@ internal readonly record struct BundleLayoutState(
 
     public bool IsExtractionComplete => !HasExtractionInProgressMarker && HasVersionMarker;
 
-    public bool IsUsableExtractedLayout => !HasExtractionInProgressMarker && (HasVersionMarker || HasRequiredLayoutStructure);
+    public bool IsUsableExtractedLayout => HasRequiredLayoutStructure && !HasExtractionInProgressMarker;
 
     public bool IsIncompleteLayout => HasKnownLayoutPath && (!HasRequiredLayoutStructure || !IsUsableExtractedLayout);
 

@@ -47,12 +47,38 @@ internal static class BundleLayoutRepairHelper
         managedPath ??= await EnsureManagedToolPathAsync(bundleService, logger, operationName, cancellationToken).ConfigureAwait(false);
         var bundleRoot = GetBundleRootFromManagedPath(managedPath);
 
-        var (exitCode, output, error) = await processRunner.RunAsync(
-            managedPath,
-            arguments,
-            workingDirectory: workingDirectory,
-            environmentVariables: environmentVariables,
-            ct: cancellationToken).ConfigureAwait(false);
+        (int exitCode, string output, string error) result;
+
+        try
+        {
+            result = await processRunner.RunAsync(
+                managedPath,
+                arguments,
+                workingDirectory: workingDirectory,
+                environmentVariables: environmentVariables,
+                ct: cancellationToken).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (!ShouldRepairAfterManagedToolStartFailure(ex, bundleRoot) ||
+                !await TryRepairAsync(bundleService, logger, operationName, cancellationToken, bundleRoot).ConfigureAwait(false))
+            {
+                throw;
+            }
+
+            managedPath = await EnsureManagedToolPathAsync(bundleService, logger, operationName, cancellationToken, allowRepair: false, bundleRoot).ConfigureAwait(false);
+            bundleRoot = GetBundleRootFromManagedPath(managedPath);
+            logger.LogWarning("Retrying {OperationName} after repairing the bundled layout.", operationName);
+
+            result = await processRunner.RunAsync(
+                managedPath,
+                arguments,
+                workingDirectory: workingDirectory,
+                environmentVariables: environmentVariables,
+                ct: cancellationToken).ConfigureAwait(false);
+        }
+
+        var (exitCode, output, error) = result;
 
         if (exitCode == 0 || !BundleService.LooksLikeBundleCorruption(error: error, output: output, bundleRoot: bundleRoot))
         {
@@ -117,5 +143,11 @@ internal static class BundleLayoutRepairHelper
     {
         var managedDirectory = Path.GetDirectoryName(managedPath);
         return string.IsNullOrEmpty(managedDirectory) ? null : Path.GetDirectoryName(managedDirectory);
+    }
+
+    private static bool ShouldRepairAfterManagedToolStartFailure(InvalidOperationException exception, string? bundleRoot)
+    {
+        return exception.Message.StartsWith("Failed to start process:", StringComparison.Ordinal)
+            && BundleService.LooksLikeBundleCorruption(exception: exception, bundleRoot: bundleRoot);
     }
 }

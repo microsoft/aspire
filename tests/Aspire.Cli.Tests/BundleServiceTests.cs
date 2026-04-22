@@ -106,6 +106,22 @@ public class BundleServiceTests
     }
 
     [Fact]
+    public void IsUsableExtractedLayout_ReturnsFalse_WhenVersionMarkerExistsButRequiredContentsAreMissing()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            BundleService.WriteVersionMarker(tempDir.FullName, "13.2.0-dev");
+
+            Assert.False(BundleService.IsUsableExtractedLayout(tempDir.FullName));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void CleanLayoutDirectories_RemovesExtractionMarkers()
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-test");

@@ -131,6 +131,69 @@ public class BundleRecoveryTests
     }
 
     [Fact]
+    public async Task RunManagedToolWithRepairAsync_RetriesWhenManagedToolFailsToStartAfterLayoutMutation()
+    {
+        var initialLayout = CreateLayout(includeManagedExecutable: true);
+        var repairedLayout = CreateLayout(includeManagedExecutable: true);
+
+        try
+        {
+            var bundleService = new RepairingBundleService(
+                initialLayout: new LayoutConfiguration { LayoutPath = initialLayout.FullName },
+                repairedLayout: new LayoutConfiguration { LayoutPath = repairedLayout.FullName });
+
+            var executionFactory = new TestProcessExecutionFactory();
+            executionFactory.CreateExecutionCallback = (args, env, workingDirectory, options) =>
+            {
+                if (executionFactory.AttemptCount == 1)
+                {
+                    var originalManagedPath = Path.Combine(initialLayout.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+                    File.Delete(originalManagedPath);
+
+                    return new TestProcessExecution(
+                        "aspire-managed",
+                        args,
+                        env,
+                        options,
+                        (_, _) => (0, "unexpected", null),
+                        () => executionFactory.AttemptCount)
+                    {
+                        StartReturnValue = false
+                    };
+                }
+
+                return new TestProcessExecution(
+                    "aspire-managed",
+                    args,
+                    env,
+                    options,
+                    (_, _) => (0, "recovered", null),
+                    () => executionFactory.AttemptCount);
+            };
+
+            var (managedPath, exitCode, output, error) = await BundleLayoutRepairHelper.RunManagedToolWithRepairAsync(
+                bundleService,
+                new LayoutProcessRunner(executionFactory),
+                NullLogger.Instance,
+                "testing managed tool launch repair",
+                ["nuget", "search"],
+                cancellationToken: CancellationToken.None);
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal("recovered", output.Trim());
+            Assert.Equal(string.Empty, error);
+            Assert.Equal(1, bundleService.ExtractCallCount);
+            Assert.Equal(2, executionFactory.AttemptCount);
+            Assert.Contains(repairedLayout.FullName, managedPath, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(initialLayout);
+            DeleteDirectory(repairedLayout);
+        }
+    }
+
+    [Fact]
     public async Task AppHostServerProjectFactory_RepairsBrokenBundleLayout()
     {
 #if DEBUG
