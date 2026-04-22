@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is for evaluation purposes only.
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -44,7 +44,6 @@ public static partial class AzureAppServiceEnvironmentExtensions
         {
             builder.Services.AddSingleton<AppServicePipelineStepMarker>();
 
-#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             builder.Pipeline.AddStep(
                 name: AppServicePipelineStepMarker.StepName,
                 action: ctx =>
@@ -63,7 +62,6 @@ public static partial class AzureAppServiceEnvironmentExtensions
                     return Task.CompletedTask;
                 },
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
-#pragma warning restore ASPIREPIPELINES001
         }
 
         return builder;

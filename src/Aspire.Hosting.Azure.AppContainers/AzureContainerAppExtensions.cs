@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is for evaluation purposes only.
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -59,7 +60,6 @@ public static class AzureContainerAppExtensions
         {
             builder.Services.AddSingleton<ContainerAppsPipelineStepMarker>();
 
-#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             builder.Pipeline.AddStep(
                 name: ContainerAppsPipelineStepMarker.StepName,
                 action: ctx =>
@@ -69,9 +69,7 @@ public static class AzureContainerAppExtensions
                         foreach (var r in ctx.Model.GetComputeResources())
                         {
                             if (r.HasAnnotationOfType<AzureContainerAppCustomizationAnnotation>() ||
-#pragma warning disable ASPIREAZURE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
                                 r.HasAnnotationOfType<AzureContainerAppJobCustomizationAnnotation>())
-#pragma warning restore ASPIREAZURE002
                             {
                                 throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as an Azure Container App, but there are no '{nameof(AzureContainerAppEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddAzureContainerAppEnvironment)}'.");
                             }
@@ -81,7 +79,6 @@ public static class AzureContainerAppExtensions
                     return Task.CompletedTask;
                 },
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
-#pragma warning restore ASPIREPIPELINES001
         }
 
         return builder;

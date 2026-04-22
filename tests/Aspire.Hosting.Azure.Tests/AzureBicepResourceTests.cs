@@ -72,7 +72,7 @@ public class AzureBicepResourceTests
 
     [Theory]
     [MemberData(nameof(AzureExtensions))]
-    public async Task AzureExtensionsAutomaticallyAddAzureProvisioning(Func<IDistributedApplicationBuilder, IResourceBuilder<IResource>> addAzureResource)
+    public void AzureExtensionsAutomaticallyAddAzureProvisioning(Func<IDistributedApplicationBuilder, IResourceBuilder<IResource>> addAzureResource)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         addAzureResource(builder);

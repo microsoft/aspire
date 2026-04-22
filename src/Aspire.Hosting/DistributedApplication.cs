@@ -567,17 +567,25 @@ public class DistributedApplication : IHost, IAsyncDisposable
             var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
 
             // Cast to internal implementation to access ExecuteStepSequentiallyAsync
-            if (pipeline is DistributedApplicationPipeline pipelineImpl)
+            if (pipeline is not DistributedApplicationPipeline pipelineImpl)
             {
-                var pipelineContext = new PipelineContext(
-                    appModel,
-                    execContext,
-                    _host.Services,
-                    logger,
-                    cancellationToken);
-
-                await pipelineImpl.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
+                throw new InvalidOperationException($"The registered {nameof(IDistributedApplicationPipeline)} implementation '{pipeline.GetType().FullName}' does not support executing the '{WellKnownPipelineSteps.BeforeStart}' step during startup.");
             }
+
+            var pipelineContext = new PipelineContext(
+                appModel,
+                execContext,
+                _host.Services,
+                logger,
+                cancellationToken);
+
+            // Run before-start steps sequentially (rather than as a parallel DAG) because they
+            // mutate the shared DistributedApplicationModel — adding DeploymentTargetAnnotations
+            // and ComputeEnvironmentAnnotations onto compute resources, removing default
+            // container registries from the model, etc. The model and its resource annotation
+            // collections are not thread-safe, so concurrent step execution would race on those
+            // mutations.
+            await pipelineImpl.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
 #pragma warning restore ASPIREPIPELINES001
         }
         finally

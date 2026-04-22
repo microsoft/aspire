@@ -653,7 +653,8 @@ public class DockerComposeTests(ITestOutputHelper output)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         acr.Resource.Outputs["loginServer"] = "myacr.azurecr.io";
-        acr.Resource.ProvisioningTaskCompletionSource!.TrySetResult();
+        Assert.NotNull(acr.Resource.ProvisioningTaskCompletionSource);
+        acr.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         // With Azure Container Registry, the full image name should use the ACR login server
         var containerImageReference = new ContainerImageReference(project.Resource);
