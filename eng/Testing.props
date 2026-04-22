@@ -3,8 +3,8 @@
     <IncludeTestUtilities>true</IncludeTestUtilities>
 
     <!-- Default timeout values for split tests -->
-    <TestSessionTimeout Condition="'$(TestSessionTimeout)' == ''">20m</TestSessionTimeout>
-    <TestHangTimeout Condition="'$(TestHangTimeout)' == ''">10m</TestHangTimeout>
+    <TestSessionTimeout Condition="'$(TestSessionTimeout)' == ''">5m</TestSessionTimeout>
+    <TestHangTimeout Condition="'$(TestHangTimeout)' == ''">3m</TestHangTimeout>
     <UncollectedTestsSessionTimeout Condition="'$(UncollectedTestsSessionTimeout)' == ''">15m</UncollectedTestsSessionTimeout>
     <UncollectedTestsHangTimeout Condition="'$(UncollectedTestsHangTimeout)' == ''">10m</UncollectedTestsHangTimeout>
 

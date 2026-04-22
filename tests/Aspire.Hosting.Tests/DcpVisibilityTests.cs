@@ -14,4 +14,12 @@ public class DcpVisibilityTests
         var dcpNamespaceTypes = types.Where(t => t.FullName!.Contains("Dcp", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(dcpNamespaceTypes);
     }
+
+    [Fact]
+    public void HangingTestForHangDumpExperiment()
+    {
+        // Intentionally hang forever to trigger MTP hangdump timeout.
+        // This test is only for CI experimentation — do NOT merge to main.
+        Thread.Sleep(Timeout.Infinite);
+    }
 }
