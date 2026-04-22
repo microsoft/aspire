@@ -2,11 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Diagnostics;
 using Aspire.Cli.Commands;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.NuGet;
@@ -82,21 +82,33 @@ public class NuGetPackagePrefetcherTests
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, true);
 
+        // Async barrier: each callback signals arrival, then waits for the other before cancelling.
+        // This ensures both Task.Run calls have started before either cancels the token.
+        var templateArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cliArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _ = Task.Run(async () =>
+        {
+            await Task.WhenAll(templateArrived.Task, cliArrived.Task);
+            stoppingCts.Cancel();
+        });
+
         var packagingService = new TestPackagingService
         {
-            GetChannelsAsyncCallback = _ =>
+            GetChannelsAsyncCallback = async _ =>
             {
-                stoppingCts.Cancel();
-                throw new OperationCanceledException(stoppingCts.Token);
+                templateArrived.SetResult();
+                await AsyncTestHelpers.WaitForCancellationAsync(stoppingCts.Token);
+                throw new UnreachableException();
             }
         };
 
         var updateNotifier = new TestCliUpdateNotifier
         {
-            CheckForCliUpdatesAsyncCallback = (_, _) =>
+            CheckForCliUpdatesAsyncCallback = async (_, _) =>
             {
-                stoppingCts.Cancel();
-                throw new OperationCanceledException(stoppingCts.Token);
+                cliArrived.SetResult();
+                await AsyncTestHelpers.WaitForCancellationAsync(stoppingCts.Token);
             }
         };
 
@@ -137,7 +149,6 @@ public class NuGetPackagePrefetcherTests
         var sink = new TestSink();
         var logger = new TestLogger<NuGetPackagePrefetcher>(new TestLoggerFactory(sink, enabled: true));
 
-        using var stoppingCts = new CancellationTokenSource();
         var executionContext = CreateExecutionContext();
         executionContext.CommandSelected.TrySetResult(new TestCommand("new"));
 
@@ -165,10 +176,10 @@ public class NuGetPackagePrefetcherTests
             packagingService,
             new TestCliUpdateNotifier());
 
-        await prefetcher.StartAsync(stoppingCts.Token);
+        await prefetcher.StartAsync(CancellationToken.None);
 
         // This will timeout if the expected log messages are not produced.
-        await errorTcs.Task.DefaultTimeout();
+        await errorTcs.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         await prefetcher.StopAsync(CancellationToken.None);
     }
