@@ -299,4 +299,49 @@ public static class KubernetesEnvironmentExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Installs a Helm chart into the Kubernetes cluster before the application is deployed.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="releaseName">The Helm release name for the chart.</param>
+    /// <param name="configure">A callback to configure the chart options (chart URL, version, namespace, values).</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// The chart is installed via <c>helm upgrade --install</c> after AKS/cluster credentials
+    /// are fetched and before the application's Helm chart is deployed.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddKubernetesEnvironment("k8s")
+    ///     .WithHelmChart("cert-manager", options =>
+    ///     {
+    ///         options.Chart = "oci://quay.io/jetstack/charts/cert-manager";
+    ///         options.Version = "v1.19.3";
+    ///         options.Namespace = "cert-manager";
+    ///         options.Values["crds.enabled"] = "true";
+    ///     });
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Installs a Helm chart into the Kubernetes cluster", RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithHelmChart(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        string releaseName,
+        Action<HelmChartInstallOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(releaseName);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var options = new HelmChartInstallOptions();
+        configure(options);
+
+        if (string.IsNullOrEmpty(options.Chart))
+        {
+            throw new InvalidOperationException($"HelmChartInstallOptions.Chart must be set for release '{releaseName}'.");
+        }
+
+        builder.WithAnnotation(new HelmChartAnnotation(releaseName, options));
+        return builder;
+    }
 }
