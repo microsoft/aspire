@@ -183,6 +183,18 @@ extends:
           teamName: $(_TeamName)
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
+            $(_OfficialBuildIdArgs)
+
+      - template: /eng/pipelines/templates/build_sign_native.yml@self
+        parameters:
+          agentOs: windows
+          targetRidsForSameOS:
+            - win-x64
+            - win-arm64
+          codeSign: true
+          teamName: $(_TeamName)
+          extraBuildArgs: >-
+            /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
             $(_OfficialBuildIdArgs)
 
@@ -298,9 +310,6 @@ extends:
                   repoLogPath: $(Build.Arcade.LogsPath)
                   repoTestResultsPath: $(Build.Arcade.TestResultsPath)
                   isWindows: true
-                  targetRids:
-                    - win-x64
-                    - win-arm64
                   publishVSCodeExtension: ${{ parameters.publishVSCodeExtension }}
                   vscePublishToken: $(VscePublishToken)
                   vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}
