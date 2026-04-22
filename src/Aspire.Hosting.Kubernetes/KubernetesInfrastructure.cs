@@ -164,6 +164,14 @@ internal sealed class KubernetesInfrastructure(
                 // Must run before the app's Helm prepare step.
                 step.RequiredBy($"prepare-{environment.Name}");
 
+                // For AKS environments, depend on the credentials step so we have
+                // a valid kubeconfig. The credentials step name follows the pattern
+                // 'aks-get-credentials-{owningEnvironmentName}'.
+                if (environment.OwningComputeEnvironment is { } owning)
+                {
+                    step.DependsOn($"aks-get-credentials-{owning.Name}");
+                }
+
                 return new[] { step };
             }));
         }
