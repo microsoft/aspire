@@ -7,6 +7,9 @@ from agent_framework import Agent, tool
 from agent_framework.foundry import FoundryChatClient
 from agent_framework_foundry_hosting import ResponsesHostServer
 from azure.identity import DefaultAzureCredential
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from starlette.routing import Route
 
 
 @tool(name="get_forecast", description="Get a weather forecast")
@@ -66,8 +69,12 @@ def main():
         default_options={"store": False},
     )
 
-    server = ResponsesHostServer(agent)
-    server.run()
+    async def liveness(request: Request) -> JSONResponse:
+        return JSONResponse({"status": "healthy"})
+
+    port = int(os.environ.get("DEFAULT_AD_PORT", "8088"))
+    server = ResponsesHostServer(agent, routes=[Route("/liveness", liveness, methods=["GET"])])
+    server.run(port=port)
 
 
 if __name__ == "__main__":
