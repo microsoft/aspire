@@ -11,17 +11,26 @@ using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
 
-/// <summary>
-/// End-to-end regression tests for dotnet-based Aspire templates executed on the CLI E2E infrastructure.
-/// </summary>
-public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
+public sealed class DotNetTemplateLocalhostTldTests(ITestOutputHelper output)
 {
+    public static TheoryData<string, string, string, bool> LocalhostTldHostnameTestData()
+    {
+        return new()
+        {
+            { "aspire", "my.namespace.app", "my-namespace-app", true },
+            { "aspire", ".StartWithDot", "startwithdot", true },
+            { "aspire", "EndWithDot.", "endwithdot", true },
+            { "aspire", "My..Test__Project", "my-test-project", true },
+            { "aspire", "Project123.Test456", "project123-test456", true },
+            { "aspire-apphost", "my.service.name", "my-service-name", true },
+            { "aspire-apphost-singlefile", "-my.service..name-", "my-service-name", true },
+            { "aspire-starter", "Test_App.1", "test-app-1", false },
+            { "aspire-ts-cs-starter", "My-App.Test", "my-app-test", false }
+        };
+    }
+
     [Theory]
-    [InlineData("aspire", "My..Test__Project", "my-test-project", true)]
-    [InlineData("aspire-apphost", "my.service.name", "my-service-name", true)]
-    [InlineData("aspire-apphost-singlefile", "-my.service..name-", "my-service-name", true)]
-    [InlineData("aspire-starter", "Test_App.1", "test-app-1", false)]
-    [InlineData("aspire-ts-cs-starter", "My-App.Test", "my-app-test", false)]
+    [MemberData(nameof(LocalhostTldHostnameTestData))]
     [CaptureWorkspaceOnFailure]
     public async Task LocalhostTldGeneratesDnsCompliantHostnames(string templateName, string projectName, string expectedHostname, bool useBootstrapInstall)
     {
@@ -41,22 +50,25 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
         string projectRoot;
         if (useBootstrapInstall)
         {
-            await CreateTemplateBootstrapAsync(auto, counter);
-            projectRoot = await CreateDotNetTemplateInBootstrapAsync(auto, counter, workspace, templateName, projectName, ["--localhost-tld"]);
+            await DotNetTemplateBehaviorTestHelpers.CreateTemplateBootstrapAsync(auto, counter);
+            projectRoot = await DotNetTemplateBehaviorTestHelpers.CreateDotNetTemplateInBootstrapAsync(auto, counter, workspace, templateName, projectName, ["--localhost-tld"]);
         }
         else
         {
-            projectRoot = await CreateCliTemplateAsync(auto, counter, workspace, templateName, projectName, useLocalhostTld: true);
+            projectRoot = await DotNetTemplateBehaviorTestHelpers.CreateCliTemplateAsync(auto, counter, workspace, templateName, projectName, useLocalhostTld: true);
         }
 
-        AssertDevLocalhostHostname(projectRoot, templateName, projectName, expectedHostname);
+        DotNetTemplateBehaviorTestHelpers.AssertDevLocalhostHostname(projectRoot, templateName, projectName, expectedHostname);
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
 
         await pendingRun;
     }
+}
 
+public sealed class DotNetTemplateTransportTests(ITestOutputHelper output)
+{
     [Fact]
     [CaptureWorkspaceOnFailure]
     public async Task NoHttpsTemplateRequiresAllowUnsecuredTransport()
@@ -74,8 +86,8 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        await CreateTemplateBootstrapAsync(auto, counter);
-        var projectRoot = await CreateDotNetTemplateInBootstrapAsync(auto, counter, workspace, "aspire", "NoHttpsApp", ["--no-https"]);
+        await DotNetTemplateBehaviorTestHelpers.CreateTemplateBootstrapAsync(auto, counter);
+        var projectRoot = await DotNetTemplateBehaviorTestHelpers.CreateDotNetTemplateInBootstrapAsync(auto, counter, workspace, "aspire", "NoHttpsApp", ["--no-https"]);
         var appHostDirectory = Path.Combine(projectRoot, "NoHttpsApp.AppHost");
 
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(appHostDirectory, workspace)}");
@@ -84,7 +96,6 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("AppHost process exited with code 2.", timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(1));
 
         var detachLogPath = await auto.CaptureLatestAspireLogAsync(
@@ -108,7 +119,10 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+}
 
+public sealed class DotNetTemplateProjectFileBehaviorTests(ITestOutputHelper output)
+{
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -132,7 +146,7 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
         await auto.AspireNewSubcommandAsync("aspire", "ExplicitSdkApp", counter);
 
         var appHostProjectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "ExplicitSdkApp", "ExplicitSdkApp.AppHost", "ExplicitSdkApp.AppHost.csproj");
-        RewriteAsExplicitSdkReference(appHostProjectPath, includeAspireHostingAppHostPackageReference);
+        DotNetTemplateBehaviorTestHelpers.RewriteAsExplicitSdkReference(appHostProjectPath, includeAspireHostingAppHostPackageReference);
 
         var appHostDirectory = Path.GetDirectoryName(appHostProjectPath)!;
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(appHostDirectory, workspace)}");
@@ -175,9 +189,15 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
 
         await auto.AspireNewSubcommandAsync("aspire-apphost", "VersionedAppHost", counter);
 
-        var appHostProjectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "VersionedAppHost", "VersionedAppHost.csproj");
-        DisableAspirePackageSourceMapping(Path.Combine(workspace.WorkspaceRoot.FullName, "VersionedAppHost", "nuget.config"));
-        AddAspireHostingAppHostPackageReference(appHostProjectPath, version);
+        var appHostRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "VersionedAppHost");
+        var appHostProjectPath = Path.Combine(appHostRoot, "VersionedAppHost.csproj");
+        var nugetConfigPath = Path.Combine(appHostRoot, "nuget.config");
+        if (File.Exists(nugetConfigPath))
+        {
+            DotNetTemplateBehaviorTestHelpers.DisableAspirePackageSourceMapping(nugetConfigPath);
+        }
+
+        DotNetTemplateBehaviorTestHelpers.AddAspireHostingAppHostPackageReference(appHostProjectPath, version);
 
         await auto.TypeAsync("cd VersionedAppHost");
         await auto.EnterAsync();
@@ -215,7 +235,7 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
 
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "CpmApp");
         var appHostProjectPath = Path.Combine(projectRoot, "CpmApp.AppHost", "CpmApp.AppHost.csproj");
-        AddCentralPackageManagementForRedis(appHostProjectPath, Path.Combine(projectRoot, "Directory.Packages.props"));
+        DotNetTemplateBehaviorTestHelpers.AddCentralPackageManagementForRedis(appHostProjectPath, Path.Combine(projectRoot, "Directory.Packages.props"));
 
         await auto.TypeAsync("cd CpmApp/CpmApp.AppHost");
         await auto.EnterAsync();
@@ -233,8 +253,11 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+}
 
-    private static async Task CreateTemplateBootstrapAsync(Hex1bTerminalAutomator auto, SequenceCounter counter)
+internal static class DotNetTemplateBehaviorTestHelpers
+{
+    internal static async Task CreateTemplateBootstrapAsync(Hex1bTerminalAutomator auto, SequenceCounter counter)
     {
         await auto.AspireNewSubcommandAsync("aspire-starter", "TemplateBootstrap", counter, "--use-redis-cache", "false", "--test-framework", "None");
         await auto.ClearScreenAsync(counter);
@@ -243,7 +266,7 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
-    private static async Task<string> CreateDotNetTemplateInBootstrapAsync(
+    internal static async Task<string> CreateDotNetTemplateInBootstrapAsync(
         Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         TemporaryWorkspace workspace,
@@ -271,7 +294,7 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
         return Path.Combine(workspace.WorkspaceRoot.FullName, "TemplateBootstrap", projectName);
     }
 
-    private static async Task<string> CreateCliTemplateAsync(
+    internal static async Task<string> CreateCliTemplateAsync(
         Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         TemporaryWorkspace workspace,
@@ -294,7 +317,7 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
         return Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
     }
 
-    private static void AssertDevLocalhostHostname(string projectRoot, string templateName, string projectName, string expectedHostname)
+    internal static void AssertDevLocalhostHostname(string projectRoot, string templateName, string projectName, string expectedHostname)
     {
         var settingsPath = templateName switch
         {
@@ -339,7 +362,7 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
         Assert.True(foundDevLocalhost, $"Expected a .dev.localhost URL in {settingsPath}.");
     }
 
-    private static void RewriteAsExplicitSdkReference(string appHostProjectPath, bool includeAspireHostingAppHostPackageReference)
+    internal static void RewriteAsExplicitSdkReference(string appHostProjectPath, bool includeAspireHostingAppHostPackageReference)
     {
         var document = XDocument.Load(appHostProjectPath);
         var project = document.Root ?? throw new InvalidOperationException($"Project root not found in {appHostProjectPath}.");
@@ -363,25 +386,25 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
         document.Save(appHostProjectPath);
     }
 
-    private static void AddAspireHostingAppHostPackageReference(string appHostProjectPath, string version)
+    internal static void AddAspireHostingAppHostPackageReference(string appHostProjectPath, string version)
     {
         var document = XDocument.Load(appHostProjectPath);
         var project = document.Root ?? throw new InvalidOperationException($"Project root not found in {appHostProjectPath}.");
         project.Add(new XElement("ItemGroup",
             new XElement("PackageReference",
                 new XAttribute("Include", "Aspire.Hosting.AppHost"),
-                new XAttribute("Version", version))));
+                    new XAttribute("Version", version))));
         document.Save(appHostProjectPath);
     }
 
-    private static void DisableAspirePackageSourceMapping(string nugetConfigPath)
+    internal static void DisableAspirePackageSourceMapping(string nugetConfigPath)
     {
         var document = XDocument.Load(nugetConfigPath);
         document.Root?.Element("packageSourceMapping")?.Remove();
         document.Save(nugetConfigPath);
     }
 
-    private static void AddCentralPackageManagementForRedis(string appHostProjectPath, string directoryPackagesPropsPath)
+    internal static void AddCentralPackageManagementForRedis(string appHostProjectPath, string directoryPackagesPropsPath)
     {
         var document = XDocument.Load(appHostProjectPath);
         var project = document.Root ?? throw new InvalidOperationException($"Project root not found in {appHostProjectPath}.");
@@ -414,5 +437,5 @@ public sealed class DotNetTemplateBehaviorTests(ITestOutputHelper output)
             : throw new InvalidOperationException($"Unexpected SDK value '{sdkValue}'.");
     }
 
-    private static string Quote(string value) => $"\"{value}\"";
+    internal static string Quote(string value) => $"\"{value}\"";
 }

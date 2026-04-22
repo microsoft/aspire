@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
@@ -15,7 +17,9 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class StarterTemplateBehaviorTests(ITestOutputHelper output)
 {
     [Theory]
+    [InlineData("StarterXunitV2", "xUnit.net", "v2")]
     [InlineData("Starter.With.1", "xUnit.net", "v3mtp")]
+    [InlineData("StarterNUnit", "NUnit", null)]
     [InlineData("StarterMSTest", "MSTest", null)]
     [CaptureWorkspaceOnFailure]
     public async Task StarterTemplateCanGenerateAndRunBuiltInTests(string projectName, string testFramework, string? xunitVersion)
@@ -154,6 +158,147 @@ public sealed class StarterTemplateBehaviorTests(ITestOutputHelper output)
         }
 
         throw new InvalidOperationException($"Expected an api service URL in {jsonPath}.");
+    }
+
+    private static string Quote(string value) => $"\"{value}\"";
+}
+
+public sealed class SupportProjectTemplateBehaviorTests(ITestOutputHelper output)
+{
+    [Theory]
+    [InlineData("aspire-xunit", "SupportTemplate.Xunit", null)]
+    [InlineData("aspire-xunit", "SupportTemplate.XunitV3", "v3")]
+    [InlineData("aspire-nunit", "SupportTemplate.NUnit", null)]
+    [InlineData("aspire-mstest", "SupportTemplate.MSTest", null)]
+    [CaptureWorkspaceOnFailure]
+    public async Task SupportProjectTemplatesBuildAgainstGeneratedAppHost(string templateName, string projectName, string? xunitVersion)
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect();
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await DotNetTemplateBehaviorTestHelpers.CreateTemplateBootstrapAsync(auto, counter);
+
+        string[] args = xunitVersion is null ? [] : ["--xunit-version", xunitVersion];
+        var testProjectDirectory = await CreateSupportTemplateInBootstrapAsync(auto, counter, workspace, templateName, projectName, args);
+
+        const string appHostProjectName = "TemplateBootstrap.AppHost";
+        var testProjectPath = Path.Combine(testProjectDirectory, $"{projectName}.csproj");
+
+        Assert.True(Directory.Exists(testProjectDirectory), $"Expected generated tests directory at {testProjectDirectory}.");
+        Assert.True(File.Exists(testProjectPath), $"Expected generated tests project at {testProjectPath}.");
+
+        PrepareSupportProject(testProjectPath, appHostProjectName);
+        PrepareSupportTestSource(testProjectDirectory, templateName, appHostProjectName);
+
+        await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(testProjectDirectory, workspace)}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("dotnet build");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
+    private static async Task<string> CreateSupportTemplateInBootstrapAsync(
+        Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TemporaryWorkspace workspace,
+        string templateName,
+        string projectName,
+        IReadOnlyList<string> extraArgs)
+    {
+        var commandParts = new List<string>
+        {
+            "dotnet",
+            "new",
+            templateName,
+            "-n",
+            Quote(projectName),
+            "-o",
+            Quote($"./{projectName}")
+        };
+
+        commandParts.AddRange(extraArgs);
+
+        await auto.TypeAsync(string.Join(" ", commandParts));
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        return Path.Combine(workspace.WorkspaceRoot.FullName, "TemplateBootstrap", projectName);
+    }
+
+    private static void PrepareSupportProject(string testProjectPath, string appHostProjectName)
+    {
+        var document = XDocument.Load(testProjectPath);
+        var project = document.Root ?? throw new InvalidOperationException($"Project root not found in {testProjectPath}.");
+
+        project.Add(new XElement("ItemGroup",
+            new XElement("ProjectReference",
+                new XAttribute("Include", Path.Combine("..", appHostProjectName, $"{appHostProjectName}.csproj")))));
+
+        document.Save(testProjectPath);
+    }
+
+    private static void PrepareSupportTestSource(string testProjectDirectory, string templateName, string appHostProjectName)
+    {
+        var testSourcePath = Path.Combine(testProjectDirectory, "IntegrationTest1.cs");
+        Assert.True(File.Exists(testSourcePath), $"Expected generated test source at {testSourcePath}.");
+
+        var marker = templateName switch
+        {
+            "aspire-nunit" => "[Test]",
+            "aspire-mstest" => "[TestMethod]",
+            "aspire-xunit" => "[Fact]",
+            _ => throw new ArgumentOutOfRangeException(nameof(templateName), templateName, "Unknown support template name.")
+        };
+
+        var uncomment = false;
+        var lines = File.ReadAllLines(testSourcePath);
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (!uncomment && lines[i].Contains(marker, StringComparison.Ordinal))
+            {
+                uncomment = true;
+            }
+
+            if (uncomment)
+            {
+                lines[i] = UncommentLine(lines[i]);
+            }
+        }
+
+        var generatedAppHostClassName = Regex.Replace(appHostProjectName, "[^A-Za-z0-9_]", "_");
+        var updatedSource = string.Join(Environment.NewLine, lines)
+            .Replace("Projects.MyAspireApp_AppHost", $"Projects.{generatedAppHostClassName}", StringComparison.Ordinal);
+
+        File.WriteAllText(testSourcePath, updatedSource + Environment.NewLine);
+    }
+
+    private static string UncommentLine(string line)
+    {
+        var trimmed = line.TrimStart();
+        if (!trimmed.StartsWith("//", StringComparison.Ordinal))
+        {
+            return line;
+        }
+
+        var indentation = line[..(line.Length - trimmed.Length)];
+        var uncommented = trimmed.Length > 2 && trimmed[2] == ' ' ? trimmed[3..] : trimmed[2..];
+        return indentation + uncommented;
     }
 
     private static string Quote(string value) => $"\"{value}\"";

@@ -180,13 +180,13 @@ public sealed class TemplateVariantSmokeTests(ITestOutputHelper output)
 
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+            Assert.Fail($".modules directory was not created at {modulesDir}");
         }
 
         var aspireModulePath = Path.Combine(modulesDir, "aspire.ts");
         if (!File.Exists(aspireModulePath))
         {
-            throw new InvalidOperationException($"Expected generated file not found: {aspireModulePath}");
+            Assert.Fail($"Expected generated file not found: {aspireModulePath}");
         }
 
         await auto.TypeAsync("cd TsStarterApp");
