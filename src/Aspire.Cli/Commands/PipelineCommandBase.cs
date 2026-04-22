@@ -395,12 +395,6 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
             return pendingRun is { } && debugMode ? await pendingRun : ExitCodeConstants.FailedToBuildArtifacts;
         }
-        catch (NonInteractiveException)
-        {
-            // Let BaseCommand handle the non-interactive error with the proper exit code.
-            StopTerminalProgressBar();
-            throw;
-        }
         catch (Exception ex)
         {
             // Send terminal progress bar stop sequence on exception
@@ -939,9 +933,11 @@ internal abstract class PipelineCommandBase : BaseCommand
             inputType = InputType.Text;
         }
 
-        // Build the binding: if --input was provided for this input, create a pre-resolved binding;
-        // otherwise fall back to a default binding with the input's current value.
-        var inputBinding = GetInputBinding(input);
+        // Check if the input value was provided via --input option
+        if (TryResolveProvidedInput(input, inputType, out var providedValue))
+        {
+            return providedValue;
+        }
 
         // Display any validation errors.
         if (input.ValidationErrors is { Count: > 0 } errors)
@@ -956,32 +952,32 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             InputType.Text => await InteractionService.PromptForStringAsync(
                 promptText,
-                binding: inputBinding ?? PromptBinding.CreateDefault(input.Value),
+                binding: PromptBinding.CreateDefault(input.Value),
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.SecretText => await InteractionService.PromptForStringAsync(
                 promptText,
-                binding: inputBinding ?? PromptBinding.CreateDefault(input.Value),
+                binding: PromptBinding.CreateDefault(input.Value),
                 isSecret: true,
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
-            InputType.Choice => await HandleSelectInputAsync(input, promptText, inputBinding, cancellationToken),
+            InputType.Choice => await HandleSelectInputAsync(input, promptText, cancellationToken),
 
-            InputType.Boolean => await HandleBooleanInputAsync(input, promptText, inputBinding, cancellationToken),
+            InputType.Boolean => (await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value)), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
 
-            InputType.Number => await HandleNumberInputAsync(input, promptText, inputBinding, cancellationToken),
+            InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            _ => await InteractionService.PromptForStringAsync(promptText, binding: inputBinding ?? PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
+            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
         };
     }
 
-    private async Task<string?> HandleSelectInputAsync(PublishingPromptInput input, string promptText, PromptBinding<string?>? inputBinding, CancellationToken cancellationToken)
+    private async Task<string?> HandleSelectInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
     {
         if (input.Options is null || input.Options.Count == 0)
         {
-            return await InteractionService.PromptForStringAsync(promptText, binding: inputBinding ?? PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
 
         // If AllowCustomChoice is enabled then add an "Other" option to the list.
@@ -993,43 +989,12 @@ internal abstract class PipelineCommandBase : BaseCommand
             options.Add(KeyValuePair.Create(CustomChoiceValue, InteractionServiceStrings.CustomChoiceLabel));
         }
 
-        // For --input values, resolve the provided key to the matching display text
-        // so MatchChoice in the interaction service can find it.
-        PromptBinding<string?>? selectionBinding = null;
-        if (inputBinding is not null)
-        {
-            var (wasProvided, providedKey, _) = PromptBinding.Resolve(inputBinding);
-            if (wasProvided && providedKey is not null)
-            {
-                var matchingOption = options.FirstOrDefault(o => o.Key.Equals(providedKey, StringComparison.OrdinalIgnoreCase));
-                if (matchingOption.Key is not null)
-                {
-                    // Use display text so MatchChoice can match it
-                    selectionBinding = PromptBinding.CreateProvided<string?>(matchingOption.Value.EscapeMarkup(), inputBinding.SymbolDisplayName);
-                }
-                else if (input.AllowCustomChoice)
-                {
-                    // Custom value allowed - return the provided value directly
-                    return providedKey;
-                }
-                else
-                {
-                    // No match found - display error with available keys and throw
-                    var availableValues = string.Join(", ", input.Options?.Select(o => o.Key) ?? []);
-                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedKey, inputBinding.SymbolDisplayName));
-                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableValues));
-                    throw new NonInteractiveException(inputBinding.SymbolDisplayName);
-                }
-            }
-        }
-
         // For Choice inputs, we can't directly set a default in PromptForSelectionAsync,
         // but we can reorder the options to put the default first or use a different approach
         var (value, displayText) = await InteractionService.PromptForSelectionAsync(
             promptText,
             options,
             choice => choice.Value.EscapeMarkup(),
-            binding: selectionBinding,
             cancellationToken: cancellationToken);
 
         if (value == CustomChoiceValue)
@@ -1037,16 +1002,12 @@ internal abstract class PipelineCommandBase : BaseCommand
             return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
 
-        // Only display the selected choice in interactive mode
-        if (selectionBinding is null)
-        {
-            AnsiConsole.MarkupLine($"{promptText} {displayText.EscapeMarkup()}");
-        }
+        AnsiConsole.MarkupLine($"{promptText} {displayText.EscapeMarkup()}");
 
         return value;
     }
 
-    private async Task<string?> HandleNumberInputAsync(PublishingPromptInput input, string promptText, PromptBinding<string?>? inputBinding, CancellationToken cancellationToken)
+    private async Task<string?> HandleNumberInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
     {
         static ValidationResult Validator(string value)
         {
@@ -1060,34 +1021,10 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         return await InteractionService.PromptForStringAsync(
             promptText,
-            binding: inputBinding ?? PromptBinding.CreateDefault(input.Value),
+            binding: PromptBinding.CreateDefault(input.Value),
             validator: Validator,
             required: input.Required,
             cancellationToken: cancellationToken);
-    }
-
-    private async Task<string?> HandleBooleanInputAsync(PublishingPromptInput input, string promptText, PromptBinding<string?>? inputBinding, CancellationToken cancellationToken)
-    {
-        PromptBinding<bool>? confirmBinding = null;
-        if (inputBinding is not null)
-        {
-            var (wasProvided, providedValue, _) = PromptBinding.Resolve(inputBinding);
-            if (wasProvided && providedValue is not null)
-            {
-                if (!bool.TryParse(providedValue, out var boolValue))
-                {
-                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputBinding.SymbolDisplayName));
-                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, "true, false"));
-                    throw new NonInteractiveException(inputBinding.SymbolDisplayName);
-                }
-
-                confirmBinding = PromptBinding.CreateProvided(boolValue, inputBinding.SymbolDisplayName);
-            }
-        }
-
-        confirmBinding ??= PromptBinding.CreateDefault(ParseBooleanValue(input.Value));
-
-        return (await InteractionService.PromptConfirmAsync(promptText, binding: confirmBinding, cancellationToken: cancellationToken)).ToString().ToLowerInvariant();
     }
 
     private static bool ParseBooleanValue(string? value)
@@ -1117,15 +1054,73 @@ internal abstract class PipelineCommandBase : BaseCommand
         return result;
     }
 
-    private PromptBinding<string?>? GetInputBinding(PublishingPromptInput input)
+    private bool TryResolveProvidedInput(PublishingPromptInput input, InputType inputType, out string? value)
     {
+        value = null;
+
         // Can only match by name; old AppHosts without names fall through to interactive prompt
         if (input.Name is null || !_providedInputs.TryGetValue(input.Name, out var providedValue))
         {
-            return null;
+            return false;
         }
 
-        return PromptBinding.CreateProvided<string?>(providedValue, $"'--input {input.Name}'");
+        switch (inputType)
+        {
+            case InputType.Choice:
+                // Validate the value matches one of the allowed options
+                if (input.Options is { Count: > 0 })
+                {
+                    var matchingOption = input.Options.FirstOrDefault(o => o.Key.Equals(providedValue, StringComparison.OrdinalIgnoreCase));
+                    if (matchingOption.Key is not null)
+                    {
+                        value = matchingOption.Key;
+                        return true;
+                    }
+
+                    if (input.AllowCustomChoice)
+                    {
+                        value = providedValue;
+                        return true;
+                    }
+
+                    var inputDisplayName = $"'--input {input.Name}'";
+                    var availableValues = string.Join(", ", input.Options.Select(o => o.Key));
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName));
+                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableValues));
+                    throw new NonInteractiveException(inputDisplayName);
+                }
+
+                value = providedValue;
+                return true;
+
+            case InputType.Boolean:
+                if (!bool.TryParse(providedValue, out var boolValue))
+                {
+                    var inputDisplayName = $"'--input {input.Name}'";
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName));
+                    InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, "true, false"));
+                    throw new NonInteractiveException(inputDisplayName);
+                }
+
+                value = boolValue.ToString().ToLowerInvariant();
+                return true;
+
+            case InputType.Number:
+                if (!double.TryParse(providedValue, out _))
+                {
+                    var inputDisplayName = $"'--input {input.Name}'";
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveInvalidValue, providedValue, inputDisplayName));
+                    throw new NonInteractiveException(inputDisplayName);
+                }
+
+                value = providedValue;
+                return true;
+
+            default:
+                // Text, SecretText, and unknown types: return as-is
+                value = providedValue;
+                return true;
+        }
     }
 
     private static (LogLevel Level, string Prefix) ParseLogLevel(string? logLevel) => logLevel?.ToUpperInvariant() switch
