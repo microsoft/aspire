@@ -379,7 +379,60 @@ public static class PromptAgentBuilderExtensions
             .WithReferenceRelationship(project);
     }
 
-    [AspireExport]
+    /// <summary>
+    /// Links a Bing Grounding tool to a Foundry project connection for the Bing Search service.
+    /// </summary>
+    /// <param name="tool">The Bing Grounding tool resource builder.</param>
+    /// <param name="bingConnection">
+    /// The Bing grounding connection resource builder created by
+    /// <see cref="AzureCognitiveServicesProjectConnectionsBuilderExtensions.AddBingGroundingConnection(IResourceBuilder{AzureCognitiveServicesProjectResource}, string, string)"/>
+    /// or
+    /// <see cref="AzureCognitiveServicesProjectConnectionsBuilderExtensions.AddBingGroundingConnection(IResourceBuilder{AzureCognitiveServicesProjectResource}, string, IResourceBuilder{ParameterResource})"/>.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
+    public static IResourceBuilder<BingGroundingToolResource> WithReference(
+        this IResourceBuilder<BingGroundingToolResource> tool,
+        IResourceBuilder<BingGroundingConnectionResource> bingConnection)
+    {
+        return WithReference(tool, (object)bingConnection);
+    }
+
+    /// <summary>
+    /// Links a Bing Grounding tool to a Bing Search resource by using its Azure resource ID.
+    /// </summary>
+    /// <param name="tool">The Bing Grounding tool resource builder.</param>
+    /// <param name="bingResourceId">
+    /// The full Azure resource ID of the Bing Search resource
+    /// (e.g., <c>/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}</c>).
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
+    public static IResourceBuilder<BingGroundingToolResource> WithReference(
+        this IResourceBuilder<BingGroundingToolResource> tool,
+        string bingResourceId)
+    {
+        return WithReference(tool, (object)bingResourceId);
+    }
+
+    /// <summary>
+    /// Links a Bing Grounding tool to a Bing Search resource by using a parameter that contains
+    /// its Azure resource ID.
+    /// </summary>
+    /// <param name="tool">The Bing Grounding tool resource builder.</param>
+    /// <param name="bingResourceId">
+    /// A parameter resource containing the full Azure resource ID of the Bing Search resource.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Covered by the internal AspireUnion overload.")]
+    public static IResourceBuilder<BingGroundingToolResource> WithReference(
+        this IResourceBuilder<BingGroundingToolResource> tool,
+        IResourceBuilder<ParameterResource> bingResourceId)
+    {
+        return WithReference(tool, (object)bingResourceId);
+    }
+
+    [AspireExport("withBingReference", MethodName = "withReference", Description = "Links a Bing Grounding tool to a Bing Search resource or connection.")]
     internal static IResourceBuilder<BingGroundingToolResource> WithReference(
         this IResourceBuilder<BingGroundingToolResource> tool,
         [AspireUnion(
