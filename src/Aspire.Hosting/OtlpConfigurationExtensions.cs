@@ -169,19 +169,14 @@ public static class OtlpConfigurationExtensions
     /// This ensures that when ports are randomized (e.g. isolated mode), resources use the actual
     /// allocated endpoint rather than the statically configured port.
     /// </summary>
+    /// <remarks>
+    /// The returned <see cref="EndpointReference"/> has no network context baked in, so it resolves
+    /// using the calling resource's network at evaluation time. This means containers automatically
+    /// get container-network URLs and non-containers get localhost URLs.
+    /// </remarks>
     private static (EndpointReference Endpoint, string Protocol)? ResolveOtlpEndpointFromDashboard(EnvironmentCallbackContext context, OtlpProtocol? requiredProtocol)
     {
         var model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
-
-        return ResolveOtlpEndpointFromDashboard(model, requiredProtocol, KnownNetworkIdentifiers.LocalhostNetwork);
-    }
-
-    /// <summary>
-    /// Resolves the OTLP endpoint from the dashboard resource in the distributed application model
-    /// for the specified network context and required protocol.
-    /// </summary>
-    internal static (EndpointReference Endpoint, string Protocol)? ResolveOtlpEndpointFromDashboard(DistributedApplicationModel? model, OtlpProtocol? requiredProtocol, NetworkIdentifier networkId)
-    {
         if (model is null)
         {
             return null;
@@ -193,8 +188,8 @@ public static class OtlpConfigurationExtensions
             return null;
         }
 
-        var grpcEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpGrpcEndpointName, networkId);
-        var httpEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName, networkId);
+        var grpcEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpGrpcEndpointName);
+        var httpEndpoint = dashboardResource.GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName);
 
         return (requiredProtocol, grpcEndpoint.Exists, httpEndpoint.Exists) switch
         {

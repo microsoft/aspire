@@ -538,7 +538,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 KeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.key"),
                 PfxPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pfx"),
             })
-            .AddExecutionConfigurationGatherer(new OtlpEndpointReferenceGatherer())
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
             .ConfigureAwait(false);
 
