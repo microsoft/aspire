@@ -620,11 +620,45 @@ public static class AzureKubernetesEnvironmentExtensions
             // Provision the AGC traffic controller, frontend, and subnet association.
             var agcName = take('agc-${uniqueString(resourceGroup().id)}', 63)
 
+            // Grant the ALB controller's managed identity access to manage AGC resources
+            // in this resource group. The identity is created automatically by the addon.
+            var albPrincipalId = aksAlbUpdate.properties.ingressProfile.applicationLoadBalancer.identity.objectId
+
+            // AppGw for Containers Configuration Manager role
+            resource agcConfigManagerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+              name: guid(resourceGroup().id, 'agc-config-manager', albPrincipalId)
+              properties: {
+                roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'fbc52c3f-28ad-4303-a892-8a056630b8f1')
+                principalId: albPrincipalId
+                principalType: 'ServicePrincipal'
+              }
+            }
+
+            // Reader role on the resource group
+            resource agcReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+              name: guid(resourceGroup().id, 'agc-reader', albPrincipalId)
+              properties: {
+                roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
+                principalId: albPrincipalId
+                principalType: 'ServicePrincipal'
+              }
+            }
+
+            // Network Contributor on the AGC subnet
+            resource agcNetworkContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+              name: guid(subnetId, 'agc-network-contributor', albPrincipalId)
+              properties: {
+                roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7')
+                principalId: albPrincipalId
+                principalType: 'ServicePrincipal'
+              }
+            }
+
             resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2025-01-01' = {
               name: agcName
               location: location
               properties: {}
-              dependsOn: [aksAlbUpdate]
+              dependsOn: [aksAlbUpdate, agcConfigManagerRole, agcReaderRole, agcNetworkContributorRole]
             }
 
             resource frontend 'Microsoft.ServiceNetworking/trafficControllers/frontends@2025-01-01' = {
