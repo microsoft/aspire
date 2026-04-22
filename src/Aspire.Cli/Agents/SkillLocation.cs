@@ -56,10 +56,10 @@ internal sealed class SkillLocation
         isDefault: false,
         includeUserLevel: false);
 
-    private SkillLocation(string id, string name, string description, string relativeSkillDirectory, bool isDefault, bool includeUserLevel)
+    private SkillLocation(string id, string displayName, string description, string relativeSkillDirectory, bool isDefault, bool includeUserLevel)
     {
         Id = id;
-        DisplayName = name;
+        DisplayName = displayName;
         Description = description;
         RelativeSkillDirectory = relativeSkillDirectory;
         IsDefault = isDefault;

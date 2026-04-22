@@ -124,7 +124,7 @@ internal sealed partial class CliTemplateFactory
 
     private async Task<bool> ResolveUseLocalhostTldAsync(System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var binding = PromptBinding.CreateBoolAsSelection(parseResult, _localhostTldOption, TemplatingStrings.Yes, TemplatingStrings.No);
+        var binding = PromptBinding.CreateBoolAsSelection(parseResult, _localhostTldOption);
 
         var selected = await _interactionService.PromptForSelectionAsync(
             TemplatingStrings.UseLocalhostTld_Prompt,

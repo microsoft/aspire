@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Interaction;
 
@@ -118,8 +119,12 @@ internal static class PromptBinding
     /// When the option is explicitly provided, resolves to <paramref name="trueValue"/> or <paramref name="falseValue"/>.
     /// When not provided in non-interactive mode, defaults to <paramref name="falseValue"/>.
     /// </summary>
-    public static PromptBinding<string?> CreateBoolAsSelection(ParseResult parseResult, Option<bool?> option, string trueValue, string falseValue) =>
-        new(parseResult, FormatOptionName(option), BuildBoolAsSelectionResolver(option, trueValue, falseValue), falseValue, hasExplicitDefault: true);
+    public static PromptBinding<string?> CreateBoolAsSelection(ParseResult parseResult, Option<bool?> option, string? trueValue = null, string? falseValue = null)
+    {
+        trueValue ??= TemplatingStrings.Yes;
+        falseValue ??= TemplatingStrings.No;
+        return new(parseResult, FormatOptionName(option), BuildBoolAsSelectionResolver(option, trueValue, falseValue), falseValue, hasExplicitDefault: true);
+    }
 
     private static string FormatOptionName<T>(Option<T> option) => $"'{option.Name}'";
 

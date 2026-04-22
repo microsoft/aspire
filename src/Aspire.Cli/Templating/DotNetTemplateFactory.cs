@@ -290,7 +290,7 @@ internal class DotNetTemplateFactory(
 
     private async Task PromptForDevLocalhostTldOptionAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
     {
-        var binding = PromptBinding.CreateBoolAsSelection(result, _localhostTldOption, TemplatingStrings.Yes, TemplatingStrings.No);
+        var binding = PromptBinding.CreateBoolAsSelection(result, _localhostTldOption);
 
         var selected = await interactionService.PromptForSelectionAsync(
             TemplatingStrings.UseLocalhostTld_Prompt,
@@ -308,7 +308,7 @@ internal class DotNetTemplateFactory(
 
     private async Task PromptForRedisCacheOptionAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
     {
-        var binding = PromptBinding.CreateBoolAsSelection(result, _useRedisCacheOption, TemplatingStrings.Yes, TemplatingStrings.No);
+        var binding = PromptBinding.CreateBoolAsSelection(result, _useRedisCacheOption);
 
         var selected = await interactionService.PromptForSelectionAsync(
             TemplatingStrings.UseRedisCache_Prompt,
