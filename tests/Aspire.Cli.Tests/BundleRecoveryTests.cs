@@ -219,7 +219,7 @@ public class BundleRecoveryTests
 
             var factory = new AppHostServerProjectFactory(
                 new TestDotNetCliRunner(),
-                new MockPackagingService(),
+                new TestPackagingService(),
                 new TestConfigurationService(),
                 bundleService,
                 bundleNuGetService,
@@ -284,7 +284,7 @@ public class BundleRecoveryTests
 
             var factory = new AppHostServerProjectFactory(
                 new TestDotNetCliRunner(),
-                new MockPackagingService(),
+                new TestPackagingService(),
                 new TestConfigurationService(),
                 bundleService,
                 bundleNuGetService,
@@ -336,7 +336,7 @@ public class BundleRecoveryTests
 
             var factory = new AppHostServerProjectFactory(
                 new TestDotNetCliRunner(),
-                new MockPackagingService(),
+                new TestPackagingService(),
                 new TestConfigurationService(),
                 bundleService,
                 bundleNuGetService,
