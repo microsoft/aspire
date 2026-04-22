@@ -84,7 +84,7 @@ namespace Aspire.Hosting.Docker
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
     }
 
-    [AspireExport(ExposeProperties = true)]
+    [AspireExport(ExposeProperties = true, ExposeMethods = true)]
     public partial class DockerComposeEnvironmentResource : ApplicationModel.Resource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource
     {
         public DockerComposeEnvironmentResource(string name) : base(default!) { }
@@ -93,7 +93,6 @@ namespace Aspire.Hosting.Docker
 
         public string? DefaultNetworkName { get { throw null; } set { } }
 
-        [AspireExport(Description = "Gets the host address expression used to reach a resource endpoint from Docker Compose")]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
     }
