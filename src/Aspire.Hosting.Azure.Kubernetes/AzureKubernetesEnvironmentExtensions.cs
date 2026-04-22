@@ -466,7 +466,6 @@ public static class AzureKubernetesEnvironmentExtensions
         // Provision AGC via inline Bicep
         var agc = builder.ApplicationBuilder.AddBicepTemplateString($"{name}-agc", GenerateAgcBicep());
         agc.Resource.Parameters["subnetId"] = subnet.Resource.Id;
-        agc.Resource.Parameters["aksClusterName"] = builder.Resource.NameOutputReference;
 
         // Store the AGC outputs on the AKS resource
         builder.Resource.AgcResourceId = new BicepOutputReference("agcId", agc.Resource);
@@ -591,44 +590,13 @@ public static class AzureKubernetesEnvironmentExtensions
             @description('The resource ID of the dedicated subnet for AGC.')
             param subnetId string
 
-            @description('The name of the AKS cluster.')
-            param aksClusterName string
-
-            // Enable the managed Gateway API and ALB controller on the AKS cluster.
-            // Uses 2026-02-02-preview which supports both gatewayAPI and
-            // applicationLoadBalancer under ingressProfile.
-            // Prerequisites:
-            //   az feature register --namespace "Microsoft.ContainerService" --name "ManagedGatewayAPIPreview"
-            //   az feature register --namespace "Microsoft.ContainerService" --name "ApplicationLoadBalancerPreview"
-            //   az provider register --namespace Microsoft.ContainerService
-            resource aksAlbUpdate 'Microsoft.ContainerService/managedClusters@2026-02-02-preview' = {
-              name: aksClusterName
-              location: location
-              properties: {
-                gatewayApiProfile: {
-                  mode: 'Enabled'
-                }
-                ingressProfile: {
-                  applicationLoadBalancer: {
-                    enabled: true
-                  }
-                }
-              }
-              identity: {
-                type: 'SystemAssigned'
-              }
-              sku: {
-                name: 'Base'
-                tier: 'Free'
-              }
-            }
-
             // Provision the AGC traffic controller, frontend, and subnet association.
+            // The ALB controller is enabled on the AKS cluster via a pipeline step
+            // that runs 'az aks update --enable-gateway-api --enable-application-load-balancer'.
             resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2023-11-01' = {
               name: 'aspire-agc'
               location: location
               properties: {}
-              dependsOn: [aksAlbUpdate]
             }
 
             resource frontend 'Microsoft.ServiceNetworking/trafficControllers/frontends@2023-11-01' = {
