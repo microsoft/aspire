@@ -115,13 +115,9 @@ internal sealed class ResourceCollection : IResourceCollection
     IEnumerator IEnumerable.GetEnumerator() => _resources.GetEnumerator();
 
     [DoesNotReturn]
-    private static void ThrowDuplicateResource(IResource newResource, IResource? existingResource = null)
+    private static void ThrowDuplicateResource(IResource newResource, IResource existingResource)
     {
-        var existingInfo = existingResource is not null
-            ? $"resource of type '{existingResource.GetType()}'"
-            : "a resource";
-
-        throw new DistributedApplicationException($"Cannot add resource of type '{newResource.GetType()}' with name '{newResource.Name}' because {existingInfo} with that name already exists. Resource names are case-insensitive.");
+        throw new DistributedApplicationException($"Cannot add resource of type '{newResource.GetType()}' with name '{newResource.Name}' because resource of type '{existingResource.GetType()}' with that name already exists. Resource names are case-insensitive.");
     }
 
     private sealed class ApplicationResourceCollectionDebugView(ResourceCollection collection)
