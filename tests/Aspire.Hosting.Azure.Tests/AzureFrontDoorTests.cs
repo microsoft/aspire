@@ -158,7 +158,7 @@ public class AzureFrontDoorTests
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
 
-        Assert.Throws<ArgumentNullException>(() => frontDoor.WithOrigin((IResourceBuilder<IResourceWithEndpoints>)null!));
+        Assert.Throws<ArgumentNullException>(() => frontDoor.WithOrigin((IResourceBuilder<ProjectResource>)null!));
     }
 
     [Fact]
