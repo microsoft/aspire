@@ -28,6 +28,94 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void GetWorkflowRunInstallCommand_FormatsCorrectly()
+    {
+        var command = AspireCliShellCommandHelpers.GetWorkflowRunInstallCommand("12345678", "/opt/aspire-scripts/get-aspire-cli-pr.sh");
+        Assert.Equal("/opt/aspire-scripts/get-aspire-cli-pr.sh --run-id 12345678", command);
+    }
+
+    [Fact]
+    public void Detect_ReturnsWorkflowRun_WhenOnlyWorkflowRunIdIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, "24856810023"),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.WorkflowRun, strategy.Mode);
+    }
+
+    [Fact]
+    public void Detect_ReturnsPullRequest_WhenBothPrMetadataAndWorkflowRunIdAreSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", "16131"),
+            ("GITHUB_PR_HEAD_SHA", "abc123"),
+            (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, "24404068249"),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.PullRequest, strategy.Mode);
+    }
+
+    [Fact]
+    public void Detect_FallsBackToDevQuality_WhenNoArchiveContextInCI()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", "true"));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.InstallScript, strategy.Mode);
+    }
+
+    [Fact]
+    public void ConfigureContainer_AddsWorkflowRunIdForWorkflowRunStrategy()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, "24856810023"),
+            ("GH_TOKEN", "ghp_test123"));
+
+        var strategy = CliInstallStrategy.Detect();
+        var options = new DockerContainerOptions();
+
+        strategy.ConfigureContainer(options);
+
+        Assert.Equal("24856810023", options.Environment[CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName]);
+        Assert.Equal("ghp_test123", options.Environment["GH_TOKEN"]);
+        Assert.False(options.Environment.ContainsKey("GITHUB_PR_NUMBER"));
+        Assert.False(options.Environment.ContainsKey("GITHUB_PR_HEAD_SHA"));
+    }
+
+    [Fact]
     public void ConfigureContainer_AddsWorkflowRunIdForPullRequestStrategy()
     {
         using var environment = new EnvironmentVariableScope(

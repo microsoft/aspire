@@ -106,6 +106,16 @@ internal static class CliE2EAutomatorHelpers
                 await auto.SourceAspireBundleEnvironmentAsync(counter);
                 break;
 
+            case CliInstallMode.WorkflowRun:
+                var wrRunId = CliInstallStrategy.GetCliArchiveWorkflowRunId()
+                    ?? throw new InvalidOperationException("WorkflowRun strategy requires ASPIRE_CLI_WORKFLOW_RUN_ID to be set.");
+                await auto.RunCommandFailFastAsync(
+                    AspireCliShellCommandHelpers.GetWorkflowRunInstallCommand(wrRunId, AspireCliShellCommandHelpers.DockerPullRequestInstallCommandPrefix),
+                    counter,
+                    TimeSpan.FromSeconds(300));
+                await auto.SourceAspireBundleEnvironmentAsync(counter);
+                break;
+
             case CliInstallMode.InstallScript:
                 await auto.RunCommandFailFastAsync(
                     AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, AspireCliShellCommandHelpers.DockerInstallScriptCommandPrefix),
@@ -183,6 +193,17 @@ internal static class CliE2EAutomatorHelpers
             case CliInstallMode.PullRequest:
                 var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
                 await auto.InstallAspireCliFromPullRequestAsync(prNumber, counter);
+                await auto.SourceAspireCliEnvironmentAsync(counter);
+                break;
+
+            case CliInstallMode.WorkflowRun:
+                var shellWrRunId = CliInstallStrategy.GetCliArchiveWorkflowRunId()
+                    ?? throw new InvalidOperationException("WorkflowRun strategy requires ASPIRE_CLI_WORKFLOW_RUN_ID to be set.");
+                var getAspireCliPrScript = AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "scripts", "get-aspire-cli-pr.sh"));
+                await auto.RunCommandFailFastAsync(
+                    AspireCliShellCommandHelpers.GetWorkflowRunInstallCommand(shellWrRunId, $"bash {getAspireCliPrScript}"),
+                    counter,
+                    TimeSpan.FromSeconds(300));
                 await auto.SourceAspireCliEnvironmentAsync(counter);
                 break;
 

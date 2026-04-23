@@ -24,8 +24,7 @@ internal static class CliE2ETestHelpers
     /// When running locally, some commands are replaced with echo stubs.
     /// </summary>
     internal static bool IsRunningInCI =>
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")) &&
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA"));
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"));
 
     /// <summary>
     /// Gets the PR number from the GITHUB_PR_NUMBER environment variable.
@@ -47,8 +46,8 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
-    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable.
-    /// This is the actual PR head commit, not the merge commit (GITHUB_SHA).
+    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable,
+    /// falling back to GITHUB_SHA for non-PR CI runs (e.g., schedule-triggered workflows).
     /// When running locally (not in CI), returns a dummy value for testing.
     /// </summary>
     /// <returns>The commit SHA, or a dummy value when running locally.</returns>
@@ -56,13 +55,21 @@ internal static class CliE2ETestHelpers
     {
         var commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA");
 
-        if (string.IsNullOrEmpty(commitSha))
+        if (!string.IsNullOrEmpty(commitSha))
         {
-            // Running locally - return dummy value
-            return "local0000";
+            return commitSha;
         }
 
-        return commitSha;
+        // Fallback: GITHUB_SHA is automatically set by GitHub Actions for all event types
+        var githubSha = Environment.GetEnvironmentVariable("GITHUB_SHA");
+
+        if (!string.IsNullOrEmpty(githubSha))
+        {
+            return githubSha;
+        }
+
+        // Running locally - return dummy value
+        return "local0000";
     }
 
     /// <summary>

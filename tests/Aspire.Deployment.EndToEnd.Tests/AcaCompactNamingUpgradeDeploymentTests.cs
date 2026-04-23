@@ -289,6 +289,7 @@ builder.Build().Run();
                 {
                     CliInstallMode.LocalHive or CliInstallMode.Preinstalled => "aspire update --channel local",
                     CliInstallMode.PullRequest => $"aspire update --channel pr-{DeploymentE2ETestHelpers.GetPrNumber()}",
+                    CliInstallMode.WorkflowRun => $"aspire update --channel run-{CliInstallStrategy.GetCliArchiveWorkflowRunId()}",
                     _ => "aspire update",
                 };
             }

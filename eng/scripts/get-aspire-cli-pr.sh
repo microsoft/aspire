@@ -2,6 +2,7 @@
 
 # get-aspire-cli-pr.sh - Download and unpack the Aspire CLI from a specific PR's build artifacts
 # Usage: ./get-aspire-cli-pr.sh PR_NUMBER [OPTIONS]
+#        ./get-aspire-cli-pr.sh --run-id WORKFLOW_RUN_ID [OPTIONS]
 
 set -euo pipefail
 
@@ -57,12 +58,13 @@ DESCRIPTION:
 USAGE:
     ./get-aspire-cli-pr.sh PR_NUMBER [OPTIONS]
     ./get-aspire-cli-pr.sh PR_NUMBER --run-id WORKFLOW_RUN_ID [OPTIONS]
+    ./get-aspire-cli-pr.sh --run-id WORKFLOW_RUN_ID [OPTIONS]
 
-    PR_NUMBER                   Pull request number (required)
-    --run-id, -r WORKFLOW_ID    Workflow run ID to download from (optional)
+    PR_NUMBER                   Pull request number (required unless --run-id is used alone)
+    --run-id, -r WORKFLOW_ID    Workflow run ID to download from (optional with PR, required without)
     -i, --install-path PATH     Directory prefix to install (default: ~/.aspire)
                                 CLI installs to: <install-path>/bin
-                                NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages
+                                NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages (or run-<RUN_ID>)
     --os OS                     Override OS detection (win, linux, linux-musl, osx)
     --arch ARCH                 Override architecture detection (x64, arm64)
     --hive-only                 Only install NuGet packages to the hive, skip CLI download
@@ -77,6 +79,7 @@ USAGE:
 EXAMPLES:
     ./get-aspire-cli-pr.sh 1234
     ./get-aspire-cli-pr.sh 1234 --run-id 12345678
+    ./get-aspire-cli-pr.sh --run-id 12345678
     ./get-aspire-cli-pr.sh 1234 --install-path ~/my-aspire
     ./get-aspire-cli-pr.sh 1234 --os linux --arch arm64 --verbose
     ./get-aspire-cli-pr.sh 1234 --hive-only
@@ -111,24 +114,24 @@ parse_args() {
 
     # Check that at least one argument is provided
     if [[ $# -lt 1 ]]; then
-        say_error "At least one argument is required. The first argument must be a PR number."
+        say_error "At least one argument is required. Provide a PR number or --run-id <ID>."
         say_info "Use --help for usage information."
         exit 1
     fi
 
-    # First argument must be the PR number (cannot start with --)
-    if [[ "$1" == --* ]]; then
-        say_error "First argument must be a PR number, not an option. Got: '$1'"
+    # First argument can be a PR number or --run-id for direct workflow run installation
+    if [[ "$1" == "--run-id" || "$1" == "-r" ]]; then
+        # No PR number — install directly from workflow run ID
+        PR_NUMBER=""
+    elif [[ "$1" == --* ]]; then
+        say_error "First argument must be a PR number or --run-id <ID>. Got: '$1'"
         say_info "Use --help for usage information."
         exit 1
-    fi
-
-    # Validate that the first argument is a valid PR number (positive integer)
-    if [[ "$1" =~ ^[1-9][0-9]*$ ]]; then
+    elif [[ "$1" =~ ^[1-9][0-9]*$ ]]; then
         PR_NUMBER="$1"
         shift
     else
-        say_error "First argument must be a valid PR number"
+        say_error "First argument must be a valid PR number or --run-id <ID>"
         say_info "Use --help for usage information."
         exit 1
     fi
@@ -975,9 +978,17 @@ download_and_install_from_pr() {
     # If a workflow run ID was explicitly provided via arguments, use that directly.
     # (Previously this checked the uninitialized local variable 'workflow_run_id', which was always empty.)
     if [[ -n "$WORKFLOW_RUN_ID" ]]; then
-        say_info "Starting download and installation for PR #$PR_NUMBER with workflow run ID: $WORKFLOW_RUN_ID"
+        if [[ -n "$PR_NUMBER" ]]; then
+            say_info "Starting download and installation for PR #$PR_NUMBER with workflow run ID: $WORKFLOW_RUN_ID"
+        else
+            say_info "Starting download and installation for workflow run ID: $WORKFLOW_RUN_ID"
+        fi
         workflow_run_id="$WORKFLOW_RUN_ID"
     else
+        if [[ -z "$PR_NUMBER" ]]; then
+            say_error "Either a PR number or --run-id <ID> must be provided."
+            return 1
+        fi
         # When only PR number is provided, find the workflow run
         say_info "Starting download and installation for PR #$PR_NUMBER"
 
@@ -995,7 +1006,13 @@ download_and_install_from_pr() {
 
     # Set installation paths
     local cli_install_dir="$INSTALL_PREFIX/bin"
-    local nuget_hive_dir="$INSTALL_PREFIX/hives/pr-$PR_NUMBER/packages"
+    local hive_label
+    if [[ -n "$PR_NUMBER" ]]; then
+        hive_label="pr-$PR_NUMBER"
+    else
+        hive_label="run-$workflow_run_id"
+    fi
+    local nuget_hive_dir="$INSTALL_PREFIX/hives/$hive_label/packages"
 
     # First, download both artifacts
     local cli_archive_path nuget_download_dir
@@ -1071,7 +1088,7 @@ download_and_install_from_pr() {
             cli_path="$cli_install_dir/aspire"
         fi
         # Non-fatal: channel can be set manually if this fails
-        save_global_settings "$cli_path" "channel" "pr-$PR_NUMBER" || true
+        save_global_settings "$cli_path" "channel" "$hive_label" || true
     fi
 }
 
