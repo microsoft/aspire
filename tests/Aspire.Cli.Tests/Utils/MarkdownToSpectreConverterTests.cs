@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Utils;
 using Spectre.Console;
@@ -237,9 +238,14 @@ public partial class MarkdownToSpectreConverterTests
     {
         var markdown = "[Aspire CLI](https://example.com/install?target=docs])";
 
-        var exception = Record.Exception(() => RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown)));
+        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
+        var exception = Record.Exception(() => RenderToPlainConsole(renderable));
 
         Assert.Null(exception);
+        Assert.Contains("Aspire CLI", RenderToPlainConsole(renderable));
+        Assert.Equal(
+            ["https://example.com/install?target=docs]"],
+            GetRenderableLinks(renderable));
     }
 
     [Fact]
@@ -409,6 +415,22 @@ public partial class MarkdownToSpectreConverterTests
 
         Assert.Equal("| Left  | Center | Right |", lines[0]);
         Assert.Equal("| :---- | :----: | ----: |", lines[1]);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_WithNarrowTableColumns_UsesConsistentWidths()
+    {
+        var markdown = """
+            | A | B |
+            | - | - |
+            | x | y |
+            """;
+
+        var lines = MarkdownToSpectreConverter.ConvertToPlainText(markdown).Replace("\r\n", "\n").Split('\n');
+
+        Assert.Equal("| A   | B   |", lines[0]);
+        Assert.Equal("| --- | --- |", lines[1]);
+        Assert.Equal("| x   | y   |", lines[2]);
     }
 
     [Fact]
@@ -720,6 +742,53 @@ Some [strikethrough]strikethrough[/] text with [grey]inline code block[/].
         console.WriteLine();
 
         return writer.ToString().Replace("\r\n", "\n");
+    }
+
+    private static IReadOnlyList<string> GetRenderableLinks(IRenderable renderable)
+    {
+        var markup = Assert.IsType<Markup>(renderable);
+
+        var paragraph = typeof(Markup)
+            .GetField("_paragraph", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(markup)!;
+        var lines = (System.Collections.IEnumerable)paragraph.GetType()
+            .GetField("_lines", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(paragraph)!;
+
+        var urls = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var line in lines)
+        {
+            if (line is not System.Collections.IEnumerable segments)
+            {
+                continue;
+            }
+
+            foreach (var segment in segments)
+            {
+                if (segment is null)
+                {
+                    continue;
+                }
+
+                var link = segment.GetType()
+                    .GetField("<Link>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(segment);
+                if (link is null)
+                {
+                    continue;
+                }
+
+                var url = (string?)link.GetType()
+                    .GetField("<Url>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .GetValue(link);
+                if (!string.IsNullOrEmpty(url))
+                {
+                    urls.Add(url);
+                }
+            }
+        }
+
+        return urls.ToArray();
     }
 
     [GeneratedRegex(@"\x1B\[[0-9;]*m")]

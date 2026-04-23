@@ -578,6 +578,11 @@ internal static partial class MarkdownToSpectreConverter
             }
         }
 
+        for (var i = 0; i < columnCount; i++)
+        {
+            widths[i] = Math.Max(widths[i], 3);
+        }
+
         var builder = new StringBuilder();
         for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
         {
@@ -617,9 +622,8 @@ internal static partial class MarkdownToSpectreConverter
         builder.Append('|');
         for (var i = 0; i < widths.Count; i++)
         {
-            var width = Math.Max(widths[i], 3);
             builder.Append(' ');
-            AppendTableSeparatorCell(builder, width, definitions is { Count: > 0 } && i < definitions.Count ? definitions[i].Alignment : null);
+            AppendTableSeparatorCell(builder, widths[i], definitions is { Count: > 0 } && i < definitions.Count ? definitions[i].Alignment : null);
             builder.Append(' ');
             builder.Append('|');
         }
