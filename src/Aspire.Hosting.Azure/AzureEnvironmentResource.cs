@@ -80,7 +80,7 @@ public sealed class AzureEnvironmentResource : Resource
             {
                 Name = PrepareResourcesStepName,
                 Description = "Prepares the Azure resources.",
-                Action = async context =>
+                Action = static async context =>
                 {
                     var preparer = context.Services.GetRequiredService<AzureResourcePreparer>();
                     await preparer.PrepareResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
@@ -92,7 +92,7 @@ public sealed class AzureEnvironmentResource : Resource
             {
                 Name = "run-mode-azure-provision",
                 Description = $"Provisions the Azure resources for {Name}.",
-                Action = async context =>
+                Action = static async context =>
                 {
                     var provisioner = context.Services.GetRequiredService<AzureProvisioner>();
                     await provisioner.ProvisionResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);

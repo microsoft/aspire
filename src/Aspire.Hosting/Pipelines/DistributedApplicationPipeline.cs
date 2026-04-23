@@ -468,6 +468,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             clone._steps.Add(step.Clone());
         }
+        clone._configurationCallbacks.Clear();
         clone._configurationCallbacks.AddRange(_configurationCallbacks);
         return clone;
     }

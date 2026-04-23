@@ -167,8 +167,14 @@ public class AzureContainerAppEnvironmentResource :
     private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)
     {
         var appModel = context.Model;
+        var executionContext = context.ExecutionContext;
         var services = context.Services;
         var cancellationToken = context.CancellationToken;
+
+        if (!executionContext.IsPublishMode)
+        {
+            return;
+        }
 
         // Remove the default container registry from the model if an explicit registry is configured
         if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
@@ -178,7 +184,6 @@ public class AzureContainerAppEnvironmentResource :
         }
 
         var logger = services.GetRequiredService<ILogger<AzureContainerAppEnvironmentResource>>();
-        var executionContext = services.GetRequiredService<DistributedApplicationExecutionContext>();
         var options = services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
 
         var containerAppEnvironmentContext = new ContainerAppEnvironmentContext(
