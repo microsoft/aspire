@@ -391,6 +391,12 @@ internal sealed class AzureResourcePreparer(
         foreach (var (azureResource, roles) in globalRoleAssignments)
         {
             var roleAssignmentResource = CreateGlobalRoleAssignmentsResource(azureResource, roles);
+
+            if (appModel.Resources.TryGetByName(roleAssignmentResource.Name, out _))
+            {
+                continue;
+            }
+
             appModel.Resources.Add(roleAssignmentResource);
 
             azureResource.Annotations.Add(new RoleAssignmentResourceAnnotation(roleAssignmentResource));
