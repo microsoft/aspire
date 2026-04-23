@@ -258,18 +258,13 @@ public static class SearchCommand
         var packages = new List<PackageInfo>();
         foreach (var result in results)
         {
-            var versions = await result.GetVersionsAsync().ConfigureAwait(false);
-            var allVersions = versions?.Select(v => v.Version.ToString()).ToList() ?? [];
-
             packages.Add(new PackageInfo
             {
                 Id = result.Identity.Id,
                 Version = result.Identity.Version.ToString(),
                 Description = result.Description,
                 Authors = result.Authors,
-                AllVersions = allVersions,
-                Source = source.Source,
-                Deprecated = await result.GetDeprecationMetadataAsync().ConfigureAwait(false) is not null
+                Source = source.Source
             });
         }
 
