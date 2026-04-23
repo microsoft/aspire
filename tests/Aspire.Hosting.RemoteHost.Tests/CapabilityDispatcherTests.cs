@@ -1801,6 +1801,28 @@ public class CapabilityDispatcherTests
         Assert.DoesNotContain("on resource", capabilityException.Message);
     }
 
+    [Fact]
+    public void Invoke_ExtensionMethodTakingRawResource_UnwrapsBuilderHandle()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestRawResourceCapabilities).Assembly]);
+
+        var resource = new TestConnectionStringResource("mydb");
+        var builder = new TestResourceBuilder<TestConnectionStringResource>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestConnectionStringResource");
+
+        var args = new JsonObject
+        {
+            ["resource"] = new JsonObject { ["$handle"] = handleId },
+            ["key"] = "Host"
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/getConnectionPropertyKey", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("Host", result.GetValue<string>());
+    }
+
     private static CapabilityDispatcher CreateDispatcher(params System.Reflection.Assembly[] assemblies)
     {
         var handles = new HandleRegistry();
@@ -2251,5 +2273,43 @@ internal sealed class TestResourceWithMethods : Resource
     public string Greet(string prefix)
     {
         return $"{prefix}, {Name}!";
+    }
+}
+
+/// <summary>
+/// Test resource implementing IResourceWithConnectionString for testing
+/// extension methods that take a raw resource type (not wrapped in IResourceBuilder).
+/// </summary>
+internal sealed class TestConnectionStringResource : Resource, IResourceWithConnectionString
+{
+    public TestConnectionStringResource(string name) : base(name) { }
+
+    public ReferenceExpression ConnectionStringExpression =>
+        ReferenceExpression.Create($"Host=localhost;Database={Name}");
+
+    public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+    {
+        yield return new("Host", ReferenceExpression.Create($"localhost"));
+        yield return new("Database", ReferenceExpression.Create($"{Name}"));
+    }
+}
+
+/// <summary>
+/// Test capabilities for extension methods that take raw resource types (not builder-wrapped).
+/// Exercises the builder-to-resource unwrapping path in RegisterFromCapability.
+/// </summary>
+internal static class TestRawResourceCapabilities
+{
+    [AspireExport(Description = "Gets a connection property by key from a raw resource")]
+    public static string GetConnectionPropertyKey(IResourceWithConnectionString resource, string key)
+    {
+        foreach (var prop in resource.GetConnectionProperties())
+        {
+            if (string.Equals(prop.Key, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return prop.Key;
+            }
+        }
+        return string.Empty;
     }
 }
