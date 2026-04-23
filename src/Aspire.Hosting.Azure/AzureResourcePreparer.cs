@@ -245,7 +245,7 @@ internal sealed class AzureResourcePreparer(
 
         if (globalRoleAssignments.Count > 0)
         {
-            CreateGlobalRoleAssignments(appModel, globalRoleAssignments);
+            EnsureGlobalRoleAssignments(appModel, globalRoleAssignments);
         }
     }
 
@@ -386,7 +386,7 @@ internal sealed class AzureResourcePreparer(
         existingRoles.UnionWith(newRoles);
     }
 
-    private void CreateGlobalRoleAssignments(DistributedApplicationModel appModel, Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> globalRoleAssignments)
+    private void EnsureGlobalRoleAssignments(DistributedApplicationModel appModel, Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> globalRoleAssignments)
     {
         foreach (var (azureResource, roles) in globalRoleAssignments)
         {
