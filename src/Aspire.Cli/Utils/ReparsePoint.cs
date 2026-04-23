@@ -376,9 +376,56 @@ internal static partial class ReparsePoint
             out uint lpBytesReturned,
             IntPtr lpOverlapped);
 
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool DeviceIoControl(
+            SafeFileHandle hDevice,
+            uint dwIoControlCode,
+            IntPtr lpInBuffer,
+            uint nInBufferSize,
+            byte[] lpOutBuffer,
+            uint nOutBufferSize,
+            out uint lpBytesReturned,
+            IntPtr lpOverlapped);
+
         // POSIX rename(2): atomic on a single filesystem, overwrites destination if it
         // exists and is of a compatible kind (symlink/file replacing symlink/file).
         [LibraryImport("libc", SetLastError = true, StringMarshalling = StringMarshalling.Utf8, EntryPoint = "rename")]
         internal static partial int rename(string oldpath, string newpath);
+    }
+
+    /// <summary>
+    /// Reads the reparse tag (e.g. <see cref="Win32Constants.IO_REPARSE_TAG_MOUNT_POINT"/>
+    /// or <see cref="Win32Constants.IO_REPARSE_TAG_SYMLINK"/>) from an existing reparse
+    /// point. Returns <see langword="null"/> if <paramref name="path"/> is not a reparse
+    /// point or the tag cannot be read.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    internal static uint? GetReparseTag(string path)
+    {
+        if (!IsReparsePoint(path))
+        {
+            return null;
+        }
+
+        using var handle = OpenReparsePointHandle(path, write: false);
+
+        // REPARSE_DATA_BUFFER starts with a DWORD ReparseTag; we only need the
+        // first 4 bytes but must supply a buffer large enough for the ioctl.
+        var buffer = new byte[16 * 1024];
+        if (!NativeMethods.DeviceIoControl(
+                handle,
+                Win32Constants.FSCTL_GET_REPARSE_POINT,
+                IntPtr.Zero,
+                0,
+                buffer,
+                (uint)buffer.Length,
+                out _,
+                IntPtr.Zero))
+        {
+            return null;
+        }
+
+        return System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(buffer.AsSpan(0, 4));
     }
 }

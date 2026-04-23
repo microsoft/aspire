@@ -33,7 +33,9 @@ internal static class Win32Constants
 
     // DeviceIoControl - dwIoControlCode
     public const uint FSCTL_SET_REPARSE_POINT = 0x000900A4;
+    public const uint FSCTL_GET_REPARSE_POINT = 0x000900A8;
 
     // Reparse-point tags (winnt.h)
     public const uint IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003u;
+    public const uint IO_REPARSE_TAG_SYMLINK = 0xA000000Cu;
 }

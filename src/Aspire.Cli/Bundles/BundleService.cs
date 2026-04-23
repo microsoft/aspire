@@ -16,10 +16,8 @@ namespace Aspire.Cli.Bundles;
 /// <summary>
 /// Manages extraction of the embedded bundle payload from self-extracting CLI binaries.
 /// </summary>
-internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<BundleService> logger) : IBundleService
+internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILayoutDiscovery layoutDiscovery, ILogger<BundleService> logger) : IBundleService
 {
-    private const string PayloadResourceName = "bundle.tar.gz";
-
     /// <summary>
     /// Name of the marker file written after successful extraction.
     /// </summary>
@@ -44,18 +42,14 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     /// </summary>
     internal const string BadSuffixPrefix = ".bad.";
 
-    private static readonly bool s_isBundle =
-        typeof(BundleService).Assembly.GetManifestResourceInfo(PayloadResourceName) is not null;
-
     /// <inheritdoc/>
-    public bool IsBundle => s_isBundle;
+    public bool IsBundle => payloadProvider.HasPayload;
 
     /// <summary>
-    /// Opens a read-only stream over the embedded bundle payload.
-    /// Returns <see langword="null"/> if no payload is embedded.
+    /// Overrides <see cref="Environment.ProcessPath"/> for version fingerprinting.
+    /// Used in tests to simulate different CLI binaries.
     /// </summary>
-    public static Stream? OpenPayload() =>
-        typeof(BundleService).Assembly.GetManifestResourceStream(PayloadResourceName);
+    internal string? ProcessPathOverride { get; init; }
 
     /// <summary>
     /// Well-known layout subdirectories that are exposed as reparse points pointing
@@ -76,7 +70,7 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
             return;
         }
 
-        var processPath = Environment.ProcessPath;
+        var processPath = ProcessPathOverride ?? Environment.ProcessPath;
         if (string.IsNullOrEmpty(processPath))
         {
             logger.LogDebug("ProcessPath is null or empty, skipping bundle extraction.");
@@ -128,7 +122,7 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
             if (!force && layoutDiscovery.DiscoverLayout() is not null)
             {
                 var existingVersion = ReadVersionMarker(destinationPath);
-                var currentVersion = GetCurrentVersion();
+                var currentVersion = GetCurrentVersion(ProcessPathOverride);
                 if (existingVersion == currentVersion)
                 {
                     logger.LogDebug("Bundle already extracted and up to date (version: {Version}).", existingVersion);
@@ -155,7 +149,7 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
         var versionsRoot = Path.Combine(destinationPath, VersionsDirectoryName);
         Directory.CreateDirectory(versionsRoot);
 
-        var currentVersion = GetCurrentVersion();
+        var currentVersion = GetCurrentVersion(ProcessPathOverride);
         var versionId = ComputeVersionId(currentVersion);
         var activeVersionDir = Path.Combine(versionsRoot, versionId);
 
@@ -575,11 +569,19 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     /// <summary>
     /// Extracts the embedded tar.gz payload to the specified directory using .NET TarReader.
     /// </summary>
-    internal static async Task ExtractPayloadAsync(string destinationPath, CancellationToken cancellationToken)
+    internal async Task ExtractPayloadAsync(string destinationPath, CancellationToken cancellationToken)
+    {
+        using var payloadStream = payloadProvider.OpenPayload() ?? throw new InvalidOperationException("No bundle payload available.");
+        await ExtractPayloadAsync(payloadStream, destinationPath, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Extracts a tar.gz payload stream to the specified directory.
+    /// </summary>
+    internal static async Task ExtractPayloadAsync(Stream payloadStream, string destinationPath, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(destinationPath);
 
-        using var payloadStream = OpenPayload() ?? throw new InvalidOperationException("No embedded bundle payload.");
         await using var gzipStream = new GZipStream(payloadStream, CompressionMode.Decompress);
         await using var tarReader = new TarReader(gzipStream);
 

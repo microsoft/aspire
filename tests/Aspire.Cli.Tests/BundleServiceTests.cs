@@ -12,14 +12,16 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsBundle_ReturnsFalse_WhenNoEmbeddedResource()
     {
-        // Test assembly has no embedded bundle.tar.gz resource — verify via OpenPayload
-        Assert.Null(BundleService.OpenPayload());
+        // Test assembly has no embedded bundle.tar.gz resource — verify via provider
+        var provider = new EmbeddedBundlePayloadProvider();
+        Assert.False(provider.HasPayload);
     }
 
     [Fact]
     public void OpenPayload_ReturnsNull_WhenNoEmbeddedResource()
     {
-        Assert.Null(BundleService.OpenPayload());
+        var provider = new EmbeddedBundlePayloadProvider();
+        Assert.Null(provider.OpenPayload());
     }
 
     [Fact]
