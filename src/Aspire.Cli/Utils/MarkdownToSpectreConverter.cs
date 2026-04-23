@@ -151,11 +151,17 @@ internal static partial class MarkdownToSpectreConverter
         return renderables;
     }
 
-    private static IRenderable? RenderBlockToRenderable(Block block, string markdown) => block switch
+    private static IRenderable? RenderBlockToRenderable(Block block, string markdown)
     {
-        MarkdigTable table => RenderTableToRenderable(table, markdown),
-        _ => CreateMarkupRenderable(block, markdown)
-    };
+        var renderable = block switch
+        {
+            ThematicBreakBlock => new Rule(),
+            MarkdigTable table => RenderTableToRenderable(table, markdown),
+            _ => CreateMarkupRenderable(block, markdown)
+        };
+
+        return renderable is null ? null : new Rows(renderable, Text.Empty);
+    }
 
     private static IRenderable? CreateMarkupRenderable(Block block, string markdown)
     {
@@ -210,6 +216,9 @@ internal static partial class MarkdownToSpectreConverter
             case HeadingBlock heading:
                 AppendInlinesToPlainText(builder, heading.Inline, markdown);
                 break;
+            case HtmlBlock htmlBlock:
+                builder.Append(StripHtmlTags(GetOriginalMarkdownSpan(htmlBlock.Span, markdown)));
+                break;
             case QuoteBlock quote:
                 AppendBlocksToPlainText(builder, quote, markdown);
                 break;
@@ -246,6 +255,9 @@ internal static partial class MarkdownToSpectreConverter
         {
             case ParagraphBlock paragraph:
                 AppendInlinesToMarkup(builder, paragraph.Inline, markdown);
+                break;
+            case HtmlBlock htmlBlock:
+                AppendEscapedMarkup(builder, StripHtmlTags(GetOriginalMarkdownSpan(htmlBlock.Span, markdown)).AsSpan());
                 break;
             case HeadingBlock heading:
                 AppendHeadingToMarkup(builder, heading.Level, heading.Inline, markdown);
@@ -672,6 +684,16 @@ internal static partial class MarkdownToSpectreConverter
             : markdown.AsSpan(span.Start, span.End - span.Start + 1);
     }
 
+    private static string StripHtmlTags(ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty)
+        {
+            return string.Empty;
+        }
+
+        return HtmlTagRegex().Replace(text.ToString(), string.Empty);
+    }
+
     private static void AppendCodeBlockToPlainText(StringBuilder builder, CodeBlock codeBlock)
     {
         AppendCodeBlockText(builder, codeBlock, escapeMarkup: false);
@@ -896,6 +918,9 @@ internal static partial class MarkdownToSpectreConverter
             case LiteralInline literal:
                 AppendEscapedMarkup(builder, literal.Content.AsSpan());
                 break;
+            case HtmlInline htmlInline:
+                AppendEscapedMarkup(builder, StripHtmlTags(GetOriginalMarkdownSpan(htmlInline.Span, markdown)).AsSpan());
+                break;
             case CodeInline code:
                 builder.Append("[grey][bold]");
                 AppendEscapedMarkup(builder, code.Content.AsSpan());
@@ -1000,6 +1025,9 @@ internal static partial class MarkdownToSpectreConverter
         {
             case LiteralInline literal:
                 builder.Append(literal.Content.AsSpan());
+                break;
+            case HtmlInline htmlInline:
+                builder.Append(StripHtmlTags(GetOriginalMarkdownSpan(htmlInline.Span, markdown)));
                 break;
             case CodeInline code:
                 builder.Append(code.Content);
@@ -1301,5 +1329,8 @@ internal static partial class MarkdownToSpectreConverter
 
     [GeneratedRegex(@"^>\s*(.*)$", RegexOptions.Multiline)]
     private static partial Regex QuotedTextRegex();
+
+    [GeneratedRegex(@"</?[^>]+>", RegexOptions.Singleline)]
+    private static partial Regex HtmlTagRegex();
 
 }

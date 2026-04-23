@@ -569,8 +569,7 @@ internal sealed class RenderCommand : BaseCommand
             That's the **full tour** of markdown features.
             """;
 
-        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
-        _ansiConsole.Write(renderable);
+        InteractionService.DisplayMarkdown(markdown);
         return ExitCodeConstants.Success;
     }
 }
