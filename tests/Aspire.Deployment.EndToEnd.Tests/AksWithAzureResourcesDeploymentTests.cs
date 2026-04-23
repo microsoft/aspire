@@ -127,9 +127,13 @@ public sealed class AksWithAzureResourcesDeploymentTests(ITestOutputHelper outpu
 
                 var content = File.ReadAllText(appHostFilePath);
 
-                // Insert AKS environment and Azure resources before builder.Build().Run()
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+                // Insert AKS environment and Azure resources AFTER CreateBuilder
+                // so variables are available when apiservice references them.
+                content = content.Replace(
+                    "var builder = DistributedApplication.CreateBuilder(args);",
+                    """
+var builder = DistributedApplication.CreateBuilder(args);
+
 #pragma warning disable ASPIREAZURE003
 
 // AKS environment with DASv5 SKUs
@@ -143,11 +147,7 @@ var storage = builder.AddAzureStorage("storage");
 var blobs = storage.AddBlobs("blobs");
 
 #pragma warning restore ASPIREAZURE003
-
-builder.Build().Run();
-""";
-
-                content = content.Replace(buildRunPattern, replacement);
+""");
 
                 // Wire Azure resources to the API service
                 content = content.Replace(
@@ -178,7 +178,7 @@ builder.Build().Run();
                     """
 builder.AddServiceDefaults();
 builder.AddAzureKeyVaultClient("vault");
-builder.AddAzureBlobClient("blobs");
+builder.AddAzureBlobServiceClient("blobs");
 """);
 
                 // Add test endpoints before app.Run()

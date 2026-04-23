@@ -107,19 +107,19 @@ public sealed class AksMultipleNodePoolsDeploymentTests(ITestOutputHelper output
             // Add using directive for WithNodePool extension method
             content = "using Aspire.Hosting.Kubernetes.Extensions;\n" + content;
 
-            // Insert the Azure Kubernetes Environment with multiple node pools before builder.Build().Run();
-            var buildRunPattern = "builder.Build().Run();";
-            var replacement = """
+            // Insert the Azure Kubernetes Environment with multiple node pools AFTER CreateBuilder
+            // so workerPool variable is available when apiservice references it.
+            content = content.Replace(
+                "var builder = DistributedApplication.CreateBuilder(args);",
+                """
+var builder = DistributedApplication.CreateBuilder(args);
+
 // AKS environment with multiple node pools
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSystemNodePool("Standard_D2as_v5", minCount: 1, maxCount: 2);
 
 var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
-
-builder.Build().Run();
-""";
-
-            content = content.Replace(buildRunPattern, replacement);
+""");
 
             // Pin apiservice to the worker node pool
             content = content.Replace(

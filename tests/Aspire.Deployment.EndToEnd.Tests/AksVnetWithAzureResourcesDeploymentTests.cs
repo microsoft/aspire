@@ -129,9 +129,13 @@ public sealed class AksVnetWithAzureResourcesDeploymentTests(ITestOutputHelper o
 
                 var content = File.ReadAllText(appHostFilePath);
 
-                // Replace builder.Build().Run() with full infrastructure
-                var buildRunPattern = "builder.Build().Run();";
-                var replacement = """
+                // Insert full infrastructure AFTER CreateBuilder so variables
+                // are available when apiservice references them.
+                content = content.Replace(
+                    "var builder = DistributedApplication.CreateBuilder(args);",
+                    """
+var builder = DistributedApplication.CreateBuilder(args);
+
 #pragma warning disable ASPIREAZURE003
 
 // VNet with subnets for AKS and Private Endpoints
@@ -154,11 +158,7 @@ var storage = builder.AddAzureStorage("storage");
 var blobs = storage.AddBlobs("blobs");
 
 #pragma warning restore ASPIREAZURE003
-
-builder.Build().Run();
-""";
-
-                content = content.Replace(buildRunPattern, replacement);
+""");
 
                 // Add WithReference and WithNodePool to apiservice
                 content = content.Replace(
@@ -190,7 +190,7 @@ builder.Build().Run();
                     """
 builder.AddServiceDefaults();
 builder.AddAzureKeyVaultClient("vault");
-builder.AddAzureBlobClient("blobs");
+builder.AddAzureBlobServiceClient("blobs");
 """);
 
                 apiContent = apiContent.Replace(
