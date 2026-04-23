@@ -30,8 +30,13 @@ internal sealed class InitCommand : BaseCommand
     private readonly ILanguageService _languageService;
     private readonly ISolutionLocator _solutionLocator;
     private readonly AgentInitCommand _agentInitCommand;
-    private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IDotNetCliRunner _runner;
+
+    internal static readonly Option<bool?> s_suppressAgentInitOption = new("--suppress-agent-init")
+    {
+        Description = SharedCommandStrings.AgentInitOptionDescription,
+        Recursive = false
+    };
 
     private readonly Option<string?> _languageOption;
 
@@ -44,7 +49,6 @@ internal sealed class InitCommand : BaseCommand
         CliExecutionContext executionContext,
         IInteractionService interactionService,
         AgentInitCommand agentInitCommand,
-        ICliHostEnvironment hostEnvironment,
         IDotNetCliRunner runner)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
@@ -52,7 +56,6 @@ internal sealed class InitCommand : BaseCommand
         _languageService = languageService;
         _solutionLocator = solutionLocator;
         _agentInitCommand = agentInitCommand;
-        _hostEnvironment = hostEnvironment;
         _runner = runner;
 
         _languageOption = new Option<string?>("--language")
@@ -60,6 +63,7 @@ internal sealed class InitCommand : BaseCommand
             Description = InitCommandStrings.LanguageOptionDescription
         };
         Options.Add(_languageOption);
+        Options.Add(s_suppressAgentInitOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -94,7 +98,8 @@ internal sealed class InitCommand : BaseCommand
         // Step 4: Chain to aspire agent init for MCP server + skill configuration.
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, ExitCodeConstants.Success, workspaceRoot, cancellationToken);
+        var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, ExitCodeConstants.Success, workspaceRoot, agentInitBinding, cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == ExitCodeConstants.Success &&
@@ -160,7 +165,7 @@ internal sealed class InitCommand : BaseCommand
         var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
         if (File.Exists(appHostPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMark, "apphost.cs already exists — skipping.");
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "apphost.cs already exists — skipping.");
             return Task.FromResult(ExitCodeConstants.Success);
         }
 
@@ -175,7 +180,7 @@ internal sealed class InitCommand : BaseCommand
             builder.Build().Run();
             """;
         File.WriteAllText(appHostPath, appHostContent);
-        InteractionService.DisplayMessage(KnownEmojis.CheckMark, "Created apphost.cs");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
 
         // Drop aspire.config.json
         DropAspireConfig(workingDirectory, "apphost.cs", language: null);
@@ -192,7 +197,7 @@ internal sealed class InitCommand : BaseCommand
 
         if (Directory.Exists(appHostDirPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"{appHostDirName}/ already exists — skipping.");
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostDirName}/ already exists — skipping.");
             return ExitCodeConstants.Success;
         }
 
@@ -217,7 +222,7 @@ internal sealed class InitCommand : BaseCommand
             return ExitCodeConstants.FailedToCreateNewProject;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"Created {appHostDirName}/");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostDirName}/");
 
         return ExitCodeConstants.Success;
     }
@@ -290,12 +295,12 @@ internal sealed class InitCommand : BaseCommand
         var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
         if (File.Exists(appHostPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"{appHostFileName} already exists — skipping.");
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists — skipping.");
             return Task.FromResult(ExitCodeConstants.Success);
         }
 
         File.WriteAllText(appHostPath, appHostContent);
-        InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"Created {appHostFileName}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostFileName}");
 
         // Drop aspire.config.json
         DropAspireConfig(workingDirectory, appHostFileName, languageConfigValue);
@@ -378,7 +383,7 @@ internal sealed class InitCommand : BaseCommand
         var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(configPath, settings.ToJsonString(jsonOptions));
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"Created {AspireConfigFile.FileName}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
     }
 
 }

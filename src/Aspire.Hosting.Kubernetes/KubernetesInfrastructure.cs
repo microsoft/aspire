@@ -52,9 +52,13 @@ internal sealed class KubernetesInfrastructure(
 
             foreach (var r in @event.Model.GetComputeResources())
             {
-                // Skip resources that are explicitly targeted to a different compute environment
+                // Skip resources that are explicitly targeted to a different compute environment.
+                // Also match if the resource targets a parent compute environment (e.g., AKS)
+                // that owns this Kubernetes environment.
                 var resourceComputeEnvironment = r.GetComputeEnvironment();
-                if (resourceComputeEnvironment is not null && resourceComputeEnvironment != environment)
+                if (resourceComputeEnvironment is not null &&
+                    resourceComputeEnvironment != environment &&
+                    resourceComputeEnvironment != environment.OwningComputeEnvironment)
                 {
                     continue;
                 }
@@ -69,10 +73,14 @@ internal sealed class KubernetesInfrastructure(
                 var serviceResource = await environmentContext.CreateKubernetesResourceAsync(r, executionContext, cancellationToken).ConfigureAwait(false);
                 serviceResource.AddPrintSummaryStep();
 
-                // Add deployment target annotation to the resource
+                // Add deployment target annotation to the resource.
+                // Use the resource's actual compute environment (which may be a parent
+                // like AzureKubernetesEnvironmentResource) so that GetDeploymentTargetAnnotation
+                // can match it correctly during publish.
+                var computeEnvForAnnotation = resourceComputeEnvironment ?? (IComputeEnvironmentResource)environment;
                 r.Annotations.Add(new DeploymentTargetAnnotation(serviceResource)
                 {
-                    ComputeEnvironment = environment,
+                    ComputeEnvironment = computeEnvForAnnotation,
                     ContainerRegistry = containerRegistry
                 });
             }

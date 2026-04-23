@@ -139,6 +139,12 @@
   <data name="CertificatesMayNotBeFullyTrusted" xml:space="preserve">
     <value>Developer certificates may not be fully trusted (trust exit code was: {0}).</value>
   </data>
+  <data name="CertificatesNotTrustedNonInteractive" xml:space="preserve">
+    <value>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</value>
+  </data>
+  <data name="CertificatesPartiallyTrustedNonInteractive" xml:space="preserve">
+    <value>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</value>
+  </data>
   <data name="FailedToRetrieveCachedTemplatePackages" xml:space="preserve">
     <value>Failed to retrieve template packages via cache.</value>
   </data>
@@ -218,8 +224,8 @@
     <value>Could not build: {0}</value>
   </data>
   <data name="ProjectFilesCreatedButNodeToolsNotFound" xml:space="preserve">
-    <value>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</value>
-    <comment>Do not translate 'npm install', 'Node.js', or 'PATH'.</comment>
+    <value>Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</value>
+    <comment>{0} is the install command, such as 'npm install', 'bun install', 'yarn install', or 'pnpm install'. {1} is the toolchain display name, such as 'Node.js', 'Bun', 'Yarn', or 'pnpm'. Do not translate 'PATH'.</comment>
   </data>
   <data name="AppHostsMayNotBeBuildable" xml:space="preserve">
     <value>No buildable AppHosts were found, but there may have been unbuildable AppHosts.</value>

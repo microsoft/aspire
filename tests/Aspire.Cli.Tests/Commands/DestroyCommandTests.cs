@@ -19,7 +19,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         using var tempRepo = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("destroy --help");
@@ -48,7 +48,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         var result = command.Parse("destroy --apphost invalid.csproj");
@@ -107,7 +107,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         var result = command.Parse("destroy");
@@ -164,7 +164,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         var result = command.Parse("destroy --yes");
@@ -222,7 +222,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
         var result = command.Parse($"destroy --output-path {testOutputPath}");

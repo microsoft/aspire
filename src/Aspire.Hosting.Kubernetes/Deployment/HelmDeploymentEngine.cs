@@ -120,6 +120,27 @@ internal static partial class HelmDeploymentEngine
         var model = factoryContext.PipelineContext.Model;
         var steps = new List<PipelineStep>();
 
+        // Step 0: Check prerequisites — verify Helm CLI is available
+        var checkPrereqStep = new PipelineStep
+        {
+            Name = $"check-helm-prereqs-{environment.Name}",
+            Description = $"Verifies Helm CLI is available for {environment.Name}.",
+            Action = ctx =>
+            {
+                var helmPath = PathLookupHelper.FindFullPathFromPath("helm");
+                if (helmPath is null)
+                {
+                    throw new InvalidOperationException(
+                        "Helm CLI not found. Install it from https://helm.sh/docs/intro/install/ " +
+                        "and ensure it is available on your PATH.");
+                }
+
+                ctx.Logger.LogDebug("Helm CLI found at: {HelmPath}", helmPath);
+                return Task.CompletedTask;
+            }
+        };
+        steps.Add(checkPrereqStep);
+
         // Step 1: Prepare - resolve values.yaml with actual image references and parameter values
         var prepareStep = new PipelineStep
         {
@@ -129,6 +150,7 @@ internal static partial class HelmDeploymentEngine
         };
         prepareStep.DependsOn(WellKnownPipelineSteps.Publish);
         prepareStep.DependsOn(WellKnownPipelineSteps.Build);
+        prepareStep.DependsOn($"check-helm-prereqs-{environment.Name}");
         steps.Add(prepareStep);
 
         // Step 2: Helm deploy - run helm upgrade --install
@@ -180,7 +202,7 @@ internal static partial class HelmDeploymentEngine
                 // Use saved state for the confirmation message (more accurate than recomputing)
                 var @namespace = savedNamespace ?? "default";
                 await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{savedReleaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
-                await HelmUninstallAsync(ctx, savedReleaseName, @namespace).ConfigureAwait(false);
+                await HelmUninstallAsync(ctx, environment, savedReleaseName, @namespace).ConfigureAwait(false);
 
                 ctx.Summary.Add("🗑️ Helm Release", savedReleaseName);
                 ctx.Summary.Add("☸️ Namespace", @namespace);
@@ -283,7 +305,8 @@ internal static partial class HelmDeploymentEngine
     {
         if (environment.CapturedHelmValues.Count == 0
             && environment.CapturedHelmCrossReferences.Count == 0
-            && environment.CapturedHelmImageReferences.Count == 0)
+            && environment.CapturedHelmImageReferences.Count == 0
+            && environment.CapturedHelmValueProviders.Count == 0)
         {
             return;
         }
@@ -326,6 +349,20 @@ internal static partial class HelmDeploymentEngine
             if (resolvedImage is not null)
             {
                 SetOverrideValue(overrideValues, imageRef.Section, imageRef.ResourceKey, imageRef.ValueKey, resolvedImage);
+            }
+        }
+
+        // Phase 4: Resolve generic IValueProvider references.
+        // During publish, values backed by IValueProvider (e.g., Bicep output references,
+        // connection strings) are written as empty placeholders. At deploy time, we call
+        // GetValueAsync() to resolve the actual values from external sources.
+        // This is cloud-provider agnostic — any IValueProvider implementation works.
+        foreach (var valueProviderRef in environment.CapturedHelmValueProviders)
+        {
+            var resolvedValue = await valueProviderRef.ValueProvider.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            if (resolvedValue is not null)
+            {
+                SetOverrideValue(overrideValues, valueProviderRef.Section, valueProviderRef.ResourceKey, valueProviderRef.ValueKey, resolvedValue);
             }
         }
 
@@ -424,6 +461,11 @@ internal static partial class HelmDeploymentEngine
                 arguments.Append(" --create-namespace");
                 arguments.Append(" --wait");
 
+                if (environment.KubeConfigPath is not null)
+                {
+                    arguments.Append(CultureInfo.InvariantCulture, $" --kubeconfig \"{environment.KubeConfigPath}\"");
+                }
+
                 if (File.Exists(valuesFilePath))
                 {
                     arguments.Append(CultureInfo.InvariantCulture, $" -f \"{valuesFilePath}\"");
@@ -501,7 +543,7 @@ internal static partial class HelmDeploymentEngine
 
         try
         {
-            var endpoints = await GetServiceEndpointsAsync(computeResource.Name.ToServiceName(), @namespace, context.Logger, context.CancellationToken).ConfigureAwait(false);
+            var endpoints = await GetServiceEndpointsAsync(computeResource.Name.ToServiceName(), @namespace, environment.KubeConfigPath, context.Logger, context.CancellationToken).ConfigureAwait(false);
 
             if (endpoints.Count > 0)
             {
@@ -534,6 +576,11 @@ internal static partial class HelmDeploymentEngine
             context.Summary.Add(
                 "📊 Dashboard",
                 new MarkdownString($"`kubectl port-forward -n {@namespace} svc/{dashboardServiceName} 18888:18888` then open [http://localhost:18888](http://localhost:18888)"));
+
+            var dashboardDeploymentName = environment.Dashboard.Resource.Name.ToKubernetesResourceName();
+            context.Summary.Add(
+                "🔑 Dashboard login",
+                new MarkdownString($"`kubectl logs -n {@namespace} -l app.kubernetes.io/component={dashboardDeploymentName} --tail=50` to retrieve the login token"));
         }
 
         // Helm status and resource inspection
@@ -555,10 +602,10 @@ internal static partial class HelmDeploymentEngine
     {
         var @namespace = await ResolveNamespaceAsync(context, environment).ConfigureAwait(false);
         var releaseName = await ResolveReleaseNameAsync(context, environment).ConfigureAwait(false);
-        await HelmUninstallAsync(context, releaseName, @namespace).ConfigureAwait(false);
+        await HelmUninstallAsync(context, environment, releaseName, @namespace).ConfigureAwait(false);
     }
 
-    private static async Task HelmUninstallAsync(PipelineStepContext context, string releaseName, string @namespace)
+    private static async Task HelmUninstallAsync(PipelineStepContext context, KubernetesEnvironmentResource environment, string releaseName, string @namespace)
     {
         var uninstallTask = await context.ReportingStep.CreateTaskAsync(
             new MarkdownString($"Uninstalling Helm release **{releaseName}** from namespace **{@namespace}**"),
@@ -570,6 +617,11 @@ internal static partial class HelmDeploymentEngine
             {
                 var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
                 var arguments = $"uninstall {releaseName} --namespace {@namespace}";
+
+                if (environment.KubeConfigPath is not null)
+                {
+                    arguments += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
 
                 context.Logger.LogDebug("Running helm {Arguments}", arguments);
 
@@ -640,12 +692,18 @@ internal static partial class HelmDeploymentEngine
     private static async Task<List<string>> GetServiceEndpointsAsync(
         string serviceName,
         string @namespace,
+        string? kubeConfigPath,
         ILogger logger,
         CancellationToken cancellationToken)
     {
         var endpoints = new List<string>();
 
         var arguments = $"get service {serviceName} --namespace {@namespace} -o json";
+
+        if (kubeConfigPath is not null)
+        {
+            arguments += $" --kubeconfig \"{kubeConfigPath}\"";
+        }
         var stdoutBuilder = new StringBuilder();
 
         var spec = new ProcessSpec("kubectl")

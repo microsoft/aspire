@@ -1,6 +1,3 @@
 ﻿parameters: {}
 secrets: {}
-config:
-  env_dashboard:
-    DASHBOARD__FRONTEND__AUTHMODE: "Unsecured"
-    DASHBOARD__OTLP__AUTHMODE: "Unsecured"
+config: {}

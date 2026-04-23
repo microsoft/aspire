@@ -32,14 +32,17 @@ public class TelemetryApiTests
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(_testOutputHelper, config =>
         {
             config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.Unsecured.ToString();
-            // Don't set any Api config
+            // Remove Api auth config to test defaults
+            config.Remove(DashboardConfigNames.DashboardApiAuthModeName.ConfigKey);
+            config.Remove(DashboardConfigNames.DashboardApiPrimaryApiKeyName.ConfigKey);
         });
         await app.StartAsync().DefaultTimeout();
 
-        // Assert - verify ApiOptions defaults
+        // Assert - verify ApiOptions defaults to ApiKey with auto-generated key
         var options = app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
         Assert.NotNull(options.Api);
-        Assert.Equal(ApiAuthMode.Unsecured, options.Api.AuthMode);
+        Assert.Equal(ApiAuthMode.ApiKey, options.Api.AuthMode);
+        Assert.False(string.IsNullOrEmpty(options.Api.PrimaryApiKey), "A primary API key should be auto-generated.");
     }
 
     #endregion

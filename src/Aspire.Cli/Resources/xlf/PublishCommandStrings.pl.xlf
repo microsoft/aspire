@@ -33,7 +33,7 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The output path for the generated artifacts. Defaults to './aspire-output' if not specified.</source>
+        <source>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</source>
         <target state="needs-review-translation">Ścieżka danych wyjściowych dla wygenerowanych artefaktów. Wartością domyślną jest „./jpg-output”, jeśli nie została określona.</target>
         <note />
       </trans-unit>

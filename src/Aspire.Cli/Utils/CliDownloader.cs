@@ -76,7 +76,7 @@ internal class CliDownloader(
             });
 
             // Validate checksum
-            interactionService.DisplayMessage(KnownEmojis.CheckMark, "Validating downloaded file...");
+            interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Validating downloaded file...");
             await ValidateChecksumAsync(archivePath, checksumPath, cancellationToken);
 
             interactionService.DisplaySuccess("Download completed successfully");

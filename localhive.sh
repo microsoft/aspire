@@ -278,10 +278,17 @@ if [[ $USE_COPY -eq 1 ]]; then
   log "Populating hive '$HIVE_NAME' by copying .nupkg files (version suffix: $VERSION_SUFFIX)"
   mkdir -p "$HIVE_PATH"
   # Only copy packages matching the current version suffix to avoid accumulating stale packages
+  copied_packages=0
+  shopt -s nullglob
   for pkg in "$PKG_DIR"/*"$VERSION_SUFFIX"*.nupkg; do
-    [ -f "$pkg" ] && cp -f "$pkg" "$HIVE_PATH"/
+    pkg_name="$(basename "$pkg")"
+    if [[ -f "$pkg" ]] && [[ "$pkg_name" != ._* ]]; then
+      cp -f "$pkg" "$HIVE_PATH"/
+      copied_packages=$((copied_packages + 1))
+    fi
   done
-  log "Created/updated hive '$HIVE_NAME' at $HIVE_PATH (copied packages)."
+  shopt -u nullglob
+  log "Created/updated hive '$HIVE_NAME' at $HIVE_PATH (copied $copied_packages packages)."
 else
   log "Linking hive '$HIVE_NAME/packages' to $PKG_DIR"
   mkdir -p "$HIVE_ROOT"
@@ -290,14 +297,30 @@ else
   else
     warn "Symlink not supported; copying .nupkg files instead"
     mkdir -p "$HIVE_PATH"
-    cp -f "$PKG_DIR"/*.nupkg "$HIVE_PATH"/ 2>/dev/null || true
-    log "Created/updated hive '$HIVE_NAME' at $HIVE_PATH (copied packages)."
+    copied_packages=0
+    shopt -s nullglob
+    for pkg in "$PKG_DIR"/*.nupkg; do
+      pkg_name="$(basename "$pkg")"
+      if [[ -f "$pkg" ]] && [[ "$pkg_name" != ._* ]]; then
+        cp -f "$pkg" "$HIVE_PATH"/
+        copied_packages=$((copied_packages + 1))
+      fi
+    done
+    shopt -u nullglob
+    log "Created/updated hive '$HIVE_NAME' at $HIVE_PATH (copied $copied_packages packages)."
   fi
 fi
 
 # Build the bundle (aspire-managed + DCP, and optionally native AOT CLI)
 if [[ $SKIP_BUNDLE -eq 0 ]]; then
   BUNDLE_PROJ="$REPO_ROOT/eng/Bundle.proj"
+
+  # Clean stale managed publish output so dotnet publish doesn't skip due to incremental builds
+  STALE_MANAGED_DIR="$REPO_ROOT/artifacts/bundle/$BUNDLE_RID/managed"
+  if [[ -d "$STALE_MANAGED_DIR" ]]; then
+    log "Cleaning stale managed publish output at $STALE_MANAGED_DIR"
+    rm -rf "$STALE_MANAGED_DIR"
+  fi
 
   if [[ $NATIVE_AOT -eq 1 ]]; then
     log "Building bundle (aspire-managed + DCP + native AOT CLI)..."
@@ -411,7 +434,7 @@ if [[ $ARCHIVE -eq 1 ]]; then
   else
     ARCHIVE_PATH="${ARCHIVE_BASE}.tar.gz"
     log "Creating archive: $ARCHIVE_PATH"
-    tar -czf "$ARCHIVE_PATH" -C "$OUTPUT_DIR" .
+    COPYFILE_DISABLE=1 tar -czf "$ARCHIVE_PATH" -C "$OUTPUT_DIR" .
   fi
   log "Archive created: $ARCHIVE_PATH"
 fi

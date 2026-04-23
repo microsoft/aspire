@@ -92,6 +92,29 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// </remarks>
     public string DefaultServiceType { get; set; } = "ClusterIP";
 
+    /// <summary>
+    /// Gets or sets the path to an explicit kubeconfig file for Helm and kubectl commands.
+    /// When set, all Helm and kubectl commands will use <c>--kubeconfig</c> to target
+    /// this file instead of the default <c>~/.kube/config</c>.
+    /// </summary>
+    /// <remarks>
+    /// This is used by Azure Kubernetes Service (AKS) integration to isolate credentials
+    /// fetched via <c>az aks get-credentials</c> from the user's default kubectl context.
+    /// </remarks>
+    public string? KubeConfigPath { get; set; }
+
+    /// <summary>
+    /// Gets or sets the parent compute environment resource that owns this Kubernetes environment.
+    /// When set, resources with <c>WithComputeEnvironment</c> targeting the parent will also
+    /// be processed by this Kubernetes environment.
+    /// </summary>
+    /// <remarks>
+    /// This is used by Azure Kubernetes Service (AKS) integration where the user calls
+    /// <c>WithComputeEnvironment(aksEnv)</c> but the inner <c>KubernetesEnvironmentResource</c>
+    /// needs to process the resource.
+    /// </remarks>
+    public IComputeEnvironmentResource? OwningComputeEnvironment { get; set; }
+
     internal IPortAllocator PortAllocator { get; } = new PortAllocator();
 
     /// <summary>
@@ -130,6 +153,19 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     /// to prepend the container registry (e.g., "server:latest" → "myregistry.azurecr.io/server:latest").
     /// </summary>
     internal sealed record CapturedHelmImageReference(string Section, string ResourceKey, string ValueKey, IResource Resource);
+
+    /// <summary>
+    /// Represents a captured value provider reference that needs deploy-time resolution.
+    /// This handles any <see cref="IValueProvider"/> implementation (e.g., Bicep output references,
+    /// connection strings) that can't be resolved at publish time.
+    /// </summary>
+    internal sealed record CapturedHelmValueProvider(string Section, string ResourceKey, string ValueKey, IValueProvider ValueProvider);
+
+    /// <summary>
+    /// Captured value provider references populated during publish, consumed during deploy
+    /// to resolve values from external sources (e.g., Azure Bicep outputs).
+    /// </summary>
+    internal List<CapturedHelmValueProvider> CapturedHelmValueProviders { get; } = [];
 
     /// <summary>
     /// Gets or sets the delegate that creates deployment pipeline steps for the configured engine.
@@ -173,7 +209,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var computeResource in resources)
             {
-                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(environment)?.DeploymentTarget;
+                var targetEnv = (IComputeEnvironmentResource?)environment.OwningComputeEnvironment ?? environment;
+                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget;
                 if (deploymentTarget is not null &&
                     deploymentTarget.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var annotations))
                 {
@@ -209,7 +246,8 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var computeResource in resources)
             {
-                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget;
+                var targetEnv = (IComputeEnvironmentResource?)OwningComputeEnvironment ?? this;
+                var deploymentTarget = computeResource.GetDeploymentTargetAnnotation(targetEnv)?.DeploymentTarget;
                 if (deploymentTarget is null)
                 {
                     continue;

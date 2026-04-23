@@ -3,7 +3,13 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var compose = builder.addDockerComposeEnvironment("compose");
+        var containerName = builder.addParameter("container-name");
         var api = builder.addContainer("api", "nginx:alpine");
+        api.withBindMount("/host/path/data", "/container/data");
+        api.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
+        var apiEndpoint = api.getEndpoint("http");
+        var hostAddressExpression = compose.getHostAddressExpression(apiEndpoint);
+        var _hostAddressValueExpression = hostAddressExpression.getValue();
         compose.withProperties((environment) -> {
             environment.setDefaultNetworkName("validation-network");
             var _defaultNetworkName = environment.defaultNetworkName();
@@ -17,6 +23,13 @@ void main() throws Exception {
             var _bindMountDescription = bindMount.description();
             bindMount.setDefaultValue("./data");
             var _bindMountDefaultValue = bindMount.defaultValue();
+        });
+        compose.configureComposeFile((composeFile) -> {
+            composeFile.setName("validation-compose");
+            var _composeFileName = composeFile.name();
+            var composeApi = composeFile.services().get("api");
+            composeApi.setPullPolicy("always");
+            var _composeApiPullPolicy = composeApi.pullPolicy();
         });
         compose.withDashboard(false);
         compose.withDashboard();
@@ -33,14 +46,12 @@ void main() throws Exception {
             var _otlpGrpcPort = otlpGrpcEndpoint.port();
         });
         api.publishAsDockerComposeService((composeService, service) -> {
-            service.setContainerName("validation-api");
-            service.setPullPolicy("always");
+            service.setContainerName(containerName.asEnvironmentPlaceholder(composeService));
             service.setRestart("unless-stopped");
             var _composeServiceName = composeService.name();
             var composeEnvironment = composeService.parent();
             var _composeEnvironmentName = composeEnvironment.name();
             var _serviceContainerName = service.containerName();
-            var _servicePullPolicy = service.pullPolicy();
             var _serviceRestart = service.restart();
         });
         var _resolvedDefaultNetworkName = compose.defaultNetworkName();

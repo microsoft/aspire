@@ -19,7 +19,16 @@
 
     <!-- Self-contained single-file publish settings (applied only during publish via Bundle.proj) -->
     <PublishSingleFile>true</PublishSingleFile>
+
+    <!-- Locate the SDK's trustedroots directory for NuGet signature verification certificates -->
+    <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
   </PropertyGroup>
+
+  <!-- Embed NuGet trusted root certificates from the .NET SDK for signature verification on Linux -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(_SdkTrustedRootsDir)\*.pem" />
+    <EmbeddedResource Update="$(_SdkTrustedRootsDir)\*.pem" LogicalName="%(Filename)%(Extension)" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Dashboard\Aspire.Dashboard.csproj" />

@@ -378,7 +378,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// has been reached." error.
     /// </para>
     /// <para>
-    /// Refer to the <see href="https://aka.ms/dotnet/aspire/testing" >Aspire testing page</see> for more information
+    /// Refer to the <see href="https://aka.ms/aspire/testing" >Aspire testing page</see> for more information
     /// on how to use Aspire APIs for functional an integrating testing.
     /// </para>
     /// </remarks>
@@ -410,7 +410,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// has been reached." error.
     /// </para>
     /// <para>
-    /// Refer to the <see href="https://aka.ms/dotnet/aspire/testing" >Aspire testing page</see> for more information
+    /// Refer to the <see href="https://aka.ms/aspire/testing" >Aspire testing page</see> for more information
     /// on how to use Aspire APIs for functional an integrating testing.
     /// </para>
     /// </remarks>

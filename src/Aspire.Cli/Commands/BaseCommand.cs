@@ -49,7 +49,16 @@ internal abstract class BaseCommand : Command
 
             // TODO: SDK install goes here in the future.
 
-            var exitCode = await ExecuteAsync(parseResult, cancellationToken);
+            int exitCode;
+            try
+            {
+                exitCode = await ExecuteAsync(parseResult, cancellationToken);
+            }
+            catch (NonInteractiveException)
+            {
+                // Error messages have already been displayed by the interaction service.
+                exitCode = ExitCodeConstants.MissingRequiredArgument;
+            }
 
             if (UpdateNotificationsEnabled && features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
             {
@@ -62,8 +71,6 @@ internal abstract class BaseCommand : Command
                     // Ignore any errors during update check to avoid impacting the main command
                 }
             }
-
-            InteractionService.DisplayEmptyLine();
 
             return exitCode;
         });

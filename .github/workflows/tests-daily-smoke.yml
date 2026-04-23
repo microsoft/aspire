@@ -47,13 +47,13 @@ jobs:
         env:
           ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'dev' }}
         run: |
-          dotnet test tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+          dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
             --no-build \
             -- \
             --filter-class "*.SmokeTests" \
             --filter-not-trait "quarantined=true" \
             --filter-not-trait "outerloop=true" \
-            --hangdump --hangdump-timeout 15m
+            --hangdump --hangdump-type none --hangdump-timeout 15m
 
       - name: Upload test recordings
         if: always()

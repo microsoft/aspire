@@ -221,4 +221,42 @@ internal static class ResourceSnapshotMapper
 
         return resource.DisplayName ?? resource.Name;
     }
+
+    /// <summary>
+    /// Determines whether a resource snapshot represents a hidden resource.
+    /// A resource is hidden if its <see cref="ResourceSnapshot.IsHidden"/> flag is set
+    /// or its <see cref="ResourceSnapshot.State"/> is "Hidden".
+    /// </summary>
+    internal static bool IsHiddenResource(ResourceSnapshot snapshot)
+    {
+        return snapshot.IsHidden || string.Equals(snapshot.State, "Hidden", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Filters a list of all resource snapshots based on hidden-resource visibility,
+    /// returning the visible snapshot list and a set of hidden resource names for log filtering.
+    /// When <paramref name="includeHidden"/> is <see langword="true"/> or <paramref name="resourceName"/>
+    /// is specified, all resources are included and the hidden set is empty.
+    /// </summary>
+    /// <param name="allSnapshots">All resource snapshots (including hidden).</param>
+    /// <param name="includeHidden">Whether the user explicitly requested hidden resources.</param>
+    /// <param name="resourceName">The specific resource name requested, or <see langword="null"/> for all.</param>
+    /// <returns>The effective include-hidden flag, the filtered snapshot list, and the set of hidden resource names.</returns>
+    internal static (bool EffectiveIncludeHidden, List<ResourceSnapshot> Snapshots, HashSet<string> HiddenResourceNames) FilterHiddenResources(
+        IReadOnlyList<ResourceSnapshot> allSnapshots,
+        bool includeHidden,
+        string? resourceName)
+    {
+        var effectiveIncludeHidden = includeHidden || resourceName is not null;
+
+        var hiddenResourceNames = effectiveIncludeHidden
+            ? new HashSet<string>(StringComparers.ResourceName)
+            : new HashSet<string>(allSnapshots.Where(IsHiddenResource).Select(s => s.Name), StringComparers.ResourceName);
+
+        var snapshots = effectiveIncludeHidden
+            ? allSnapshots.ToList()
+            : allSnapshots.Where(s => !IsHiddenResource(s)).ToList();
+
+        return (effectiveIncludeHidden, snapshots, hiddenResourceNames);
+    }
 }

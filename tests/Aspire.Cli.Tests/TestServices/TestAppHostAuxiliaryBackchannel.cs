@@ -51,25 +51,54 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public Func<CancellationToken, Task<List<ResourceSnapshot>>>? GetResourceSnapshotsHandler { get; set; }
 
+    /// <summary>
+    /// Gets or sets the function to call when WatchResourceSnapshotsAsync is invoked.
+    /// If null, yields the ResourceSnapshots list.
+    /// </summary>
+    public Func<bool, CancellationToken, IAsyncEnumerable<ResourceSnapshot>>? WatchResourceSnapshotsHandler { get; set; }
+
+    /// <summary>
+    /// Gets or sets the function to call when GetResourceLogsAsync is invoked.
+    /// If null, yields the LogLines list.
+    /// </summary>
+    public Func<string?, bool, CancellationToken, IAsyncEnumerable<ResourceLogLine>>? GetResourceLogsHandler { get; set; }
+
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(DashboardUrlsState);
     }
 
-    public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
+    public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
         if (GetResourceSnapshotsHandler is not null)
         {
             return GetResourceSnapshotsHandler(cancellationToken);
         }
 
-        return Task.FromResult(ResourceSnapshots);
+        var snapshots = includeHidden
+            ? ResourceSnapshots
+            : ResourceSnapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
+        return Task.FromResult(snapshots);
     }
 
-    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (WatchResourceSnapshotsHandler is not null)
+        {
+            await foreach (var snapshot in WatchResourceSnapshotsHandler(includeHidden, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return snapshot;
+            }
+            yield break;
+        }
+
         foreach (var snapshot in ResourceSnapshots)
         {
+            if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
+            {
+                continue;
+            }
+
             yield return snapshot;
         }
         await Task.CompletedTask;
@@ -80,6 +109,15 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         bool follow = false,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (GetResourceLogsHandler is not null)
+        {
+            await foreach (var line in GetResourceLogsHandler(resourceName, follow, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return line;
+            }
+            yield break;
+        }
+
         var lines = resourceName is null
             ? LogLines
             : LogLines.Where(l => string.Equals(l.ResourceName, resourceName, StringComparison.OrdinalIgnoreCase)

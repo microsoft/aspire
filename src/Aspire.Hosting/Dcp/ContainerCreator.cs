@@ -415,7 +415,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     /// </summary>
     internal async Task CreateTunnelAsync(ContainerCreationContext cctx, IDcpObjectFactory factory, CancellationToken cancellationToken)
     {
-        // Container creation tasks need to figure out dependencies of each container 
+        // Container creation tasks need to figure out dependencies of each container
         // and then create Service and TunnelConfiguration definitions for each of them.
         cctx.ContainerServicesSpecReady.Wait(cancellationToken);
         cctx.ContainerServicesChan.Writer.Complete();
@@ -456,11 +456,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         if (resource.TryGetAnnotationsOfType<OtlpExporterAnnotation>(out _))
         {
-            var maybeDashboard = _model.Resources.Where(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard))
-                    .Select(HostResourceWithEndpoints.Create).FirstOrDefault();
-            if (maybeDashboard is HostResourceWithEndpoints dashboardResource)
+            if (_model.Resources.TryGetByName(KnownResourceNames.AspireDashboard, out var dashboardResource)
+                && HostResourceWithEndpoints.Create(dashboardResource) is HostResourceWithEndpoints dashboard)
             {
-                hostDependencies.Add(dashboardResource);
+                hostDependencies.Add(dashboard);
             }
         }
 
@@ -538,7 +537,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 KeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.key"),
                 PfxPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pfx"),
             })
-            .AddExecutionConfigurationGatherer(new OtlpEndpointReferenceGatherer())
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
             .ConfigureAwait(false);
 

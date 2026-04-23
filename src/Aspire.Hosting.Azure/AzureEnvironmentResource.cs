@@ -23,7 +23,7 @@ namespace Aspire.Hosting.Azure;
 /// Represents the root Azure deployment target for an Aspire application.
 /// Manages deployment parameters and context for Azure resources.
 /// </summary>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureEnvironmentResource : Resource
 {
     /// <summary>
@@ -149,11 +149,10 @@ public sealed class AzureEnvironmentResource : Resource
         var location = provisioningContext.Location.Name;
 
         var tenantId = provisioningContext.Tenant.TenantId;
-        var portalUrl = AzurePortalUrls.GetResourceGroupUrl(subscriptionId, resourceGroupName, tenantId);
-        var resourceGroupValue = $"[{resourceGroupName}]({portalUrl})";
 
         ctx.Summary.Add("☁️ Target", "Azure");
-        ctx.Summary.Add("📦 Resource Group", new MarkdownString(resourceGroupValue));
+        ctx.Summary.Add("📦 Resource Group", AzurePortalUrls.GetResourceGroupLink(subscriptionId, resourceGroupName, tenantId));
+        ctx.Summary.Add("📜 Deployments", AzurePortalUrls.GetResourceGroupDeploymentsLink(subscriptionId, resourceGroupName, tenantId));
         ctx.Summary.Add("🔑 Subscription", subscriptionId);
         ctx.Summary.Add("🌐 Location", location);
     }

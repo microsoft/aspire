@@ -16,9 +16,6 @@ parameters:
     type: string
   - name: dotnetScript
     type: string
-  - name: targetRids
-    type: object
-    default: ''
   - name: runHelixTests
     type: boolean
     default: false
@@ -40,44 +37,10 @@ parameters:
 
 steps:
   # Internal pipeline: Build with pack+sign
+  # Native archives are produced by the build_sign_native stage for all platforms
+  # (macOS, Linux, Windows). This job builds all managed packages, signs them,
+  # and publishes.
   - ${{ if ne(parameters.runAsPublic, 'true') }}:
-    # Build, publish, and sign aspire-managed for each target RID before the main build.
-    # This ensures aspire-managed is signed before CreateLayout packs it into the bundle archive.
-    # Step 1: dotnet publish produces the self-contained single-file binary.
-    # Step 2: build.cmd -sign runs Arcade's signing, which picks up the binary via ItemsToSign in Signing.props.
-    # Step 3: Bundle.proj creates the bundle layout and archive using the signed binary.
-    - ${{ each targetRid in parameters.targetRids }}:
-      - script: ${{ parameters.dotnetScript }}
-                publish
-                $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
-                -c ${{ parameters.buildConfig }}
-                -r ${{ targetRid }}
-                --self-contained
-                /p:GenerateDocumentationFile=false
-                /p:EnforceCodeStyleInBuild=false
-                $(_OfficialBuildIdArgs)
-                /bl:${{ parameters.repoLogPath }}/PublishManaged-${{ targetRid }}.binlog
-        displayName: 🟣Publish aspire-managed (${{ targetRid }})
-
-      - script: ${{ parameters.buildScript }}
-                -restore -sign $(_SignArgs)
-                -configuration ${{ parameters.buildConfig }}
-                $(_OfficialBuildIdArgs)
-                -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
-                /bl:${{ parameters.repoLogPath }}/SignManaged-${{ targetRid }}.binlog
-        displayName: 🟣Sign aspire-managed (${{ targetRid }})
-
-      - script: ${{ parameters.dotnetScript }}
-                msbuild
-                $(Build.SourcesDirectory)/eng/Bundle.proj
-                "/t:_RestoreDcpPackage;_RunCreateLayout"
-                /p:Configuration=${{ parameters.buildConfig }}
-                /p:TargetRid=${{ targetRid }}
-                /p:BundleVersion=ci-bundlepayload
-                /p:ContinuousIntegrationBuild=true
-                /bl:${{ parameters.repoLogPath }}/BundleLayout-${{ targetRid }}.binlog
-        displayName: 🟣Create bundle layout (${{ targetRid }})
-
     - script: ${{ parameters.buildScript }}
               -restore -build
               -pack
@@ -87,31 +50,10 @@ steps:
               /bl:${{ parameters.repoLogPath }}/build.binlog
               $(_OfficialBuildIdArgs)
               $(_InternalBuildArgs)
-              /p:TargetRids=${{ join(':', parameters.targetRids) }}
+              /p:SkipNativeBuild=true
               /p:SkipTestProjects=true
               /p:BuildExtension=true
       displayName: 🟣Build
-
-    # Verify the signed win-x64 CLI archive works (version check + project creation)
-    - pwsh: |
-        $ErrorActionPreference = 'Stop'
-        $archiveDir = "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}"
-        $archive = Get-ChildItem -Path $archiveDir -Filter "aspire-cli-win-x64-*.zip" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $archive) {
-          Write-Host "##[warning]No win-x64 CLI archive found - skipping verification"
-          exit 0
-        }
-        Write-Host "Found archive: $($archive.FullName)"
-        & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.ps1" -ArchivePath $archive.FullName
-        if ($LASTEXITCODE -ne 0) {
-          Write-Host "##[error]CLI archive verification failed"
-          exit 1
-        }
-      displayName: 🟣Verify CLI archive (win-x64)
-      condition: succeeded()
-      env:
-        ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
-        DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
     # Log MicroBuild environment for debugging
     # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml
@@ -163,7 +105,7 @@ steps:
           $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
           $manifestPath = Join-Path $vsixDir "$baseName.manifest"
           $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
-          
+
           if (-not (Test-Path $manifestPath)) {
             Write-Host "##[error]Manifest file not found: $manifestPath"
             exit 1
@@ -172,7 +114,7 @@ steps:
             Write-Host "##[error]Signature file not found: $signaturePath"
             exit 1
           }
-          
+
           # First verify the .signature.p7s is in PKCS#7 format (binary)
           $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
           if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
@@ -180,7 +122,7 @@ steps:
             Write-Host "##[error]$baseName.signature.p7s does NOT appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)"
             exit 1
           }
-          
+
           Write-Host "Verifying signature for $($vsix.Name)..."
           npx vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
           if ($LASTEXITCODE -ne 0) {
@@ -222,7 +164,7 @@ steps:
             $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
             $manifestPath = Join-Path $vsixDir "$baseName.manifest"
             $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
-            
+
             $publishArgs = @("vsce", "publish", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
             if ($preRelease -eq 'True') {
               $publishArgs += "--pre-release"
@@ -230,7 +172,7 @@ steps:
             } else {
               Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
             }
-            
+
             & npx @publishArgs
             if ($LASTEXITCODE -ne 0) {
               Write-Host "##[error]Failed to publish $($vsix.Name)"

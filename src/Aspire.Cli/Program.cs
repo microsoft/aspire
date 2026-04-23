@@ -19,6 +19,7 @@ using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Secrets;
+using Aspire.Cli.Documentation.ApiDocs;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Configuration;
@@ -28,7 +29,7 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -376,11 +377,14 @@ public class Program
         builder.Services.AddSingleton<ResourceColorMap>();
         builder.Services.AddMemoryCache();
 
-        // MCP server: aspire.dev docs services.
+        // aspire.dev documentation services.
         builder.Services.AddSingleton<IDocsCache, DocsCache>();
         builder.Services.AddHttpClient<IDocsFetcher, DocsFetcher>();
         builder.Services.AddSingleton<IDocsIndexService, DocsIndexService>();
         builder.Services.AddSingleton<IDocsSearchService, DocsSearchService>();
+        builder.Services.AddSingleton<IApiDocsCache, ApiDocsCache>();
+        builder.Services.AddHttpClient<IApiDocsFetcher, ApiDocsFetcher>();
+        builder.Services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
 
         // Bundle layout services (for polyglot apphost without .NET SDK).
         // Registered before NuGetPackageCache so the factory can choose implementation.
@@ -437,6 +441,7 @@ public class Program
         // Environment checking services.
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
@@ -487,6 +492,10 @@ public class Program
         builder.Services.AddTransient<TelemetrySpansCommand>();
         builder.Services.AddTransient<TelemetryTracesCommand>();
         builder.Services.AddTransient<ExportCommand>();
+        builder.Services.AddTransient<ApiCommand>();
+        builder.Services.AddTransient<ApiListCommand>();
+        builder.Services.AddTransient<ApiSearchCommand>();
+        builder.Services.AddTransient<ApiGetCommand>();
         builder.Services.AddTransient<DocsCommand>();
         builder.Services.AddTransient<DocsListCommand>();
         builder.Services.AddTransient<DocsSearchCommand>();
@@ -634,6 +643,9 @@ public class Program
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var isPlayground = CliHostEnvironment.IsPlaygroundMode(configuration);
+        var supportsAnsi = hostEnvironment.SupportsAnsi;
+        var supportsInteractiveOutput = hostEnvironment.SupportsInteractiveOutput;
+        var usePlaygroundFormatting = isPlayground && supportsAnsi && supportsInteractiveOutput;
 
         // Create custom output that handles width detection better in CI environments
         // and encapsulates ASPIRE_CONSOLE_WIDTH environment variable handling
@@ -641,22 +653,16 @@ public class Program
 
         var settings = new AnsiConsoleSettings()
         {
-            Ansi = isPlayground ? AnsiSupport.Yes : AnsiSupport.Detect,
-            Interactive = isPlayground ? InteractionSupport.Yes : InteractionSupport.Detect,
-            ColorSystem = isPlayground ? ColorSystemSupport.Standard : ColorSystemSupport.Detect,
+            Ansi = supportsAnsi ? AnsiSupport.Yes : AnsiSupport.No,
+            Interactive = supportsInteractiveOutput ? InteractionSupport.Detect : InteractionSupport.No,
+            ColorSystem = supportsAnsi ? ColorSystemSupport.EightBit : ColorSystemSupport.NoColors,
             Out = output,
         };
 
-        // Use SupportsAnsi from hostEnvironment which already checks ASPIRE_ANSI_PASS_THRU
-        if (hostEnvironment.SupportsAnsi)
+        if (usePlaygroundFormatting)
         {
-            settings.Ansi = AnsiSupport.Yes;
-            // Using EightBit color system for better color support of Aspire brand colors in terminals that support ANSI
-            settings.ColorSystem = ColorSystemSupport.EightBit;
-        }
+            settings.Interactive = InteractionSupport.Yes;
 
-        if (isPlayground)
-        {
             // Enrichers interfere with interactive playground experience so
             // this suppresses the default enrichers so that the CLI experience
             // is more like what we would get in an interactive experience.
@@ -667,8 +673,7 @@ public class Program
             };
         }
 
-        var ansiConsole = AnsiConsole.Create(settings);
-        return ansiConsole;
+        return AnsiConsole.Create(settings);
     }
 
     public static async Task<int> Main(string[] args)

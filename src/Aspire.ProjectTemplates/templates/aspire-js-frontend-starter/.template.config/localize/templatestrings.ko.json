@@ -7,7 +7,7 @@
   "symbols/Framework/choices/net9.0/description": "Target net9.0",
   "symbols/Framework/choices/net10.0/description": "대상 net10.0",
   "symbols/UseRedisCache/displayName": "캐싱용 _Use Redis(지원되는 컨테이너 런타임 필요)",
-  "symbols/UseRedisCache/description": "캐싱에 Redis를 사용하도록 응용 프로그램을 설정할지 여부를 구성합니다. 로컬로 실행하려면 지원되는 컨테이너 런타임이 필요합니다. 자세한 내용은 https://aka.ms/dotnet/aspire/containers를 참조하세요.",
+  "symbols/UseRedisCache/description": "캐싱에 Redis를 사용하도록 응용 프로그램을 설정할지 여부를 구성합니다. 로컬로 실행하려면 지원되는 컨테이너 런타임이 필요합니다. 자세한 내용은 https://aka.ms/aspire/containers를 참조하세요.",
   "symbols/appHostHttpPort/description": "AppHost 프로젝트의 launchSettings.json HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostOtlpHttpPort/description": "AppHost 프로젝트의 launchSettings.json OTLP HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostResourceHttpPort/description": "AppHost 프로젝트의 launchSettings.json 리소스 서비스 HTTP 엔드포인트에 사용할 포트 번호입니다.",

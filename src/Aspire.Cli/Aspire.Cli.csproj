@@ -56,7 +56,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-
+    <PackageReference Include="Semver" />
     <PackageReference Include="Sigstore" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="Tuf" />
@@ -74,10 +74,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)SmolSemVer.cs" Link="SmolSemVer.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Utils\ContainerRuntimeDetector.cs" />
     <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
@@ -120,6 +120,7 @@
     <Compile Include="$(SharedDir)Otlp\Serialization\OtlpJsonSerializerContext.cs" Link="Otlp\OtlpJsonSerializerContext.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\TelemetryApiResponse.cs" Link="Otlp\TelemetryApiResponse.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\ResourceInfoJson.cs" Link="Otlp\ResourceInfoJson.cs" />
+    <Compile Include="$(SharedDir)Model\Serialization\TelemetryValidateTokenJson.cs" Link="Otlp\TelemetryValidateTokenJson.cs" />
     <Compile Include="$(SharedDir)Export\ExportArchive.cs" Link="Export\ExportArchive.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\AnsiParser.cs" Link="ConsoleLogs\AnsiParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntries.cs" Link="ConsoleLogs\LogEntries.cs" />

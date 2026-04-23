@@ -95,6 +95,12 @@ variables:
     - name: _Sign
       value: true
 
+  # Packages are published only on internal, non-PR builds on publishing branches
+  # (main, release/*, internal/release/*). Feature branches and PR builds don't
+  # have Maestro default channels so archive URLs won't be valid.
+  - name: _PackagesPublished
+    value: ${{ and(ne(variables['_RunAsPublic'], 'true'), ne(variables['Build.Reason'], 'PullRequest'), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/'))) }}
+
 resources:
   repositories:
   - repository: 1ESPipelineTemplates
@@ -177,6 +183,18 @@ extends:
           teamName: $(_TeamName)
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
+            $(_OfficialBuildIdArgs)
+
+      - template: /eng/pipelines/templates/build_sign_native.yml@self
+        parameters:
+          agentOs: windows
+          targetRidsForSameOS:
+            - win-x64
+            - win-arm64
+          codeSign: true
+          teamName: $(_TeamName)
+          extraBuildArgs: >-
+            /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
             $(_OfficialBuildIdArgs)
 
@@ -236,7 +254,11 @@ extends:
                   itemPattern: |
                     **/aspire-cli-*.zip
                     **/aspire-cli-*.tar.gz
-                  targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)'
+                  # Download to a separate directory from artifacts/packages so that
+                  # MicroBuild's -sign step doesn't process these already-signed archives.
+                  # Repacking tar.gz on Windows changes their SHA-256, breaking installer
+                  # validation (Homebrew cask audit, WinGet manifest) against published URLs.
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
@@ -288,9 +310,6 @@ extends:
                   repoLogPath: $(Build.Arcade.LogsPath)
                   repoTestResultsPath: $(Build.Arcade.TestResultsPath)
                   isWindows: true
-                  targetRids:
-                    - win-x64
-                    - win-arm64
                   publishVSCodeExtension: ${{ parameters.publishVSCodeExtension }}
                   vscePublishToken: $(VscePublishToken)
                   vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}
@@ -383,12 +402,14 @@ extends:
       condition: |
         and(
           succeeded(),
-          ne(variables['Build.Reason'], 'PullRequest'),
           or(
-            ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
+            eq(variables['Build.Reason'], 'PullRequest'),
             or(
-              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+              ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
+              or(
+                eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+                startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+              )
             )
           )
         )
@@ -413,16 +434,27 @@ extends:
             steps:
             - checkout: self
               fetchDepth: 1
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (win-x64)
+              inputs:
+                artifact: native_archives_win_x64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_win_x64'
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (win-arm64)
+              inputs:
+                artifact: native_archives_win_arm64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_win_arm64'
             - template: /eng/pipelines/templates/prepare-winget-manifest.yml@self
               parameters:
                 version: $(aspireVersion)
                 artifactVersion: $(aspireArtifactVersion)
                 channel: $(installerChannel)
+                archiveRoot: $(Pipeline.Workspace)/native-archives
+                skipUrlValidation: ${{ ne(variables['_PackagesPublished'], 'true') }}
 
           - job: Homebrew
             displayName: Homebrew Cask
             timeoutInMinutes: 30
-            condition: and(succeeded(), eq(variables['installerChannel'], 'stable'))
             pool:
               name: Azure Pipelines
               vmImage: macOS-latest-internal
@@ -430,7 +462,19 @@ extends:
             steps:
             - checkout: self
               fetchDepth: 1
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (osx-x64)
+              inputs:
+                artifact: native_archives_osx_x64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_osx_x64'
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (osx-arm64)
+              inputs:
+                artifact: native_archives_osx_arm64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_osx_arm64'
             - template: /eng/pipelines/templates/prepare-homebrew-cask.yml@self
               parameters:
                 version: $(aspireVersion)
                 artifactVersion: $(aspireArtifactVersion)
+                archiveRoot: $(Pipeline.Workspace)/native-archives
+                skipUrlValidation: ${{ ne(variables['_PackagesPublished'], 'true') }}

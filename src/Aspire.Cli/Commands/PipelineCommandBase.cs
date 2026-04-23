@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -60,6 +61,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         Description = PublishCommandStrings.NoBuildArgumentDescription
     };
 
+    protected static readonly Option<bool> s_listStepsOption = new("--list-steps")
+    {
+        Description = "List the pipeline steps that would be executed, without running them."
+    };
+
     protected abstract string OperationCompletedPrefix { get; }
     protected abstract string OperationFailedPrefix { get; }
 
@@ -95,6 +101,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         Options.Add(s_environmentOption);
         Options.Add(s_includeExceptionDetailsOption);
         Options.Add(s_noBuildOption);
+        Options.Add(s_listStepsOption);
 
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
@@ -114,6 +121,12 @@ internal abstract class PipelineCommandBase : BaseCommand
     protected abstract Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken);
     protected abstract string GetCanceledMessage();
     protected abstract string GetProgressMessage(ParseResult parseResult);
+
+    /// <summary>
+    /// Gets the target pipeline step name for this command, used for --list-steps filtering.
+    /// Returns null to show all steps.
+    /// </summary>
+    protected virtual string? GetTargetStepName(ParseResult parseResult) => null;
 
     /// <summary>
     /// Gets command-specific arguments to forward when starting a debug session from the extension context.
@@ -250,6 +263,30 @@ internal abstract class PipelineCommandBase : BaseCommand
                 throw new InvalidOperationException("Run completed without returning a backchannel.", innerException);
             }, emoji: KnownEmojis.HammerAndWrench);
 
+            // If --list-steps was specified, get pipeline steps and print them instead of executing
+            var listSteps = parseResult.GetValue(s_listStepsOption);
+            if (listSteps)
+            {
+                StopTerminalProgressBar();
+
+                // Check that the AppHost supports this capability before calling
+                var capabilities = await backchannel.GetCapabilitiesAsync(cancellationToken);
+                if (!capabilities.Contains("pipeline-steps.v1"))
+                {
+                    throw new AppHostIncompatibleException(
+                        "The AppHost does not support --list-steps. Update the AppHost to a newer version of Aspire.",
+                        "pipeline-steps.v1");
+                }
+
+                var targetStep = GetTargetStepName(parseResult);
+                var response = await backchannel.GetPipelineStepsAsync(targetStep, cancellationToken);
+                PrintPipelineSteps(response.Steps);
+
+                await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
+                await pendingRun;
+                return ExitCodeConstants.Success;
+            }
+
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
 
             // Check if debug or trace logging is enabled
@@ -359,6 +396,103 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
             return ExitCodeConstants.FailedToBuildArtifacts;
         }
+    }
+
+    /// <summary>
+    /// Prints pipeline steps in a numbered tree format showing dependencies and tags.
+    /// </summary>
+    internal void PrintPipelineSteps(PipelineStepInfo[] steps)
+    {
+        if (steps.Length == 0)
+        {
+            _ansiConsole.MarkupLine("[dim]No pipeline steps found.[/]");
+            return;
+        }
+
+        for (var i = 0; i < steps.Length; i++)
+        {
+            var step = steps[i];
+
+            _ansiConsole.MarkupLine($"[bold green]{i + 1}.[/] [cyan]{step.Name.EscapeMarkup()}[/]");
+
+            var hasDeps = step.DependsOn.Length > 0;
+            var hasTags = step.Tags.Length > 0;
+
+            if (!hasDeps && !hasTags)
+            {
+                _ansiConsole.MarkupLine("[dim]   └─ No dependencies[/]");
+            }
+            else
+            {
+                if (hasDeps)
+                {
+                    var connector = hasTags ? "├" : "└";
+                    var continuation = hasTags ? "│" : " ";
+                    var firstLinePrefix = $"   {connector}─ [blue]Depends on:[/] ";
+                    // Build continuation prefix that aligns wrapped items under the first dep value.
+                    // Replace the connector with the continuation char and pad the rest with spaces.
+                    var visibleWidth = StripMarkup(firstLinePrefix).Length;
+                    var continuationPrefix = "   " + continuation + new string(' ', visibleWidth - 4);
+                    var wrappedDeps = FormatWithHangingIndent(step.DependsOn, firstLinePrefix, continuationPrefix);
+                    _ansiConsole.MarkupLine(wrappedDeps);
+                }
+
+                if (hasTags)
+                {
+                    var tagsText = string.Join(", ", step.Tags);
+                    _ansiConsole.MarkupLine($"   └─ [yellow]Tags:[/] {tagsText.EscapeMarkup()}");
+                }
+            }
+
+            if (i < steps.Length - 1)
+            {
+                _ansiConsole.WriteLine();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Formats a list of items with a prefix on the first line and hanging indent on continuation lines.
+    /// Items are comma-separated and wrapped so each line stays readable.
+    /// </summary>
+    private static string FormatWithHangingIndent(string[] items, string firstLinePrefix, string continuationPrefix, int maxLineLength = 100)
+    {
+        if (items.Length == 0)
+        {
+            return firstLinePrefix;
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(firstLinePrefix);
+
+        // Track visible length (without markup tags) for line wrapping
+        var visiblePrefixLength = StripMarkup(firstLinePrefix).Length;
+        var currentLineLength = visiblePrefixLength;
+
+        for (var i = 0; i < items.Length; i++)
+        {
+            var item = items[i].EscapeMarkup();
+            var separator = i < items.Length - 1 ? ", " : "";
+            var chunk = item + separator;
+
+            if (i > 0 && currentLineLength + chunk.Length > maxLineLength)
+            {
+                sb.AppendLine();
+                sb.Append(continuationPrefix);
+                currentLineLength = StripMarkup(continuationPrefix).Length;
+            }
+
+            sb.Append(chunk);
+            currentLineLength += chunk.Length;
+        }
+
+        return sb.ToString();
+    }
+
+    private static string StripMarkup(string text)
+    {
+        // Remove Spectre markup tags like [bold], [/], [blue], etc.
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\[/?[^\]]*\]", "");
     }
 
     /// <summary>
@@ -800,24 +934,24 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             InputType.Text => await InteractionService.PromptForStringAsync(
                 promptText,
-                defaultValue: input.Value?.EscapeMarkup(),
+                binding: PromptBinding.CreateDefault(input.Value),
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.SecretText => await InteractionService.PromptForStringAsync(
                 promptText,
-                defaultValue: input.Value?.EscapeMarkup(),
+                binding: PromptBinding.CreateDefault(input.Value),
                 isSecret: true,
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.Choice => await HandleSelectInputAsync(input, promptText, cancellationToken),
 
-            InputType.Boolean => (await InteractionService.ConfirmAsync(promptText, defaultValue: ParseBooleanValue(input.Value), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
+            InputType.Boolean => (await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value)), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            _ => await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken)
+            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
         };
     }
 
@@ -825,7 +959,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     {
         if (input.Options is null || input.Options.Count == 0)
         {
-            return await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
 
         // If AllowCustomChoice is enabled then add an "Other" option to the list.
@@ -843,11 +977,11 @@ internal abstract class PipelineCommandBase : BaseCommand
             promptText,
             options,
             choice => choice.Value.EscapeMarkup(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         if (value == CustomChoiceValue)
         {
-            return await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
 
         AnsiConsole.MarkupLine($"{promptText} {displayText.EscapeMarkup()}");
@@ -869,7 +1003,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         return await InteractionService.PromptForStringAsync(
             promptText,
-            defaultValue: input.Value?.EscapeMarkup(),
+            binding: PromptBinding.CreateDefault(input.Value),
             validator: Validator,
             required: input.Required,
             cancellationToken: cancellationToken);

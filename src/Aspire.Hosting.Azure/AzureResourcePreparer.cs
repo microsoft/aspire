@@ -245,7 +245,7 @@ internal sealed class AzureResourcePreparer(
 
         if (globalRoleAssignments.Count > 0)
         {
-            CreateGlobalRoleAssignments(appModel, globalRoleAssignments);
+            EnsureGlobalRoleAssignments(appModel, globalRoleAssignments);
         }
     }
 
@@ -386,11 +386,19 @@ internal sealed class AzureResourcePreparer(
         existingRoles.UnionWith(newRoles);
     }
 
-    private void CreateGlobalRoleAssignments(DistributedApplicationModel appModel, Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> globalRoleAssignments)
+    private void EnsureGlobalRoleAssignments(DistributedApplicationModel appModel, Dictionary<AzureProvisioningResource, HashSet<RoleDefinition>> globalRoleAssignments)
     {
         foreach (var (azureResource, roles) in globalRoleAssignments)
         {
-            var roleAssignmentResource = CreateGlobalRoleAssignmentsResource(azureResource, roles);
+            var roleAssignmentResourceName = $"{azureResource.Name}-roles";
+
+            if (appModel.Resources.TryGetByName(roleAssignmentResourceName, out _))
+            {
+                continue;
+            }
+
+            var roleAssignmentResource = CreateGlobalRoleAssignmentsResource(roleAssignmentResourceName, azureResource, roles);
+
             appModel.Resources.Add(roleAssignmentResource);
 
             azureResource.Annotations.Add(new RoleAssignmentResourceAnnotation(roleAssignmentResource));
@@ -400,11 +408,12 @@ internal sealed class AzureResourcePreparer(
     }
 
     private AzureProvisioningResource CreateGlobalRoleAssignmentsResource(
+        string name,
         AzureProvisioningResource targetResource,
         IEnumerable<RoleDefinition> roles)
     {
         var roleAssignmentResource = new AzureProvisioningResource(
-            $"{targetResource.Name}-roles",
+            name,
             infra => AddGlobalRoleAssignmentsInfrastructure(infra, targetResource, roles))
         {
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,

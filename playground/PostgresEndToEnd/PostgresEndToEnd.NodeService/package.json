@@ -15,7 +15,7 @@
     "pg": "^8.11.3",
     "@azure/identity": "^4.0.0",
     "@azure/core-auth": "^1.10.1",
-    "uuid": "^9.0.1",
+    "uuid": "^14.0.0",
     "jws": "^3.2.3"
   },
   "devDependencies": {

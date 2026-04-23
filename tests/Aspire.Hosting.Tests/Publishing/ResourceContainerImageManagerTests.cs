@@ -660,10 +660,12 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var cts = new CancellationTokenSource(TestConstants.DefaultTimeoutTimeSpan);
         var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(() =>
             imageBuilder.BuildImageAsync(project.Resource, cts.Token));
 
         Assert.Contains("broken-project", exception.Message);
+        Assert.Contains("missing.csproj", exception.Message);
+        Assert.NotEqual(0, exception.ExitCode);
     }
 
     [Fact]
@@ -1435,6 +1437,44 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Verify CheckIfRunningAsync was called
         Assert.Equal(1, fakeContainerRuntime.CheckIfRunningCallCount);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    public async Task DockerBuildFailureIncludesProcessOutputInException()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(output);
+
+        builder.Services.AddLogging(logging =>
+        {
+            logging.AddXunit(output);
+        });
+
+        // Create a Dockerfile that will fail — references a nonexistent file
+        using var tempDir = new TestTempDirectory();
+        var dockerfilePath = Path.Combine(tempDir.Path, "Dockerfile");
+        await File.WriteAllTextAsync(dockerfilePath, """
+            FROM scratch
+            COPY nonexistent-file-12345.txt /app/
+            """);
+
+        var container = builder.AddDockerfile("broken-container", tempDir.Path, dockerfilePath);
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var ex = await Assert.ThrowsAsync<ProcessFailedException>(
+            () => imageBuilder.BuildImageAsync(container.Resource, cts.Token));
+
+        Assert.NotEqual(0, ex.ExitCode);
+        Assert.NotEmpty(ex.ProcessOutput);
+
+        var newlineIndex = ex.Message.IndexOf(Environment.NewLine, StringComparison.Ordinal);
+        Assert.NotEqual(-1, newlineIndex);
+        Assert.Equal($"Docker build failed with exit code {ex.ExitCode}.", ex.Message[..newlineIndex]);
+        Assert.Equal(ex.GetFormattedOutput(), ex.Message[(newlineIndex + Environment.NewLine.Length)..]);
     }
 }
 
