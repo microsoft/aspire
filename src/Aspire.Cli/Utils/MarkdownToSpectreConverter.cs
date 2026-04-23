@@ -24,6 +24,9 @@ internal static partial class MarkdownToSpectreConverter
     private static readonly MarkdownPipeline s_markdownPipeline = new MarkdownPipelineBuilder()
         .UsePipeTables()
         .UseAutoLinks()
+        // This parses additional emphasis forms (for example ==mark== and ++inserted++).
+        // We currently only style the common bold/italic/strikethrough cases, but this
+        // keeps the AST shape ready if we decide to add richer inline formatting later.
         .UseEmphasisExtras()
         .Build();
 
@@ -226,6 +229,8 @@ internal static partial class MarkdownToSpectreConverter
                 AppendBlocksToPlainText(builder, container, markdown);
                 break;
             default:
+                // Fail open for block types we do not render yet so unsupported markdown
+                // stays visible instead of silently disappearing from the CLI output.
                 builder.Append(GetOriginalMarkdownSpan(block.Span, markdown));
                 break;
         }
@@ -264,6 +269,8 @@ internal static partial class MarkdownToSpectreConverter
                 AppendBlocksToMarkup(builder, container, markdown);
                 break;
             default:
+                // Keep unsupported block nodes visible in interactive output too. Escaping
+                // preserves the literal markdown without letting Spectre treat it as markup.
                 AppendEscapedMarkup(builder, GetOriginalMarkdownSpan(block.Span, markdown));
                 break;
         }
@@ -891,6 +898,8 @@ internal static partial class MarkdownToSpectreConverter
                 builder.Append("[/][/]");
                 break;
             case LinkInline { IsImage: true }:
+                // Images have no useful terminal representation in this flow, so drop them
+                // rather than surfacing raw alt/url syntax in docs output.
                 break;
             case LinkInline link:
                 AppendLinkToMarkup(builder, link, markdown);
@@ -912,6 +921,8 @@ internal static partial class MarkdownToSpectreConverter
                 AppendInlinesToMarkup(builder, container, markdown);
                 break;
             default:
+                // Preserve unsupported inline nodes literally so future Markdig constructs
+                // remain readable until we add explicit formatting support for them.
                 AppendEscapedMarkup(builder, GetOriginalMarkdownSpan(inline.Span, markdown));
                 break;
         }
@@ -927,6 +938,8 @@ internal static partial class MarkdownToSpectreConverter
             _ => (string.Empty, string.Empty)
         };
 
+        // Unmapped emphasis extras currently degrade to plain child text. This is the place
+        // to add CLI styling later if we want explicit support for more Markdig extensions.
         if (startTag.Length > 0)
         {
             builder.Append(startTag);
@@ -988,6 +1001,8 @@ internal static partial class MarkdownToSpectreConverter
                 builder.Append(code.Content);
                 break;
             case LinkInline { IsImage: true }:
+                // Keep plain-text output focused on readable prose; image markdown currently
+                // contributes more noise than signal in the CLI.
                 break;
             case LinkInline link:
                 AppendLinkToPlainText(builder, link, markdown);
@@ -1005,6 +1020,8 @@ internal static partial class MarkdownToSpectreConverter
                 AppendInlinesToPlainText(builder, container, markdown);
                 break;
             default:
+                // Plain-text mode also fails open for unsupported inline nodes so callers
+                // can still see the original markdown syntax instead of losing content.
                 builder.Append(GetOriginalMarkdownSpan(inline.Span, markdown));
                 break;
         }
