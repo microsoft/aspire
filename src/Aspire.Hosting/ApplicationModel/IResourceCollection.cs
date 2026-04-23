@@ -17,9 +17,7 @@ public interface IResourceCollection : IList<IResource>
     /// <param name="resource">When this method returns, contains the resource with the specified name, if found; otherwise, <see langword="null"/>.</param>
     /// <returns><see langword="true"/> if a resource with the specified name was found; otherwise, <see langword="false"/>.</returns>
     /// <remarks>
-    /// The comparison is case-insensitive, using the same semantics as <see cref="StringComparisons.ResourceName"/>.
-    /// The default implementation performs a linear scan of the collection. The internal <c>ResourceCollection</c>
-    /// implementation overrides this with an O(1) dictionary-backed lookup.
+    /// The resource name comparison is case-insensitive.
     /// </remarks>
     bool TryGetByName(string name, [NotNullWhen(true)] out IResource? resource)
     {
