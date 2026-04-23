@@ -151,312 +151,326 @@ internal static partial class MarkdownToSpectreConverter
     private static IRenderable? RenderBlockToRenderable(Block block, string markdown) => block switch
     {
         MarkdigTable table => RenderTableToRenderable(table, markdown),
-        _ => CreateMarkupRenderable(RenderBlockToMarkup(block, markdown))
+        _ => CreateMarkupRenderable(block, markdown)
     };
 
-    private static IRenderable? CreateMarkupRenderable(string markup)
+    private static IRenderable? CreateMarkupRenderable(Block block, string markdown)
     {
-        return string.IsNullOrEmpty(markup)
+        var builder = new StringBuilder();
+        AppendBlockToMarkup(builder, block, markdown);
+
+        return builder.Length == 0
             ? null
-            : new Markup(markup);
+            : new Markup(builder.ToString());
     }
 
     private static string RenderBlocksToPlainText(ContainerBlock container, string markdown)
     {
-        var blocks = new List<string>();
+        var builder = new StringBuilder();
+        AppendBlocksToPlainText(builder, container, markdown);
+        return builder.ToString();
+    }
+
+    private static bool AppendBlocksToPlainText(StringBuilder builder, ContainerBlock container, string markdown)
+    {
+        var hasContent = false;
 
         foreach (var block in container)
         {
-            var text = RenderBlockToPlainText(block, markdown);
-            if (!string.IsNullOrEmpty(text))
-            {
-                blocks.Add(text);
-            }
-        }
-
-        return string.Join("\n", blocks);
-    }
-
-    private static string RenderBlockToPlainText(Block block, string markdown) => block switch
-    {
-        ParagraphBlock paragraph => RenderInlinesToPlainText(paragraph.Inline, markdown),
-        HeadingBlock heading => RenderInlinesToPlainText(heading.Inline, markdown),
-        QuoteBlock quote => RenderBlocksToPlainText(quote, markdown),
-        ListBlock list => RenderListToPlainText(list, markdown),
-        CodeBlock codeBlock => GetRawCodeText(codeBlock).TrimEnd('\r', '\n'),
-        MarkdigTable table => RenderTableToPlainText(table, markdown),
-        LeafBlock leaf when leaf.Inline is not null => RenderInlinesToPlainText(leaf.Inline, markdown),
-        ContainerBlock container => RenderBlocksToPlainText(container, markdown),
-        _ => GetOriginalMarkdown(block.Span, markdown)
-    };
-
-    private static string RenderBlockToMarkup(Block block, string markdown) => block switch
-    {
-        ParagraphBlock paragraph => RenderInlinesToMarkup(paragraph.Inline, markdown),
-        HeadingBlock heading => ApplyHeadingStyle(heading.Level, RenderInlinesToMarkup(heading.Inline, markdown)),
-        QuoteBlock quote => RenderQuoteToMarkup(quote, markdown),
-        ListBlock list => RenderListToMarkup(list, markdown),
-        CodeBlock codeBlock => $"[grey]{GetRawCodeText(codeBlock).TrimEnd('\r', '\n').EscapeMarkup()}[/]",
-        MarkdigTable table => RenderTableToPlainText(table, markdown).EscapeMarkup(),
-        LeafBlock leaf when leaf.Inline is not null => RenderInlinesToMarkup(leaf.Inline, markdown),
-        ContainerBlock container => RenderBlocksToMarkup(container, markdown),
-        _ => GetOriginalMarkdown(block.Span, markdown).EscapeMarkup()
-    };
-
-    private static string RenderQuoteToMarkup(QuoteBlock quote, string markdown)
-    {
-        var quoteMarkup = RenderBlocksToMarkup(quote, markdown);
-        if (string.IsNullOrEmpty(quoteMarkup))
-        {
-            return "[italic grey][/]";
-        }
-
-        var builder = new StringBuilder();
-        var lines = quoteMarkup.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n');
-
-        for (var i = 0; i < lines.Length; i++)
-        {
-            if (i > 0)
+            var blockStart = builder.Length;
+            if (hasContent)
             {
                 builder.Append('\n');
             }
 
-            builder.Append("[italic grey]");
-            builder.Append(lines[i]);
-            builder.Append("[/]");
+            if (!AppendBlockToPlainText(builder, block, markdown))
+            {
+                builder.Length = blockStart;
+                continue;
+            }
+
+            hasContent = true;
         }
 
-        return builder.ToString();
+        return hasContent;
     }
 
-    private static string RenderListToMarkup(ListBlock list, string markdown)
+    private static bool AppendBlockToPlainText(StringBuilder builder, Block block, string markdown)
     {
-        var builder = new StringBuilder();
+        var start = builder.Length;
+
+        switch (block)
+        {
+            case ParagraphBlock paragraph:
+                AppendInlinesToPlainText(builder, paragraph.Inline, markdown);
+                break;
+            case HeadingBlock heading:
+                AppendInlinesToPlainText(builder, heading.Inline, markdown);
+                break;
+            case QuoteBlock quote:
+                AppendBlocksToPlainText(builder, quote, markdown);
+                break;
+            case ListBlock list:
+                AppendListToPlainText(builder, list, markdown);
+                break;
+            case CodeBlock codeBlock:
+                AppendCodeBlockToPlainText(builder, codeBlock);
+                break;
+            case MarkdigTable table:
+                builder.Append(RenderTableToPlainText(table, markdown));
+                break;
+            case LeafBlock leaf when leaf.Inline is not null:
+                AppendInlinesToPlainText(builder, leaf.Inline, markdown);
+                break;
+            case ContainerBlock container:
+                AppendBlocksToPlainText(builder, container, markdown);
+                break;
+            default:
+                builder.Append(GetOriginalMarkdownSpan(block.Span, markdown));
+                break;
+        }
+
+        return builder.Length > start;
+    }
+
+    private static bool AppendBlockToMarkup(StringBuilder builder, Block block, string markdown)
+    {
+        var start = builder.Length;
+
+        switch (block)
+        {
+            case ParagraphBlock paragraph:
+                AppendInlinesToMarkup(builder, paragraph.Inline, markdown);
+                break;
+            case HeadingBlock heading:
+                AppendHeadingToMarkup(builder, heading.Level, heading.Inline, markdown);
+                break;
+            case QuoteBlock quote:
+                AppendQuoteToMarkup(builder, quote, markdown);
+                break;
+            case ListBlock list:
+                AppendListToMarkup(builder, list, markdown);
+                break;
+            case CodeBlock codeBlock:
+                AppendCodeBlockToMarkup(builder, codeBlock);
+                break;
+            case MarkdigTable table:
+                AppendEscapedMarkup(builder, RenderTableToPlainText(table, markdown).AsSpan());
+                break;
+            case LeafBlock leaf when leaf.Inline is not null:
+                AppendInlinesToMarkup(builder, leaf.Inline, markdown);
+                break;
+            case ContainerBlock container:
+                AppendBlocksToMarkup(builder, container, markdown);
+                break;
+            default:
+                AppendEscapedMarkup(builder, GetOriginalMarkdownSpan(block.Span, markdown));
+                break;
+        }
+
+        return builder.Length > start;
+    }
+
+    private static void AppendHeadingToMarkup(StringBuilder builder, int level, ContainerInline? inline, string markdown)
+    {
+        builder.Append(level switch
+        {
+            1 => "[bold green]",
+            2 => "[bold blue]",
+            3 => "[bold yellow]",
+            _ => "[bold]"
+        });
+
+        AppendInlinesToMarkup(builder, inline, markdown);
+        builder.Append("[/]");
+    }
+
+    private static void AppendQuoteToMarkup(StringBuilder builder, QuoteBlock quote, string markdown)
+    {
+        var quoteStart = builder.Length;
+        if (!AppendBlocksToMarkup(builder, quote, markdown))
+        {
+            builder.Append("[italic grey][/]");
+            return;
+        }
+
+        WrapAppendedLines(builder, quoteStart, "[italic grey]", "[/]");
+    }
+
+    private static bool AppendListToMarkup(StringBuilder builder, ListBlock list, string markdown)
+    {
+        var start = builder.Length;
+        var hasContent = false;
         var index = int.TryParse(list.OrderedStart, out var orderedStart) ? orderedStart : 1;
 
         foreach (var item in list.OfType<ListItemBlock>())
         {
-            if (builder.Length > 0)
+            var itemStart = builder.Length;
+            if (hasContent)
             {
                 builder.Append('\n');
             }
 
             var prefix = list.IsOrdered ? $"{index++}. " : "* ";
-            builder.Append(RenderListItem(item, prefix.EscapeMarkup(), prefix.Length, block => RenderBlockToMarkup(block, markdown)));
+            if (!AppendListItemToMarkup(builder, item, prefix, prefix.Length, markdown))
+            {
+                builder.Length = itemStart;
+                continue;
+            }
+
+            hasContent = true;
         }
 
-        return builder.ToString();
+        return builder.Length > start;
     }
 
-    private static string RenderListToPlainText(ListBlock list, string markdown)
+    private static bool AppendListToPlainText(StringBuilder builder, ListBlock list, string markdown)
     {
-        var builder = new StringBuilder();
+        var start = builder.Length;
+        var hasContent = false;
         var index = int.TryParse(list.OrderedStart, out var orderedStart) ? orderedStart : 1;
 
         foreach (var item in list.OfType<ListItemBlock>())
         {
-            if (builder.Length > 0)
+            var itemStart = builder.Length;
+            if (hasContent)
             {
                 builder.Append('\n');
             }
 
             var prefix = list.IsOrdered ? $"{index++}. " : "* ";
-            builder.Append(RenderListItem(item, prefix, prefix.Length, block => RenderBlockToPlainText(block, markdown)));
+            if (!AppendListItemToPlainText(builder, item, prefix, prefix.Length, markdown))
+            {
+                builder.Length = itemStart;
+                continue;
+            }
+
+            hasContent = true;
         }
 
-        return builder.ToString();
+        return builder.Length > start;
     }
 
-    private static string RenderListItem(ListItemBlock item, string prefix, int continuationIndent, Func<Block, string> blockRenderer)
+    private static bool AppendListItemToMarkup(StringBuilder builder, ListItemBlock item, string prefix, int continuationIndent, string markdown)
     {
-        var renderedBlocks = new List<(Block Block, string Content)>();
+        var start = builder.Length;
+        var hasContent = false;
+        var trimmedPrefix = prefix.TrimEnd();
 
         foreach (var block in item)
         {
-            var content = blockRenderer(block);
-            if (!string.IsNullOrEmpty(content))
+            var blockStart = builder.Length;
+
+            if (!hasContent)
             {
-                renderedBlocks.Add((block, content));
+                if (block is ParagraphBlock)
+                {
+                    builder.Append(prefix);
+                    var contentStart = builder.Length;
+                    if (!AppendBlockToMarkup(builder, block, markdown))
+                    {
+                        builder.Length = blockStart;
+                        continue;
+                    }
+
+                    ApplyHangingIndent(builder, contentStart, continuationIndent);
+                }
+                else
+                {
+                    builder.Append(trimmedPrefix);
+                    builder.Append('\n');
+                    var contentStart = builder.Length;
+                    if (!AppendBlockToMarkup(builder, block, markdown))
+                    {
+                        builder.Length = blockStart;
+                        continue;
+                    }
+
+                    IndentAppendedLines(builder, contentStart, continuationIndent);
+                }
+
+                hasContent = true;
+                continue;
             }
-        }
 
-        if (renderedBlocks.Count == 0)
-        {
-            return prefix.TrimEnd();
-        }
-
-        var builder = new StringBuilder();
-        var continuationPrefix = new string(' ', continuationIndent);
-
-        if (renderedBlocks[0].Block is ParagraphBlock)
-        {
-            builder.Append(prefix);
-            AppendWithHangingIndent(builder, renderedBlocks[0].Content, continuationPrefix);
-        }
-        else
-        {
-            builder.Append(prefix.TrimEnd());
             builder.Append('\n');
-            AppendIndentedLines(builder, renderedBlocks[0].Content, continuationPrefix);
+            var nestedContentStart = builder.Length;
+            if (!AppendBlockToMarkup(builder, block, markdown))
+            {
+                builder.Length = blockStart;
+                continue;
+            }
+
+            IndentAppendedLines(builder, nestedContentStart, continuationIndent);
         }
 
-        for (var i = 1; i < renderedBlocks.Count; i++)
+        if (!hasContent)
         {
+            builder.Append(trimmedPrefix);
+        }
+
+        return builder.Length > start;
+    }
+
+    private static bool AppendListItemToPlainText(StringBuilder builder, ListItemBlock item, string prefix, int continuationIndent, string markdown)
+    {
+        var start = builder.Length;
+        var hasContent = false;
+        var trimmedPrefix = prefix.TrimEnd();
+
+        foreach (var block in item)
+        {
+            var blockStart = builder.Length;
+
+            if (!hasContent)
+            {
+                if (block is ParagraphBlock)
+                {
+                    builder.Append(prefix);
+                    var contentStart = builder.Length;
+                    if (!AppendBlockToPlainText(builder, block, markdown))
+                    {
+                        builder.Length = blockStart;
+                        continue;
+                    }
+
+                    ApplyHangingIndent(builder, contentStart, continuationIndent);
+                }
+                else
+                {
+                    builder.Append(trimmedPrefix);
+                    builder.Append('\n');
+                    var contentStart = builder.Length;
+                    if (!AppendBlockToPlainText(builder, block, markdown))
+                    {
+                        builder.Length = blockStart;
+                        continue;
+                    }
+
+                    IndentAppendedLines(builder, contentStart, continuationIndent);
+                }
+
+                hasContent = true;
+                continue;
+            }
+
             builder.Append('\n');
-            AppendIndentedLines(builder, renderedBlocks[i].Content, continuationPrefix);
-        }
-
-        return builder.ToString();
-    }
-
-    private static void AppendWithHangingIndent(StringBuilder builder, string content, string continuationPrefix)
-    {
-        var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Split('\n');
-
-        builder.Append(lines[0]);
-
-        for (var i = 1; i < lines.Length; i++)
-        {
-            builder.Append('\n');
-
-            if (!string.IsNullOrEmpty(lines[i]))
+            var nestedContentStart = builder.Length;
+            if (!AppendBlockToPlainText(builder, block, markdown))
             {
-                builder.Append(continuationPrefix);
+                builder.Length = blockStart;
+                continue;
             }
 
-            builder.Append(lines[i]);
-        }
-    }
-
-    private static void AppendIndentedLines(StringBuilder builder, string content, string prefix)
-    {
-        var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace("\r", "\n", StringComparison.Ordinal).Split('\n');
-
-        for (var i = 0; i < lines.Length; i++)
-        {
-            if (i > 0)
-            {
-                builder.Append('\n');
-            }
-
-            if (!string.IsNullOrEmpty(lines[i]))
-            {
-                builder.Append(prefix);
-            }
-
-            builder.Append(lines[i]);
-        }
-    }
-
-    private static string RenderInlinesToMarkup(ContainerInline? inline, string markdown)
-    {
-        if (inline is null)
-        {
-            return string.Empty;
+            IndentAppendedLines(builder, nestedContentStart, continuationIndent);
         }
 
-        var builder = new StringBuilder();
-        var current = inline.FirstChild;
-
-        while (current is not null)
+        if (!hasContent)
         {
-            builder.Append(RenderInlineToMarkup(current, markdown));
-            current = current.NextSibling;
+            builder.Append(trimmedPrefix);
         }
 
-        return builder.ToString();
-    }
-
-    private static string RenderInlineToMarkup(Inline inline, string markdown) => inline switch
-    {
-        LiteralInline literal => literal.Content.ToString().EscapeMarkup(),
-        CodeInline code => $"[grey][bold]{code.Content.EscapeMarkup()}[/][/]",
-        LinkInline { IsImage: true } => string.Empty,
-        LinkInline link => RenderLinkToMarkup(RenderInlinesToMarkup(link, markdown), link.Url),
-        AutolinkInline autolink => RenderLinkToMarkup(autolink.Url.EscapeMarkup(), autolink.Url),
-        EmphasisInline emphasis => RenderEmphasisToMarkup(emphasis, markdown),
-        LineBreakInline => "\n",
-        ContainerInline container => RenderInlinesToMarkup(container, markdown),
-        _ => GetOriginalMarkdown(inline.Span, markdown).EscapeMarkup()
-    };
-
-    private static string RenderEmphasisToMarkup(EmphasisInline emphasis, string markdown)
-    {
-        var content = RenderInlinesToMarkup(emphasis, markdown);
-        return emphasis.DelimiterChar switch
-        {
-            '~' => $"[strikethrough]{content}[/]",
-            '*' or '_' when emphasis.DelimiterCount >= 2 => $"[bold]{content}[/]",
-            '*' or '_' => $"[italic]{content}[/]",
-            _ => content
-        };
-    }
-
-    private static string RenderLinkToMarkup(string text, string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            return text;
-        }
-
-        var escapedUrl = url.EscapeMarkup();
-        var linkText = string.IsNullOrEmpty(text) ? escapedUrl : text;
-        return $"[cyan][link={escapedUrl}]{linkText}[/][/]";
-    }
-
-    private static string RenderInlinesToPlainText(ContainerInline? inline, string markdown)
-    {
-        if (inline is null)
-        {
-            return string.Empty;
-        }
-
-        var builder = new StringBuilder();
-        var current = inline.FirstChild;
-
-        while (current is not null)
-        {
-            builder.Append(RenderInlineToPlainText(current, markdown));
-            current = current.NextSibling;
-        }
-
-        return builder.ToString();
-    }
-
-    private static string RenderInlineToPlainText(Inline inline, string markdown) => inline switch
-    {
-        LiteralInline literal => literal.Content.ToString(),
-        CodeInline code => code.Content,
-        LinkInline { IsImage: true } => string.Empty,
-        LinkInline link => RenderLinkToPlainText(RenderInlinesToPlainText(link, markdown), link.Url),
-        AutolinkInline autolink => autolink.Url,
-        EmphasisInline emphasis => RenderInlinesToPlainText(emphasis, markdown),
-        LineBreakInline => "\n",
-        ContainerInline container => RenderInlinesToPlainText(container, markdown),
-        _ => GetOriginalMarkdown(inline.Span, markdown)
-    };
-
-    private static string RenderLinkToPlainText(string text, string? url)
-    {
-        if (string.IsNullOrWhiteSpace(url))
-        {
-            return text;
-        }
-
-        return string.IsNullOrEmpty(text) || string.Equals(text, url, StringComparison.Ordinal)
-            ? url
-            : $"{text} ({url})";
-    }
-
-    private static string ApplyHeadingStyle(int level, string content)
-    {
-        return level switch
-        {
-            1 => $"[bold green]{content}[/]",
-            2 => $"[bold blue]{content}[/]",
-            3 => $"[bold yellow]{content}[/]",
-            _ => $"[bold]{content}[/]"
-        };
+        return builder.Length > start;
     }
 
     private static IRenderable RenderTableToRenderable(MarkdigTable markdownTable, string markdown)
@@ -584,7 +598,8 @@ internal static partial class MarkdownToSpectreConverter
         {
             var value = i < row.Count ? row[i] : string.Empty;
             builder.Append(' ');
-            builder.Append(value.PadRight(widths[i]));
+            builder.Append(value);
+            builder.Append(' ', widths[i] - value.Length);
             builder.Append(' ');
             builder.Append('|');
         }
@@ -596,18 +611,8 @@ internal static partial class MarkdownToSpectreConverter
         for (var i = 0; i < widths.Count; i++)
         {
             var width = Math.Max(widths[i], 3);
-            var separator = definitions is { Count: > 0 } && i < definitions.Count
-                ? definitions[i].Alignment switch
-                {
-                    TableColumnAlign.Left => ":" + new string('-', Math.Max(width - 1, 2)),
-                    TableColumnAlign.Center => ":" + new string('-', Math.Max(width - 2, 1)) + ":",
-                    TableColumnAlign.Right => new string('-', Math.Max(width - 1, 2)) + ":",
-                    _ => new string('-', width)
-                }
-                : new string('-', width);
-
             builder.Append(' ');
-            builder.Append(separator);
+            AppendTableSeparatorCell(builder, width, definitions is { Count: > 0 } && i < definitions.Count ? definitions[i].Alignment : null);
             builder.Append(' ');
             builder.Append('|');
         }
@@ -615,50 +620,68 @@ internal static partial class MarkdownToSpectreConverter
 
     private static string RenderTableCellToMarkup(MarkdigTableCell cell, string markdown)
     {
-        return RenderBlocksToMarkup(cell, markdown);
+        var builder = new StringBuilder();
+        AppendBlocksToMarkup(builder, cell, markdown);
+        return builder.ToString();
     }
 
     private static string RenderTableCellToPlainText(MarkdigTableCell cell, string markdown)
     {
-        var text = RenderBlocksToPlainText(cell, markdown);
-        return string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return CollapseWhitespace(RenderBlocksToPlainText(cell, markdown));
     }
 
-    private static string RenderBlocksToMarkup(ContainerBlock container, string markdown)
+    private static bool AppendBlocksToMarkup(StringBuilder builder, ContainerBlock container, string markdown)
     {
-        var blocks = new List<string>();
+        var hasContent = false;
 
         foreach (var block in container)
         {
-            var markup = RenderBlockToMarkup(block, markdown);
-            if (!string.IsNullOrEmpty(markup))
+            var blockStart = builder.Length;
+            if (hasContent)
             {
-                blocks.Add(markup);
+                builder.Append('\n');
             }
+
+            if (!AppendBlockToMarkup(builder, block, markdown))
+            {
+                builder.Length = blockStart;
+                continue;
+            }
+
+            hasContent = true;
         }
 
-        return string.Join("\n", blocks);
+        return hasContent;
     }
 
-    private static string GetOriginalMarkdown(SourceSpan span, string markdown)
+    private static ReadOnlySpan<char> GetOriginalMarkdownSpan(SourceSpan span, string markdown)
     {
-        if (span.Start < 0 || span.End < span.Start || span.End >= markdown.Length)
-        {
-            return string.Empty;
-        }
-
-        return markdown.Substring(span.Start, span.End - span.Start + 1);
+        return span.Start < 0 || span.End < span.Start || span.End >= markdown.Length
+            ? ReadOnlySpan<char>.Empty
+            : markdown.AsSpan(span.Start, span.End - span.Start + 1);
     }
 
-    private static string GetRawCodeText(CodeBlock codeBlock)
+    private static void AppendCodeBlockToPlainText(StringBuilder builder, CodeBlock codeBlock)
     {
-        var builder = new StringBuilder();
+        AppendCodeBlockText(builder, codeBlock, escapeMarkup: false);
+    }
+
+    private static void AppendCodeBlockToMarkup(StringBuilder builder, CodeBlock codeBlock)
+    {
+        builder.Append("[grey]");
+        AppendCodeBlockText(builder, codeBlock, escapeMarkup: true);
+        builder.Append("[/]");
+    }
+
+    private static void AppendCodeBlockText(StringBuilder builder, CodeBlock codeBlock, bool escapeMarkup)
+    {
         var slices = codeBlock.Lines.Lines;
         if (slices is null)
         {
-            return string.Empty;
+            return;
         }
 
+        var wroteContent = false;
         for (var i = 0; i < slices.Length; i++)
         {
             ref var slice = ref slices[i].Slice;
@@ -667,11 +690,385 @@ internal static partial class MarkdownToSpectreConverter
                 break;
             }
 
-            builder.Append(slice.AsSpan());
-            builder.AppendLine();
+            if (wroteContent)
+            {
+                builder.Append('\n');
+            }
+
+            if (escapeMarkup)
+            {
+                AppendEscapedMarkup(builder, slice.AsSpan());
+            }
+            else
+            {
+                builder.Append(slice.AsSpan());
+            }
+
+            wroteContent = true;
+        }
+    }
+
+    private static void AppendEscapedMarkup(StringBuilder builder, ReadOnlySpan<char> text)
+    {
+        var start = 0;
+
+        while (start < text.Length)
+        {
+            var bracketIndex = text[start..].IndexOfAny('[', ']');
+            if (bracketIndex < 0)
+            {
+                builder.Append(text[start..]);
+                return;
+            }
+
+            bracketIndex += start;
+
+            if (bracketIndex > start)
+            {
+                builder.Append(text[start..bracketIndex]);
+            }
+
+            builder.Append(text[bracketIndex]);
+            builder.Append(text[bracketIndex]);
+            start = bracketIndex + 1;
+        }
+    }
+
+    private static void AppendTableSeparatorCell(StringBuilder builder, int width, TableColumnAlign? alignment)
+    {
+        switch (alignment)
+        {
+            case TableColumnAlign.Left:
+                builder.Append(':');
+                builder.Append('-', Math.Max(width - 1, 2));
+                break;
+            case TableColumnAlign.Center:
+                builder.Append(':');
+                builder.Append('-', Math.Max(width - 2, 1));
+                builder.Append(':');
+                break;
+            case TableColumnAlign.Right:
+                builder.Append('-', Math.Max(width - 1, 2));
+                builder.Append(':');
+                break;
+            default:
+                builder.Append('-', width);
+                break;
+        }
+    }
+
+    private static string CollapseWhitespace(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        var pendingSpace = false;
+
+        foreach (var character in text)
+        {
+            if (char.IsWhiteSpace(character))
+            {
+                pendingSpace = builder.Length > 0;
+                continue;
+            }
+
+            if (pendingSpace)
+            {
+                builder.Append(' ');
+                pendingSpace = false;
+            }
+
+            builder.Append(character);
         }
 
         return builder.ToString();
+    }
+
+    private static void WrapAppendedLines(StringBuilder builder, int contentStart, string linePrefix, string lineSuffix)
+    {
+        if (contentStart >= builder.Length)
+        {
+            builder.Append(linePrefix);
+            builder.Append(lineSuffix);
+            return;
+        }
+
+        // Walk backwards so each inserted wrapper leaves earlier newline indexes stable.
+        for (var index = builder.Length - 1; index >= contentStart; index--)
+        {
+            if (builder[index] == '\n')
+            {
+                builder.Insert(index + 1, linePrefix);
+                builder.Insert(index, lineSuffix);
+            }
+        }
+
+        builder.Insert(contentStart, linePrefix);
+        builder.Append(lineSuffix);
+    }
+
+    private static void ApplyHangingIndent(StringBuilder builder, int contentStart, int continuationIndent)
+    {
+        if (continuationIndent <= 0)
+        {
+            return;
+        }
+
+        // The first line already follows the list marker; only continuation lines need padding.
+        for (var index = contentStart; index < builder.Length; index++)
+        {
+            if (builder[index] != '\n')
+            {
+                continue;
+            }
+
+            var nextIndex = index + 1;
+            if (nextIndex < builder.Length && builder[nextIndex] != '\n')
+            {
+                builder.Insert(nextIndex, " ", continuationIndent);
+                index = nextIndex + continuationIndent - 1;
+            }
+        }
+    }
+
+    private static void IndentAppendedLines(StringBuilder builder, int contentStart, int indentation)
+    {
+        if (indentation <= 0 || contentStart >= builder.Length)
+        {
+            return;
+        }
+
+        // Nested blocks are rendered first, then indented in place to avoid another temporary buffer.
+        if (builder[contentStart] != '\n')
+        {
+            builder.Insert(contentStart, " ", indentation);
+        }
+
+        for (var index = contentStart; index < builder.Length; index++)
+        {
+            if (builder[index] != '\n')
+            {
+                continue;
+            }
+
+            var nextIndex = index + 1;
+            if (nextIndex < builder.Length && builder[nextIndex] != '\n')
+            {
+                builder.Insert(nextIndex, " ", indentation);
+                index = nextIndex + indentation - 1;
+            }
+        }
+    }
+
+    private static void AppendInlinesToMarkup(StringBuilder builder, ContainerInline? inline, string markdown)
+    {
+        if (inline is null)
+        {
+            return;
+        }
+
+        var current = inline.FirstChild;
+        while (current is not null)
+        {
+            AppendInlineToMarkup(builder, current, markdown);
+            current = current.NextSibling;
+        }
+    }
+
+    private static void AppendInlineToMarkup(StringBuilder builder, Inline inline, string markdown)
+    {
+        switch (inline)
+        {
+            case LiteralInline literal:
+                AppendEscapedMarkup(builder, literal.Content.AsSpan());
+                break;
+            case CodeInline code:
+                builder.Append("[grey][bold]");
+                AppendEscapedMarkup(builder, code.Content.AsSpan());
+                builder.Append("[/][/]");
+                break;
+            case LinkInline { IsImage: true }:
+                break;
+            case LinkInline link:
+                AppendLinkToMarkup(builder, link, markdown);
+                break;
+            case AutolinkInline autolink:
+                builder.Append("[cyan][link=");
+                AppendEscapedMarkup(builder, autolink.Url.AsSpan());
+                builder.Append(']');
+                AppendEscapedMarkup(builder, autolink.Url.AsSpan());
+                builder.Append("[/][/]");
+                break;
+            case EmphasisInline emphasis:
+                AppendEmphasisToMarkup(builder, emphasis, markdown);
+                break;
+            case LineBreakInline:
+                builder.Append('\n');
+                break;
+            case ContainerInline container:
+                AppendInlinesToMarkup(builder, container, markdown);
+                break;
+            default:
+                AppendEscapedMarkup(builder, GetOriginalMarkdownSpan(inline.Span, markdown));
+                break;
+        }
+    }
+
+    private static void AppendEmphasisToMarkup(StringBuilder builder, EmphasisInline emphasis, string markdown)
+    {
+        var (startTag, endTag) = emphasis.DelimiterChar switch
+        {
+            '~' => ("[strikethrough]", "[/]"),
+            '*' or '_' when emphasis.DelimiterCount >= 2 => ("[bold]", "[/]"),
+            '*' or '_' => ("[italic]", "[/]"),
+            _ => (string.Empty, string.Empty)
+        };
+
+        if (startTag.Length > 0)
+        {
+            builder.Append(startTag);
+        }
+
+        AppendInlinesToMarkup(builder, emphasis, markdown);
+
+        if (endTag.Length > 0)
+        {
+            builder.Append(endTag);
+        }
+    }
+
+    private static void AppendLinkToMarkup(StringBuilder builder, LinkInline link, string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(link.Url))
+        {
+            AppendInlinesToMarkup(builder, link, markdown);
+            return;
+        }
+
+        builder.Append("[cyan][link=");
+        AppendEscapedMarkup(builder, link.Url.AsSpan());
+        builder.Append(']');
+
+        var contentStart = builder.Length;
+        AppendInlinesToMarkup(builder, link, markdown);
+        if (builder.Length == contentStart)
+        {
+            AppendEscapedMarkup(builder, link.Url.AsSpan());
+        }
+
+        builder.Append("[/][/]");
+    }
+
+    private static void AppendInlinesToPlainText(StringBuilder builder, ContainerInline? inline, string markdown)
+    {
+        if (inline is null)
+        {
+            return;
+        }
+
+        var current = inline.FirstChild;
+        while (current is not null)
+        {
+            AppendInlineToPlainText(builder, current, markdown);
+            current = current.NextSibling;
+        }
+    }
+
+    private static void AppendInlineToPlainText(StringBuilder builder, Inline inline, string markdown)
+    {
+        switch (inline)
+        {
+            case LiteralInline literal:
+                builder.Append(literal.Content.AsSpan());
+                break;
+            case CodeInline code:
+                builder.Append(code.Content);
+                break;
+            case LinkInline { IsImage: true }:
+                break;
+            case LinkInline link:
+                AppendLinkToPlainText(builder, link, markdown);
+                break;
+            case AutolinkInline autolink:
+                builder.Append(autolink.Url);
+                break;
+            case EmphasisInline emphasis:
+                AppendInlinesToPlainText(builder, emphasis, markdown);
+                break;
+            case LineBreakInline:
+                builder.Append('\n');
+                break;
+            case ContainerInline container:
+                AppendInlinesToPlainText(builder, container, markdown);
+                break;
+            default:
+                builder.Append(GetOriginalMarkdownSpan(inline.Span, markdown));
+                break;
+        }
+    }
+
+    private static void AppendLinkToPlainText(StringBuilder builder, LinkInline link, string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(link.Url))
+        {
+            AppendInlinesToPlainText(builder, link, markdown);
+            return;
+        }
+
+        var contentStart = builder.Length;
+        AppendInlinesToPlainText(builder, link, markdown);
+
+        var appendedLength = builder.Length - contentStart;
+        if (appendedLength == 0 || appendedLength == link.Url.Length && AppendedTextEquals(builder, contentStart, link.Url))
+        {
+            if (appendedLength == 0)
+            {
+                builder.Append(link.Url);
+            }
+
+            return;
+        }
+
+        builder.Append(" (");
+        builder.Append(link.Url);
+        builder.Append(')');
+    }
+
+    private static bool AppendedTextEquals(StringBuilder builder, int startIndex, string value)
+    {
+        var remainingOffset = startIndex;
+        var compared = 0;
+        var valueSpan = value.AsSpan();
+
+        foreach (var chunk in builder.GetChunks())
+        {
+            var chunkSpan = chunk.Span;
+            if (remainingOffset >= chunkSpan.Length)
+            {
+                remainingOffset -= chunkSpan.Length;
+                continue;
+            }
+
+            chunkSpan = chunkSpan[remainingOffset..];
+            remainingOffset = 0;
+
+            var count = Math.Min(chunkSpan.Length, valueSpan.Length - compared);
+            if (!chunkSpan[..count].SequenceEqual(valueSpan.Slice(compared, count)))
+            {
+                return false;
+            }
+
+            compared += count;
+            if (compared == valueSpan.Length)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string ConvertHeaders(string text)
