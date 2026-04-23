@@ -390,12 +390,14 @@ internal sealed class AzureResourcePreparer(
     {
         foreach (var (azureResource, roles) in globalRoleAssignments)
         {
-            var roleAssignmentResource = CreateGlobalRoleAssignmentsResource(azureResource, roles);
+            var roleAssignmentResourceName = $"{azureResource.Name}-roles";
 
-            if (appModel.Resources.TryGetByName(roleAssignmentResource.Name, out _))
+            if (appModel.Resources.TryGetByName(roleAssignmentResourceName, out _))
             {
                 continue;
             }
+
+            var roleAssignmentResource = CreateGlobalRoleAssignmentsResource(roleAssignmentResourceName, azureResource, roles);
 
             appModel.Resources.Add(roleAssignmentResource);
 
@@ -406,11 +408,12 @@ internal sealed class AzureResourcePreparer(
     }
 
     private AzureProvisioningResource CreateGlobalRoleAssignmentsResource(
+        string name,
         AzureProvisioningResource targetResource,
         IEnumerable<RoleDefinition> roles)
     {
         var roleAssignmentResource = new AzureProvisioningResource(
-            $"{targetResource.Name}-roles",
+            name,
             infra => AddGlobalRoleAssignmentsInfrastructure(infra, targetResource, roles))
         {
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
