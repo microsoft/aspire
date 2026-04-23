@@ -65,7 +65,7 @@ public class PipelineConfigurationContext
     /// </summary>
     /// <param name="tag">The tag to search for.</param>
     /// <returns>A collection of steps that have the specified tag.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the pipeline editor helpers instead.")]
+    [AspireExport(Description = "Gets pipeline steps with the specified tag")]
     public IEnumerable<PipelineStep> GetSteps(string tag)
     {
         ArgumentNullException.ThrowIfNull(tag);

@@ -37,7 +37,7 @@ public static class ConnectionStringBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnectionString dispatcher export.")]
     public static IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, ReferenceExpression connectionStringExpression)
     {
         var cs = new ConnectionStringResource(name, connectionStringExpression);
@@ -142,7 +142,7 @@ public static class ConnectionStringBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "Polyglot app hosts should build a ReferenceExpression explicitly and use the canonical addConnectionString export.")]
     public static IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<ReferenceExpressionBuilder> connectionStringBuilder)
     {
         var rb = new ReferenceExpressionBuilder();

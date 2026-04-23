@@ -16,7 +16,7 @@ void main() throws Exception {
             .withRealmImport(".")
             .withEnabledFeatures(new String[] { "rolling-updates" })
             .withDisabledFeatures(new String[] { "scripts" })
-            .withOtlpExporterWithProtocol(OtlpProtocol.HTTP_PROTOBUF);
+            .withOtlpExporter(OtlpProtocol.HTTP_PROTOBUF);
         var consumer = builder.addContainer("consumer", "nginx");
         consumer.withReference(keycloak);
         consumer.withReference(keycloak2);

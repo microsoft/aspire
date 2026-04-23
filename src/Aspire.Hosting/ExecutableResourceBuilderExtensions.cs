@@ -74,7 +74,7 @@ public static class ExecutableResourceBuilderExtensions
     /// <typeparam name="T">Type of executable resource</typeparam>
     /// <param name="builder">Resource builder</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Publishes the executable as a Docker container")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the overload with the optional configure callback.")]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder) where T : ExecutableResource
     {
         return builder.PublishAsDockerFile(c => { });
@@ -117,7 +117,7 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="builder">Resource builder</param>
     /// <param name="configure">Optional action to configure the container resource</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("publishAsDockerFileWithConfigure", Description = "Publishes an executable as a Docker file with optional container configuration", RunSyncOnBackgroundThread = true)]
+    [AspireExport(Description = "Publishes an executable as a Docker file", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<ContainerResource>>? configure)
         where T : ExecutableResource
     {
@@ -173,7 +173,7 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="builder">Builder for the executable resource.</param>
     /// <param name="command">Command.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withExecutableCommand", Description = "Sets the executable command")]
+    [AspireExport("withExecutableCommand", MethodName = "withCommand", Description = "Sets the executable command")]
     public static IResourceBuilder<T> WithCommand<T>(this IResourceBuilder<T> builder, string command) where T : ExecutableResource
     {
         ArgumentException.ThrowIfNullOrEmpty(command);

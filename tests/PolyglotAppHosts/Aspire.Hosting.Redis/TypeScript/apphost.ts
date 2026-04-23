@@ -6,8 +6,8 @@ const builder = await createBuilder();
 const password = await builder.addParameter("redis-password", { secret: true });
 const cache = await builder.addRedis("cache", { password: password });
 
-// addRedisWithPort — overload with explicit port
-const cache2 = await builder.addRedisWithPort("cache2", { port: 6380 });
+// addRedis — overload with explicit port
+const cache2 = await builder.addRedis("cache2", { port: 6380 });
 
 // withDataVolume + withPersistence — fluent chaining on RedisResource
 await cache.withDataVolume({ name: "redis-data" });

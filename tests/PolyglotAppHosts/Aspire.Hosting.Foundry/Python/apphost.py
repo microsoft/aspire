@@ -8,7 +8,7 @@ with create_builder() as builder:
     foundry = builder.add_foundry("resource")
     chat = foundry
     model = None
-    _chat_from_model = foundry.add_deployment_from_model("resource")
+    _chat_from_model = foundry.add_deployment("resource")
     local_foundry = builder.add_foundry("resource")
     _local_chat = local_foundry.add_deployment("resource")
     registry = builder.add_azure_container_registry("resource")
@@ -27,7 +27,7 @@ with create_builder() as builder:
     builder_project_foundry = builder.add_foundry("resource")
     builder_project = builder_project_foundry.add_project("resource", ".", launch_profile_name="default")
     _builder_project_model = builder_project.add_model_deployment("resource")
-    _project_model = project.add_model_deployment_from_model("resource")
+    _project_model = project.add_model_deployment("resource")
     hosted_agent = builder.add_executable("resource", "echo", ".", [])
     http = None
     port = None

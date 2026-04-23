@@ -94,7 +94,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The URL of the endpoint.</returns>
-    [AspireExport("getValueAsync", Description = "Gets the URL of the endpoint asynchronously")]
+    [AspireExport(Description = "Gets the URL of the endpoint asynchronously")]
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) => Property(EndpointProperty.Url).GetValueAsync(cancellationToken);
 
     /// <summary>
