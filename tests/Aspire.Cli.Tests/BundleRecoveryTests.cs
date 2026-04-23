@@ -18,43 +18,6 @@ namespace Aspire.Cli.Tests;
 public class BundleRecoveryTests
 {
     [Fact]
-    public void BundleService_LooksLikeBundleCorruption_ReturnsTrueForKnownRuntimeFailure()
-    {
-        Assert.True(BundleService.LooksLikeBundleCorruption(
-            error: "Failed to create CoreCLR because System.Private.CoreLib.dll could not be loaded."));
-    }
-
-    [Fact]
-    public void BundleService_LooksLikeBundleCorruption_ReturnsTrueForManagedAssemblyLoadFailure()
-    {
-        Assert.True(BundleService.LooksLikeBundleCorruption(
-            error: "Could not load file or assembly 'Aspire.Foo'",
-            additionalLines: ["/tmp/.aspire/managed/Aspire.Foo.dll"]));
-    }
-
-    [Fact]
-    public void BundleService_LooksLikeBundleCorruption_ReturnsFalseForUnrelatedFailure()
-    {
-        Assert.False(BundleService.LooksLikeBundleCorruption(
-            error: "The requested package source could not be reached."));
-    }
-
-    [Fact]
-    public void BundleService_LooksLikeBundleCorruption_ReturnsTrueForIncompleteLayoutWhenBundleRootProvided()
-    {
-        var layoutDirectory = CreateLayout(includeManagedExecutable: false);
-
-        try
-        {
-            Assert.True(BundleService.LooksLikeBundleCorruption(bundleRoot: layoutDirectory.FullName));
-        }
-        finally
-        {
-            DeleteDirectory(layoutDirectory);
-        }
-    }
-
-    [Fact]
     public async Task EnsureManagedToolPathAsync_RepairsMissingManagedExecutable()
     {
         var brokenLayout = CreateLayout(includeManagedExecutable: false);
@@ -84,22 +47,30 @@ public class BundleRecoveryTests
     }
 
     [Fact]
-    public async Task BundleNuGetPackageCache_RetriesSearchAfterBundleRepair()
+    public async Task BundleNuGetPackageCache_RetriesSearchAfterLayoutBecomesIncomplete()
     {
-        var layoutDirectory = CreateLayout(includeManagedExecutable: true);
+        var initialLayout = CreateLayout(includeManagedExecutable: true);
+        var repairedLayout = CreateLayout(includeManagedExecutable: true);
 
         try
         {
             var bundleService = new RepairingBundleService(
-                initialLayout: new LayoutConfiguration { LayoutPath = layoutDirectory.FullName },
-                repairedLayout: new LayoutConfiguration { LayoutPath = layoutDirectory.FullName });
+                initialLayout: new LayoutConfiguration { LayoutPath = initialLayout.FullName },
+                repairedLayout: new LayoutConfiguration { LayoutPath = repairedLayout.FullName });
 
             var executionFactory = new TestProcessExecutionFactory
             {
-                AttemptWithErrorCallback = (attempt, _) => attempt switch
+                AttemptWithErrorCallback = (attempt, _) =>
                 {
-                    1 => (134, null, $"Failed to load System.Private.CoreLib.dll{Environment.NewLine}Path: {Path.Combine(layoutDirectory.FullName, "managed", "System.Private.CoreLib.dll")}"),
-                    _ => (0, """{"packages":[{"id":"Aspire.Hosting.Redis","version":"9.2.0","source":"nuget"}],"totalHits":1}""", null)
+                    if (attempt == 1)
+                    {
+                        var managedPath = Path.Combine(initialLayout.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+                        File.Delete(managedPath);
+
+                        return (134, null, "bundle process failed");
+                    }
+
+                    return (0, "{\"packages\":[{\"id\":\"Aspire.Hosting.Redis\",\"version\":\"9.2.0\",\"source\":\"nuget\"}],\"totalHits\":1}", null);
                 }
             };
 
@@ -110,7 +81,7 @@ public class BundleRecoveryTests
                 new TestFeatures());
 
             var packages = await cache.GetPackagesAsync(
-                layoutDirectory,
+                initialLayout,
                 "Aspire.Hosting.Redis",
                 filter: null,
                 prerelease: false,
@@ -123,6 +94,48 @@ public class BundleRecoveryTests
             Assert.Equal("9.2.0", package.Version);
             Assert.Equal(1, bundleService.ExtractCallCount);
             Assert.Equal(2, executionFactory.AttemptCount);
+        }
+        finally
+        {
+            DeleteDirectory(initialLayout);
+            DeleteDirectory(repairedLayout);
+        }
+    }
+
+    [Fact]
+    public async Task BundleNuGetPackageCache_DoesNotRetryWhenRuntimeFailureLeavesLayoutUsable()
+    {
+        var layoutDirectory = CreateLayout(includeManagedExecutable: true);
+
+        try
+        {
+            var bundleService = new RepairingBundleService(
+                initialLayout: new LayoutConfiguration { LayoutPath = layoutDirectory.FullName },
+                repairedLayout: new LayoutConfiguration { LayoutPath = layoutDirectory.FullName });
+
+            var executionFactory = new TestProcessExecutionFactory
+            {
+                AttemptWithErrorCallback = (_, _) =>
+                    (134, null, $"Failed to load System.Private.CoreLib.dll{Environment.NewLine}Path: {Path.Combine(layoutDirectory.FullName, "managed", "System.Private.CoreLib.dll")}")
+            };
+
+            var cache = new BundleNuGetPackageCache(
+                bundleService,
+                new LayoutProcessRunner(executionFactory),
+                NullLogger<BundleNuGetPackageCache>.Instance,
+                new TestFeatures());
+
+            await Assert.ThrowsAsync<NuGetPackageCacheException>(() => cache.GetPackagesAsync(
+                layoutDirectory,
+                "Aspire.Hosting.Redis",
+                filter: null,
+                prerelease: false,
+                nugetConfigFile: null,
+                useCache: false,
+                CancellationToken.None));
+
+            Assert.Equal(0, bundleService.ExtractCallCount);
+            Assert.Equal(1, executionFactory.AttemptCount);
         }
         finally
         {

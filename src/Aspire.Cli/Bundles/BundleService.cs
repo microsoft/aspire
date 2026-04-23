@@ -17,7 +17,6 @@ namespace Aspire.Cli.Bundles;
 internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<BundleService> logger) : IBundleService
 {
     private const string PayloadResourceName = "bundle.tar.gz";
-    private const string AssemblyLoadFailureIndicator = "Could not load file or assembly";
 
     /// <summary>
     /// Name of the marker file written after successful extraction.
@@ -31,21 +30,6 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
 
     private static readonly bool s_isBundle =
         typeof(BundleService).Assembly.GetManifestResourceInfo(PayloadResourceName) is not null;
-
-    private static readonly string[] s_bundleCorruptionIndicators =
-    [
-        "System.Private.CoreLib.dll",
-        "Failed to create CoreCLR",
-        "aspire-managed not found in layout"
-    ];
-
-    private static readonly string[] s_managedLayoutIndicators =
-    [
-        "aspire-managed",
-        $"{Path.DirectorySeparatorChar}{BundleDiscovery.ManagedDirectoryName}{Path.DirectorySeparatorChar}",
-        "/managed/",
-        "\\managed\\"
-    ];
 
     /// <inheritdoc/>
     public bool IsBundle => s_isBundle;
@@ -436,27 +420,6 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     internal static bool IsUsableExtractedLayout(string extractDir)
         => BundleLayoutState.Inspect(extractDir).IsUsableExtractedLayout;
 
-    /// <summary>
-    /// Returns whether failure evidence from the extracted <c>aspire-managed</c> process
-    /// looks like bundle corruption rather than an unrelated command failure.
-    /// </summary>
-    internal static bool LooksLikeBundleCorruption(
-        Exception? exception = null,
-        string? error = null,
-        string? output = null,
-        IEnumerable<string>? additionalLines = null,
-        string? bundleRoot = null)
-    {
-        if (BundleLayoutState.Inspect(bundleRoot).IsIncompleteLayout)
-        {
-            return true;
-        }
-
-        var evidence = string.Join(Environment.NewLine, EnumerateFailureEvidence(exception, error, output, additionalLines));
-
-        return ContainsAny(evidence, s_bundleCorruptionIndicators) || HasManagedLayoutAssemblyLoadFailure(evidence);
-    }
-
     private static string? TryGetDefaultExtractDir()
     {
         var processPath = Environment.ProcessPath;
@@ -484,60 +447,6 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
         {
             File.Delete(markerPath);
         }
-    }
-
-    private static IEnumerable<string> EnumerateFailureEvidence(
-        Exception? exception,
-        string? error,
-        string? output,
-        IEnumerable<string>? additionalLines)
-    {
-        if (exception is not null)
-        {
-            yield return exception.ToString();
-        }
-
-        if (!string.IsNullOrWhiteSpace(error))
-        {
-            yield return error;
-        }
-
-        if (!string.IsNullOrWhiteSpace(output))
-        {
-            yield return output;
-        }
-
-        if (additionalLines is null)
-        {
-            yield break;
-        }
-
-        foreach (var line in additionalLines)
-        {
-            if (!string.IsNullOrWhiteSpace(line))
-            {
-                yield return line;
-            }
-        }
-    }
-
-    private static bool HasManagedLayoutAssemblyLoadFailure(string evidence)
-    {
-        return evidence.Contains(AssemblyLoadFailureIndicator, StringComparison.OrdinalIgnoreCase)
-            && ContainsAny(evidence, s_managedLayoutIndicators);
-    }
-
-    private static bool ContainsAny(string evidence, IEnumerable<string> indicators)
-    {
-        foreach (var indicator in indicators)
-        {
-            if (evidence.Contains(indicator, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

@@ -60,7 +60,7 @@ internal static class BundleLayoutRepairHelper
         }
         catch (InvalidOperationException ex)
         {
-            if (!ShouldRepairAfterManagedToolStartFailure(ex, bundleRoot) ||
+            if (!ShouldRepairAfterManagedToolStartFailure(bundleService, ex, bundleRoot) ||
                 !await TryRepairAsync(bundleService, logger, operationName, cancellationToken, bundleRoot).ConfigureAwait(false))
             {
                 throw;
@@ -80,7 +80,7 @@ internal static class BundleLayoutRepairHelper
 
         var (exitCode, output, error) = result;
 
-        if (exitCode == 0 || !BundleService.LooksLikeBundleCorruption(error: error, output: output, bundleRoot: bundleRoot))
+        if (exitCode == 0 || !bundleService.GetLayoutState(bundleRoot).IsIncompleteLayout)
         {
             return (managedPath, exitCode, output, error);
         }
@@ -145,9 +145,9 @@ internal static class BundleLayoutRepairHelper
         return string.IsNullOrEmpty(managedDirectory) ? null : Path.GetDirectoryName(managedDirectory);
     }
 
-    private static bool ShouldRepairAfterManagedToolStartFailure(InvalidOperationException exception, string? bundleRoot)
+    private static bool ShouldRepairAfterManagedToolStartFailure(IBundleService bundleService, InvalidOperationException exception, string? bundleRoot)
     {
         return exception.Message.StartsWith("Failed to start process:", StringComparison.Ordinal)
-            && BundleService.LooksLikeBundleCorruption(exception: exception, bundleRoot: bundleRoot);
+            && bundleService.GetLayoutState(bundleRoot).IsIncompleteLayout;
     }
 }
