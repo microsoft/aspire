@@ -34,6 +34,13 @@ public partial class AzureKubernetesEnvironmentResource
     private Task PrepareAksEnvironmentAsync(PipelineStepContext context)
     {
         var appModel = context.Model;
+        var executionContext = context.ExecutionContext;
+
+        if (executionContext.IsRunMode)
+        {
+            return Task.CompletedTask;
+        }
+
         var logger = context.Services.GetRequiredService<ILogger<AzureKubernetesEnvironmentResource>>();
 
         logger.LogInformation("Processing AKS environment '{Name}'", Name);

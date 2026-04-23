@@ -317,7 +317,13 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     {
         var appModel = context.Model;
         var services = context.Services;
-        var executionContext = services.GetRequiredService<DistributedApplicationExecutionContext>();
+        var executionContext = context.ExecutionContext;
+
+        if (executionContext.IsRunMode)
+        {
+            return;
+        }
+
         var logger = services.GetRequiredService<ILogger<KubernetesEnvironmentResource>>();
         var cancellationToken = context.CancellationToken;
 

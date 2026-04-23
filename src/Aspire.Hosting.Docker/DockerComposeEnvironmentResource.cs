@@ -293,7 +293,13 @@ public class DockerComposeEnvironmentResource : Resource, IComputeEnvironmentRes
     {
         var appModel = context.Model;
         var services = context.Services;
-        var executionContext = services.GetRequiredService<DistributedApplicationExecutionContext>();
+        var executionContext = context.ExecutionContext;
+
+        if (executionContext.IsRunMode)
+        {
+            return;
+        }
+
         var logger = services.GetRequiredService<ILogger<DockerComposeEnvironmentResource>>();
         var cancellationToken = context.CancellationToken;
 
