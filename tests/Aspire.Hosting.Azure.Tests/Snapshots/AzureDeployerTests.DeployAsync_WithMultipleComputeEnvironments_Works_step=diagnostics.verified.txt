@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 42
+Total steps defined: 48
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -14,53 +14,68 @@ EXECUTION ORDER
 This shows the order in which steps would execute, respecting all dependencies.
 Steps with no dependencies run first, followed by steps that depend on them.
 
-  1. process-parameters
-  2. build-prereq
-  3. check-container-runtime
-  4. deploy-prereq
-  5. build-api-service
-  6. build-python-app
-  7. build
-  8. validate-azure-login
-  9. create-provisioning-context
- 10. provision-aas-env-acr
- 11. provision-aas-env
- 12. login-to-acr-aas-env-acr
- 13. provision-aca-env-acr
- 14. login-to-acr-aca-env-acr
- 15. push-prereq
- 16. push-api-service
- 17. provision-api-service-website
- 18. print-api-service-summary
- 19. provision-aca-env
- 20. provision-cache-containerapp
- 21. print-cache-summary
- 22. push-python-app
- 23. provision-python-app-containerapp
- 24. provision-storage
- 25. provision-azure-bicep-resources
- 26. print-dashboard-url-aas-env
- 27. print-dashboard-url-aca-env
- 28. print-python-app-summary
- 29. deploy
- 30. deploy-api-service
- 31. deploy-cache
- 32. deploy-python-app
- 33. destroy-prereq
- 34. destroy-azure-azure634f9
- 35. destroy
- 36. diagnostics
- 37. publish-prereq
- 38. publish-azure634f9
- 39. validate-appservice-config-aas-env
- 40. publish
- 41. publish-manifest
- 42. push
+  1. azure-prepare-resources
+  2. prepare-azure-app-service-aas-env
+  3. prepare-azure-container-apps-aca-env
+  4. validate-azure-app-service
+  5. validate-azure-container-apps
+  6. before-start
+  7. process-parameters
+  8. build-prereq
+  9. check-container-runtime
+ 10. deploy-prereq
+ 11. build-api-service
+ 12. build-python-app
+ 13. build
+ 14. validate-azure-login
+ 15. create-provisioning-context
+ 16. provision-aas-env-acr
+ 17. provision-aas-env
+ 18. login-to-acr-aas-env-acr
+ 19. provision-aca-env-acr
+ 20. login-to-acr-aca-env-acr
+ 21. push-prereq
+ 22. push-api-service
+ 23. provision-api-service-website
+ 24. print-api-service-summary
+ 25. provision-aca-env
+ 26. provision-cache-containerapp
+ 27. print-cache-summary
+ 28. push-python-app
+ 29. provision-python-app-containerapp
+ 30. provision-storage
+ 31. provision-azure-bicep-resources
+ 32. print-dashboard-url-aas-env
+ 33. print-dashboard-url-aca-env
+ 34. print-python-app-summary
+ 35. deploy
+ 36. deploy-api-service
+ 37. deploy-cache
+ 38. deploy-python-app
+ 39. destroy-prereq
+ 40. destroy-azure-azure634f9
+ 41. destroy
+ 42. diagnostics
+ 43. publish-prereq
+ 44. publish-azure634f9
+ 45. validate-appservice-config-aas-env
+ 46. publish
+ 47. publish-manifest
+ 48. push
 
 DETAILED STEP ANALYSIS
 ======================
 Shows each step's dependencies, associated resources, tags, and descriptions.
 ✓ = dependency exists, ? = dependency missing
+
+Step: azure-prepare-resources
+    Description: Prepares the Azure resources.
+    Dependencies: none
+    Resource: azure634f9 (AzureEnvironmentResource)
+
+Step: before-start
+    Description: Aggregation step for operations that run before the application starts.
+    Dependencies: ✓ azure-prepare-resources, ✓ prepare-azure-app-service-aas-env, ✓ prepare-azure-container-apps-aca-env, ✓ validate-azure-app-service, ✓ validate-azure-container-apps
 
 Step: build
     Description: Aggregation step for all build operations. All build steps should be required by this step.
@@ -142,6 +157,16 @@ Step: login-to-acr-aca-env-acr
     Dependencies: ✓ provision-aca-env-acr
     Resource: aca-env-acr (AzureContainerRegistryResource)
     Tags: acr-login
+
+Step: prepare-azure-app-service-aas-env
+    Description: Prepares Azure App Service deployment targets for aas-env.
+    Dependencies: ✓ azure-prepare-resources
+    Resource: aas-env (AzureAppServiceEnvironmentResource)
+
+Step: prepare-azure-container-apps-aca-env
+    Description: Prepares Azure Container Apps deployment targets for aca-env.
+    Dependencies: ✓ azure-prepare-resources
+    Resource: aca-env (AzureContainerAppEnvironmentResource)
 
 Step: print-api-service-summary
     Description: Prints the deployment summary and URL for api-service.
@@ -271,6 +296,12 @@ Step: validate-appservice-config-aas-env
     Dependencies: ✓ publish-prereq
     Resource: aas-env (AzureAppServiceEnvironmentResource)
 
+Step: validate-azure-app-service
+    Dependencies: none
+
+Step: validate-azure-container-apps
+    Dependencies: none
+
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
     Dependencies: ✓ deploy-prereq
@@ -287,6 +318,20 @@ EXECUTION SIMULATION ("What If" Analysis):
 Shows what steps would run for each possible target step and in what order.
 Steps at the same level can run concurrently.
 ─────────────────────────────────────────────────────────────────────────────
+If targeting 'azure-prepare-resources':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] azure-prepare-resources
+
+If targeting 'before-start':
+  Direct dependencies: azure-prepare-resources, prepare-azure-app-service-aas-env, prepare-azure-container-apps-aca-env, validate-azure-app-service, validate-azure-container-apps
+  Total steps: 6
+  Execution order:
+    [0] azure-prepare-resources | validate-azure-app-service | validate-azure-container-apps (parallel)
+    [1] prepare-azure-app-service-aas-env | prepare-azure-container-apps-aca-env (parallel)
+    [2] before-start
+
 If targeting 'build':
   Direct dependencies: build-api-service, build-python-app
   Total steps: 7
@@ -452,6 +497,20 @@ If targeting 'login-to-acr-aca-env-acr':
     [3] create-provisioning-context
     [4] provision-aca-env-acr
     [5] login-to-acr-aca-env-acr
+
+If targeting 'prepare-azure-app-service-aas-env':
+  Direct dependencies: azure-prepare-resources
+  Total steps: 2
+  Execution order:
+    [0] azure-prepare-resources
+    [1] prepare-azure-app-service-aas-env
+
+If targeting 'prepare-azure-container-apps-aca-env':
+  Direct dependencies: azure-prepare-resources
+  Total steps: 2
+  Execution order:
+    [0] azure-prepare-resources
+    [1] prepare-azure-container-apps-aca-env
 
 If targeting 'print-api-service-summary':
   Direct dependencies: provision-api-service-website
@@ -730,6 +789,18 @@ If targeting 'validate-appservice-config-aas-env':
     [0] process-parameters
     [1] publish-prereq
     [2] validate-appservice-config-aas-env
+
+If targeting 'validate-azure-app-service':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] validate-azure-app-service
+
+If targeting 'validate-azure-container-apps':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] validate-azure-container-apps
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

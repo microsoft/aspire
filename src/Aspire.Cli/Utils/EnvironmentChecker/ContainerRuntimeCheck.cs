@@ -75,7 +75,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
                     Status = EnvironmentCheckStatus.Fail,
                     Message = "No container runtime detected",
                     Fix = "Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation",
-                    Link = "https://aka.ms/dotnet/aspire/containers"
+                    Link = "https://aka.ms/aspire/containers"
                 });
             }
 
@@ -131,7 +131,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
                 Message = $"{runtimeName} is running in Windows container mode",
                 Details = "Aspire requires Linux containers. Windows containers are not supported.",
                 Fix = "Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → 'Switch to Linux containers...')",
-                Link = "https://aka.ms/dotnet/aspire/containers"
+                Link = "https://aka.ms/aspire/containers"
             };
         }
 
@@ -145,7 +145,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
         Status = EnvironmentCheckStatus.Warning,
         Message = message,
         Fix = fix,
-        Link = "https://aka.ms/dotnet/aspire/containers"
+        Link = "https://aka.ms/aspire/containers"
     };
 
     private static EnvironmentCheckResult BuildRuntimeResult(

@@ -289,7 +289,7 @@ builder.Build().Run();
                 {
                     CliInstallMode.LocalHive or CliInstallMode.Preinstalled => "aspire update --channel local",
                     CliInstallMode.PullRequest => $"aspire update --channel pr-{DeploymentE2ETestHelpers.GetPrNumber()}",
-                    CliInstallMode.WorkflowRun => $"aspire update --channel run-{CliInstallStrategy.GetCliArchiveWorkflowRunId()}",
+                    CliInstallMode.WorkflowRun => $"aspire update --channel run-{CliInstallStrategy.GetCliArchiveWorkflowRunId() ?? throw new InvalidOperationException("WorkflowRun strategy requires ASPIRE_CLI_WORKFLOW_RUN_ID to be set.")}",
                     _ => "aspire update",
                 };
             }

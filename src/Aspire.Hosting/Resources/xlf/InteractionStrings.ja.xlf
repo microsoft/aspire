@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledMessage">
-        <source>Container runtime could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes.</source>
-        <target state="translated">コンテナー ランタイムが見つかりませんでした。サポートされているコンテナー ランタイムの詳細については、https://aka.ms/dotnet/aspire/containers を参照してください。</target>
+        <source>Container runtime could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.</source>
+        <target state="translated">コンテナー ランタイムが見つかりませんでした。サポートされているコンテナー ランタイムの詳細については、https://aka.ms/aspire/containers を参照してください。</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledTitle">
