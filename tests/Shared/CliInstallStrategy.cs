@@ -34,6 +34,13 @@ internal enum CliInstallMode
     /// Covers GA releases, daily builds, preview, and explicit versions.
     /// </summary>
     InstallScript,
+
+    /// <summary>
+    /// Install via <c>dotnet tool install --global Aspire.Cli</c>.
+    /// Supports published NuGet feeds and local nupkg sources.
+    /// Set via ASPIRE_E2E_DOTNET_TOOL or ASPIRE_E2E_DOTNET_TOOL_SOURCE.
+    /// </summary>
+    DotnetTool,
 }
 
 /// <summary>
@@ -120,6 +127,41 @@ internal static class AspireCliShellCommandHelpers
     {
         return $"'{value.Replace("'", "'\"'\"'")}'";
     }
+
+    internal static string GetDotnetToolInstallCommand(CliInstallStrategy strategy)
+    {
+        var args = "--global Aspire.Cli";
+
+        if (strategy.Version is not null)
+        {
+            args += $" --version {strategy.Version}";
+        }
+
+        if (strategy.NupkgSourcePath is not null)
+        {
+            args += $" --add-source {QuoteBashArg(strategy.NupkgSourcePath)}";
+        }
+
+        return $"dotnet tool install {args}";
+    }
+
+    internal static string GetDotnetToolInstallCommandInDocker(CliInstallStrategy strategy)
+    {
+        var args = "--global Aspire.Cli";
+
+        if (strategy.Version is not null)
+        {
+            args += $" --version {strategy.Version}";
+        }
+
+        if (strategy.NupkgSourcePath is not null)
+        {
+            // In Docker, local nupkg source is mounted at /tmp/aspire-nupkg-source
+            args += " --add-source /tmp/aspire-nupkg-source";
+        }
+
+        return $"dotnet tool install {args}";
+    }
 }
 
 /// <summary>
@@ -167,12 +209,18 @@ internal sealed class CliInstallStrategy
     /// </summary>
     public string? Version { get; }
 
-    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null)
+    /// <summary>
+    /// For DotnetTool: path to directory containing nupkg files (local feed).
+    /// </summary>
+    public string? NupkgSourcePath { get; }
+
+    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null, string? nupkgSourcePath = null)
     {
         Mode = mode;
         ArchivePath = archivePath;
         Quality = quality;
         Version = version;
+        NupkgSourcePath = nupkgSourcePath;
     }
 
     /// <summary>
@@ -242,6 +290,37 @@ internal sealed class CliInstallStrategy
     }
 
     /// <summary>
+    /// Creates a DotnetTool strategy to install from a published NuGet feed.
+    /// </summary>
+    public static CliInstallStrategy FromDotnetTool(string? version = null)
+    {
+        if (version is not null && !s_versionPattern.IsMatch(version))
+        {
+            throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
+        }
+
+        return new CliInstallStrategy(CliInstallMode.DotnetTool, version: version);
+    }
+
+    /// <summary>
+    /// Creates a DotnetTool strategy to install from a local directory of nupkg files.
+    /// </summary>
+    public static CliInstallStrategy FromDotnetToolLocalSource(string nupkgSourcePath, string version)
+    {
+        if (!Directory.Exists(nupkgSourcePath))
+        {
+            throw new DirectoryNotFoundException($"Nupkg source directory not found: {nupkgSourcePath}");
+        }
+
+        if (!s_versionPattern.IsMatch(version))
+        {
+            throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
+        }
+
+        return new CliInstallStrategy(CliInstallMode.DotnetTool, version: version, nupkgSourcePath: nupkgSourcePath);
+    }
+
+    /// <summary>
     /// Gets the workflow run ID that produced the CLI archive for the current test run, if one was provided.
     /// </summary>
     public static string? GetCliArchiveWorkflowRunId()
@@ -265,12 +344,14 @@ internal sealed class CliInstallStrategy
     /// Auto-detect the install strategy from the environment.
     /// Priority:
     ///   1. ASPIRE_E2E_ARCHIVE → LocalHive
-    ///   2. ASPIRE_E2E_QUALITY → InstallScript with quality
-    ///   3. ASPIRE_E2E_VERSION → InstallScript with version
-    ///   4. ASPIRE_E2E_PREINSTALLED → Preinstalled
-    ///   5. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
-    ///   6. CI/GITHUB_ACTIONS → InstallScript (dev/daily)
-    ///   7. Local fallback → InstallScript (latest GA)
+    ///   2. ASPIRE_E2E_DOTNET_TOOL_SOURCE → DotnetTool with local nupkg source
+    ///   3. ASPIRE_E2E_DOTNET_TOOL=true → DotnetTool from published feed
+    ///   4. ASPIRE_E2E_QUALITY → InstallScript with quality
+    ///   5. ASPIRE_E2E_VERSION → InstallScript with version
+    ///   6. ASPIRE_E2E_PREINSTALLED → Preinstalled
+    ///   7. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
+    ///   8. CI/GITHUB_ACTIONS → InstallScript (dev/daily)
+    ///   9. Local fallback → InstallScript (latest GA)
     /// </summary>
     public static CliInstallStrategy Detect()
     {
@@ -278,6 +359,27 @@ internal sealed class CliInstallStrategy
         if (!string.IsNullOrEmpty(archivePath))
         {
             return FromLocalHive(archivePath);
+        }
+
+        var dotnetToolSource = Environment.GetEnvironmentVariable("ASPIRE_E2E_DOTNET_TOOL_SOURCE");
+        if (!string.IsNullOrEmpty(dotnetToolSource))
+        {
+            var toolVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
+            if (string.IsNullOrEmpty(toolVersion))
+            {
+                throw new InvalidOperationException(
+                    "ASPIRE_E2E_DOTNET_TOOL_SOURCE requires ASPIRE_E2E_VERSION to specify which version to install.");
+            }
+
+            return FromDotnetToolLocalSource(dotnetToolSource, toolVersion);
+        }
+
+        var dotnetTool = Environment.GetEnvironmentVariable("ASPIRE_E2E_DOTNET_TOOL");
+        if (string.Equals(dotnetTool, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(dotnetTool, "1", StringComparison.OrdinalIgnoreCase))
+        {
+            var toolVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
+            return FromDotnetTool(toolVersion);
         }
 
         var qualityStr = Environment.GetEnvironmentVariable("ASPIRE_E2E_QUALITY");
@@ -357,6 +459,14 @@ internal sealed class CliInstallStrategy
             case CliInstallMode.InstallScript:
                 break;
 
+            case CliInstallMode.DotnetTool:
+                if (NupkgSourcePath is not null)
+                {
+                    config.Volumes.Add($"{NupkgSourcePath}:/tmp/aspire-nupkg-source:ro");
+                }
+
+                break;
+
             default:
                 throw new InvalidOperationException($"Unknown install mode: {Mode}");
         }
@@ -375,6 +485,9 @@ internal sealed class CliInstallStrategy
             CliInstallMode.InstallScript when Quality is not null => $"InstallScript (--quality {Quality.Value.ToString().ToLowerInvariant()})",
             CliInstallMode.InstallScript when Version is not null => $"InstallScript (--version {Version})",
             CliInstallMode.InstallScript => "InstallScript (latest GA)",
+            CliInstallMode.DotnetTool when NupkgSourcePath is not null => $"DotnetTool (local: {NupkgSourcePath}, --version {Version})",
+            CliInstallMode.DotnetTool when Version is not null => $"DotnetTool (--version {Version})",
+            CliInstallMode.DotnetTool => "DotnetTool (latest)",
             _ => Mode.ToString(),
         };
     }

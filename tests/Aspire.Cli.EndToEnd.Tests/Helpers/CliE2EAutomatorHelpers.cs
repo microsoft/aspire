@@ -114,6 +114,14 @@ internal static class CliE2EAutomatorHelpers
                 await auto.SourceAspireCliEnvironmentAsync(counter);
                 break;
 
+            case CliInstallMode.DotnetTool:
+                await auto.SourceDotnetToolEnvironmentAsync(counter);
+                await auto.RunCommandFailFastAsync(
+                    AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy),
+                    counter,
+                    TimeSpan.FromSeconds(120));
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(strategy), strategy.Mode, "Unknown install mode");
         }
@@ -194,6 +202,11 @@ internal static class CliE2EAutomatorHelpers
                     TimeSpan.FromSeconds(120));
                 await auto.SourceAspireCliEnvironmentAsync(counter);
                 break;
+
+            case CliInstallMode.DotnetTool:
+                throw new InvalidOperationException(
+                    "DotnetTool CLI mode is only supported in Docker test environments. " +
+                    "Use CreateDockerTestTerminal instead of CreateTestTerminal to avoid mutating the host machine.");
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(strategy), strategy.Mode, "Unknown install mode");
@@ -303,6 +316,20 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter)
     {
         await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath: true);
+    }
+
+    /// <summary>
+    /// Configures the PATH and environment variables for the Aspire CLI installed via <c>dotnet tool install</c>.
+    /// Adds <c>~/.dotnet/tools</c> to PATH and sets the standard Aspire environment variables.
+    /// </summary>
+    internal static async Task SourceDotnetToolEnvironmentAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.RunCommandAsync(
+            $"export PATH=~/.dotnet/tools:$PATH {AspireCliShellCommandHelpers.CommonAspireEnvironmentAssignments}",
+            counter,
+            TimeSpan.FromSeconds(30));
     }
 
     /// <summary>

@@ -32,6 +32,8 @@ public class CliInstallStrategyTests
     {
         using var environment = new EnvironmentVariableScope(
             ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
             ("ASPIRE_E2E_QUALITY", null),
             ("ASPIRE_E2E_VERSION", null),
             ("GITHUB_PR_NUMBER", "16131"),
@@ -44,6 +46,195 @@ public class CliInstallStrategyTests
         strategy.ConfigureContainer(options);
 
         Assert.Equal("24404068249", options.Environment[CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName]);
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_WhenEnvironmentVariableIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Null(strategy.Version);
+        Assert.Null(strategy.NupkgSourcePath);
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_WithVersion()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", "9.5.0"),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Equal("9.5.0", strategy.Version);
+        Assert.Null(strategy.NupkgSourcePath);
+    }
+
+    [Fact]
+    public void Detect_DotnetToolLocalSource_WithVersionAndPath()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", tempDir.FullName),
+                ("ASPIRE_E2E_DOTNET_TOOL", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", "13.3.0-preview.1.25175.1"),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", null),
+                ("GITHUB_PR_HEAD_SHA", null),
+                ("CI", null),
+                ("GITHUB_ACTIONS", null));
+
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+            Assert.Equal("13.3.0-preview.1.25175.1", strategy.Version);
+            Assert.Equal(tempDir.FullName, strategy.NupkgSourcePath);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Detect_DotnetToolLocalSource_ThrowsWithoutVersion()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", tempDir.FullName),
+                ("ASPIRE_E2E_DOTNET_TOOL", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", null),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", null),
+                ("GITHUB_PR_HEAD_SHA", null),
+                ("CI", null),
+                ("GITHUB_ACTIONS", null));
+
+            Assert.Throws<InvalidOperationException>(CliInstallStrategy.Detect);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_TakesPriorityOverQuality()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", "dev"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+    }
+
+    [Fact]
+    public void ConfigureContainer_MountsNupkgSourceForDotnetToolLocalSource()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            var strategy = CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName, "13.3.0");
+            var options = new DockerContainerOptions();
+
+            strategy.ConfigureContainer(options);
+
+            Assert.Contains(options.Volumes, v => v.Contains("/tmp/aspire-nupkg-source:ro"));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ConfigureContainer_NoVolumeForDotnetToolPublishedFeed()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool("9.5.0");
+        var options = new DockerContainerOptions();
+
+        strategy.ConfigureContainer(options);
+
+        Assert.DoesNotContain(options.Volumes, v => v.Contains("aspire-nupkg-source"));
+    }
+
+    [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithVersionOnly()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool("9.5.0");
+        var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+        Assert.Equal("dotnet tool install --global Aspire.Cli --version 9.5.0", command);
+    }
+
+    [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithLocalSource()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            var strategy = CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName, "13.3.0");
+            var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+            Assert.Equal("dotnet tool install --global Aspire.Cli --version 13.3.0 --add-source /tmp/aspire-nupkg-source", command);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithoutVersion()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool();
+        var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+        Assert.Equal("dotnet tool install --global Aspire.Cli", command);
     }
 
     private sealed class EnvironmentVariableScope : IDisposable

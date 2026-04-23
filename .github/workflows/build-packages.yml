@@ -18,6 +18,30 @@ jobs:
       - name: Build with packages
         run: ./build.sh -restore -build -ci -pack -bl -p:InstallBrowsersForPlaywright=false -p:SkipTestProjects=true -p:SkipPlaygroundProjects=true -p:SkipBundleDeps=true ${{ inputs.versionOverrideArg }}
 
+      - name: Pack Aspire CLI dotnet tool
+        run: |
+          # The dotnet tool nupkg has the same PackageId (Aspire.Cli) as the native AOT pointer
+          # package, so it must go to a separate directory to avoid overwriting it.
+          # Extract the version from an already-built package to ensure consistency.
+          HOSTING_PKG=$(ls artifacts/packages/Debug/Shipping/Aspire.Hosting.[0-9]*.nupkg 2>/dev/null | head -1)
+          if [ -z "$HOSTING_PKG" ]; then
+            echo "::error::Cannot find Aspire.Hosting nupkg to determine version"
+            exit 1
+          fi
+          VERSION=$(basename "$HOSTING_PKG" .nupkg | sed 's/^Aspire\.Hosting\.//')
+          echo "Building Aspire CLI dotnet tool nupkg with version: $VERSION"
+
+          mkdir -p artifacts/packages/Debug/DotnetTool
+          dotnet pack src/Aspire.Cli/Aspire.Cli.Tool.csproj \
+            -c Debug \
+            -o artifacts/packages/Debug/DotnetTool \
+            /p:Version="$VERSION" \
+            /p:ContinuousIntegrationBuild=true \
+            ${{ inputs.versionOverrideArg }}
+
+          echo "Produced dotnet tool nupkg:"
+          ls -la artifacts/packages/Debug/DotnetTool/
+
       - name: Clean up artifacts
         run: |
           rm -rf artifacts/bin
