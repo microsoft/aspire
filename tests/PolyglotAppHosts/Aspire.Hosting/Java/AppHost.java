@@ -46,6 +46,10 @@ void main() throws Exception {
         var endpoint = dockerContainer.getEndpoint("http");
         var expr = ReferenceExpression.refExpr("Host=%s", endpoint);
         var builtConnectionString = builder.addConnectionString("customcs", expr);
+        var envConnectionString = builder.addConnectionString("envcs");
+        var expressionConnectionString = builder.addConnectionString("exprcs", expr);
+        builtConnectionString.withConnectionProperty("Host", expr);
+        builtConnectionString.withConnectionProperty("Mode", "Development");
         container.withReference(endpoint);
         container.withReference("https://example.com/", new WithReferenceOptions().name("external-uri"));
         var pipeline = builder.pipeline();
@@ -53,7 +57,13 @@ void main() throws Exception {
         pipeline.configure((configContext) -> { var _allSteps = configContext.steps(); var _builderTaggedSteps = configContext.getSteps("custom-build"); });
         container.withEnvironment("MY_ENDPOINT", endpoint);
         container.withEnvironment("MY_PARAM", configParam);
-        container.withEnvironment("MY_CONN", builtConnectionString);
+        container.withEnvironment("MY_CONN", envConnectionString);
+        container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
+        container.withEnvironmentCallback((environmentContext) -> { var environment = environmentContext.environment(); environment.set("MY_CALLBACK_ENDPOINT", endpoint); });
+        container.withArgsCallback((argsContext) -> { var argsEditor = argsContext.args(); argsEditor.add("--validation-callback"); argsEditor.add(expr); });
+        container.withUrlsCallback((urlsContext) -> { var callbackEndpoint = urlsContext.getEndpoint("http"); urlsContext.urls().add(ReferenceExpression.refExpr("https://%s", callbackEndpoint)); });
+        builtConnectionString.withConnectionProperty("Endpoint", expr);
+        builtConnectionString.withConnectionProperty("Protocol", "https");
         container.excludeFromManifest();
         container.excludeFromMcp();
         container.waitForCompletion(exe);

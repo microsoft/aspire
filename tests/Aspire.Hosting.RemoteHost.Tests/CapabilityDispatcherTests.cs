@@ -388,9 +388,9 @@ public class CapabilityDispatcherTests
         Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.executionContext"),
             "EnvironmentCallbackContext.executionContext capability should be registered");
 
-        // Other EnvironmentCallbackContext properties should also be registered
-        Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environmentVariables"),
-            "EnvironmentCallbackContext.environmentVariables should be registered");
+        // Other EnvironmentCallbackContext ATS-facing properties should also be registered
+        Assert.True(dispatcher.HasCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environment"),
+            "EnvironmentCallbackContext.environment should be registered");
 
         // DistributedApplicationExecutionContext properties should also be registered
         Assert.True(dispatcher.HasCapability("Aspire.Hosting/DistributedApplicationExecutionContext.operation"),

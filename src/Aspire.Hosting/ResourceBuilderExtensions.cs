@@ -534,7 +534,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to add.</param>
     /// <param name="value">The string value to assign to the connection property.</param>
     /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
-    [AspireExport("withConnectionPropertyValue", Description = "Adds a connection property with a string value")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the unified withConnectionProperty export.")]
     internal static IResourceBuilder<T> WithConnectionPropertyValueExport<T>(
         this IResourceBuilder<T> builder,
         string name,
@@ -1869,6 +1869,34 @@ public static class ResourceBuilderExtensions
                 c.Urls.Add(new() { Endpoint = endpoint, Url = urlValue, DisplayText = displayText });
             }
         }));
+    }
+
+    /// <summary>
+    /// Adds a URL to be displayed for the resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The builder for the resource.</param>
+    /// <param name="url">The URL to display, specified as a string or reference expression.</param>
+    /// <param name="displayText">The display text to show when the link is displayed.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExport("withUrl", Description = "Adds or modifies displayed URLs")]
+    internal static IResourceBuilder<T> WithUrlExport<T>(
+        this IResourceBuilder<T> builder,
+        [AspireUnion(typeof(string), typeof(ReferenceExpression))] object url,
+        string? displayText = null)
+        where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(url);
+
+        return url switch
+        {
+            string stringUrl => builder.WithUrl(stringUrl, displayText),
+            ReferenceExpression referenceExpression => builder.WithUrl(referenceExpression, displayText),
+            _ => throw new ArgumentException(
+                $"Unsupported URL type '{url.GetType().Name}'. Expected string or ReferenceExpression.",
+                nameof(url))
+        };
     }
 
     /// <summary>

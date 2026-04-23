@@ -97,10 +97,6 @@ public static class ProjectResourceBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// <para>
-    /// This overload is also exported to polyglot app hosts as <c>addProjectWithoutLaunchProfile</c> for the common case
-    /// where no launch profile is needed.
-    /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addProject dispatcher export.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)

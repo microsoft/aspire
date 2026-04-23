@@ -256,8 +256,8 @@ class TestCallbackContextImpl implements TestCallbackContext {
 
 export interface TestCollectionContext {
     toJSON(): MarshalledHandle;
-    readonly items: AspireList<string>;
-    readonly metadata: AspireDict<string, string>;
+    items(): Promise<AspireList<string>>;
+    metadata(): Promise<AspireDict<string, string>>;
 }
 
 // ============================================================================
@@ -275,7 +275,7 @@ class TestCollectionContextImpl implements TestCollectionContext {
 
     /** Gets the Items property */
     private _items?: AspireList<string>;
-    get items(): AspireList<string> {
+    async items(): Promise<AspireList<string>> {
         if (!this._items) {
             this._items = new AspireList<string>(
                 this._handle,
@@ -289,7 +289,7 @@ class TestCollectionContextImpl implements TestCollectionContext {
 
     /** Gets the Metadata property */
     private _metadata?: AspireDict<string, string>;
-    get metadata(): AspireDict<string, string> {
+    async metadata(): Promise<AspireDict<string, string>> {
         if (!this._metadata) {
             this._metadata = new AspireDict<string, string>(
                 this._handle,

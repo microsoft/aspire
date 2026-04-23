@@ -39,12 +39,12 @@ const subscription = await topic.addServiceBusSubscription("audit", {
     subscriptionName: "audit-sub",
 });
 
-const _queueParent = await queue.parent.get();
-const _queueConnectionString = await queue.connectionStringExpression.get();
-const _topicParent = await topic.parent.get();
-const _topicConnectionString = await topic.connectionStringExpression.get();
-const _subscriptionParent = await subscription.parent.get();
-const _subscriptionConnectionString = await subscription.connectionStringExpression.get();
+const _queueParent = await queue.parent();
+const _queueConnectionString = await queue.connectionStringExpression();
+const _topicParent = await topic.parent();
+const _topicConnectionString = await topic.connectionStringExpression();
+const _subscriptionParent = await subscription.parent();
+const _subscriptionConnectionString = await subscription.connectionStringExpression();
 
 // ── DTO types ───────────────────────────────────────────────────────────────
 const filter: AzureServiceBusCorrelationFilter = {
@@ -78,10 +78,10 @@ await queue.withProperties(async (q) => {
     await q.requiresSession.set(false);
 
     // Read back properties to verify getter generation
-    const _dlq: boolean = await q.deadLetteringOnMessageExpiration.get();
-    const _ttl: number = await q.defaultMessageTimeToLive.get();
-    const _fwd: string = await q.forwardTo.get();
-    const _maxDel: number = await q.maxDeliveryCount.get();
+    const _dlq: boolean = await q.deadLetteringOnMessageExpiration();
+    const _ttl: number = await q.defaultMessageTimeToLive();
+    const _fwd: string = await q.forwardTo();
+    const _maxDel: number = await q.maxDeliveryCount();
 });
 
 await topic.withProperties(async (t) => {
@@ -89,7 +89,7 @@ await topic.withProperties(async (t) => {
     await t.duplicateDetectionHistoryTimeWindow.set(3000000000);  // 5 min in ticks
     await t.requiresDuplicateDetection.set(false);
 
-    const _dupDetect: boolean = await t.requiresDuplicateDetection.get();
+    const _dupDetect: boolean = await t.requiresDuplicateDetection();
 });
 
 await subscription.withProperties(async (s) => {
@@ -102,7 +102,7 @@ await subscription.withProperties(async (s) => {
     await s.requiresSession.set(false);
 
     // Read back a subscription property
-    const _lock: number = await s.lockDuration.get();
+    const _lock: number = await s.lockDuration();
 
     // Add rules using AspireList.add() and the DTO types
     await s.rules.add({

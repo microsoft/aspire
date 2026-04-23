@@ -14,29 +14,29 @@ const _hostAddressValueExpression: string | null = await hostAddressExpression.g
 
 await compose.withProperties(async (environment) => {
     await environment.defaultNetworkName.set("validation-network");
-    const _defaultNetworkName: string = await environment.defaultNetworkName.get();
+    const _defaultNetworkName: string = await environment.defaultNetworkName();
 
     await environment.dashboardEnabled.set(true);
-    const _dashboardEnabled: boolean = await environment.dashboardEnabled.get();
+    const _dashboardEnabled: boolean = await environment.dashboardEnabled();
 
-    const _environmentName: string = await environment.name.get();
+    const _environmentName: string = await environment.name();
 });
 
 await compose.configureEnvFile(async (envVars) => {
     const bindMount = await envVars.get("API_BINDMOUNT_0");
     await bindMount.description.set("Customized bind mount source");
-    const _bindMountDescription: string | null = await bindMount.description.get();
+    const _bindMountDescription: string | null = await bindMount.description();
     await bindMount.defaultValue.set("./data");
-    const _bindMountDefaultValue: string | null = await bindMount.defaultValue.get();
+    const _bindMountDefaultValue: string | null = await bindMount.defaultValue();
 });
 
 await compose.configureComposeFile(async (composeFile) => {
     await composeFile.name.set("validation-compose");
-    const _composeFileName: string | null = await composeFile.name.get();
+    const _composeFileName: string | null = await composeFile.name();
 
     const composeApi = await composeFile.services.get("api");
     await composeApi.pullPolicy.set("always");
-    const _composeApiPullPolicy: string | null = await composeApi.pullPolicy.get();
+    const _composeApiPullPolicy: string | null = await composeApi.pullPolicy();
 });
 
 await compose.withDashboard({ enabled: false });
@@ -46,32 +46,32 @@ await compose.configureDashboard(async (dashboard) => {
     await dashboard.withHostPort({ port: 18888 });
     await dashboard.withForwardedHeaders({ enabled: true });
 
-    const _dashboardName: string = await dashboard.name.get();
+    const _dashboardName: string = await dashboard.name();
 
-    const primaryEndpoint = await dashboard.primaryEndpoint.get();
-    const _primaryUrl: string = await primaryEndpoint.url.get();
-    const _primaryHost: string = await primaryEndpoint.host.get();
-    const _primaryPort: number = await primaryEndpoint.port.get();
+    const primaryEndpoint = await dashboard.primaryEndpoint();
+    const _primaryUrl: string = await primaryEndpoint.url();
+    const _primaryHost: string = await primaryEndpoint.host();
+    const _primaryPort: number = await primaryEndpoint.port();
 
-    const otlpGrpcEndpoint = await dashboard.otlpGrpcEndpoint.get();
-    const _otlpGrpcUrl: string = await otlpGrpcEndpoint.url.get();
-    const _otlpGrpcPort: number = await otlpGrpcEndpoint.port.get();
+    const otlpGrpcEndpoint = await dashboard.otlpGrpcEndpoint();
+    const _otlpGrpcUrl: string = await otlpGrpcEndpoint.url();
+    const _otlpGrpcPort: number = await otlpGrpcEndpoint.port();
 });
 
 await api.publishAsDockerComposeService(async (composeService, service) => {
     await service.containerName.set(await containerName.asEnvironmentPlaceholder(composeService));
     await service.restart.set("unless-stopped");
 
-    const _composeServiceName: string = await composeService.name.get();
-    const composeEnvironment = await composeService.parent.get();
-    const _composeEnvironmentName: string = await composeEnvironment.name.get();
+    const _composeServiceName: string = await composeService.name();
+    const composeEnvironment = await composeService.parent();
+    const _composeEnvironmentName: string = await composeEnvironment.name();
 
-    const _serviceContainerName: string = await service.containerName.get();
-    const _serviceRestart: string = await service.restart.get();
+    const _serviceContainerName: string = await service.containerName();
+    const _serviceRestart: string = await service.restart();
 });
 
-const _resolvedDefaultNetworkName: string = await compose.defaultNetworkName.get();
-const _resolvedDashboardEnabled: boolean = await compose.dashboardEnabled.get();
-const _resolvedName: string = await compose.name.get();
+const _resolvedDefaultNetworkName: string = await compose.defaultNetworkName();
+const _resolvedDashboardEnabled: boolean = await compose.dashboardEnabled();
+const _resolvedName: string = await compose.name();
 
 await builder.build().run();
