@@ -1802,7 +1802,7 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
-    public void Invoke_ExtensionMethodTakingRawResource_UnwrapsBuilderHandle()
+    public void Invoke_StaticMethodTakingRawResource_UnwrapsBuilderHandle()
     {
         var handles = new HandleRegistry();
         var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestRawResourceCapabilities).Assembly]);
@@ -1817,7 +1817,7 @@ public class CapabilityDispatcherTests
             ["key"] = "Host"
         };
 
-        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/getConnectionPropertyKey", args);
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/findConnectionPropertyKey", args);
 
         Assert.NotNull(result);
         Assert.Equal("Host", result.GetValue<string>());
@@ -2295,13 +2295,13 @@ internal sealed class TestConnectionStringResource : Resource, IResourceWithConn
 }
 
 /// <summary>
-/// Test capabilities for extension methods that take raw resource types (not builder-wrapped).
+/// Test capabilities for static methods that take raw resource types (not builder-wrapped).
 /// Exercises the builder-to-resource unwrapping path in RegisterFromCapability.
 /// </summary>
 internal static class TestRawResourceCapabilities
 {
-    [AspireExport(Description = "Gets a connection property by key from a raw resource")]
-    public static string GetConnectionPropertyKey(IResourceWithConnectionString resource, string key)
+    [AspireExport(Description = "Finds a matching connection property key")]
+    public static string FindConnectionPropertyKey(this IResourceWithConnectionString resource, string key)
     {
         foreach (var prop in resource.GetConnectionProperties())
         {
