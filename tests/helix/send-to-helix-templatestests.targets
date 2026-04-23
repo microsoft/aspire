@@ -46,9 +46,9 @@
 
     <ItemGroup>
       <!-- the default dotnet-tests sdk is added by inner.proj . Add the rest here -->
-      <HelixCorrelationPayload Include="$(ArtifactsBinDir)dotnet-8" Destination="dotnet-8" />
       <HelixCorrelationPayload Include="$(ArtifactsBinDir)dotnet-9" Destination="dotnet-9" />
       <HelixCorrelationPayload Include="$(ArtifactsBinDir)dotnet-10" Destination="dotnet-10" />
+      <HelixCorrelationPayload Include="$(ArtifactsBinDir)dotnet-11" Destination="dotnet-11" />
 
       <!-- PreCommands="" needed for batching below -->
       <_TemplateTestsClassNames TestNameSuffix="$([System.String]::Copy('%(Identity)').Replace('Aspire.Template.Tests.', ''))" PreCommands="" />

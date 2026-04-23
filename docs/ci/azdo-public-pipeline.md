@@ -115,7 +115,7 @@ Each test category has its own strategy for splitting tests into Helix work item
 - The `ExtractTestClassNames` target runs the test assembly with `--list-tests` to discover classes
 - Class names are written to `<TestProject>.tests.list`
 - Each class becomes a separate Helix work item with `--filter-class <ClassName>`
-- Correlation payloads include multiple SDK versions (`dotnet-8`, `dotnet-9`, `dotnet-10`)
+- Correlation payloads include multiple SDK versions (`dotnet-9`, `dotnet-10`, `dotnet-11`)
 
 #### `buildonhelixtests`
 

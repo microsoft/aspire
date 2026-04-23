@@ -37,22 +37,22 @@ public class BuildEnvironment
     public static bool IsRunningOnCI => IsRunningOnHelix || IsRunningOnCIBuildMachine || IsRunningOnGithubActions;
     public static bool ShouldRunPlaywrightTests => PlaywrightProvider.HasPlaywrightSupport && !EnvironmentVariables.RunOnlyBasicBuildTemplatesTests;
 
-    private static readonly Lazy<BuildEnvironment> s_instance_80 = new(() =>
-        new BuildEnvironment(sdkDirName: "dotnet-8"));
-
     private static readonly Lazy<BuildEnvironment> s_instance_90 = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-9"));
 
     private static readonly Lazy<BuildEnvironment> s_instance_100 = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-10"));
 
-    private static readonly Lazy<BuildEnvironment> s_instance_100_90_80 = new(() =>
+    private static readonly Lazy<BuildEnvironment> s_instance_110 = new(() =>
+        new BuildEnvironment(sdkDirName: "dotnet-11"));
+
+    private static readonly Lazy<BuildEnvironment> s_instance_110_100_90 = new(() =>
         new BuildEnvironment(sdkDirName: "dotnet-tests"));
 
-    public static BuildEnvironment ForPreviousSdkOnly => s_instance_80.Value;
-    public static BuildEnvironment ForCurrentSdkOnly => s_instance_90.Value;
-    public static BuildEnvironment ForNextSdkOnly => s_instance_100.Value;
-    public static BuildEnvironment ForNextSdkWithCurrentAndPreviousRuntimes => s_instance_100_90_80.Value;
+    public static BuildEnvironment ForPreviousSdkOnly => s_instance_90.Value;
+    public static BuildEnvironment ForCurrentSdkOnly => s_instance_100.Value;
+    public static BuildEnvironment ForNextSdkOnly => s_instance_110.Value;
+    public static BuildEnvironment ForNextSdkWithCurrentAndPreviousRuntimes => s_instance_110_100_90.Value;
 
     public static BuildEnvironment ForDefaultFramework =>
         DefaultTargetFramework switch
@@ -287,9 +287,9 @@ public class BuildEnvironment
     private static TestTargetFramework ComputeDefaultTargetFramework()
         => EnvironmentVariables.DefaultTFMForTesting?.ToLowerInvariant() switch
         {
-            null or "" or "net9.0" => TestTargetFramework.Current,
-            "net8.0" => TestTargetFramework.Previous,
-            "net10.0" => TestTargetFramework.Next,
+            null or "" or "net10.0" => TestTargetFramework.Current,
+            "net9.0" => TestTargetFramework.Previous,
+            "net11.0" => TestTargetFramework.Next,
             _ => throw new ArgumentOutOfRangeException(nameof(EnvironmentVariables.DefaultTFMForTesting), EnvironmentVariables.DefaultTFMForTesting, "Invalid value")
         };
 
@@ -308,9 +308,9 @@ public static class TestTargetFrameworkExtensions
 {
     public static string ToTFMString(this TestTargetFramework tfm) => tfm switch
     {
-        TestTargetFramework.Previous => "net8.0",
-        TestTargetFramework.Current => "net9.0",
-        TestTargetFramework.Next => "net10.0",
+        TestTargetFramework.Previous => "net9.0",
+        TestTargetFramework.Current => "net10.0",
+        TestTargetFramework.Next => "net11.0",
         _ => throw new ArgumentOutOfRangeException(nameof(tfm))
     };
 }

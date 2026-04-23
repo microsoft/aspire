@@ -9,12 +9,12 @@
     <DefaultTargetFramework>net8.0</DefaultTargetFramework>
     <AllTargetFrameworks>$(DefaultTargetFramework);net9.0;net10.0</AllTargetFrameworks>
     <!-- dotnet versions for running tests -->
-    <DotNetRuntimePreviousVersionForTesting>8.0.21</DotNetRuntimePreviousVersionForTesting>
-    <DotNetRuntimeCurrentVersionForTesting>9.0.10</DotNetRuntimeCurrentVersionForTesting>
-    <!-- dotnet 8.0 versions for running tests - used for templates tests -->
-    <DotNetSdkPreviousVersionForTesting>8.0.415</DotNetSdkPreviousVersionForTesting>
+    <DotNetRuntimePreviousVersionForTesting>9.0.14</DotNetRuntimePreviousVersionForTesting>
+    <DotNetRuntimeCurrentVersionForTesting>10.0.5</DotNetRuntimeCurrentVersionForTesting>
     <!-- dotnet 9.0 versions for running tests - used for templates tests -->
-    <DotNetSdkCurrentVersionForTesting>9.0.306</DotNetSdkCurrentVersionForTesting>
+    <DotNetSdkPreviousVersionForTesting>9.0.312</DotNetSdkPreviousVersionForTesting>
+    <!-- dotnet 10.0 versions for running tests - used for templates tests -->
+    <DotNetSdkCurrentVersionForTesting>10.0.201</DotNetSdkCurrentVersionForTesting>
     <XunitV3Version>3.1.0</XunitV3Version>
     <XUnitAnalyzersVersion>1.21.0</XUnitAnalyzersVersion>
     <XunitRunnerVisualStudioVersion>3.1.0</XunitRunnerVisualStudioVersion>
