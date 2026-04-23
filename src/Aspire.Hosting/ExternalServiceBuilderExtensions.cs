@@ -24,7 +24,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="url">The URL of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
-    [AspireExport(Description = "Adds an external service resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, string url)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -39,6 +39,25 @@ public static class ExternalServiceBuilderExtensions
         return AddExternalServiceImpl(builder, name, uri);
     }
 
+    [AspireExport("addExternalService", Description = "Adds an external service resource")]
+    internal static IResourceBuilder<ExternalServiceResource> AddExternalServiceForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(Uri), typeof(IResourceBuilder<ParameterResource>))] object url)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(url);
+
+        return url switch
+        {
+            string urlString => builder.AddExternalService(name, urlString),
+            Uri uri => builder.AddExternalService(name, uri),
+            IResourceBuilder<ParameterResource> urlParameter => builder.AddExternalService(name, urlParameter),
+            _ => throw new ArgumentException("URL must be a string, Uri, or parameter resource builder.", nameof(url))
+        };
+    }
+
     /// <summary>
     /// Adds an external service resource to the distributed application with the specified URI.
     /// </summary>
@@ -46,7 +65,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="uri">The URI of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
-    [AspireExport("addExternalServiceUri", Description = "Adds an external service with a URI")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, Uri uri)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -63,7 +82,7 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="urlParameter">The parameter containing the URL of the external service.</param>
     /// <returns>An <see cref="IResourceBuilder{ExternalServiceResource}"/> instance.</returns>
-    [AspireExport("addExternalServiceParameter", Description = "Adds an external service with a parameter URL")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addExternalService dispatcher export.")]
     public static IResourceBuilder<ExternalServiceResource> AddExternalService(this IDistributedApplicationBuilder builder, [ResourceName] string name, IResourceBuilder<ParameterResource> urlParameter)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -185,7 +204,7 @@ public static class ExternalServiceBuilderExtensions
     /// different one can be specified.
     /// </para>
     /// </remarks>
-    [AspireExport("withExternalServiceHttpHealthCheck", Description = "Adds an HTTP health check to an external service")]
+    [AspireExport(Description = "Adds an HTTP health check to an external service")]
     public static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null)
     {
         if (path is not null && !Uri.IsWellFormedUriString(path, UriKind.Relative))

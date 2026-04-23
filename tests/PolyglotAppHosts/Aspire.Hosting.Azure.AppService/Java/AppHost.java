@@ -11,8 +11,8 @@ void main() throws Exception {
             .withAzureApplicationInsights()
             .withAzureApplicationInsightsLocation("westus")
             .withAzureApplicationInsightsLocationParameter(applicationInsightsLocation)
-            .withAzureApplicationInsightsResource(existingApplicationInsights)
-            .withDeploymentSlotParameter(deploymentSlot)
+            .withAzureApplicationInsights(existingApplicationInsights)
+            .withDeploymentSlot(deploymentSlot)
             .withDeploymentSlot("staging");
         var website = builder.addContainer("frontend", "nginx");
         website.skipEnvironmentVariableNameChecks();

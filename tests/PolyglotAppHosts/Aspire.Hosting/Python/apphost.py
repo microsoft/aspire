@@ -90,9 +90,11 @@ with create_builder() as builder:
     docker_container.with_http_endpoint_callback(update_existing_http_endpoint, name="http", create_if_not_exists=False)
     endpoint = docker_container.get_endpoint("http")
     expr = "expression"
-    built_connection_string = builder.add_connection_string_builder("connection-string", lambda *_args, **_kwargs: None)
+    built_connection_string = builder.add_connection_string("connection-string", expr)
     built_connection_string.with_connection_property("Key", "Value")
     built_connection_string.with_connection_property_value("Key", "Value")
+    container.with_reference(endpoint)
+    container.with_reference("https://example.com/", name="external-uri")
     # builder-level pipeline APIs
     pipeline = builder.pipeline
 
@@ -108,7 +110,7 @@ with create_builder() as builder:
 
     def configure_builder_pipeline(config_context):
         _all_steps = config_context.steps
-        _builder_tagged_steps = config_context.get_steps_by_tag("custom-build")
+        _builder_tagged_steps = config_context.get_steps("custom-build")
 
     pipeline.configure(configure_builder_pipeline)
     # withEnvironment - EndpointReference

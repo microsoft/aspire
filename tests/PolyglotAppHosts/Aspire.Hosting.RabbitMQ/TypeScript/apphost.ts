@@ -10,7 +10,7 @@ const rabbitmq2 = await builder
     .addRabbitMQ("messaging2")
     .withLifetime(ContainerLifetime.Persistent)
     .withDataVolume()
-    .withManagementPluginWithPort({ port: 15673 });
+    .withManagementPlugin({ port: 15673 });
 
 // ---- Property access on RabbitMQServerResource ----
 const _endpoint = await rabbitmq.primaryEndpoint.get();

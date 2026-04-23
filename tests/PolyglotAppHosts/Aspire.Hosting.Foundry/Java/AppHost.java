@@ -18,7 +18,7 @@ void main() throws Exception {
         model.setVersion("1");
         model.setFormat("OpenAI");
 
-        var _chatFromModel = foundry.addDeploymentFromModel("chat-from-model", model);
+        var _chatFromModel = foundry.addDeployment("chat-from-model", model);
 
         var localFoundry = builder.addFoundry("local-foundry")
             .runAsFoundryLocal();
@@ -44,7 +44,7 @@ void main() throws Exception {
         var builderProjectFoundry = builder.addFoundry("builder-project-foundry");
         var builderProject = builderProjectFoundry.addProject("builder-project");
         var _builderProjectModel = builderProject.addModelDeployment("builder-project-model", "Phi-4-mini", "1", "Microsoft");
-        var _projectModel = project.addModelDeploymentFromModel("project-model", model);
+        var _projectModel = project.addModelDeployment("project-model", model);
         var hostedAgent = builder.addExecutable(
             "hosted-agent",
             "node",

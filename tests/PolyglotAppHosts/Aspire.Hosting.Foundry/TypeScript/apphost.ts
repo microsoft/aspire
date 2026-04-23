@@ -18,7 +18,7 @@ const model: FoundryModel = {
     format: 'OpenAI'
 };
 
-const _chatFromModel = await foundry.addDeploymentFromModel('chat-from-model', model);
+const _chatFromModel = await foundry.addDeployment('chat-from-model', model);
 
 const localFoundry = await builder.addFoundry('local-foundry')
     .runAsFoundryLocal();
@@ -50,7 +50,7 @@ const _keyVaultConnection = await project.addKeyVaultConnection(keyVault);
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');
 const _builderProjectModel = await builderProject.addModelDeployment('builder-project-model', 'Phi-4-mini', '1', 'Microsoft');
-const _projectModel = await project.addModelDeploymentFromModel('project-model', model);
+const _projectModel = await project.addModelDeployment('project-model', model);
 const hostedAgent = await builder.addExecutable(
     'hosted-agent',
     'node',

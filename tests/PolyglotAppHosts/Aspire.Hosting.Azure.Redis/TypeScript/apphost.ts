@@ -8,7 +8,7 @@ const accessKeyCache = await builder.addAzureManagedRedis("cache-access-key");
 const containerCache = await builder.addAzureManagedRedis("cache-container");
 
 await accessKeyCache.withAccessKeyAuthentication();
-await accessKeyCache.withAccessKeyAuthenticationWithKeyVault(keyVault);
+await accessKeyCache.withAccessKeyAuthentication(keyVault);
 
 await containerCache.runAsContainer({
     configureContainer: async (container) => {

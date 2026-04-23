@@ -12,8 +12,8 @@ const environment = await builder.addAzureAppServiceEnvironment('appservice-envi
     .withAzureApplicationInsights()
     .withAzureApplicationInsightsLocation('westus')
     .withAzureApplicationInsightsLocationParameter(applicationInsightsLocation)
-    .withAzureApplicationInsightsResource(existingApplicationInsights)
-    .withDeploymentSlotParameter(deploymentSlot)
+    .withAzureApplicationInsights(existingApplicationInsights)
+    .withDeploymentSlot(deploymentSlot)
     .withDeploymentSlot('staging');
 
 const website = await builder.addContainer('frontend', 'nginx')

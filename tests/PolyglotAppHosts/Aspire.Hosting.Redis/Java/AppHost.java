@@ -5,8 +5,8 @@ void main() throws Exception {
         // addRedis - full overload with port and password parameter
         var password = builder.addParameter("redis-password", true);
         var cache = builder.addRedis("cache", new AddRedisOptions().password(password));
-        // addRedisWithPort - overload with explicit port
-        var cache2 = builder.addRedisWithPort("cache2", 6380.0);
+        // addRedis - overload with explicit port
+        var cache2 = builder.addRedis("cache2", 6380.0);
         // withDataVolume + withPersistence - fluent chaining on RedisResource
         cache.withDataVolume(new WithDataVolumeOptions().name("redis-data"));
         cache.withPersistence(new WithPersistenceOptions().interval(600000000.0).keysChangedThreshold(5.0));

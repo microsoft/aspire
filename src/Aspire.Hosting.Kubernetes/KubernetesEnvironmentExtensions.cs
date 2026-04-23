@@ -221,7 +221,7 @@ public static class KubernetesEnvironmentExtensions
     ///     .WithNodePool(gpuPool);
     /// </code>
     /// </example>
-    [AspireExport("withKubernetesNodePool", Description = "Schedules a workload on a specific Kubernetes node pool")]
+    [AspireExport("withKubernetesNodePool", MethodName = "withNodePool", Description = "Schedules a workload on a specific Kubernetes node pool")]
     public static IResourceBuilder<T> WithNodePool<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<KubernetesNodePoolResource> nodePool)
