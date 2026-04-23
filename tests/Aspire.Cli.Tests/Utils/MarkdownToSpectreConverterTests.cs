@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Cli.Utils;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
 namespace Aspire.Cli.Tests.Utils;
 
-public class MarkdownToSpectreConverterTests
+public partial class MarkdownToSpectreConverterTests
 {
     [Fact]
     public void ConvertToSpectre_WithEmptyString_ReturnsEmpty()
@@ -225,7 +226,7 @@ public class MarkdownToSpectreConverterTests
 
         var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
 
-        var output = RenderToPlainConsole(renderable);
+        var output = StripAnsi(RenderToPlainConsole(renderable));
 
         Assert.Contains("Learn how to configure HTTPS endpoints with the Aspire CLI and aspire run.", output);
         Assert.DoesNotContain("https://aspire.dev/get-started/install-cli/", output);
@@ -720,6 +721,11 @@ Some [strikethrough]strikethrough[/] text with [grey]inline code block[/].
 
         return writer.ToString().Replace("\r\n", "\n");
     }
+
+    [GeneratedRegex(@"\x1B\[[0-9;]*m")]
+    private static partial Regex AnsiEscapeRegex();
+
+    private static string StripAnsi(string text) => AnsiEscapeRegex().Replace(text, "");
 
     [Theory]
     [InlineData("```bash\nexport APP_NAME=\"your-app-name\"\n```", "[grey]export APP_NAME=\"your-app-name\"[/]")]
