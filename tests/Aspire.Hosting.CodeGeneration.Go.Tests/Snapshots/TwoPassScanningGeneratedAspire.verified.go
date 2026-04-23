@@ -15931,6 +15931,62 @@ func (s *TestEnvironmentContext) SetPriority(value float64) (*TestEnvironmentCon
 	return result.(*TestEnvironmentContext), nil
 }
 
+// TestMutableCollectionContext wraps a handle for Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext.
+type TestMutableCollectionContext struct {
+	HandleWrapperBase
+	tags *AspireList[string]
+	counts *AspireDict[string, float64]
+}
+
+// NewTestMutableCollectionContext creates a new TestMutableCollectionContext.
+func NewTestMutableCollectionContext(handle *Handle, client *AspireClient) *TestMutableCollectionContext {
+	return &TestMutableCollectionContext{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Tags gets the Tags property
+func (s *TestMutableCollectionContext) Tags() *AspireList[string] {
+	if s.tags == nil {
+		s.tags = NewAspireListWithGetter[string](s.Handle(), s.Client(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags")
+	}
+	return s.tags
+}
+
+// SetTags sets the Tags property
+func (s *TestMutableCollectionContext) SetTags(value *AspireList[string]) (*TestMutableCollectionContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*TestMutableCollectionContext), nil
+}
+
+// Counts gets the Counts property
+func (s *TestMutableCollectionContext) Counts() *AspireDict[string, float64] {
+	if s.counts == nil {
+		s.counts = NewAspireDictWithGetter[string, float64](s.Handle(), s.Client(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts")
+	}
+	return s.counts
+}
+
+// SetCounts sets the Counts property
+func (s *TestMutableCollectionContext) SetCounts(value *AspireDict[string, float64]) (*TestMutableCollectionContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["value"] = SerializeValue(value)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*TestMutableCollectionContext), nil
+}
+
 // TestRedisResource wraps a handle for Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource.
 type TestRedisResource struct {
 	ResourceBuilderBase
@@ -19777,6 +19833,9 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", func(h *Handle, c *AspireClient) any {
 		return NewTestCollectionContext(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", func(h *Handle, c *AspireClient) any {
+		return NewTestMutableCollectionContext(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", func(h *Handle, c *AspireClient) any {
 		return NewTestRedisResource(h, c)
 	})
@@ -19811,6 +19870,9 @@ func init() {
 		return &AspireList[any]{HandleWrapperBase: NewHandleWrapperBase(h, c)}
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Dict<string,string>", func(h *Handle, c *AspireClient) any {
+		return &AspireDict[any, any]{HandleWrapperBase: NewHandleWrapperBase(h, c)}
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Dict<string,number>", func(h *Handle, c *AspireClient) any {
 		return &AspireDict[any, any]{HandleWrapperBase: NewHandleWrapperBase(h, c)}
 	})
 }
