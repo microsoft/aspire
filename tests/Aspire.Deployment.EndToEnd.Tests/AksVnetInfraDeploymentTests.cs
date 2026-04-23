@@ -111,7 +111,7 @@ public sealed class AksVnetInfraDeploymentTests(ITestOutputHelper output)
 #pragma warning disable ASPIREAZURE003
 
 // VNet with separate subnets for system and worker node pools
-var vnet = builder.AddAzureVirtualNetwork("vnet");
+var vnet = builder.AddAzureVirtualNetwork("vnet", "10.1.0.0/16");
 var systemSubnet = vnet.AddSubnet("system-subnet", "10.1.0.0/22");
 var workerSubnet = vnet.AddSubnet("worker-subnet", "10.1.4.0/22");
 

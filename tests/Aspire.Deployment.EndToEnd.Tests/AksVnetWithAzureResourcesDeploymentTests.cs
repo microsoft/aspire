@@ -139,7 +139,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 #pragma warning disable ASPIREAZURE003
 
 // VNet with subnets for AKS and Private Endpoints
-var vnet = builder.AddAzureVirtualNetwork("vnet");
+var vnet = builder.AddAzureVirtualNetwork("vnet", "10.1.0.0/16");
 var aksSubnet = vnet.AddSubnet("aks-subnet", "10.1.0.0/22");
 var peSubnet = vnet.AddSubnet("pe-subnet", "10.1.4.0/24");
 
