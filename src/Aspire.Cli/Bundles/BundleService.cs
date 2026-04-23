@@ -201,6 +201,13 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
         // .tmp.*, .bad.*, .old.* siblings.
         TryCleanupStaleVersions(versionsRoot, versionId);
 
+        // Best-effort cleanup of .old legacy directories created during this
+        // migration. These are safe to remove now that post-flip validation passed.
+        foreach (var dir in s_linkedLayoutDirectories)
+        {
+            FileDeleteHelper.TryCleanupOldItems(destinationPath, dir);
+        }
+
         logger.LogDebug("Bundle extraction verified successfully.");
         return BundleExtractResult.Extracted;
     }
@@ -338,11 +345,22 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
             FileDeleteHelper.TryCleanupOldItems(layoutPath, dir);
 
             // If a legacy real directory is sitting at the public path (pre-migration
-            // layout), move it aside so we can install a reparse point in its place.
+            // layout), rename it to a .old sibling so a reparse point can be created.
+            // The .old sibling is preserved until after post-flip validation succeeds,
+            // ensuring a working layout is never lost if link creation fails.
             if (Directory.Exists(linkPath) && !ReparsePoint.IsReparsePoint(linkPath))
             {
-                logger.LogDebug("Migrating legacy directory at {Path} to .old sibling.", linkPath);
-                FileDeleteHelper.TryDeleteDirectory(linkPath);
+                var renamedPath = $"{linkPath}.old.{Environment.TickCount64}";
+                logger.LogDebug("Migrating legacy directory at {Path} to {Renamed}.", linkPath, renamedPath);
+                try
+                {
+                    Directory.Move(linkPath, renamedPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    logger.LogError(ex, "Failed to rename legacy directory {Path}.", linkPath);
+                    return false;
+                }
             }
 
             try

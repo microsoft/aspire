@@ -48,10 +48,10 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void CreateOrReplace_ReplacesExistingRealDirectoryWhenRemovedFirst()
+    public void CreateOrReplace_ThrowsWhenExistingPathIsRealDirectory()
     {
-        // CreateOrReplace expects the caller to have removed any conflicting
-        // non-reparse-point entry. Verify it does not follow a real directory.
+        // CreateOrReplace must refuse to remove a real directory to prevent
+        // accidental data loss. Callers must handle migration explicitly.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var root = workspace.WorkspaceRoot.FullName;
 
@@ -62,12 +62,13 @@ public class ReparsePointTests(ITestOutputHelper outputHelper)
         var target = Path.Combine(root, "target");
         Directory.CreateDirectory(target);
 
-        // A real directory in the way should prevent the atomic rename-over on
-        // most platforms. Callers must delete it first; simulate that.
-        Directory.Delete(real, recursive: true);
-        ReparsePoint.CreateOrReplace(real, target);
+        // A real directory at the link path should throw — callers must remove
+        // or migrate it before calling CreateOrReplace.
+        Assert.Throws<InvalidOperationException>(() => ReparsePoint.CreateOrReplace(real, target));
 
-        Assert.True(ReparsePoint.IsReparsePoint(real));
+        // The real directory and its contents must be preserved.
+        Assert.True(Directory.Exists(real));
+        Assert.True(File.Exists(Path.Combine(real, "legacy")));
     }
 
     [Fact]

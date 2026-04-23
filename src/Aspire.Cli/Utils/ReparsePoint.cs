@@ -67,6 +67,13 @@ internal static partial class ReparsePoint
                 // caller's bundle lock.
                 if (Exists(linkPath))
                 {
+                    if (!IsReparsePoint(linkPath))
+                    {
+                        throw new InvalidOperationException(
+                            $"Cannot replace '{linkPath}': it is a real directory, not a reparse point. " +
+                            "Callers must remove or migrate existing directories before creating a reparse point.");
+                    }
+
                     RemoveIfExists(linkPath);
                 }
 
@@ -291,6 +298,11 @@ internal static partial class ReparsePoint
         return handle;
     }
 
+    /// <summary>
+    /// Maximum size of a reparse data buffer (defined by MAXIMUM_REPARSE_DATA_BUFFER_SIZE in the Windows SDK).
+    /// </summary>
+    private const int MaxReparseDataBufferSize = 16 * 1024; // 16 KB
+
     [SupportedOSPlatform("windows")]
     private static void WriteMountPointReparseData(SafeFileHandle handle, string substituteName, string printName)
     {
@@ -314,6 +326,20 @@ internal static partial class ReparsePoint
         var pathBufferSize = subNameBytes.Length + 2 + printNameBytes.Length + 2;
         var reparseDataLength = mountPointInfoSize + pathBufferSize;
         var totalSize = headerSize + reparseDataLength;
+
+        if (reparseDataLength > ushort.MaxValue)
+        {
+            throw new PathTooLongException(
+                $"Junction target path is too long. The reparse data ({reparseDataLength} bytes) exceeds the " +
+                $"maximum of {ushort.MaxValue} bytes. Use a shorter target path.");
+        }
+
+        if (totalSize > MaxReparseDataBufferSize)
+        {
+            throw new PathTooLongException(
+                $"Junction target path is too long. The reparse buffer ({totalSize} bytes) exceeds the " +
+                $"maximum of {MaxReparseDataBufferSize} bytes. Use a shorter target path.");
+        }
 
         var buffer = new byte[totalSize];
         var span = buffer.AsSpan();
