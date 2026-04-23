@@ -617,21 +617,24 @@ public class DistributedApplication : IHost, IAsyncDisposable
     }
 
     /// <summary>
-    /// When the model contains exactly one compute environment, applies a
-    /// <see cref="ComputeEnvironmentAnnotation"/> pointing to that environment to every
-    /// <see cref="IComputeResource"/> that doesn't already have one.
+    /// Validates and applies <see cref="ComputeEnvironmentAnnotation"/> to compute resources based on
+    /// the number of compute environments in the model:
     /// </summary>
     /// <remarks>
-    /// This implements the "single compute environment is the default" convention: when only one
-    /// compute environment is present (e.g., a single <c>AzureContainerAppEnvironmentResource</c>),
-    /// developers don't need to call <c>WithComputeEnvironment(...)</c> on every compute resource —
-    /// the unique environment is auto-assigned here. Resources that have been explicitly bound to a
-    /// compute environment (via <c>WithComputeEnvironment</c> or otherwise) are left untouched.
+    /// - When exactly one compute environment is present (e.g., a single
+    /// <c>AzureContainerAppEnvironmentResource</c>), it is auto-assigned to every <see cref="IComputeResource"/>
+    /// that doesn't already have an explicit binding. Developers don't need to call
+    /// <c>WithComputeEnvironment(...)</c> on every compute resource — the unique environment is the default.
+    /// Resources that have been explicitly bound to a compute environment (via <c>WithComputeEnvironment</c>
+    /// or otherwise) are left untouched.
     ///
-    /// When zero or more than one compute environment is present we deliberately do nothing.
-    /// - With zero compute environments there is no default to apply.
-    /// - With multiple compute environments there is no unambiguous default; the developer must pick one explicitly per
-    /// resource.
+    /// - When more than one compute environment is present there is no unambiguous default. Any
+    /// <see cref="IComputeResource"/> without an explicit <see cref="ComputeEnvironmentAnnotation"/>
+    /// causes an <see cref="InvalidOperationException"/> so the developer is forced to disambiguate via
+    /// <c>WithComputeEnvironment</c> rather than silently producing a model where some resources are
+    /// never deployed (because per-environment prepare steps would skip resources not bound to their env).
+    ///
+    /// - When zero compute environments are present nothing is done.
     ///
     /// Doing this once here, before the before-start pipeline runs, guarantees downstream
     /// consumers (per-environment prepare steps, deployment-target inspection helpers, etc.) see
@@ -653,6 +656,26 @@ public class DistributedApplication : IHost, IAsyncDisposable
                 {
                     computeResource.Annotations.Add(new ComputeEnvironmentAnnotation(environment));
                 }
+            }
+        }
+        else if (computeEnvironments.Count > 1)
+        {
+            // With multiple compute environments there is no unambiguous default. Surface a clear
+            // error for any compute resource that hasn't been explicitly bound, rather than letting
+            // the environments' steps silently skip it (which would result in the resource
+            // never being deployed).
+            var unboundResources = appModel.Resources
+                .OfType<IComputeResource>()
+                .Where(r => r.GetComputeEnvironment() is null)
+                .ToList();
+
+            if (unboundResources.Count > 0)
+            {
+                var resourceNames = string.Join("', '", unboundResources.Select(r => r.Name));
+                var environmentNames = string.Join("', '", computeEnvironments.Select(e => e.Name));
+                throw new InvalidOperationException(
+                    $"Compute resource(s) '{resourceNames}' are not assigned to a compute environment, but the model contains multiple compute environments ('{environmentNames}'). " +
+                    $"Specify which environment each resource should target by calling 'WithComputeEnvironment' on the resource builder.");
             }
         }
     }
