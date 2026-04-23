@@ -81,6 +81,14 @@ public class TestCollectionContext
     public Dictionary<string, string> Metadata { get; } = [];
 }
 
+[AspireExport(ExposeProperties = true)]
+public class TestMutableCollectionContext
+{
+    public List<string> Tags { get; set; } = [];
+
+    public Dictionary<string, int> Counts { get; set; } = [];
+}
+
 /// <summary>
 /// Test DTO with complex nested types.
 /// </summary>

@@ -1409,6 +1409,21 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_MutableCollectionProperties_UsePropertyAccessors()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var code = files["aspire.ts"];
+
+        Assert.Contains("readonly tags: AspireList<string>;", code);
+        Assert.Contains("get tags(): AspireList<string> {", code);
+        Assert.Contains("readonly counts: AspireDict<string, number>;", code);
+        Assert.Contains("get counts(): AspireDict<string, number> {", code);
+        Assert.DoesNotContain("async tags(): Promise<AspireList<string>>", code);
+        Assert.DoesNotContain("async counts(): Promise<AspireDict<string, number>>", code);
+    }
+
+    [Fact]
     public void Generate_ConcreteAndInterfaceWithSameClassName_NoDuplicateClasses()
     {
         // TestVaultResource (concrete) and ITestVaultResource (interface) both derive

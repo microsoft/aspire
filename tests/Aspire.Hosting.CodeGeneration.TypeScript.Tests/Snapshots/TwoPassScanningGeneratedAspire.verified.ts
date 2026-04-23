@@ -49,6 +49,9 @@ type TestDatabaseResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScri
 /** Handle to TestEnvironmentContext */
 type TestEnvironmentContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext'>;
 
+/** Handle to TestMutableCollectionContext */
+type TestMutableCollectionContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext'>;
+
 /** Handle to TestRedisResource */
 type TestRedisResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource'>;
 
@@ -4980,6 +4983,59 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
             );
         }
     };
+
+}
+
+// ============================================================================
+// TestMutableCollectionContext
+// ============================================================================
+
+export interface TestMutableCollectionContext {
+    toJSON(): MarshalledHandle;
+    readonly tags: AspireList<string>;
+    readonly counts: AspireDict<string, number>;
+}
+
+// ============================================================================
+// TestMutableCollectionContextImpl
+// ============================================================================
+
+/**
+ * Type class for TestMutableCollectionContext.
+ */
+class TestMutableCollectionContextImpl implements TestMutableCollectionContext {
+    constructor(private _handle: TestMutableCollectionContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    private _tags?: AspireList<string>;
+    /** Gets the Tags property */
+    get tags(): AspireList<string> {
+        if (!this._tags) {
+            this._tags = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags',
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags'
+            );
+        }
+        return this._tags;
+    }
+
+    private _counts?: AspireDict<string, number>;
+    /** Gets the Counts property */
+    get counts(): AspireDict<string, number> {
+        if (!this._counts) {
+            this._counts = new AspireDict<string, number>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts',
+                'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts'
+            );
+        }
+        return this._counts;
+    }
 
 }
 
@@ -34760,6 +34816,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUr
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext', (handle, client) => new TestCallbackContextImpl(handle as TestCallbackContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext', (handle, client) => new TestCollectionContextImpl(handle as TestCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext', (handle, client) => new TestEnvironmentContextImpl(handle as TestEnvironmentContextHandle, client));
+registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext', (handle, client) => new TestMutableCollectionContextImpl(handle as TestMutableCollectionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext', (handle, client) => new TestResourceContextImpl(handle as TestResourceContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore', (handle, client) => new AspireStoreImpl(handle as IAspireStoreHandle, client));

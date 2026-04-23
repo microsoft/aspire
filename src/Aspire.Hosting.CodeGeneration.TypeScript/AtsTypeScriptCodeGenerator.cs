@@ -2624,17 +2624,18 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             returnType = MapTypeRefToTypeScript(getter.ReturnType);
             description = getter.Description;
 
-            // Check if this is a dictionary type - generate direct AspireDict field instead
+            // Mutable dictionary/list properties stay as property accessors so callers can use
+            // wrapper operations (for example, property.get()/set() or list/dict helpers)
+            // without switching to the getter-only method shape.
             if (IsDictionaryType(getter.ReturnType))
             {
-                GenerateDictionaryProperty(propertyName, getter);
+                GenerateMutableDictionaryProperty(propertyName, getter);
                 return;
             }
 
-            // Check if this is a list type - generate direct AspireList field instead
             if (IsListType(getter.ReturnType))
             {
-                GenerateListProperty(propertyName, getter);
+                GenerateMutableListProperty(propertyName, getter);
                 return;
             }
 
@@ -2886,6 +2887,43 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine();
     }
 
+    private void GenerateMutableDictionaryProperty(string propertyName, AtsCapabilityInfo getter)
+    {
+        var keyType = "string";
+        var valueType = "unknown";
+
+        if (getter.ReturnType?.KeyType != null)
+        {
+            keyType = MapTypeRefToTypeScript(getter.ReturnType.KeyType);
+        }
+
+        if (getter.ReturnType?.ValueType != null)
+        {
+            valueType = MapTypeRefToTypeScript(getter.ReturnType.ValueType);
+        }
+
+        var typeId = $"'{getter.CapabilityId.Replace(".get", "")}'";
+        var getterCapabilityId = $"'{getter.CapabilityId}'";
+
+        WriteLine($"    private _{propertyName}?: AspireDict<{keyType}, {valueType}>;");
+        if (!string.IsNullOrEmpty(getter.Description))
+        {
+            WriteLine($"    /** {getter.Description} */");
+        }
+        WriteLine($"    get {propertyName}(): AspireDict<{keyType}, {valueType}> {{");
+        WriteLine($"        if (!this._{propertyName}) {{");
+        WriteLine($"            this._{propertyName} = new AspireDict<{keyType}, {valueType}>(");
+        WriteLine($"                this._handle,");
+        WriteLine($"                this._client,");
+        WriteLine($"                {typeId},");
+        WriteLine($"                {getterCapabilityId}");
+        WriteLine("            );");
+        WriteLine("        }");
+        WriteLine($"        return this._{propertyName};");
+        WriteLine("    }");
+        WriteLine();
+    }
+
     /// <summary>
     /// Generates a getter-only method for list types.
     /// </summary>
@@ -2910,6 +2948,37 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Pass the getter capability ID so AspireList can lazily fetch the actual list handle.
         WriteLine($"    private _{propertyName}?: AspireList<{elementType}>;");
         WriteLine($"    async {propertyName}(): Promise<AspireList<{elementType}>> {{");
+        WriteLine($"        if (!this._{propertyName}) {{");
+        WriteLine($"            this._{propertyName} = new AspireList<{elementType}>(");
+        WriteLine($"                this._handle,");
+        WriteLine($"                this._client,");
+        WriteLine($"                {typeId},");
+        WriteLine($"                {getterCapabilityId}");
+        WriteLine("            );");
+        WriteLine("        }");
+        WriteLine($"        return this._{propertyName};");
+        WriteLine("    }");
+        WriteLine();
+    }
+
+    private void GenerateMutableListProperty(string propertyName, AtsCapabilityInfo getter)
+    {
+        var elementType = "unknown";
+
+        if (getter.ReturnType?.ElementType != null)
+        {
+            elementType = MapTypeRefToTypeScript(getter.ReturnType.ElementType);
+        }
+
+        var typeId = $"'{getter.CapabilityId.Replace(".get", "")}'";
+        var getterCapabilityId = $"'{getter.CapabilityId}'";
+
+        WriteLine($"    private _{propertyName}?: AspireList<{elementType}>;");
+        if (!string.IsNullOrEmpty(getter.Description))
+        {
+            WriteLine($"    /** {getter.Description} */");
+        }
+        WriteLine($"    get {propertyName}(): AspireList<{elementType}> {{");
         WriteLine($"        if (!this._{propertyName}) {{");
         WriteLine($"            this._{propertyName} = new AspireList<{elementType}>(");
         WriteLine($"                this._handle,");

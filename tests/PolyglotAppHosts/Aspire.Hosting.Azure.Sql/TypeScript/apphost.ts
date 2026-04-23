@@ -27,9 +27,11 @@ const _fullyQualifiedDomainName = await sqlServer.fullyQualifiedDomainName();
 const _nameOutputReference = await sqlServer.nameOutputReference();
 const _resourceId = await sqlServer.id();
 const _isContainer: boolean = await sqlServer.isContainer();
-const _databaseCount = await sqlServer.databases.count();
-const _hasMyDb: boolean = await sqlServer.databases.containsKey("mydb");
-const _azureSqlDatabase = await sqlServer.azureSqlDatabases.get("mydb");
+const databases = await sqlServer.databases();
+const _databaseCount = await databases.count();
+const _hasMyDb: boolean = await databases.containsKey("mydb");
+const azureSqlDatabases = await sqlServer.azureSqlDatabases();
+const _azureSqlDatabase = await azureSqlDatabases.get("mydb");
 
 const _parent = await db.parent();
 const _dbConnectionStringExpression = await db.connectionStringExpression();

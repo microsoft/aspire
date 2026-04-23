@@ -9,7 +9,7 @@ const chat = await foundry
     .withProperties(async (deployment) => {
         await deployment.deploymentName.set('chat-deployment');
         await deployment.skuCapacity.set(10);
-        const _capacity: number = await deployment.skuCapacity();
+        const _capacity: number = await deployment.skuCapacity.get();
     });
 
 const model: FoundryModel = {
@@ -95,11 +95,11 @@ await api.withRoleAssignments(foundry, [
     FoundryRole.CognitiveServicesUser
 ]);
 
-const _deploymentName = await chat.deploymentName();
-const _modelName = await chat.modelName();
-const _format = await chat.format();
-const _version = await chat.modelVersion();
+const _deploymentName = await chat.deploymentName.get();
+const _modelName = await chat.modelName.get();
+const _format = await chat.format.get();
+const _version = await chat.modelVersion.get();
 const _connectionString = await chat.connectionStringExpression();
-const _deploymentParent = await chat.parent();
+const _deploymentParent = await chat.parent.get();
 
 await builder.build().run();
