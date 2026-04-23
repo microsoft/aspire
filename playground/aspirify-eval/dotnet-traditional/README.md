@@ -1,6 +1,6 @@
 # BoardApp — .NET Traditional (Pre-Aspirification)
 
-A traditional .NET LOB app with a Vue frontend. This app is **intentionally not aspirified** — it represents the "before" state for evaluating the `aspire-init` skill.
+A traditional .NET LOB app with a Vue frontend. This app is **intentionally not aspirified** — it represents the "before" state for evaluating the `aspireify` skill.
 
 ## Architecture
 

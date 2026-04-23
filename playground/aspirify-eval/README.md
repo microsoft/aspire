@@ -1,8 +1,8 @@
 # Aspirify Eval Apps
 
-These are **pre-aspirification** playground apps used to evaluate the `aspire-init` skill.
+These are **pre-aspirification** playground apps used to evaluate the `aspireify` skill.
 They are intentionally NOT wired up with Aspire — the goal is to run `aspire init` on them
-and have the agent use the `aspire-init` skill to fully aspirify them.
+and have the agent use the `aspireify` skill to fully aspirify them.
 
 ## Apps
 
@@ -20,7 +20,7 @@ See its README for architecture and manual setup instructions.
 
 1. `cd` into either app directory
 2. Run `aspire init`
-3. Let the agent execute the `aspire-init` skill
+3. Let the agent execute the `aspireify` skill
 4. Score against the rubric in `EVAL-RUBRIC.md`
 
 **Important**: The app READMEs only describe the "before" state (how to run manually).

@@ -1,9 +1,9 @@
 ---
-name: aspire-init
+name: aspireify
 description: "One-time skill for completing Aspire initialization after `aspire init` has dropped the skeleton AppHost and aspire.config.json. This skill scans the repository, discovers projects, wires up the AppHost (TypeScript or C#), configures dependencies and OpenTelemetry, validates that `aspire start` works, and self-removes on success."
 ---
 
-# Aspire Init
+# Aspireify
 
 This is a **one-time setup skill**. It completes the Aspire initialization that `aspire init` started. After this skill finishes successfully, it should be deleted — the evergreen `aspire` skill handles ongoing AppHost work.
 
@@ -661,7 +661,7 @@ Ensure both the AppHost and ServiceDefaults projects appear.
 After successful validation:
 
 1. **Leave the AppHost running** — the user gets a fully running app with the dashboard open. Do not call `aspire stop`.
-2. **Delete this skill** — remove the `aspire-init/` skill directory from all locations where it was installed (check `.agents/skills/`, `.github/skills/`, `.claude/skills/`)
+2. **Delete this skill** — remove the `aspireify/` skill directory from all locations where it was installed (check `.agents/skills/`, `.github/skills/`, `.claude/skills/`)
 3. Confirm the evergreen `aspire` skill is present for ongoing AppHost work
 
 ## Key rules

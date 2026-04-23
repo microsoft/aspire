@@ -50,11 +50,11 @@ internal sealed class SkillDefinition
     /// One-time skill for completing Aspire initialization.
     /// Installed by <c>aspire init</c> to scan the repo, wire up the AppHost, and configure dependencies.
     /// </summary>
-    public static readonly SkillDefinition AspireInit = new(
-        CommonAgentApplicators.AspireInitSkillName,
-        AgentCommandStrings.SkillDescription_AspireInit,
+    public static readonly SkillDefinition Aspireify = new(
+        CommonAgentApplicators.AspireifySkillName,
+        AgentCommandStrings.SkillDescription_Aspireify,
         skillContent: null,
-        embeddedResourceRoot: CommonAgentApplicators.AspireInitSkillResourceRoot,
+        embeddedResourceRoot: CommonAgentApplicators.AspireifySkillResourceRoot,
         installExcludedRelativePaths: [],
         isDefault: false);
 
@@ -162,5 +162,5 @@ internal sealed class SkillDefinition
     /// <summary>
     /// Gets all available skill definitions.
     /// </summary>
-    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, AspireInit, PlaywrightCli, DotnetInspect];
+    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, Aspireify, PlaywrightCli, DotnetInspect];
 }

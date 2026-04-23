@@ -1,6 +1,6 @@
 # CityServices — Polyglot (Pre-Aspirification)
 
-A polyglot microservices app with Python, Go, C#, and React. This app is **intentionally not aspirified** — it represents the "before" state for evaluating the `aspire-init` skill.
+A polyglot microservices app with Python, Go, C#, and React. This app is **intentionally not aspirified** — it represents the "before" state for evaluating the `aspireify` skill.
 
 ## Architecture
 

@@ -165,7 +165,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_WhenAspireInitSkillSelected_PrintsToolSpecificFollowUpCommands()
+    public async Task InitCommand_WhenAspireifySkillSelected_PrintsToolSpecificFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -185,7 +185,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return [SkillLocation.Standard, SkillLocation.ClaudeCode, SkillLocation.OpenCode];
             }
 
-            return [SkillDefinition.AspireInit];
+            return [SkillDefinition.Aspireify];
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -202,13 +202,13 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Aspire AppHost created! To complete setup, run one of:");
-        Assert.Contains("  copilot -i \"run the aspire-init skill\" --yolo", subtleMessages);
-        Assert.Contains("  claude \"run the aspire-init skill\"", subtleMessages);
-        Assert.Contains("  opencode --prompt \"run the aspire-init skill\"", subtleMessages);
+        Assert.Contains("  copilot -i \"run the aspireify skill\" --yolo", subtleMessages);
+        Assert.Contains("  claude \"run the aspireify skill\"", subtleMessages);
+        Assert.Contains("  opencode --prompt \"run the aspireify skill\"", subtleMessages);
     }
 
     [Fact]
-    public async Task InitCommand_WhenAspireInitSkillNotSelected_DoesNotPrintFollowUpCommands()
+    public async Task InitCommand_WhenAspireifySkillNotSelected_DoesNotPrintFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -245,6 +245,6 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.DoesNotContain(interactionService.DisplayedMessages, m => m.Message.Contains("To complete setup", StringComparison.Ordinal));
-        Assert.DoesNotContain(subtleMessages, m => m.Contains("run the aspire-init skill", StringComparison.Ordinal));
+        Assert.DoesNotContain(subtleMessages, m => m.Contains("run the aspireify skill", StringComparison.Ordinal));
     }
 }

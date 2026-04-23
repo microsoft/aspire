@@ -107,7 +107,7 @@
         <target state="new">Aspire CLI commands and workflows for distributed apps</target>
         <note />
       </trans-unit>
-      <trans-unit id="SkillDescription_AspireInit">
+      <trans-unit id="SkillDescription_Aspireify">
         <source>One-time setup: wire up AppHost with discovered projects</source>
         <target state="new">One-time setup: wire up AppHost with discovered projects</target>
         <note />

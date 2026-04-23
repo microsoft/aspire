@@ -1,4 +1,4 @@
-<!-- This directory contains evaluation/test data for the aspire-init skill.
+<!-- This directory contains evaluation/test data for the aspireify skill.
      These are intentionally un-aspirified sample apps and should NOT be built
      by the repo's CI pipeline. -->
 <Project>
