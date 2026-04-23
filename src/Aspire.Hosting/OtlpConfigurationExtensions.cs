@@ -193,8 +193,7 @@ public static class OtlpConfigurationExtensions
             return null;
         }
 
-        var dashboardResource = model.Resources.SingleOrDefault(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) as IResourceWithEndpoints;
-        if (dashboardResource is null)
+        if (!model.Resources.TryGetByName(KnownResourceNames.AspireDashboard, out var resource) || resource is not IResourceWithEndpoints dashboardResource)
         {
             return null;
         }

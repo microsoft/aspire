@@ -456,11 +456,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         if (resource.TryGetAnnotationsOfType<OtlpExporterAnnotation>(out _))
         {
-            var maybeDashboard = _model.Resources.Where(r => StringComparers.ResourceName.Equals(r.Name, KnownResourceNames.AspireDashboard))
-                    .Select(HostResourceWithEndpoints.Create).FirstOrDefault();
-            if (maybeDashboard is HostResourceWithEndpoints dashboardResource)
+            if (_model.Resources.TryGetByName(KnownResourceNames.AspireDashboard, out var dashboardResource)
+                && HostResourceWithEndpoints.Create(dashboardResource) is HostResourceWithEndpoints dashboard)
             {
-                hostDependencies.Add(dashboardResource);
+                hostDependencies.Add(dashboard);
             }
         }
 
