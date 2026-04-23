@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 37
+Total steps defined: 36
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -16,41 +16,40 @@ Steps with no dependencies run first, followed by steps that depend on them.
 
   1. azure-prepare-resources
   2. prepare-azure-app-service-env
-  3. run-mode-azure-provision
-  4. validate-azure-app-service
-  5. before-start
-  6. process-parameters
-  7. build-prereq
-  8. check-container-runtime
-  9. deploy-prereq
- 10. build-api
- 11. build
- 12. validate-azure-login
- 13. create-provisioning-context
- 14. provision-api-identity
- 15. provision-kv
- 16. provision-api-roles-kv
- 17. provision-env-acr
- 18. provision-env
- 19. login-to-acr-env-acr
- 20. push-prereq
- 21. push-api
- 22. provision-api-website
- 23. print-api-summary
- 24. provision-azure-bicep-resources
- 25. print-dashboard-url-env
- 26. deploy
- 27. deploy-api
- 28. destroy-prereq
- 29. destroy-azure-azure634f9
- 30. destroy
- 31. diagnostics
- 32. publish-prereq
- 33. publish-azure634f9
- 34. validate-appservice-config-env
- 35. publish
- 36. publish-manifest
- 37. push
+  3. validate-azure-app-service
+  4. before-start
+  5. process-parameters
+  6. build-prereq
+  7. check-container-runtime
+  8. deploy-prereq
+  9. build-api
+ 10. build
+ 11. validate-azure-login
+ 12. create-provisioning-context
+ 13. provision-api-identity
+ 14. provision-kv
+ 15. provision-api-roles-kv
+ 16. provision-env-acr
+ 17. provision-env
+ 18. login-to-acr-env-acr
+ 19. push-prereq
+ 20. push-api
+ 21. provision-api-website
+ 22. print-api-summary
+ 23. provision-azure-bicep-resources
+ 24. print-dashboard-url-env
+ 25. deploy
+ 26. deploy-api
+ 27. destroy-prereq
+ 28. destroy-azure-azure634f9
+ 29. destroy
+ 30. diagnostics
+ 31. publish-prereq
+ 32. publish-azure634f9
+ 33. validate-appservice-config-env
+ 34. publish
+ 35. publish-manifest
+ 36. push
 
 DETAILED STEP ANALYSIS
 ======================
@@ -64,7 +63,7 @@ Step: azure-prepare-resources
 
 Step: before-start
     Description: Aggregation step for operations that run before the application starts.
-    Dependencies: ✓ azure-prepare-resources, ✓ prepare-azure-app-service-env, ✓ run-mode-azure-provision, ✓ validate-azure-app-service
+    Dependencies: ✓ azure-prepare-resources, ✓ prepare-azure-app-service-env, ✓ validate-azure-app-service
 
 Step: build
     Description: Aggregation step for all build operations. All build steps should be required by this step.
@@ -218,11 +217,6 @@ Step: push-prereq
     Description: Prerequisite step that runs before any push operations.
     Dependencies: ✓ login-to-acr-env-acr
 
-Step: run-mode-azure-provision
-    Description: Provisions the Azure resources for azure634f9.
-    Dependencies: ✓ azure-prepare-resources
-    Resource: azure634f9 (AzureEnvironmentResource)
-
 Step: validate-appservice-config-env
     Description: Validates Azure App Service configuration for env.
     Dependencies: ✓ publish-prereq
@@ -254,11 +248,11 @@ If targeting 'azure-prepare-resources':
     [0] azure-prepare-resources
 
 If targeting 'before-start':
-  Direct dependencies: azure-prepare-resources, prepare-azure-app-service-env, run-mode-azure-provision, validate-azure-app-service
-  Total steps: 5
+  Direct dependencies: azure-prepare-resources, prepare-azure-app-service-env, validate-azure-app-service
+  Total steps: 4
   Execution order:
     [0] azure-prepare-resources | validate-azure-app-service (parallel)
-    [1] prepare-azure-app-service-env | run-mode-azure-provision (parallel)
+    [1] prepare-azure-app-service-env
     [2] before-start
 
 If targeting 'build':
@@ -571,13 +565,6 @@ If targeting 'push-prereq':
     [4] provision-env-acr
     [5] login-to-acr-env-acr
     [6] push-prereq
-
-If targeting 'run-mode-azure-provision':
-  Direct dependencies: azure-prepare-resources
-  Total steps: 2
-  Execution order:
-    [0] azure-prepare-resources
-    [1] run-mode-azure-provision
 
 If targeting 'validate-appservice-config-env':
   Direct dependencies: publish-prereq

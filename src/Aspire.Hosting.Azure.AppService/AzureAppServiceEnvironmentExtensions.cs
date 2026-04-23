@@ -26,8 +26,6 @@ public static partial class AzureAppServiceEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddAzureAppServiceInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        // ensure AzureProvisioning is added first so the AzureResourcePreparer pipeline step
-        // runs before the per-environment prepare-azure-app-service-{name} steps that depend on it.
         builder.AddAzureProvisioning();
 
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);

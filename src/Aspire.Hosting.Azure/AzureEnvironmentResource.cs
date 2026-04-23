@@ -76,6 +76,8 @@ public sealed class AzureEnvironmentResource : Resource
     {
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
+            var steps = new List<PipelineStep>();
+
             var prepareResourcesStep = new PipelineStep
             {
                 Name = PrepareResourcesStepName,
@@ -87,19 +89,24 @@ public sealed class AzureEnvironmentResource : Resource
                 },
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
+            steps.Add(prepareResourcesStep);
 
-            var runModeProvisionStep = new PipelineStep
+            if (factoryContext.PipelineContext.ExecutionContext.IsRunMode)
             {
-                Name = "run-mode-azure-provision",
-                Description = $"Provisions the Azure resources for {Name}.",
-                Action = static async context =>
+                var runModeProvisionStep = new PipelineStep
                 {
-                    var provisioner = context.Services.GetRequiredService<AzureProvisioner>();
-                    await provisioner.ProvisionResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
-                },
-                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
-                DependsOnSteps = [prepareResourcesStep.Name]
-            };
+                    Name = "run-mode-azure-provision",
+                    Description = $"Provisions the Azure resources for {Name}.",
+                    Action = static async context =>
+                    {
+                        var provisioner = context.Services.GetRequiredService<AzureProvisioner>();
+                        await provisioner.ProvisionResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+                    },
+                    RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
+                    DependsOnSteps = [prepareResourcesStep.Name]
+                };
+                steps.Add(runModeProvisionStep);
+            }
 
             var publishStep = new PipelineStep
             {
@@ -109,6 +116,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Publish],
                 DependsOnSteps = [WellKnownPipelineSteps.PublishPrereq]
             };
+            steps.Add(publishStep);
 
             var validateStep = new PipelineStep
             {
@@ -118,6 +126,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
+            steps.Add(validateStep);
 
             var createContextStep = new PipelineStep
             {
@@ -135,6 +144,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
+            steps.Add(createContextStep);
             createContextStep.DependsOn(validateStep);
 
             var provisionStep = new PipelineStep
@@ -146,7 +156,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
-
+            steps.Add(provisionStep);
             provisionStep.DependsOn(createContextStep);
 
             var destroyStep = new PipelineStep
@@ -157,8 +167,9 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Destroy],
                 DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
             };
+            steps.Add(destroyStep);
 
-            return [prepareResourcesStep, runModeProvisionStep, publishStep, validateStep, createContextStep, provisionStep, destroyStep];
+            return steps;
         }));
 
         Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);

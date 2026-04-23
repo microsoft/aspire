@@ -40,8 +40,6 @@ public static class AzureContainerAppExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        // ensure AzureProvisioning is added first so the AzureResourcePreparer pipeline step
-        // runs before the per-environment prepare-azure-container-apps-{name} steps that depend on it.
         builder.AddAzureProvisioning();
 
         // The per-environment prepare-azure-container-apps-{name} steps handle role assignments,
