@@ -236,7 +236,7 @@ await container.withRemoteImageTag("latest");
 
 // withImagePushOptions
 await container.withImagePushOptions(async (context) => {
-    const options = await context.options();
+    const options = await context.options.get();
     await options.remoteImageName.set("myregistry.azurecr.io/myapp");
     await options.remoteImageTag.set("latest");
 });
@@ -277,7 +277,7 @@ await tool.publishAsDockerFile(async (_container) => {
 // ===================================================================
 
 await container.withPipelineStepFactory("custom-build-step", async (stepContext) => {
-    const pipelineContext = await stepContext.pipelineContext();
+    const pipelineContext = await stepContext.pipelineContext.get();
     const pipelineModel = await pipelineContext.model();
     const _pipelineResources = await pipelineModel.getResources();
     const _pipelineContainer = await pipelineModel.findResourceByName("mycontainer");
@@ -298,7 +298,7 @@ await container.withPipelineStepFactory("custom-build-step", async (stepContext)
     await stepLogger.logInformation("Pipeline step context logger");
     const stepSummary = await stepContext.summary();
     await stepSummary.add("PipelineStepContext", "Validated");
-    const reportingStep = await stepContext.reportingStep();
+    const reportingStep = await stepContext.reportingStep.get();
     await reportingStep.logStep("information", "Reporting step log");
     await reportingStep.logStepMarkdown("information", "**Reporting step markdown log**");
     const reportingTask = await reportingStep.createTask("Task created");
@@ -332,8 +332,8 @@ await container.withPipelineConfiguration(async (configContext) => {
     const allSteps = await configContext.steps.get();
     const taggedSteps = await configContext.getSteps("custom-build");
 
-    const _stepName: string = await allSteps[0].name();
-    const _description: string = await allSteps[0].description();
+    const _stepName: string = await allSteps[0].name.get();
+    const _description: string = await allSteps[0].description.get();
 
     await allSteps[0].addTag("validated");
     await allSteps[0].dependsOn("restore");

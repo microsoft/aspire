@@ -48,8 +48,8 @@ void main() throws Exception {
         var builtConnectionString = builder.addConnectionString("customcs", expr);
         var envConnectionString = builder.addConnectionString("envcs");
         var expressionConnectionString = builder.addConnectionString("exprcs", expr);
-        builtConnectionString.withConnectionProperty("Host", expr);
-        builtConnectionString.withConnectionProperty("Mode", "Development");
+        cache.withConnectionProperty("Host", expr);
+        cache.withConnectionProperty("Mode", "Development");
         container.withReference(endpoint);
         container.withReference("https://example.com/", new WithReferenceOptions().name("external-uri"));
         var pipeline = builder.pipeline();
@@ -61,9 +61,9 @@ void main() throws Exception {
         container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
         container.withEnvironmentCallback((environmentContext) -> { var environment = environmentContext.environment(); environment.set("MY_CALLBACK_ENDPOINT", endpoint); });
         container.withArgsCallback((argsContext) -> { var argsEditor = argsContext.args(); argsEditor.add("--validation-callback"); argsEditor.add(expr); });
-        container.withUrlsCallback((urlsContext) -> { var callbackEndpoint = urlsContext.getEndpoint("http"); urlsContext.urls().add(ReferenceExpression.refExpr("https://%s", callbackEndpoint)); });
-        builtConnectionString.withConnectionProperty("Endpoint", expr);
-        builtConnectionString.withConnectionProperty("Protocol", "https");
+        container.withUrlsCallback((urlsContext) -> { var callbackEndpoint = urlsContext.getEndpoint("http"); urlsContext.urls().add(ReferenceExpression.refExpr("https://%s", callbackEndpoint), null); });
+        cache.withConnectionProperty("Endpoint", expr);
+        cache.withConnectionProperty("Protocol", "https");
         container.excludeFromManifest();
         container.excludeFromMcp();
         container.waitForCompletion(exe);
@@ -157,6 +157,7 @@ void main() throws Exception {
         builderEventing.unsubscribe(afterResourcesCreatedSubscription);
         container.onBeforeResourceStarted((beforeResourceStartedEvent) -> { var _resource = beforeResourceStartedEvent.resource(); var services = beforeResourceStartedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.BeforeResourceStarted"); logger.logInformation("BeforeResourceStarted"); });
         container.onResourceStopped((resourceStoppedEvent) -> { var _resource = resourceStoppedEvent.resource(); var services = resourceStoppedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceStopped"); logger.logWarning("ResourceStopped"); });
+        cache.onConnectionStringAvailable((connectionStringAvailableEvent) -> { var _resource = connectionStringAvailableEvent.resource(); var services = connectionStringAvailableEvent.services(); var notifications = services.getResourceNotificationService(); var _connectionState = notifications.tryGetResourceState("cache"); });
         container.onInitializeResource((initializeResourceEvent) -> { var _resource = initializeResourceEvent.resource(); var _initializeEventing = initializeResourceEvent.eventing(); var initializeLogger = initializeResourceEvent.logger(); var initializeNotifications = initializeResourceEvent.notifications(); var initializeServices = initializeResourceEvent.services(); initializeLogger.logDebug("InitializeResource"); initializeNotifications.waitForDependencies(container); var _initializeModel = initializeServices.getDistributedApplicationModel(); var _initializeEventingFromServices = initializeServices.getEventing(); });
         container.onResourceEndpointsAllocated((resourceEndpointsAllocatedEvent) -> { var _resource = resourceEndpointsAllocatedEvent.resource(); var services = resourceEndpointsAllocatedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceEndpointsAllocated"); logger.logInformation("ResourceEndpointsAllocated"); });
         container.onResourceReady((resourceReadyEvent) -> { var _resource = resourceReadyEvent.resource(); var services = resourceReadyEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceReady"); logger.logInformation("ResourceReady"); });
@@ -179,7 +180,8 @@ void main() throws Exception {
         container.withExplicitStart();
         container.withUrl("http://localhost:8080", null);
         container.withUrl(ReferenceExpression.refExpr("http://%s", endpoint), null);
-        container.withHealthCheck("http");
+        container.withHttpHealthCheck();
+        container.withHttpHealthCheck();
         container.withCommand("restart", "Restart", (_ctx) -> {
             var result = new ExecuteCommandResult();
             result.setSuccess(true);
