@@ -80,7 +80,11 @@ time.
 - For each PR, capture: number, title, author, base branch, merged-at
   timestamp, linked issues, and labels.
 - Sort by most-recently-merged first.
-- Cap at 15 items for display; note if the real count exceeded the cap.
+- **Cap at 25 items for display.** If the true count exceeds the cap, note
+  the total at the bottom of the section and include a "See all" link to
+  the equivalent GitHub search (URL-encoded), e.g.
+  `https://github.com/${{ github.repository }}/pulls?q=is%3Apr+is%3Amerged+merged%3A%3E%3D<YYYY-MM-DD>`
+  where `<YYYY-MM-DD>` is 3 days before the run date (UTC).
 
 ### 2. Recently opened PRs (last 3 days)
 
@@ -89,7 +93,8 @@ time.
 - Capture: number, title, author, base branch, opened-at timestamp, labels,
   draft status.
 - Sort by most-recently-opened first.
-- Cap at 15 items for display.
+- **Cap at 25 items for display.** If truncated, include a "See all" link:
+  `https://github.com/${{ github.repository }}/pulls?q=is%3Apr+is%3Aopen+created%3A%3E%3D<YYYY-MM-DD>`.
 
 ### 3. Recently filed issues (last 3 days)
 
@@ -98,7 +103,8 @@ time.
 - Capture: number, title, author, opened-at timestamp, labels.
 - Highlight any labeled `bug` or `regression`.
 - Sort by most-recently-opened first.
-- Cap at 15 items for display.
+- **Cap at 25 items for display.** If truncated, include a "See all" link:
+  `https://github.com/${{ github.repository }}/issues?q=is%3Aissue+created%3A%3E%3D<YYYY-MM-DD>`.
 
 ### 4. PRs awaiting review
 
@@ -108,7 +114,8 @@ time.
 - Capture: number, title, author, base branch, opened-at timestamp, how long
   they've been open, requested reviewers (if any).
 - Prioritize PRs that have been waiting longer.
-- Cap at 15 items for display.
+- **Cap at 25 items for display.** If truncated, include a "See all" link:
+  `https://github.com/${{ github.repository }}/pulls?q=is%3Apr+is%3Aopen+review%3Arequired`.
 
 ### 5. Activity highlights (issues / PRs with recent comment or review activity)
 
@@ -118,7 +125,9 @@ time.
   latest activity timestamp.
 - This section captures "where attention is going" regardless of when the
   item was originally opened.
-- Cap at 10 items for display.
+- **Cap at 25 items for display.** If truncated, include a "See all" link
+  to a GitHub search scoped to recently-updated items:
+  `https://github.com/${{ github.repository }}/issues?q=updated%3A%3E%3D<YYYY-MM-DD>+sort%3Aupdated-desc`.
 
 ## Notable Changes (derived, Phase 2 only)
 
@@ -191,6 +200,11 @@ If any data-gathering step failed, add one more line immediately after the
 - For `## ⭐ Notable Changes`, render each item as:
   - `### [#<PR number>](<url>) — <short title>`
   - one-sentence "why it matters" paragraph.
+- **Every list section (🔥, 🚧, 🐛, 👀, 💬) must end with a "See all" link**
+  to the equivalent GitHub search query, even when the list is not
+  truncated. This gives readers a canonical query to explore the full set.
+  When truncated, also include the raw count: e.g. *"Showing 25 of 47 —
+  [see all](https://github.com/.../pulls?q=...)."*
 - If a section has no data, keep the header and write a single italic line
   such as *"No activity in the last 3 days."*
 - If a section failed to gather data, keep the header and write
