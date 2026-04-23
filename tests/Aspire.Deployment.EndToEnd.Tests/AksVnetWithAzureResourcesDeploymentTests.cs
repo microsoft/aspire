@@ -140,8 +140,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 // VNet with subnets for AKS and Private Endpoints
 var vnet = builder.AddAzureVirtualNetwork("vnet");
-var aksSubnet = vnet.AddSubnet("aks-subnet", "10.0.0.0/22");
-var peSubnet = vnet.AddSubnet("pe-subnet", "10.0.4.0/24");
+var aksSubnet = vnet.AddSubnet("aks-subnet", "10.1.0.0/22");
+var peSubnet = vnet.AddSubnet("pe-subnet", "10.1.4.0/24");
 
 // AKS environment with VNet integration
 var aks = builder.AddAzureKubernetesEnvironment("aks")

@@ -71,28 +71,38 @@ public sealed class AksVnetInfraDeploymentTests(ITestOutputHelper output)
 
             await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
-            // Step 3: Create single-file AppHost using aspire init
-            output.WriteLine("Step 3: Creating single-file AppHost with aspire init...");
-            await auto.AspireInitAsync(counter);
+            // Step 3: Create starter project using aspire new
+            // (Using aspire new instead of aspire init to avoid pre-existing
+            // AspireInitAsync helper issue with the *.dev.localhost prompt)
+            var projectName = "AksVnet";
+            output.WriteLine("Step 3: Creating starter project...");
+            await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
 
-            // Step 4a: Add Aspire.Hosting.Azure.Kubernetes
-            output.WriteLine("Step 4a: Adding Azure Kubernetes hosting package...");
+            // Step 4: Navigate to project directory
+            await auto.TypeAsync($"cd {projectName}");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // Step 5a: Add Aspire.Hosting.Azure.Kubernetes
+            output.WriteLine("Step 5a: Adding Azure Kubernetes hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Kubernetes");
             await auto.EnterAsync();
 
             await auto.WaitForAspireAddCompletionAsync(counter);
 
-            // Step 4b: Add Aspire.Hosting.Azure.Network
-            output.WriteLine("Step 4b: Adding Azure Network hosting package...");
+            // Step 5b: Add Aspire.Hosting.Azure.Network
+            output.WriteLine("Step 5b: Adding Azure Network hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Network");
             await auto.EnterAsync();
 
             await auto.WaitForAspireAddCompletionAsync(counter);
 
-            // Step 5: Modify apphost.cs to add VNet + AKS infrastructure
+            // Step 6: Modify AppHost.cs to add VNet + AKS infrastructure
             {
-                var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
-                output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
+                var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+                var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
+                var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+                output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
 
                 var content = File.ReadAllText(appHostFilePath);
 
@@ -102,8 +112,8 @@ public sealed class AksVnetInfraDeploymentTests(ITestOutputHelper output)
 
 // VNet with separate subnets for system and worker node pools
 var vnet = builder.AddAzureVirtualNetwork("vnet");
-var systemSubnet = vnet.AddSubnet("system-subnet", "10.0.0.0/22");
-var workerSubnet = vnet.AddSubnet("worker-subnet", "10.0.4.0/22");
+var systemSubnet = vnet.AddSubnet("system-subnet", "10.1.0.0/22");
+var workerSubnet = vnet.AddSubnet("worker-subnet", "10.1.4.0/22");
 
 // AKS environment with VNet integration and per-pool subnets
 var aks = builder.AddAzureKubernetesEnvironment("aks")
@@ -125,13 +135,19 @@ builder.Build().Run();
                 output.WriteLine($"New content:\n{content}");
             }
 
-            // Step 6: Set environment variables for deployment
+            // Step 7: Navigate to AppHost project directory
+            output.WriteLine("Step 7: Navigating to AppHost directory...");
+            await auto.TypeAsync($"cd {projectName}.AppHost");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // Step 8: Set environment variables for deployment
             await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Step 7: Deploy to Azure
-            output.WriteLine("Step 7: Starting Azure deployment...");
+            // Step 9: Deploy to Azure
+            output.WriteLine("Step 9: Starting Azure deployment...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
