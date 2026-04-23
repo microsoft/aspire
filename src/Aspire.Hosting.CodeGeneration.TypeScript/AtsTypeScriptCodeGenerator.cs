@@ -1137,8 +1137,45 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return string.Join(", ", publicParamDefs);
     }
 
+    private static bool IsGetterOnlyProperty(AtsCapabilityInfo? getter, AtsCapabilityInfo? setter) => getter is not null && setter is null;
+
+    private string GetGetterOnlyPropertyReturnType(AtsTypeRef? typeRef)
+    {
+        if (typeRef == null)
+        {
+            return "unknown";
+        }
+
+        if (IsDictionaryType(typeRef))
+        {
+            var keyType = typeRef.KeyType != null ? MapTypeRefToTypeScript(typeRef.KeyType) : "string";
+            var valueType = typeRef.ValueType != null ? MapTypeRefToTypeScript(typeRef.ValueType) : "unknown";
+            return $"AspireDict<{keyType}, {valueType}>";
+        }
+
+        if (IsListType(typeRef))
+        {
+            var elementType = typeRef.ElementType != null ? MapTypeRefToTypeScript(typeRef.ElementType) : "unknown";
+            return $"AspireList<{elementType}>";
+        }
+
+        return MapTypeRefToTypeScript(typeRef);
+    }
+
+    private void GenerateGetterOnlyPropertyPromiseSignature(string propertyName, AtsCapabilityInfo getter)
+    {
+        var returnType = GetGetterOnlyPropertyReturnType(getter.ReturnType);
+        WriteLine($"    {propertyName}(): Promise<{returnType}>;");
+    }
+
     private void GenerateInterfaceProperty(string propertyName, AtsCapabilityInfo? getter, AtsCapabilityInfo? setter)
     {
+        if (IsGetterOnlyProperty(getter, setter))
+        {
+            GenerateGetterOnlyPropertyPromiseSignature(propertyName, getter!);
+            return;
+        }
+
         if (getter?.ReturnType is { } returnType)
         {
             if (IsDictionaryType(returnType))
@@ -1245,8 +1282,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var capabilities = builder.Capabilities.Where(c =>
             c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
             c.CapabilityKind != AtsCapabilityKind.PropertySetter).ToList();
+        var getters = builder.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertyGetter).ToList();
+        var setters = builder.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
+        var getterOnlyProperties = GroupPropertiesByName(getters, setters)
+            .Where(p => IsGetterOnlyProperty(p.Getter, p.Setter))
+            .ToList();
 
-        if (capabilities.Count == 0)
+        if (capabilities.Count == 0 && getterOnlyProperties.Count == 0)
         {
             return;
         }
@@ -1255,6 +1297,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var promiseInterfaceName = GetPromiseInterfaceName(builder.BuilderClassName);
 
         WriteLine($"export interface {promiseInterfaceName} extends PromiseLike<{interfaceName}> {{");
+
+        foreach (var prop in getterOnlyProperties)
+        {
+            GenerateGetterOnlyPropertyPromiseSignature(prop.PropertyName, prop.Getter!);
+        }
 
         foreach (var capability in capabilities)
         {
@@ -1351,6 +1398,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         var promiseInterfaceName = GetPromiseInterfaceName(className);
         WriteLine($"export interface {promiseInterfaceName} extends PromiseLike<{interfaceName}> {{");
+        foreach (var prop in properties.Where(p => IsGetterOnlyProperty(p.Getter, p.Setter)))
+        {
+            GenerateGetterOnlyPropertyPromiseSignature(prop.PropertyName, prop.Getter!);
+        }
         foreach (var method in standardMethods)
         {
             GenerateTypeClassInterfaceMethod(className, method);
@@ -1801,8 +1852,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var capabilities = builder.Capabilities.Where(c =>
             c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
             c.CapabilityKind != AtsCapabilityKind.PropertySetter).ToList();
+        var getters = builder.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertyGetter).ToList();
+        var setters = builder.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
+        var getterOnlyProperties = GroupPropertiesByName(getters, setters)
+            .Where(p => IsGetterOnlyProperty(p.Getter, p.Setter))
+            .ToList();
 
-        if (capabilities.Count == 0)
+        if (capabilities.Count == 0 && getterOnlyProperties.Count == 0)
         {
             return;
         }
@@ -1829,6 +1885,16 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine("        return this._promise.then(onfulfilled, onrejected);");
         WriteLine("    }");
         WriteLine();
+
+        foreach (var prop in getterOnlyProperties)
+        {
+            var returnType = GetGetterOnlyPropertyReturnType(prop.Getter!.ReturnType);
+            WriteCapabilityDocComment("    ", prop.Getter);
+            WriteLine($"    {prop.PropertyName}(): Promise<{returnType}> {{");
+            WriteLine($"        return this._promise.then(obj => obj.{prop.PropertyName}());");
+            WriteLine("    }");
+            WriteLine();
+        }
 
         // Generate fluent methods that chain via .then()
         // Capabilities are already flattened - no need to collect from parents
@@ -2386,7 +2452,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     /// <summary>
     /// Generates a type class (context type or wrapper type).
-    /// Uses property-like object pattern for exposed properties.
+    /// Uses property-like objects for mutable properties and methods for getter-only properties.
     /// For types with methods, also generates a Promise wrapper class for fluent chaining.
     /// </summary>
     private void GenerateTypeClass(BuilderModel model)
@@ -2420,10 +2486,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine($"    toJSON(): MarshalledHandle {{ return this._handle.toJSON(); }}");
         WriteLine();
 
-        // Group getters and setters by property name to create property-like objects
+        // Group getters and setters by property name to create property members
         var properties = GroupPropertiesByName(getters, setters);
 
-        // Generate property-like objects
+        // Generate property access members
         foreach (var prop in properties)
         {
             GeneratePropertyLikeObject(prop.PropertyName, prop.Getter, prop.Setter);
@@ -2519,13 +2585,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     /// <summary>
-    /// Generates a property-like object with get and/or set methods.
-    /// For dictionary types, generates a direct AspireDict field instead.
+    /// Generates a property access member.
     /// </summary>
     /// <remarks>
-    /// <para>Scalar properties produce an object with async <c>get</c>/<c>set</c> functions.
+    /// <para>Getter-only properties are emitted as zero-argument async methods.
+    /// Mutable properties produce an object with async <c>get</c>/<c>set</c> functions.
     /// Dictionary and list properties delegate to <c>AspireDict</c>/<c>AspireList</c> helpers.
-    /// Wrapper-typed properties delegate to <see cref="GenerateWrapperPropertyObject"/>.</para>
+    /// Wrapper-typed mutable properties delegate to <see cref="GenerateWrapperPropertyObject"/>.</para>
     /// <para>Generated TypeScript (example for a string property <c>connectionString</c>):</para>
     /// <code>
     /// connectionString = {
@@ -2543,6 +2609,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// </remarks>
     private void GeneratePropertyLikeObject(string propertyName, AtsCapabilityInfo? getter, AtsCapabilityInfo? setter)
     {
+        if (IsGetterOnlyProperty(getter, setter))
+        {
+            GenerateGetterOnlyPropertyMethod(propertyName, getter!);
+            return;
+        }
+
         // Determine the return type from getter
         string returnType = "unknown";
         string? description = null;
@@ -2625,6 +2697,73 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine();
     }
 
+    private void GenerateGetterOnlyPropertyMethod(string propertyName, AtsCapabilityInfo getter)
+    {
+        if (IsDictionaryType(getter.ReturnType))
+        {
+            GenerateDictionaryProperty(propertyName, getter);
+            return;
+        }
+
+        if (IsListType(getter.ReturnType))
+        {
+            GenerateListProperty(propertyName, getter);
+            return;
+        }
+
+        if (getter.ReturnType?.TypeId != null && _wrapperClassNames.TryGetValue(getter.ReturnType.TypeId, out var wrapperClassName))
+        {
+            GenerateWrapperGetterOnlyPropertyMethod(propertyName, getter, wrapperClassName);
+            return;
+        }
+
+        var returnType = GetGetterOnlyPropertyReturnType(getter.ReturnType);
+
+        if (!string.IsNullOrEmpty(getter.Description))
+        {
+            WriteLine($"    /** {getter.Description} */");
+        }
+
+        WriteLine($"    async {propertyName}(): Promise<{returnType}> {{");
+        if (getter.ReturnType?.TypeId == AtsConstants.CancellationToken)
+        {
+            WriteLine("        const result = await this._client.invokeCapability<string | null>(");
+            WriteLine($"            '{getter.CapabilityId}',");
+            WriteLine("            { context: this._handle }");
+            WriteLine("        );");
+            WriteLine("        return CancellationToken.fromValue(result);");
+        }
+        else
+        {
+            WriteLine($"        return await this._client.invokeCapability<{returnType}>(");
+            WriteLine($"            '{getter.CapabilityId}',");
+            WriteLine("            { context: this._handle }");
+            WriteLine("        );");
+        }
+        WriteLine("    }");
+        WriteLine();
+    }
+
+    private void GenerateWrapperGetterOnlyPropertyMethod(string propertyName, AtsCapabilityInfo getter, string wrapperClassName)
+    {
+        var handleType = GetHandleTypeName(getter.ReturnType!.TypeId);
+        var wrapperImplementationClassName = GetImplementationClassName(wrapperClassName);
+
+        if (!string.IsNullOrEmpty(getter.Description))
+        {
+            WriteLine($"    /** {getter.Description} */");
+        }
+
+        WriteLine($"    async {propertyName}(): Promise<{wrapperClassName}> {{");
+        WriteLine($"        const handle = await this._client.invokeCapability<{handleType}>(");
+        WriteLine($"            '{getter.CapabilityId}',");
+        WriteLine("            { context: this._handle }");
+        WriteLine("        );");
+        WriteLine($"        return new {wrapperImplementationClassName}(handle, this._client);");
+        WriteLine("    }");
+        WriteLine();
+    }
+
     /// <summary>
     /// Generates a property-like object that returns a wrapper class.
     /// </summary>
@@ -2704,7 +2843,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     /// <summary>
-    /// Generates a direct AspireDict property for dictionary types.
+    /// Generates a getter-only method for dictionary types.
     /// </summary>
     private void GenerateDictionaryProperty(string propertyName, AtsCapabilityInfo getter)
     {
@@ -2731,10 +2870,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"    /** {getter.Description} */");
         }
 
-        // Generate a getter property that returns AspireDict
-        // Pass the getter capability ID so AspireDict can lazily fetch the actual dictionary handle
+        // Pass the getter capability ID so AspireDict can lazily fetch the actual dictionary handle.
         WriteLine($"    private _{propertyName}?: AspireDict<{keyType}, {valueType}>;");
-        WriteLine($"    get {propertyName}(): AspireDict<{keyType}, {valueType}> {{");
+        WriteLine($"    async {propertyName}(): Promise<AspireDict<{keyType}, {valueType}>> {{");
         WriteLine($"        if (!this._{propertyName}) {{");
         WriteLine($"            this._{propertyName} = new AspireDict<{keyType}, {valueType}>(");
         WriteLine($"                this._handle,");
@@ -2749,7 +2887,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     /// <summary>
-    /// Generates a direct AspireList property for list types.
+    /// Generates a getter-only method for list types.
     /// </summary>
     private void GenerateListProperty(string propertyName, AtsCapabilityInfo getter)
     {
@@ -2769,10 +2907,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             WriteLine($"    /** {getter.Description} */");
         }
 
-        // Generate a getter property that returns AspireList
-        // Pass the getter capability ID so AspireList can lazily fetch the actual list handle
+        // Pass the getter capability ID so AspireList can lazily fetch the actual list handle.
         WriteLine($"    private _{propertyName}?: AspireList<{elementType}>;");
-        WriteLine($"    get {propertyName}(): AspireList<{elementType}> {{");
+        WriteLine($"    async {propertyName}(): Promise<AspireList<{elementType}>> {{");
         WriteLine($"        if (!this._{propertyName}) {{");
         WriteLine($"            this._{propertyName} = new AspireList<{elementType}>(");
         WriteLine($"                this._handle,");
@@ -3235,6 +3372,22 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine("        return this._promise.then(onfulfilled, onrejected);");
         WriteLine("    }");
         WriteLine();
+
+        var getters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertyGetter).ToList();
+        var setters = model.Capabilities.Where(c => c.CapabilityKind == AtsCapabilityKind.PropertySetter).ToList();
+        var getterOnlyProperties = GroupPropertiesByName(getters, setters)
+            .Where(p => IsGetterOnlyProperty(p.Getter, p.Setter))
+            .ToList();
+
+        foreach (var prop in getterOnlyProperties)
+        {
+            var returnType = GetGetterOnlyPropertyReturnType(prop.Getter!.ReturnType);
+            WriteCapabilityDocComment("    ", prop.Getter);
+            WriteLine($"    {prop.PropertyName}(): Promise<{returnType}> {{");
+            WriteLine($"        return this._promise.then(obj => obj.{prop.PropertyName}());");
+            WriteLine("    }");
+            WriteLine();
+        }
 
         // Generate fluent methods that chain via .then()
         foreach (var capability in methods)

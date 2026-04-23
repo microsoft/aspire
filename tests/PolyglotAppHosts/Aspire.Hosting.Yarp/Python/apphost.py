@@ -54,7 +54,7 @@ with create_builder() as builder:
     build_secret = builder.add_parameter_from_config("buildSecret", "MyConfig:Secret")
     static_files_source = builder.add_container("static-files-source", "nginx")
     backend = builder.add_container("backend", "nginx").with_http_endpoint(name="http", target_port=80)
-    backend_service = builder.add_project("backend-service", "./src/BackendService", "http")
+    backend_service = builder.add_project("backend-service", "./src/BackendService", launch_profile_name="http")
     external_backend = builder.add_external_service("external-backend", "https://example.com")
     proxy = builder.add_yarp("proxy")
     proxy.with_host_port(port=8080)

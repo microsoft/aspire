@@ -1373,33 +1373,32 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void Generate_ListProperty_GeneratesAspireListGetter()
+    public void Generate_ListProperty_GeneratesGetterOnlyMethods()
     {
         // Verify that List properties on [AspireExport(ExposeProperties = true)] types
-        // generate AspireList getters (same pattern as Dictionary properties with AspireDict)
+        // generate zero-argument methods (same pattern as Dictionary properties with AspireDict)
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
         var code = files["aspire.ts"];
 
         // TestCollectionContext has both Items (List) and Metadata (Dictionary)
-        // Both should use the same getter pattern with lazy initialization
+        // Both should use the same getter-only method pattern with lazy initialization.
 
-        // Check for AspireList getter pattern
+        // Check for AspireList getter-only method pattern.
         Assert.Contains("private _items?: AspireList<string>;", code);
-        Assert.Contains("get items(): AspireList<string>", code);
+        Assert.Contains("async items(): Promise<AspireList<string>>", code);
         Assert.Contains("this._items = new AspireList<string>(", code);
 
-        // Check for AspireDict getter pattern (existing behavior)
+        // Check for AspireDict getter-only method pattern.
         Assert.Contains("private _metadata?: AspireDict<string, string>;", code);
-        Assert.Contains("get metadata(): AspireDict<string, string>", code);
+        Assert.Contains("async metadata(): Promise<AspireDict<string, string>>", code);
         Assert.Contains("this._metadata = new AspireDict<string, string>(", code);
     }
 
     [Fact]
-    public void Generate_ListProperty_DoesNotUseAsyncGetterPattern()
+    public void Generate_ListProperty_DoesNotUsePropertyObjectPattern()
     {
-        // Verify that List properties do NOT use the old async getter pattern
-        // (args = { get: async () => ... }) but instead use proper TypeScript getters
+        // Verify that getter-only List properties do not use the old property object pattern.
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
         var code = files["aspire.ts"];

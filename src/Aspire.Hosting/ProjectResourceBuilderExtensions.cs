@@ -97,12 +97,8 @@ public static class ProjectResourceBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// <para>
-    /// This overload is also exported to polyglot app hosts as <c>addProjectWithoutLaunchProfile</c> for the common case
-    /// where no launch profile is needed.
-    /// </para>
     /// </remarks>
-    [AspireExport("addProjectWithoutLaunchProfile", Description = "Adds a .NET project resource without a launch profile")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use addProject with an optional launchProfileName argument.")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -191,7 +187,7 @@ public static class ProjectResourceBuilderExtensions
     /// </example>
     /// </remarks>
     [AspireExport(Description = "Adds a .NET project resource")]
-    public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, string? launchProfileName)
+    public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath, string? launchProfileName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);

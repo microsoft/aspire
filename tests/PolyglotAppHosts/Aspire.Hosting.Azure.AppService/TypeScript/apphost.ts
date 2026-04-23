@@ -29,7 +29,7 @@ await builder.addExecutable('worker', 'dotnet', '.', ['run'])
     })
     .skipEnvironmentVariableNameChecks();
 
-await builder.addProject('api', '../Fake.Api/Fake.Api.csproj', 'https')
+await builder.addProject('api', '../Fake.Api/Fake.Api.csproj', { launchProfileName: 'https' })
     .publishAsAzureAppServiceWebsite({
         configureSlot: async (_infrastructure, _appServiceSlot) => {}
     })

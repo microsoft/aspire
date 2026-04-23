@@ -41,13 +41,13 @@ await inlineBicep.getBicepIdentifier();
 await inlineBicep.isExisting();
 
 const infrastructure = await builder.addAzureInfrastructure("infra", async infrastructureContext => {
-    await infrastructureContext.bicepName.get();
+    await infrastructureContext.bicepName();
     await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
 });
 const infrastructureOutput = await infrastructure.getOutput("serviceUrl");
-await infrastructureOutput.name.get();
-await infrastructureOutput.value.get();
-await infrastructureOutput.valueExpression.get();
+await infrastructureOutput.name();
+await infrastructureOutput.value();
+await infrastructureOutput.valueExpression();
 await infrastructure.withParameter("empty");
 await infrastructure.withParameterStringValue("plain", "value");
 await infrastructure.withParameterStringValues("list", ["one", "two"]);
@@ -68,7 +68,7 @@ await infrastructure.asExisting(existingName, { resourceGroup: existingResourceG
 
 const identity = await builder.addAzureUserAssignedIdentity("identity");
 await identity.configureInfrastructure(async infrastructureContext => {
-    await infrastructureContext.bicepName.get();
+    await infrastructureContext.bicepName();
     await infrastructureContext.targetScope.set(DeploymentScope.Subscription);
 });
 await identity.withParameter("identityEmpty");

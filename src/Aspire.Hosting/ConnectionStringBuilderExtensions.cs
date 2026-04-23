@@ -37,7 +37,7 @@ public static class ConnectionStringBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addConnectionStringExpression", Description = "Adds a connection string with a reference expression")]
+    [AspireExportIgnore]
     public static IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, ReferenceExpression connectionStringExpression)
     {
         var cs = new ConnectionStringResource(name, connectionStringExpression);
@@ -142,11 +142,54 @@ public static class ConnectionStringBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport("addConnectionStringBuilder", Description = "Adds a connection string with a builder callback", RunSyncOnBackgroundThread = true)]
+    [AspireExportIgnore]
     public static IResourceBuilder<ConnectionStringResource> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<ReferenceExpressionBuilder> connectionStringBuilder)
     {
         var rb = new ReferenceExpressionBuilder();
         connectionStringBuilder(rb);
         return builder.AddConnectionString(name, rb.Build());
+    }
+
+    /// <summary>
+    /// Adds a connection string resource using the ATS-first options surface.
+    /// </summary>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="environmentVariableName">The environment variable name to set when the connection string is referenced.</param>
+    /// <param name="expression">The connection string expression.</param>
+    /// <param name="build">The callback used to build the connection string expression.</param>
+    /// <returns>A resource builder for a resource that exposes a connection string.</returns>
+    [AspireExport("addConnectionString", Description = "Adds a connection string resource", RunSyncOnBackgroundThread = true)]
+    internal static IResourceBuilder<IResourceWithConnectionString> AddConnectionStringExport(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        string? environmentVariableName = null,
+        ReferenceExpression? expression = null,
+        Action<ReferenceExpressionBuilder>? build = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (expression is not null && build is not null)
+        {
+            throw new ArgumentException("Only one of expression or build can be specified.");
+        }
+
+        if (environmentVariableName is not null && (expression is not null || build is not null))
+        {
+            throw new ArgumentException("environmentVariableName cannot be combined with expression or build.");
+        }
+
+        if (expression is not null)
+        {
+            return builder.AddConnectionString(name, expression);
+        }
+
+        if (build is not null)
+        {
+            return builder.AddConnectionString(name, build);
+        }
+
+        return builder.AddConnectionString(name, environmentVariableName);
     }
 }

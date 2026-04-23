@@ -45,17 +45,23 @@ void main() throws Exception {
         dockerContainer.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8080.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("http").createIfNotExists(false));
         var endpoint = dockerContainer.getEndpoint("http");
         var expr = ReferenceExpression.refExpr("Host=%s", endpoint);
-        var builtConnectionString = builder.addConnectionStringBuilder("customcs", (connectionStringBuilder) -> { var _isEmpty = connectionStringBuilder.isEmpty(); connectionStringBuilder.appendLiteral("Host="); connectionStringBuilder.appendValueProvider(endpoint); connectionStringBuilder.appendLiteral(";Key="); connectionStringBuilder.appendValueProvider(secretParam); var _builtExpression = connectionStringBuilder.build(); });
+        var builtConnectionString = builder.addConnectionString("customcs", new AddConnectionStringOptions().build((connectionStringBuilder) -> { var _isEmpty = connectionStringBuilder.isEmpty(); connectionStringBuilder.appendLiteral("Host="); connectionStringBuilder.appendValueProvider(endpoint); connectionStringBuilder.appendLiteral(";Key="); connectionStringBuilder.appendValueProvider(secretParam); var _builtExpression = connectionStringBuilder.build(); }));
+        var envConnectionString = builder.addConnectionString("envcs");
+        var expressionConnectionString = builder.addConnectionString("exprcs", new AddConnectionStringOptions().expression(expr));
         builtConnectionString.withConnectionProperty("Host", expr);
-        builtConnectionString.withConnectionPropertyValue("Mode", "Development");
+        builtConnectionString.withConnectionProperty("Mode", "Development");
         var pipeline = builder.pipeline();
         pipeline.addStep("custom-builder-step", (stepContext) -> { var builderSummary = stepContext.summary(); builderSummary.add("BuilderPipelineStep", "Validated"); }, new AddStepOptions().dependsOn(new String[] { "build" }).requiredBy(new String[] { "publish" }));
-        pipeline.configure((configContext) -> { var _allSteps = configContext.steps(); var _builderTaggedSteps = configContext.getStepsByTag("custom-build"); });
+        pipeline.configure((configContext) -> { var builderPipeline = configContext.pipeline(); var _allSteps = builderPipeline.steps(); var _builderTaggedSteps = builderPipeline.stepsByTag("custom-build"); });
         container.withEnvironment("MY_ENDPOINT", endpoint);
         container.withEnvironment("MY_PARAM", configParam);
-        container.withEnvironment("MY_CONN", builtConnectionString);
+        container.withEnvironment("MY_CONN", envConnectionString);
+        container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
+        container.withEnvironmentCallback((environmentContext) -> { var environment = environmentContext.environment(); environment.set("MY_CALLBACK_ENDPOINT", endpoint); });
+        container.withArgsCallback((argsContext) -> { var argsEditor = argsContext.args(); argsEditor.add("--validation-callback"); argsEditor.add(expr); });
+        container.withUrlsCallback((urlsContext) -> { var callbackEndpoint = urlsContext.getEndpoint("http"); urlsContext.urls().add(ReferenceExpression.refExpr("https://%s", callbackEndpoint)); });
         builtConnectionString.withConnectionProperty("Endpoint", expr);
-        builtConnectionString.withConnectionPropertyValue("Protocol", "https");
+        builtConnectionString.withConnectionProperty("Protocol", "https");
         container.excludeFromManifest();
         container.excludeFromMcp();
         container.waitForCompletion(exe);
@@ -83,8 +89,8 @@ void main() throws Exception {
         tool.withToolVersion("8.0.0");
         tool.publishAsDockerFile();
         container.withPipelineStepFactory("custom-build-step", (stepContext) -> { var pipelineContext = stepContext.pipelineContext(); var pipelineModel = pipelineContext.model(); var _pipelineResources = pipelineModel.getResources(); var _pipelineContainer = pipelineModel.findResourceByName("mycontainer"); var pipelineServices = pipelineContext.services(); var pipelineLoggerFactory = pipelineServices.getLoggerFactory(); var pipelineFactoryLogger = pipelineLoggerFactory.createLogger("ValidationAppHost.PipelineContext"); pipelineFactoryLogger.logInformation("Pipeline factory context logger"); var pipelineLogger = pipelineContext.logger(); pipelineLogger.logDebug("Pipeline context logger"); var pipelineSummary = pipelineContext.summary(); pipelineSummary.add("PipelineContext", "Validated"); pipelineSummary.addMarkdown("PipelineMarkdown", "**Validated**"); var executionContext = stepContext.executionContext(); var _isPublishMode = executionContext.isPublishMode(); var stepServices = stepContext.services(); var stepLogger = stepContext.logger(); stepLogger.logInformation("Pipeline step context logger"); var stepSummary = stepContext.summary(); stepSummary.add("PipelineStepContext", "Validated"); var reportingStep = stepContext.reportingStep(); reportingStep.logStep("information", "Reporting step log"); reportingStep.logStepMarkdown("information", "**Reporting step markdown log**"); var reportingTask = reportingStep.createTask("Task created"); reportingTask.updateTask("Task updated"); reportingTask.updateTaskMarkdown("**Task markdown updated**"); reportingTask.completeTask(new CompleteTaskOptions().completionMessage("Task complete")); var markdownTask = reportingStep.createMarkdownTask("**Markdown task created**"); markdownTask.completeTaskMarkdown("**Markdown task complete**", new CompleteTaskMarkdownOptions().completionState("completed-with-warning")); reportingStep.completeStep("Reporting step complete"); reportingStep.completeStepMarkdown("**Reporting step markdown complete**", new CompleteStepMarkdownOptions().completionState("completed-with-warning")); var stepModel = stepContext.model(); var _stepResources = stepModel.getResources(); var _stepContainer = stepModel.findResourceByName("mycontainer"); var stepLoggerFactory = stepServices.getLoggerFactory(); var stepFactoryLogger = stepLoggerFactory.createLogger("ValidationAppHost.PipelineStepContext"); stepFactoryLogger.logDebug("Pipeline step factory logger"); var cancellationToken = stepContext.cancellationToken(); var cacheUriExpression = cache.uriExpression(); var _cacheUri = cacheUriExpression.getValue(cancellationToken); }, new WithPipelineStepFactoryOptions().dependsOn(new String[] { "build" }).requiredBy(new String[] { "deploy" }).tags(new String[] { "custom-build" }).description("Custom pipeline step"));
-        container.withPipelineConfiguration((configContext) -> { var configServices = configContext.services(); var configModel = configContext.model(); var _configResources = configModel.getResources(); var _configContainer = configModel.findResourceByName("mycontainer"); var configLoggerFactory = configServices.getLoggerFactory(); var configLogger = configLoggerFactory.createLogger("ValidationAppHost.PipelineConfigurationContext"); configLogger.logInformation("Pipeline configuration logger"); var allSteps = configContext.steps(); var taggedSteps = configContext.getStepsByTag("custom-build"); var _stepName = allSteps[0].name(); var _description = allSteps[0].description(); var _tags = allSteps[0].tags(); var _dependsOnSteps = allSteps[0].dependsOnSteps(); var _requiredBySteps = taggedSteps[0].requiredBySteps(); taggedSteps[0].requiredBy("publish"); allSteps[0].dependsOn("build"); });
-        container.withPipelineConfiguration((configContext) -> { var _configServices = configContext.services(); var _configModel = configContext.model(); var _resourceSteps = configContext.steps(); var _taggedSteps = configContext.getStepsByTag("custom-build"); });
+        container.withPipelineConfiguration((configContext) -> { var configLog = configContext.log(); configLog.info("Pipeline configuration logger"); var configPipeline = configContext.pipeline(); var allSteps = configPipeline.steps(); var taggedSteps = configPipeline.stepsByTag("custom-build"); var _stepName = allSteps[0].name(); var _description = allSteps[0].description(); allSteps[0].addTag("validated"); allSteps[0].dependsOn("restore"); taggedSteps[0].requiredBy("publish"); allSteps[0].dependsOn("build"); });
+        container.withPipelineConfiguration((configContext) -> { var configPipeline = configContext.pipeline(); var _resourceSteps = configPipeline.steps(); var _taggedSteps = configPipeline.stepsByTag("custom-build"); });
         var _appHostDirectory = builder.appHostDirectory();
         var hostEnvironment = builder.environment();
         var _isDevelopment = hostEnvironment.isDevelopment();
@@ -171,7 +177,7 @@ void main() throws Exception {
         container.withParentRelationship(exe);
         container.withExplicitStart();
         container.withUrl("http://localhost:8080");
-        container.withUrlExpression(ReferenceExpression.refExpr("http://%s", endpoint));
+        container.withUrl(ReferenceExpression.refExpr("http://%s", endpoint));
         container.withHttpHealthCheck();
         container.withHttpHealthCheck();
         container.withCommand("restart", "Restart", (_ctx) -> {
