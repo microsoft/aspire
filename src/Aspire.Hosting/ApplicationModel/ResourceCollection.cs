@@ -22,7 +22,7 @@ internal sealed class ResourceCollection : IResourceCollection
         {
             if (!_resourcesByName.TryAdd(resource.Name, resource))
             {
-                ThrowDuplicateResource(resource);
+                ThrowDuplicateResource(resource, _resourcesByName[resource.Name]);
             }
 
             _resources.Add(resource);
@@ -38,9 +38,9 @@ internal sealed class ResourceCollection : IResourceCollection
 
             // Allow replacing with same name (same slot), but reject if a *different* slot already has this name.
             if (!StringComparers.ResourceName.Equals(old.Name, value.Name) &&
-                _resourcesByName.ContainsKey(value.Name))
+                _resourcesByName.TryGetValue(value.Name, out var existing))
             {
-                ThrowDuplicateResource(value);
+                ThrowDuplicateResource(value, existing);
             }
 
             _resources[index] = value;
@@ -56,7 +56,7 @@ internal sealed class ResourceCollection : IResourceCollection
     {
         if (!_resourcesByName.TryAdd(item.Name, item))
         {
-            ThrowDuplicateResource(item);
+            ThrowDuplicateResource(item, _resourcesByName[item.Name]);
         }
 
         _resources.Add(item);
@@ -77,7 +77,7 @@ internal sealed class ResourceCollection : IResourceCollection
     {
         if (!_resourcesByName.TryAdd(item.Name, item))
         {
-            ThrowDuplicateResource(item);
+            ThrowDuplicateResource(item, _resourcesByName[item.Name]);
         }
 
         _resources.Insert(index, item);
@@ -115,9 +115,13 @@ internal sealed class ResourceCollection : IResourceCollection
     IEnumerator IEnumerable.GetEnumerator() => _resources.GetEnumerator();
 
     [DoesNotReturn]
-    private static void ThrowDuplicateResource(IResource newResource)
+    private static void ThrowDuplicateResource(IResource newResource, IResource? existingResource = null)
     {
-        throw new DistributedApplicationException($"Cannot add resource of type '{newResource.GetType()}' with name '{newResource.Name}' because a resource with that name already exists. Resource names are case-insensitive.");
+        var existingInfo = existingResource is not null
+            ? $"resource of type '{existingResource.GetType()}'"
+            : "a resource";
+
+        throw new DistributedApplicationException($"Cannot add resource of type '{newResource.GetType()}' with name '{newResource.Name}' because {existingInfo} with that name already exists. Resource names are case-insensitive.");
     }
 
     private sealed class ApplicationResourceCollectionDebugView(ResourceCollection collection)

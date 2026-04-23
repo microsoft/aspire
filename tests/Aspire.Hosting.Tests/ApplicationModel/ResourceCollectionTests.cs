@@ -145,6 +145,7 @@ public class ResourceCollectionTests
 
         var ex = Assert.Throws<DistributedApplicationException>(() => collection.Add(new TestResource("res")));
         Assert.Contains("res", ex.Message);
+        Assert.Contains(nameof(TestResource), ex.Message);
     }
 
     [Fact]
