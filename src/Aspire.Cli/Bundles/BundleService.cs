@@ -4,6 +4,8 @@
 using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
@@ -23,6 +25,25 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     /// </summary>
     internal const string VersionMarkerFileName = ".aspire-bundle-version";
 
+    /// <summary>
+    /// Directory under the layout root containing per-version bundle installations.
+    /// </summary>
+    internal const string VersionsDirectoryName = "versions";
+
+    /// <summary>
+    /// Suffix appended to an in-progress extraction directory so it is ignored by
+    /// layout discovery and can be atomically renamed to its final name only after
+    /// extraction completes.
+    /// </summary>
+    internal const string TempSuffixPrefix = ".tmp.";
+
+    /// <summary>
+    /// Suffix appended to a versioned directory that failed verification. Retained
+    /// on disk (with the version-id fingerprint) so the fingerprint-match
+    /// short-circuit cannot accidentally promote a known-bad payload on a later run.
+    /// </summary>
+    internal const string BadSuffixPrefix = ".bad.";
+
     private static readonly bool s_isBundle =
         typeof(BundleService).Assembly.GetManifestResourceInfo(PayloadResourceName) is not null;
 
@@ -37,10 +58,11 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
         typeof(BundleService).Assembly.GetManifestResourceStream(PayloadResourceName);
 
     /// <summary>
-    /// Well-known layout subdirectories that are cleaned before re-extraction.
-    /// The bin/ directory is intentionally excluded since it contains the running CLI binary.
+    /// Well-known layout subdirectories that are exposed as reparse points pointing
+    /// at the active versioned bundle directory. The bin/ directory is intentionally
+    /// excluded since it contains the running CLI binary itself.
     /// </summary>
-    internal static readonly string[] s_layoutDirectories = [
+    internal static readonly string[] s_linkedLayoutDirectories = [
         BundleDiscovery.ManagedDirectoryName,
         BundleDiscovery.DcpDirectoryName
     ];
@@ -129,29 +151,149 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     {
         logger.LogInformation("Extracting embedded bundle to {Path}...", destinationPath);
 
-        // Clean existing layout directories before extraction to avoid file conflicts
-        logger.LogDebug("Cleaning existing layout directories in {Path}.", destinationPath);
-        CleanLayoutDirectories(destinationPath);
+        Directory.CreateDirectory(destinationPath);
+        var versionsRoot = Path.Combine(destinationPath, VersionsDirectoryName);
+        Directory.CreateDirectory(versionsRoot);
 
-        var sw = Stopwatch.StartNew();
-        await ExtractPayloadAsync(destinationPath, cancellationToken);
-        sw.Stop();
-        logger.LogDebug("Payload extraction completed in {ElapsedMs}ms.", sw.ElapsedMilliseconds);
-
-        // Write version marker so subsequent runs skip extraction
         var currentVersion = GetCurrentVersion();
-        WriteVersionMarker(destinationPath, currentVersion);
-        logger.LogDebug("Version marker written (version: {Version}).", currentVersion);
+        var versionId = ComputeVersionId(currentVersion);
+        var activeVersionDir = Path.Combine(versionsRoot, versionId);
 
-        // Verify extraction produced a valid layout
-        if (layoutDiscovery.DiscoverLayout() is null)
+        // Reuse an already-extracted versioned directory if it passes validation.
+        // This handles the case where the marker / links were deleted but the
+        // payload is still intact on disk.
+        if (!IsVersionedLayoutValid(activeVersionDir))
         {
-            logger.LogError("Extraction completed but no valid layout found in {Path}.", destinationPath);
+            logger.LogDebug("Versioned layout {Path} not valid or missing; extracting fresh.", activeVersionDir);
+            if (!await ExtractVersionedLayoutAsync(versionsRoot, versionId, activeVersionDir, cancellationToken).ConfigureAwait(false))
+            {
+                return BundleExtractResult.ExtractionFailed;
+            }
+        }
+        else
+        {
+            logger.LogDebug("Reusing existing versioned layout at {Path}.", activeVersionDir);
+        }
+
+        // Capture prior link targets before flipping so we can roll back if the
+        // post-flip sanity check fails.
+        var priorTargets = CaptureLinkTargets(destinationPath);
+
+        // Migrate any legacy real directories (managed/, dcp/) and flip the public
+        // reparse points to point at the new versioned directory.
+        if (!TryFlipLinks(destinationPath, activeVersionDir))
+        {
+            logger.LogError("Failed to flip bundle links to {VersionDir}.", activeVersionDir);
             return BundleExtractResult.ExtractionFailed;
         }
 
+        // Post-flip sanity check: confirm layout discovery resolves through the
+        // new reparse points. Roll back to the prior targets on failure.
+        if (layoutDiscovery.DiscoverLayout() is null)
+        {
+            logger.LogError("Post-flip layout validation failed; attempting rollback.");
+            if (!TryRestoreLinks(destinationPath, priorTargets))
+            {
+                logger.LogError("Rollback of bundle links failed; layout is in an inconsistent state.");
+            }
+            return BundleExtractResult.ExtractionFailed;
+        }
+
+        // Write version marker so subsequent runs can short-circuit.
+        WriteVersionMarker(destinationPath, currentVersion);
+        logger.LogDebug("Version marker written (version: {Version}).", currentVersion);
+
+        // Best-effort cleanup of non-active versioned directories and any stale
+        // .tmp.*, .bad.*, .old.* siblings.
+        TryCleanupStaleVersions(versionsRoot, versionId);
+
         logger.LogDebug("Bundle extraction verified successfully.");
         return BundleExtractResult.Extracted;
+    }
+
+    /// <summary>
+    /// Extracts the payload into a <c>.tmp.*</c> sibling of the target versioned
+    /// directory, validates the result, and atomically renames it to
+    /// <paramref name="activeVersionDir"/>. Returns <see langword="false"/> if
+    /// verification fails (in which case the failed directory has been renamed
+    /// to <c>.bad.&lt;tick&gt;</c> and logged).
+    /// </summary>
+    private async Task<bool> ExtractVersionedLayoutAsync(
+        string versionsRoot,
+        string versionId,
+        string activeVersionDir,
+        CancellationToken cancellationToken)
+    {
+        var tempDir = Path.Combine(versionsRoot, $"{versionId}{TempSuffixPrefix}{Guid.NewGuid():N}");
+
+        // Clean up if a previous attempt left a dir with this exact name.
+        FileDeleteHelper.TryDeleteDirectory(tempDir);
+
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            await ExtractPayloadAsync(tempDir, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            FileDeleteHelper.TryDeleteDirectory(tempDir);
+            throw;
+        }
+        sw.Stop();
+        logger.LogDebug("Payload extraction into {Path} completed in {ElapsedMs}ms.", tempDir, sw.ElapsedMilliseconds);
+
+        // Pre-flip verification: validate the freshly-unpacked bundle before it
+        // can become the active version.
+        if (!IsVersionedLayoutValid(tempDir))
+        {
+            var badPath = $"{activeVersionDir}{BadSuffixPrefix}{Environment.TickCount64}";
+            logger.LogError("Extracted bundle at {Path} failed verification; renaming to {BadPath}.", tempDir, badPath);
+            try
+            {
+                Directory.Move(tempDir, badPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(ex, "Unable to preserve failed bundle at {BadPath}; deleting instead.", badPath);
+                FileDeleteHelper.TryDeleteDirectory(tempDir);
+            }
+            return false;
+        }
+
+        // If a stale activeVersionDir exists (partial prior install), move it aside.
+        if (Directory.Exists(activeVersionDir))
+        {
+            FileDeleteHelper.TryDeleteDirectory(activeVersionDir);
+        }
+
+        try
+        {
+            Directory.Move(tempDir, activeVersionDir);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogError(ex, "Failed to promote {TempDir} to {ActiveDir}.", tempDir, activeVersionDir);
+            FileDeleteHelper.TryDeleteDirectory(tempDir);
+            return false;
+        }
+
+        // Re-validate after rename.
+        if (!IsVersionedLayoutValid(activeVersionDir))
+        {
+            var badPath = $"{activeVersionDir}{BadSuffixPrefix}{Environment.TickCount64}";
+            logger.LogError("Post-rename validation failed for {Path}; renaming to {BadPath}.", activeVersionDir, badPath);
+            try
+            {
+                Directory.Move(activeVersionDir, badPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(ex, "Unable to preserve failed bundle at {BadPath}.", badPath);
+            }
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -171,30 +313,200 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     }
 
     /// <summary>
-    /// Removes well-known layout subdirectories before re-extraction.
-    /// Preserves the bin/ directory (which contains the CLI binary itself).
-    /// If a directory cannot be deleted (e.g. a process is still using files
-    /// inside it), it is renamed to {dir}.old.{timestamp} so extraction can
-    /// proceed. The stale directory will be cleaned up on the next successful
-    /// extraction.
+    /// Captures the current reparse-point targets for the public link paths so
+    /// they can be restored if the post-flip sanity check fails.
+    /// A non-reparse-point path (or missing path) is captured as <see langword="null"/>
+    /// meaning "no link to restore".
     /// </summary>
-    internal static void CleanLayoutDirectories(string layoutPath)
+    internal static IReadOnlyDictionary<string, string?> CaptureLinkTargets(string layoutPath)
     {
-        foreach (var dir in s_layoutDirectories)
+        var targets = new Dictionary<string, string?>(s_linkedLayoutDirectories.Length, StringComparer.Ordinal);
+        foreach (var dir in s_linkedLayoutDirectories)
         {
-            // Clean up stale .old directories from previous runs first
+            var linkPath = Path.Combine(layoutPath, dir);
+            targets[dir] = ReparsePoint.IsReparsePoint(linkPath) ? ReparsePoint.GetTarget(linkPath) : null;
+        }
+        return targets;
+    }
+
+    /// <summary>
+    /// Points the public link paths (<c>managed/</c>, <c>dcp/</c>) at the active
+    /// versioned directory, replacing any existing link or legacy real directory.
+    /// </summary>
+    private bool TryFlipLinks(string layoutPath, string activeVersionDir)
+    {
+        foreach (var dir in s_linkedLayoutDirectories)
+        {
+            var linkPath = Path.Combine(layoutPath, dir);
+            var target = Path.Combine(activeVersionDir, dir);
+
+            // Clear out legacy stale siblings from prior runs first.
             FileDeleteHelper.TryCleanupOldItems(layoutPath, dir);
 
-            var fullPath = Path.Combine(layoutPath, dir);
-            FileDeleteHelper.TryDeleteDirectory(fullPath);
+            // If a legacy real directory is sitting at the public path (pre-migration
+            // layout), move it aside so we can install a reparse point in its place.
+            if (Directory.Exists(linkPath) && !ReparsePoint.IsReparsePoint(linkPath))
+            {
+                logger.LogDebug("Migrating legacy directory at {Path} to .old sibling.", linkPath);
+                FileDeleteHelper.TryDeleteDirectory(linkPath);
+            }
+
+            try
+            {
+                ReparsePoint.CreateOrReplace(linkPath, target);
+                logger.LogDebug("Linked {Link} -> {Target}", linkPath, target);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogError(ex, "Failed to create reparse point at {Path} -> {Target}.", linkPath, target);
+                return false;
+            }
         }
 
-        // Remove version marker so it's rewritten after extraction
-        var markerPath = Path.Combine(layoutPath, VersionMarkerFileName);
-        if (File.Exists(markerPath))
+        return true;
+    }
+
+    /// <summary>
+    /// Best-effort restore of link targets captured before a failed flip. Entries
+    /// whose prior value was <see langword="null"/> (no previous link) are removed.
+    /// </summary>
+    private bool TryRestoreLinks(string layoutPath, IReadOnlyDictionary<string, string?> priorTargets)
+    {
+        var allOk = true;
+        foreach (var (dir, priorTarget) in priorTargets)
         {
-            File.Delete(markerPath);
+            var linkPath = Path.Combine(layoutPath, dir);
+            try
+            {
+                if (priorTarget is null)
+                {
+                    ReparsePoint.RemoveIfExists(linkPath);
+                }
+                else
+                {
+                    ReparsePoint.CreateOrReplace(linkPath, priorTarget);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogError(ex, "Rollback failed for link {Path}.", linkPath);
+                allOk = false;
+            }
         }
+        return allOk;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if <paramref name="versionDir"/> contains the
+    /// essential bundle components (<c>managed/aspire-managed</c> and a DCP directory).
+    /// </summary>
+    internal static bool IsVersionedLayoutValid(string versionDir)
+    {
+        if (!Directory.Exists(versionDir))
+        {
+            return false;
+        }
+
+        var managedDir = Path.Combine(versionDir, BundleDiscovery.ManagedDirectoryName);
+        var managedExe = Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+
+        if (!Directory.Exists(managedDir) || !File.Exists(managedExe))
+        {
+            return false;
+        }
+
+        try
+        {
+            var info = new FileInfo(managedExe);
+            if (info.Length == 0)
+            {
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+
+        var dcpDir = Path.Combine(versionDir, BundleDiscovery.DcpDirectoryName);
+        if (!Directory.Exists(dcpDir))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Best-effort sweep of the <c>versions/</c> directory, removing anything other
+    /// than the active version plus any <c>.tmp.*</c>, <c>.bad.*</c>, <c>.old.*</c>
+    /// leftovers. Locked items are softly renamed so they can be reaped next run.
+    /// </summary>
+    internal static void TryCleanupStaleVersions(string versionsRoot, string activeVersionId)
+    {
+        if (!Directory.Exists(versionsRoot))
+        {
+            return;
+        }
+
+        foreach (var entry in Directory.EnumerateDirectories(versionsRoot))
+        {
+            var name = Path.GetFileName(entry);
+
+            // Keep the active version.
+            if (string.Equals(name, activeVersionId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                Directory.Delete(entry, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Still in use — rename so it is out of the way and will be reaped next run.
+                try
+                {
+                    Directory.Move(entry, $"{entry}.old.{Environment.TickCount64}");
+                }
+                catch
+                {
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Computes a deterministic, filesystem-safe directory name for a given
+    /// current-version fingerprint. The fingerprint already captures the CLI
+    /// binary's size and timestamp, so the resulting id changes whenever the
+    /// payload would change.
+    /// </summary>
+    /// <remarks>
+    /// Format: <c>&lt;sanitized-version&gt;-&lt;64-bit-xxhash-hex&gt;</c>. Version
+    /// characters outside <c>[A-Za-z0-9._-]</c> are replaced with <c>_</c>.
+    /// </remarks>
+    internal static string ComputeVersionId(string currentVersion)
+    {
+        var hashBytes = XxHash3.Hash(Encoding.UTF8.GetBytes(currentVersion));
+        var hash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+        // Extract the human-readable prefix (everything before the first '|') for
+        // readability in the on-disk layout, and sanitize for filesystem safety.
+        var separatorIndex = currentVersion.IndexOf('|');
+        var versionPart = separatorIndex >= 0 ? currentVersion[..separatorIndex] : currentVersion;
+
+        var sb = new StringBuilder(versionPart.Length);
+        foreach (var ch in versionPart)
+        {
+            sb.Append(ch is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9') or '.' or '-' or '_'
+                ? ch
+                : '_');
+        }
+
+        var prefix = sb.Length == 0 ? "bundle" : sb.ToString();
+        return $"{prefix}-{hash}";
     }
 
     /// <summary>
