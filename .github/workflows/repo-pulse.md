@@ -9,7 +9,7 @@ description: |
 
 on:
   schedule:
-    - cron: "0 16 * * *"   # 08:00 PST / 16:00 UTC daily
+    - cron: "0 16 * * *"   # 16:00 UTC daily (08:00 PT in PST / 09:00 PT in PDT)
   workflow_dispatch:
 
 permissions:
@@ -28,7 +28,7 @@ safe-outputs:
   update-issue:
     body:
     title-prefix: "[repo-pulse]"
-    target: "*"
+    target: "16404"
     max: 1
 ---
 
@@ -67,6 +67,10 @@ short note that the data could not be retrieved for this run.
 
 **Always emit exactly one `update_issue` output**, even if some queries
 failed. Use `operation: "replace"` — the full body is regenerated every run.
+**Never emit** `missing_tool`, `missing_data`, or `noop`. If any query or
+data-gathering step partially fails, report that only inside the regenerated
+issue body using the per-section failure notes described above; do not use
+any alternative safe-output to report partial failures.
 
 ## Data gathering (Phase 1)
 

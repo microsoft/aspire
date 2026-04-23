@@ -1,4 +1,4 @@
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"4d61dcd3e4e25804b1d82e22e28499725685da49e9705aa417536bc458806010","compiler_version":"v0.69.0","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"1d9c9f2c1f98a21c88d13a5abffd7231d0ae301fbc7a8511d97f39994b9a395e","compiler_version":"v0.69.0","strict":true,"agent_id":"copilot"}
 # gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"v6.0.2"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"81b86c58b134601fc10d4745e276d7861cd12911","version":"v0.69.0"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.25.25"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.25.25"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.25.25"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.2.26"},{"image":"ghcr.io/github/github-mcp-server:v1.0.0"},{"image":"node:lts-alpine","digest":"sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f","pinned_image":"node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f"}]}
 #    ___                   _   _      
 #   / _ \                 | | (_)     
@@ -178,14 +178,14 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_842dd97ad2ff9d18_EOF'
+          cat << 'GH_AW_PROMPT_6f07baf4e288918a_EOF'
           <system>
-          GH_AW_PROMPT_842dd97ad2ff9d18_EOF
+          GH_AW_PROMPT_6f07baf4e288918a_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_842dd97ad2ff9d18_EOF'
+          cat << 'GH_AW_PROMPT_6f07baf4e288918a_EOF'
           <safe-output-tools>
           Tools: update_issue, missing_tool, missing_data, noop
           </safe-output-tools>
@@ -217,12 +217,12 @@ jobs:
           {{/if}}
           </github-context>
           
-          GH_AW_PROMPT_842dd97ad2ff9d18_EOF
+          GH_AW_PROMPT_6f07baf4e288918a_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_842dd97ad2ff9d18_EOF'
+          cat << 'GH_AW_PROMPT_6f07baf4e288918a_EOF'
           </system>
           {{#runtime-import .github/workflows/repo-pulse.md}}
-          GH_AW_PROMPT_842dd97ad2ff9d18_EOF
+          GH_AW_PROMPT_6f07baf4e288918a_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
@@ -396,15 +396,15 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/gh-aw/safeoutputs"
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
-          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_ee6b5683678ef92d_EOF'
-          {"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"report_incomplete":{},"update_issue":{"allow_body":true,"max":1,"target":"*","title_prefix":"[repo-pulse]"}}
-          GH_AW_SAFE_OUTPUTS_CONFIG_ee6b5683678ef92d_EOF
+          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_3e484fcd94a188d8_EOF'
+          {"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"report_incomplete":{},"update_issue":{"allow_body":true,"max":1,"target":"16404","title_prefix":"[repo-pulse]"}}
+          GH_AW_SAFE_OUTPUTS_CONFIG_3e484fcd94a188d8_EOF
       - name: Write Safe Outputs Tools
         env:
           GH_AW_TOOLS_META_JSON: |
             {
               "description_suffixes": {
-                "update_issue": " CONSTRAINTS: Maximum 1 issue(s) can be updated. Target: *. The target issue title must start with \"[repo-pulse]\". Body updates are allowed."
+                "update_issue": " CONSTRAINTS: Maximum 1 issue(s) can be updated. Target: 16404. The target issue title must start with \"[repo-pulse]\". Body updates are allowed."
               },
               "repo_params": {},
               "dynamic_tools": []
@@ -618,7 +618,7 @@ jobs:
           
           mkdir -p /home/runner/.copilot
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_3dd4bd10d5ea3bf2_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_2fec1396ccc3202c_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
               "github": {
@@ -659,7 +659,7 @@ jobs:
               "payloadDir": "${MCP_GATEWAY_PAYLOAD_DIR}"
             }
           }
-          GH_AW_MCP_CONFIG_3dd4bd10d5ea3bf2_EOF
+          GH_AW_MCP_CONFIG_2fec1396ccc3202c_EOF
       - name: Download activation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -1217,7 +1217,7 @@ jobs:
           GH_AW_ALLOWED_DOMAINS: "api.business.githubcopilot.com,api.enterprise.githubcopilot.com,api.github.com,api.githubcopilot.com,api.individual.githubcopilot.com,api.snapcraft.io,archive.ubuntu.com,azure.archive.ubuntu.com,crl.geotrust.com,crl.globalsign.com,crl.identrust.com,crl.sectigo.com,crl.thawte.com,crl.usertrust.com,crl.verisign.com,crl3.digicert.com,crl4.digicert.com,crls.ssl.com,github.com,host.docker.internal,json-schema.org,json.schemastore.org,keyserver.ubuntu.com,ocsp.digicert.com,ocsp.geotrust.com,ocsp.globalsign.com,ocsp.identrust.com,ocsp.sectigo.com,ocsp.ssl.com,ocsp.thawte.com,ocsp.usertrust.com,ocsp.verisign.com,packagecloud.io,packages.cloud.google.com,packages.microsoft.com,ppa.launchpad.net,raw.githubusercontent.com,registry.npmjs.org,s.symcb.com,s.symcd.com,security.ubuntu.com,telemetry.enterprise.githubcopilot.com,ts-crl.ws.symantec.com,ts-ocsp.ws.symantec.com,www.googleapis.com"
           GITHUB_SERVER_URL: ${{ github.server_url }}
           GITHUB_API_URL: ${{ github.api_url }}
-          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_report_incomplete_issue\":{},\"missing_data\":{},\"missing_tool\":{},\"noop\":{\"max\":1,\"report-as-issue\":\"true\"},\"report_incomplete\":{},\"update_issue\":{\"allow_body\":true,\"max\":1,\"target\":\"*\",\"title_prefix\":\"[repo-pulse]\"}}"
+          GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG: "{\"create_report_incomplete_issue\":{},\"missing_data\":{},\"missing_tool\":{},\"noop\":{\"max\":1,\"report-as-issue\":\"true\"},\"report_incomplete\":{},\"update_issue\":{\"allow_body\":true,\"max\":1,\"target\":\"16404\",\"title_prefix\":\"[repo-pulse]\"}}"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
