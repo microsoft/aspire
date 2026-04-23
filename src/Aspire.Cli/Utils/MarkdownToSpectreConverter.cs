@@ -144,6 +144,11 @@ internal static partial class MarkdownToSpectreConverter
             var renderable = RenderBlockToRenderable(block, markdown);
             if (renderable is not null)
             {
+                if (renderables.Count > 0)
+                {
+                    renderables.Add(Text.Empty);
+                }
+
                 renderables.Add(renderable);
             }
         }
@@ -153,15 +158,17 @@ internal static partial class MarkdownToSpectreConverter
 
     private static IRenderable? RenderBlockToRenderable(Block block, string markdown)
     {
-        var renderable = block switch
-        {
-            ThematicBreakBlock => new Rule(),
-            MarkdigTable table => RenderTableToRenderable(table, markdown),
-            _ => CreateMarkupRenderable(block, markdown)
-        };
-
-        return renderable is null ? null : new Rows(renderable, Text.Empty);
+        return RenderBlockContentToRenderable(block, markdown);
     }
+
+    private static IRenderable? RenderBlockContentToRenderable(Block block, string markdown) => block switch
+    {
+        ThematicBreakBlock => new Rule(),
+        QuoteBlock quote => RenderQuoteToRenderable(quote, markdown),
+        ListBlock list => RenderListToRenderable(list, markdown),
+        MarkdigTable table => RenderTableToRenderable(table, markdown),
+        _ => CreateMarkupRenderable(block, markdown)
+    };
 
     private static IRenderable? CreateMarkupRenderable(Block block, string markdown)
     {
@@ -171,6 +178,96 @@ internal static partial class MarkdownToSpectreConverter
         return builder.Length == 0
             ? null
             : new Markup(builder.ToString());
+    }
+
+    private static IRenderable? RenderContainerContentToRenderable(ContainerBlock container, string markdown)
+    {
+        var renderables = new List<IRenderable>();
+        Block? previousBlock = null;
+
+        foreach (var block in container)
+        {
+            var renderable = RenderBlockContentToRenderable(block, markdown);
+            if (renderable is null)
+            {
+                continue;
+            }
+
+            if (renderables.Count > 0 && ShouldInsertBlankLineBetween(previousBlock, block))
+            {
+                renderables.Add(Text.Empty);
+            }
+
+            renderables.Add(renderable);
+            previousBlock = block;
+        }
+
+        return renderables.Count switch
+        {
+            0 => null,
+            1 => renderables[0],
+            _ => new Rows(renderables)
+        };
+    }
+
+    private static bool ShouldInsertBlankLineBetween(Block? previous, Block current)
+    {
+        if (previous is null)
+        {
+            return false;
+        }
+
+        // Keep nested list and quote content tightly coupled to the preceding block.
+        return current is not ListBlock and not QuoteBlock;
+    }
+
+    private static IRenderable RenderQuoteToRenderable(QuoteBlock quote, string markdown)
+    {
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddColumn();
+        grid.Columns[0].NoWrap = true;
+        grid.Columns[0].Padding = new Padding(0);
+        grid.Columns[1].Padding = new Padding(0);
+
+        grid.AddRow(
+            new Markup("[grey]>[/] "),
+            RenderContainerContentToRenderable(quote, markdown) ?? Text.Empty);
+
+        return grid;
+    }
+
+    private static IRenderable RenderListToRenderable(ListBlock list, string markdown)
+    {
+        var items = list.OfType<ListItemBlock>().ToList();
+        if (items.Count == 0)
+        {
+            return Text.Empty;
+        }
+
+        var orderedStart = int.TryParse(list.OrderedStart, out var parsedOrderedStart) ? parsedOrderedStart : 1;
+
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddColumn();
+        grid.Columns[0].NoWrap = true;
+        grid.Columns[0].Padding = new Padding(0);
+        grid.Columns[1].Padding = new Padding(0);
+
+        var index = orderedStart;
+        foreach (var item in items)
+        {
+            var content = RenderContainerContentToRenderable(item, markdown);
+            if (content is null)
+            {
+                continue;
+            }
+
+            var marker = list.IsOrdered ? $"{index++}. " : "• ";
+            grid.AddRow(new Markup(marker.EscapeMarkup()), content);
+        }
+
+        return grid;
     }
 
     private static string RenderBlocksToPlainText(ContainerBlock container, string markdown)
@@ -926,12 +1023,15 @@ internal static partial class MarkdownToSpectreConverter
                 AppendEscapedMarkup(builder, code.Content.AsSpan());
                 builder.Append("[/][/]");
                 break;
-            case LinkInline { IsImage: true }:
-                // Images have no useful terminal representation in this flow, so drop them
-                // rather than surfacing raw alt/url syntax in docs output.
-                break;
             case LinkInline link:
-                AppendLinkToMarkup(builder, link, markdown);
+                if (link.IsImage)
+                {
+                    AppendImageToMarkup(builder, link, markdown);
+                }
+                else
+                {
+                    AppendLinkToMarkup(builder, link, markdown);
+                }
                 break;
             case AutolinkInline autolink:
                 builder.Append("[cyan][link=");
@@ -1004,6 +1104,28 @@ internal static partial class MarkdownToSpectreConverter
         builder.Append("[/][/]");
     }
 
+    private static void AppendImageToMarkup(StringBuilder builder, LinkInline image, string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(image.Url))
+        {
+            AppendInlinesToMarkup(builder, image, markdown);
+            return;
+        }
+
+        builder.Append("[cyan][link=");
+        AppendEscapedMarkup(builder, image.Url.AsSpan());
+        builder.Append(']');
+
+        var textStart = builder.Length;
+        AppendInlinesToMarkup(builder, image, markdown);
+        if (builder.Length == textStart)
+        {
+            AppendEscapedMarkup(builder, image.Url.AsSpan());
+        }
+
+        builder.Append("[/][/]");
+    }
+
     private static void AppendInlinesToPlainText(StringBuilder builder, ContainerInline? inline, string markdown)
     {
         if (inline is null)
@@ -1032,12 +1154,15 @@ internal static partial class MarkdownToSpectreConverter
             case CodeInline code:
                 builder.Append(code.Content);
                 break;
-            case LinkInline { IsImage: true }:
-                // Keep plain-text output focused on readable prose; image markdown currently
-                // contributes more noise than signal in the CLI.
-                break;
             case LinkInline link:
-                AppendLinkToPlainText(builder, link, markdown);
+                if (link.IsImage)
+                {
+                    AppendImageToPlainText(builder, link, markdown);
+                }
+                else
+                {
+                    AppendLinkToPlainText(builder, link, markdown);
+                }
                 break;
             case AutolinkInline autolink:
                 builder.Append(autolink.Url);
@@ -1083,6 +1208,28 @@ internal static partial class MarkdownToSpectreConverter
 
         builder.Append(" (");
         builder.Append(link.Url);
+        builder.Append(')');
+    }
+
+    private static void AppendImageToPlainText(StringBuilder builder, LinkInline image, string markdown)
+    {
+        if (string.IsNullOrWhiteSpace(image.Url))
+        {
+            AppendInlinesToPlainText(builder, image, markdown);
+            return;
+        }
+
+        var textStart = builder.Length;
+        AppendInlinesToPlainText(builder, image, markdown);
+
+        if (builder.Length == textStart)
+        {
+            builder.Append(image.Url);
+            return;
+        }
+
+        builder.Append(" (");
+        builder.Append(image.Url);
         builder.Append(')');
     }
 
