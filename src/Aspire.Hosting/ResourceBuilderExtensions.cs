@@ -3982,7 +3982,7 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(exitCodes);
 
-        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = [.. exitCodes] }, ResourceAnnotationMutationBehavior.Replace);
+        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = exitCodes.Length > 0 ? [.. exitCodes] : [0] }, ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
