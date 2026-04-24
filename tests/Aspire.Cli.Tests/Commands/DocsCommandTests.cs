@@ -222,14 +222,14 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("Azure__SubscriptionId", output);
         Assert.Contains("Target Azure subscription", output);
 
-        var headingIndex = FindLogIndex(outputWriter.Logs, "Docs Smoke Test");
-        var listIndex = FindLogIndex(outputWriter.Logs, "1. First item");
-        var codeIndex = FindLogIndex(outputWriter.Logs, "aspire docs get docs-smoke-test");
-        var tableIndex = FindLogIndex(outputWriter.Logs, "Azure:SubscriptionId");
+        var headingPos = output.IndexOf("Docs Smoke Test", StringComparison.Ordinal);
+        var listPos = output.IndexOf("1. First item", StringComparison.Ordinal);
+        var codePos = output.IndexOf("aspire docs get docs-smoke-test", StringComparison.Ordinal);
+        var tablePos = output.IndexOf("Azure:SubscriptionId", StringComparison.Ordinal);
 
-        Assert.True(headingIndex < listIndex);
-        Assert.True(listIndex < codeIndex);
-        Assert.True(codeIndex < tableIndex);
+        Assert.True(headingPos < listPos);
+        Assert.True(listPos < codePos);
+        Assert.True(codePos < tablePos);
     }
 
     [Fact]
@@ -247,23 +247,6 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.NotEqual(0, exitCode);
-    }
-
-    private static int FindLogIndex(IReadOnlyList<string> logs, string text)
-    {
-        var index = -1;
-
-        for (var i = 0; i < logs.Count; i++)
-        {
-            if (logs[i].Contains(text, StringComparison.Ordinal))
-            {
-                index = i;
-                break;
-            }
-        }
-
-        Assert.True(index >= 0, $"Could not find '{text}' in output.");
-        return index;
     }
 }
 
