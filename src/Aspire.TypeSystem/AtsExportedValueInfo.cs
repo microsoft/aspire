@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
+
 namespace Aspire.TypeSystem;
 
 /// <summary>
@@ -19,7 +21,7 @@ public sealed class AtsExportedValueInfo
     /// <summary>
     /// Gets the snapped JSON value emitted into guest SDKs.
     /// </summary>
-    public required System.Text.Json.Nodes.JsonNode? Value { get; init; }
+    public required JsonNode? Value { get; init; }
 
     /// <summary>
     /// Gets the ATS type of the exported value.
