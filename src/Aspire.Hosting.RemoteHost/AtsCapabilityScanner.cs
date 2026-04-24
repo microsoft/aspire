@@ -859,33 +859,13 @@ public static class AtsCapabilityScanner
             return;
         }
 
-        // Collect all MethodName values that have collisions and their colliding CapabilityIds.
-        var collidingMethodNames = new Dictionary<string, List<string>>();
-
-        foreach (var g in collisionGroups)
-        {
-            var methodName = g.Key.MethodName;
-            var capIds = g.Select(x => x.Capability.CapabilityId).Distinct().ToList();
-
-            if (!collidingMethodNames.TryGetValue(methodName, out var existingIds))
-            {
-                existingIds = [];
-                collidingMethodNames[methodName] = existingIds;
-            }
-
-            foreach (var id in capIds)
-            {
-                if (!existingIds.Contains(id))
-                {
-                    existingIds.Add(id);
-                }
-            }
-        }
-
         var capabilitiesToRemove = new HashSet<string>();
 
-        foreach (var (methodName, capIds) in collidingMethodNames)
+        foreach (var collisionGroup in collisionGroups)
         {
+            var methodName = collisionGroup.Key.MethodName;
+            var targetTypeId = collisionGroup.Key.Target;
+            var capIds = collisionGroup.Select(x => x.Capability.CapabilityId).Distinct().ToList();
             capIds.Sort(StringComparer.Ordinal);
 
             var conflictingIdsStr = string.Join(", ", capIds);
@@ -896,7 +876,7 @@ public static class AtsCapabilityScanner
                 capabilitiesToRemove.Add(capIds[i]);
 
                 diagnostics.Add(AtsDiagnostic.Warning(
-                    $"Method '{methodName}' has collisions ({conflictingIdsStr}). '{capIds[i]}' was removed. Use [AspireExport(MethodName = \"uniqueName\")] to set an explicit name.",
+                    $"Method '{methodName}' on target '{targetTypeId}' has collisions ({conflictingIdsStr}). '{capIds[i]}' was removed. Use [AspireExport(MethodName = \"uniqueName\")] to set an explicit name.",
                     capIds[i]));
             }
         }
