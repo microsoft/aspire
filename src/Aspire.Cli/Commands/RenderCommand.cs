@@ -14,6 +14,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -81,13 +82,7 @@ internal sealed class RenderCommand : BaseCommand
 
     private readonly IAnsiConsole _ansiConsole;
     private readonly ICliHostEnvironment _hostEnvironment;
-    private readonly IFeatures _features;
-    private readonly ICliUpdateNotifier _updateNotifier;
-    private readonly IDotNetCliRunner _runner;
-    private readonly IProjectLocator _projectLocator;
-    private readonly IAppHostProjectFactory _projectFactory;
-    private readonly IConfiguration _configuration;
-    private readonly ILogger _logger;
+    private readonly IServiceProvider _serviceProvider;
 
     public RenderCommand(
         IFeatures features,
@@ -97,22 +92,12 @@ internal sealed class RenderCommand : BaseCommand
         AspireCliTelemetry telemetry,
         IAnsiConsole ansiConsole,
         ICliHostEnvironment hostEnvironment,
-        IDotNetCliRunner runner,
-        IProjectLocator projectLocator,
-        IAppHostProjectFactory projectFactory,
-        IConfiguration configuration,
-        ILogger<RenderCommand> logger)
+        IServiceProvider serviceProvider)
         : base("render", "Smoke test CLI rendering", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _ansiConsole = ansiConsole;
         _hostEnvironment = hostEnvironment;
-        _features = features;
-        _updateNotifier = updateNotifier;
-        _runner = runner;
-        _projectLocator = projectLocator;
-        _projectFactory = projectFactory;
-        _configuration = configuration;
-        _logger = logger;
+        _serviceProvider = serviceProvider;
 
         Options.Add(s_scenarioOption);
         Options.Add(s_consoleWidthOption);
@@ -476,9 +461,18 @@ internal sealed class RenderCommand : BaseCommand
         IReadOnlyList<BackchannelPipelineSummaryItem>? PipelineSummary = null);
 
     private TestPipelineCommand CreateTestPipelineCommand() => new(
-        _runner, InteractionService, _projectLocator, Telemetry,
-        _features, _updateNotifier, ExecutionContext,
-        _hostEnvironment, _projectFactory, _configuration, _logger, _ansiConsole);
+        _serviceProvider.GetRequiredService<IDotNetCliRunner>(),
+        InteractionService,
+        _serviceProvider.GetRequiredService<IProjectLocator>(),
+        Telemetry,
+        _serviceProvider.GetRequiredService<IFeatures>(),
+        _serviceProvider.GetRequiredService<ICliUpdateNotifier>(),
+        ExecutionContext,
+        _hostEnvironment,
+        _serviceProvider.GetRequiredService<IAppHostProjectFactory>(),
+        _serviceProvider.GetRequiredService<IConfiguration>(),
+        _serviceProvider.GetRequiredService<ILogger<RenderCommand>>(),
+        _ansiConsole);
 
     private async Task<int> RenderDebugActivitiesAsync(CancellationToken cancellationToken)
     {
