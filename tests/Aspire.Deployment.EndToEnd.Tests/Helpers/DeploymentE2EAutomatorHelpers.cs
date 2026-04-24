@@ -78,6 +78,11 @@ internal static class DeploymentE2EAutomatorHelpers
                 await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
                 break;
 
+            case CliInstallMode.DotnetTool:
+                throw new InvalidOperationException(
+                    "DotnetTool install mode is not supported for deployment E2E tests. " +
+                    "Deployment tests require the native CLI. Clear ASPIRE_E2E_DOTNET_TOOL* environment variables and retry.");
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(strategy), strategy.Mode, "Unknown install mode");
         }
