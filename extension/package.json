@@ -390,8 +390,12 @@
     ],
     "jsonValidation": [
       {
-        "fileMatch": "aspire.config.json",
+        "fileMatch": ["aspire.config.json", "!**/.aspire/aspire.config.json"],
         "url": "./schemas/aspire-config.schema.json"
+      },
+      {
+        "fileMatch": "**/.aspire/aspire.config.json",
+        "url": "./schemas/aspire-global-config.schema.json"
       },
       {
         "fileMatch": ".aspire/settings.json",

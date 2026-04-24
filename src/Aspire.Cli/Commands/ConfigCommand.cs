@@ -481,7 +481,8 @@ internal sealed class ConfigCommand : BaseCommand
             if (useJson)
             {
                 var configFileSchema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
-                var info = new ConfigInfo(localPath, globalPath, availableFeatures, localSchema, globalSchema, configFileSchema, KnownCapabilities.GetAdvertisedCapabilities());
+                var globalConfigFileSchema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: true);
+                var info = new ConfigInfo(localPath, globalPath, availableFeatures, localSchema, globalSchema, configFileSchema, KnownCapabilities.GetAdvertisedCapabilities(), globalConfigFileSchema);
                 var json = System.Text.Json.JsonSerializer.Serialize(info, JsonSourceGenerationContext.Default.ConfigInfo);
                 // Use DisplayRawText to avoid Spectre.Console word wrapping which breaks JSON strings
                 if (InteractionService is ConsoleInteractionService consoleService)

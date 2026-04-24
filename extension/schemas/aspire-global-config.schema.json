@@ -1,25 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://json.schemastore.org/aspire-config.json",
+  "$id": "https://json.schemastore.org/aspire-global-config.json",
   "type": "object",
-  "title": "Aspire Configuration",
-  "description": "Aspire CLI unified configuration file (aspire.config.json). Replaces .aspire/settings.json and apphost.run.json.",
+  "title": "Aspire Global Configuration",
+  "description": "Aspire CLI global configuration file (~/.aspire/aspire.config.json). Does not include local-only properties like appHost.",
   "properties": {
-    "appHost": {
-      "description": "AppHost entry point configuration.",
-      "type": "object",
-      "properties": {
-        "path": {
-          "description": "Relative path to the AppHost entry point file (e.g., \"Program.cs\", \"app.ts\"). Relative to the directory containing aspire.config.json.",
-          "type": "string"
-        },
-        "language": {
-          "description": "Language identifier (e.g., \"typescript/nodejs\", \"python\"). Used to determine which runtime to use for execution.",
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
     "channel": {
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"

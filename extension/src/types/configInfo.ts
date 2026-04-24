@@ -30,4 +30,5 @@ export interface ConfigInfo {
     GlobalSettingsSchema: SettingsSchema;
     ConfigFileSchema?: SettingsSchema;
     Capabilities?: string[];
+    GlobalConfigFileSchema?: SettingsSchema;
 }

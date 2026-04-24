@@ -40,4 +40,36 @@ public class SettingsSchemaBuilderTests
         Assert.Contains(ApiDocsSourceConfiguration.DefaultSitemapUrl, sitemapProperty.Description, StringComparison.Ordinal);
         Assert.Contains("override", sitemapProperty.Description, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void BuildConfigFileSchema_LocalIncludesAppHost()
+    {
+        var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
+
+        Assert.Contains(schema.Properties, static property => property.Name == "appHost");
+    }
+
+    [Fact]
+    public void BuildConfigFileSchema_GlobalExcludesAppHost()
+    {
+        var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: true);
+
+        Assert.DoesNotContain(schema.Properties, static property => property.Name == "appHost");
+    }
+
+    [Fact]
+    public void BuildSchema_LocalIncludesAppHostPath()
+    {
+        var schema = SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: false);
+
+        Assert.Contains(schema.Properties, static property => property.Name == "appHostPath");
+    }
+
+    [Fact]
+    public void BuildSchema_GlobalExcludesAppHostPath()
+    {
+        var schema = SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: true);
+
+        Assert.DoesNotContain(schema.Properties, static property => property.Name == "appHostPath");
+    }
 }

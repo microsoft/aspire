@@ -11,8 +11,9 @@ namespace Aspire.Cli.Commands;
 /// <param name="AvailableFeatures">List of all available feature metadata.</param>
 /// <param name="LocalSettingsSchema">Schema for the local settings.json file structure (includes all properties).</param>
 /// <param name="GlobalSettingsSchema">Schema for the global settings.json file structure (excludes local-only properties).</param>
-/// <param name="ConfigFileSchema">Schema for the aspire.config.json file structure.</param>
+/// <param name="ConfigFileSchema">Schema for the aspire.config.json file structure (includes all properties).</param>
 /// <param name="Capabilities">List of CLI capabilities advertised to extensions.</param>
+/// <param name="GlobalConfigFileSchema">Schema for the global aspire.config.json file structure (excludes local-only properties like appHost).</param>
 internal sealed record ConfigInfo(
     string LocalSettingsPath,
     string GlobalSettingsPath,
@@ -20,7 +21,8 @@ internal sealed record ConfigInfo(
     SettingsSchema LocalSettingsSchema,
     SettingsSchema GlobalSettingsSchema,
     SettingsSchema? ConfigFileSchema,
-    string[] Capabilities);
+    string[] Capabilities,
+    SettingsSchema? GlobalConfigFileSchema = null);
 
 /// <summary>
 /// Information about a single feature flag.
