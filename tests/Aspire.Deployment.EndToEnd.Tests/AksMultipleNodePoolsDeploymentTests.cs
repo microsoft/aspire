@@ -177,10 +177,13 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
             // Step 14: Verify API pod is on a worker pool node
             output.WriteLine("Step 14: Verifying API pod scheduling on workers pool...");
             await auto.TypeAsync("NS=$(kubectl get svc --all-namespaces -o jsonpath='{range .items[?(@.metadata.name==\"apiservice-service\")]}{.metadata.namespace}{end}') && " +
-                      "POD_NODE=$(kubectl get pods -n $NS -l app=apiservice -o jsonpath='{.items[0].spec.nodeName}') && " +
-                      "NODE_POOL=$(kubectl get node $POD_NODE -o jsonpath='{.metadata.labels.agentpool}') && " +
+                      "[ -n \"$NS\" ] || { echo 'ERROR: apiservice-service namespace not found'; exit 1; }; " +
+                      "POD_NODE=$(kubectl get pods -n \"$NS\" -l app=apiservice -o jsonpath='{.items[0].spec.nodeName}') && " +
+                      "[ -n \"$POD_NODE\" ] || { echo 'ERROR: apiservice pod node not found'; exit 1; }; " +
+                      "NODE_POOL=$(kubectl get node \"$POD_NODE\" -o jsonpath='{.metadata.labels.agentpool}') && " +
+                      "[ -n \"$NODE_POOL\" ] || { echo 'ERROR: node pool label not found'; exit 1; }; " +
                       "echo \"API pod node: $POD_NODE, pool: $NODE_POOL\" && " +
-                      "[ \"$NODE_POOL\" = \"workers\" ] && echo 'PASS: API pod on workers pool' || echo 'WARN: API pod not on expected pool'");
+                      "if [ \"$NODE_POOL\" = \"workers\" ]; then echo 'PASS: API pod on workers pool'; else echo 'ERROR: API pod not on expected pool'; exit 1; fi");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 

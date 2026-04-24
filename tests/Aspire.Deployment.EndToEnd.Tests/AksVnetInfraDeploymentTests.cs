@@ -71,38 +71,28 @@ public sealed class AksVnetInfraDeploymentTests(ITestOutputHelper output)
 
             await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
-            // Step 3: Create starter project using aspire new
-            // (Using aspire new instead of aspire init to avoid pre-existing
-            // AspireInitAsync helper issue with the *.dev.localhost prompt)
-            var projectName = "AksVnet";
-            output.WriteLine("Step 3: Creating starter project...");
-            await auto.AspireNewAsync(projectName, counter, useRedisCache: false);
+            // Step 3: Create single-file AppHost using aspire init
+            output.WriteLine("Step 3: Creating single-file AppHost with aspire init...");
+            await auto.AspireInitAsync(counter);
 
-            // Step 4: Navigate to project directory
-            await auto.TypeAsync($"cd {projectName}");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
-
-            // Step 5a: Add Aspire.Hosting.Azure.Kubernetes
-            output.WriteLine("Step 5a: Adding Azure Kubernetes hosting package...");
+            // Step 4: Add Aspire.Hosting.Azure.Kubernetes
+            output.WriteLine("Step 4: Adding Azure Kubernetes hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Kubernetes");
             await auto.EnterAsync();
 
             await auto.WaitForAspireAddCompletionAsync(counter);
 
-            // Step 5b: Add Aspire.Hosting.Azure.Network
-            output.WriteLine("Step 5b: Adding Azure Network hosting package...");
+            // Step 5: Add Aspire.Hosting.Azure.Network
+            output.WriteLine("Step 5: Adding Azure Network hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Network");
             await auto.EnterAsync();
 
             await auto.WaitForAspireAddCompletionAsync(counter);
 
-            // Step 6: Modify AppHost.cs to add VNet + AKS infrastructure
+            // Step 6: Modify apphost.cs to add VNet + AKS infrastructure
             {
-                var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-                var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
-                var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
-                output.WriteLine($"Looking for AppHost.cs at: {appHostFilePath}");
+                var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+                output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
 
                 var content = File.ReadAllText(appHostFilePath);
 
@@ -135,26 +125,20 @@ builder.Build().Run();
                 output.WriteLine($"New content:\n{content}");
             }
 
-            // Step 7: Navigate to AppHost project directory
-            output.WriteLine("Step 7: Navigating to AppHost directory...");
-            await auto.TypeAsync($"cd {projectName}.AppHost");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
-
-            // Step 8: Set environment variables for deployment
+            // Step 7: Set environment variables for deployment
             await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Step 9: Deploy to Azure
-            output.WriteLine("Step 9: Starting Azure deployment...");
+            // Step 8: Deploy to Azure
+            output.WriteLine("Step 8: Starting Azure deployment...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Step 8: Verify VNet infrastructure
-            output.WriteLine("Step 8: Verifying VNet infrastructure...");
+            // Step 9: Verify VNet infrastructure
+            output.WriteLine("Step 9: Verifying VNet infrastructure...");
             await auto.TypeAsync($"az network vnet list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
@@ -165,8 +149,8 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            // Step 9: Verify AKS cluster and node pools
-            output.WriteLine("Step 9: Verifying AKS cluster and node pools...");
+            // Step 10: Verify AKS cluster and node pools
+            output.WriteLine("Step 10: Verifying AKS cluster and node pools...");
             await auto.TypeAsync($"AKS_NAME=$(az aks list -g {resourceGroupName} --query '[0].name' -o tsv) && " +
                       $"echo \"AKS Cluster: $AKS_NAME\"");
             await auto.EnterAsync();
@@ -177,11 +161,11 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 10: Clean up Azure resources using aspire destroy
-            output.WriteLine("Step 10: Destroying Azure deployment...");
+            // Step 11: Clean up Azure resources using aspire destroy
+            output.WriteLine("Step 11: Destroying Azure deployment...");
             await auto.AspireDestroyAsync(counter);
 
-            // Step 11: Exit terminal
+            // Step 12: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 
