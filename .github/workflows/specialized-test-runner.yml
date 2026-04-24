@@ -96,6 +96,8 @@ jobs:
           /p:GenerateCIPartitions=true
           /p:InstallBrowsersForPlaywright=false
           /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/BeforeBuildProps.props
+          /p:IncludeTemplateTests=true
+          /p:IncludeCliE2ETests=true
           ${{ steps.derive_props.outputs.msbuild_prop }}
           /p:DiscoveryTraitFilter=${{ steps.derive_props.outputs.discovery_filter }}
           /bl
