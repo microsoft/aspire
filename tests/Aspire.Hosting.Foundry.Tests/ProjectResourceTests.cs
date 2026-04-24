@@ -64,6 +64,25 @@ public class ProjectResourceTests
     }
 
     [Fact]
+    public void WithContainerRegistry_RemovesDefaultContainerRegistry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("acr");
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project")
+            .WithContainerRegistry(registry);
+
+        // Default registry should be removed
+        Assert.Null(project.Resource.DefaultContainerRegistry);
+
+        // Only the explicit registry should remain
+        var registries = builder.Resources.OfType<AzureContainerRegistryResource>().ToList();
+        Assert.Single(registries);
+        Assert.Same(registry.Resource, registries[0]);
+    }
+
+    [Fact]
     public void ConnectionStringExpression_HasCorrectFormat()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
