@@ -71,14 +71,23 @@ with create_builder() as builder:
         _built_expression = connection_string_builder.build()
 
     def configure_environment_callback(context):
+        _environment_resource = context.resource
+        _environment_is_run_mode = context.execution_context.is_run_mode()
+        context.log.warning("Environment callback logger")
         context.env.set("MY_CALLBACK_ENDPOINT", endpoint)
 
     def configure_args_callback(context):
+        _args_resource = context.resource
+        _args_is_run_mode = context.execution_context.is_run_mode()
+        context.log.error("Args callback logger")
         context.args.add("--validation-callback")
         context.args.add(expr)
 
     def configure_urls_callback(context):
+        _urls_resource = context.resource
+        _urls_is_run_mode = context.execution_context.is_run_mode()
         callback_endpoint = context.get_endpoint("http")
+        context.log.debug("URLs callback logger")
         context.urls.add(ReferenceExpression.format_string("https://%s", callback_endpoint))
 
     # addContainer (pre-existing)
@@ -132,10 +141,28 @@ with create_builder() as builder:
     )
 
     def configure_builder_pipeline(config_context):
+        config_context.log.info("Builder pipeline configuration logger")
         _all_steps = config_context.steps
         _builder_tagged_steps = config_context.get_steps("custom-build")
 
     pipeline.configure(configure_builder_pipeline)
+
+    def configure_resource_pipeline(config_context):
+        config_context.log.info("Pipeline configuration logger")
+        config_pipeline = config_context.pipeline
+        all_steps = list(config_pipeline.steps())
+        tagged_steps = list(config_pipeline.steps_by_tag("custom-build"))
+        _step_name = all_steps[0].name
+        _description = all_steps[0].description
+        all_steps[0].add_tag("validated")
+        all_steps[0].depends_on("restore")
+        tagged_steps[0].required_by("publish")
+        all_steps[0].depends_on("build")
+
+    def capture_resource_pipeline(config_context):
+        config_pipeline = config_context.pipeline
+        _resource_steps = list(config_pipeline.steps())
+        _tagged_steps = list(config_pipeline.steps_by_tag("custom-build"))
     # withEnvironment - EndpointReference
     container.with_environment("MY_ENDPOINT", endpoint)
     # withEnvironment - ParameterResource
@@ -200,9 +227,16 @@ with create_builder() as builder:
     # publishAsDockerFile
     tool.publish_as_docker_file()
     # ===================================================================
-    container.with_pipeline_step_factory("step", lambda *_args, **_kwargs: None)
-    container.with_pipeline_configuration(lambda *_args, **_kwargs: None)
-    container.with_pipeline_configuration(lambda *_args, **_kwargs: None)
+    container.with_pipeline_step_factory(
+        "custom-build-step",
+        lambda *_args, **_kwargs: None,
+        depends_on=["build"],
+        required_by=["deploy"],
+        tags=["custom-build"],
+        description="Custom pipeline step",
+    )
+    container.with_pipeline_configuration(configure_resource_pipeline)
+    container.with_pipeline_configuration(capture_resource_pipeline)
     # ===================================================================
     _app_host_directory = builder.app_host_dir
     host_environment = builder.env

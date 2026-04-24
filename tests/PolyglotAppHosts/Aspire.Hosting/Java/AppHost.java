@@ -60,9 +60,9 @@ void main() throws Exception {
         container.withEnvironment("MY_BUILT_CONN", builtConnectionString);
         container.withEnvironment("MY_CONN", envConnectionString);
         container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
-        container.withEnvironmentCallback((environmentContext) -> { var environment = environmentContext.environment(); environment.set("MY_CALLBACK_ENDPOINT", endpoint); });
-        container.withArgsCallback((argsContext) -> { var argsEditor = argsContext.args(); argsEditor.add("--validation-callback"); argsEditor.add(expr); });
-        container.withUrlsCallback((urlsContext) -> { var callbackEndpoint = urlsContext.getEndpoint("http"); urlsContext.urls().add(ReferenceExpression.refExpr("https://%s", callbackEndpoint), null); });
+        container.withEnvironmentCallback((environmentContext) -> { var environment = environmentContext.environment(); var environmentLog = environmentContext.log(); var _environmentResource = environmentContext.resource(); var environmentExecutionContext = environmentContext.executionContext(); var _environmentIsRunMode = environmentExecutionContext.isRunMode(); environmentLog.warning("Environment callback logger"); environment.set("MY_CALLBACK_ENDPOINT", endpoint); });
+        container.withArgsCallback((argsContext) -> { var argsEditor = argsContext.args(); var argsLog = argsContext.log(); var _argsResource = argsContext.resource(); var argsExecutionContext = argsContext.executionContext(); var _argsIsRunMode = argsExecutionContext.isRunMode(); argsLog.error("Args callback logger"); argsEditor.add("--validation-callback"); argsEditor.add(expr); });
+        container.withUrlsCallback((urlsContext) -> { var _urlsResource = urlsContext.resource(); var urlsLog = urlsContext.log(); var urlsExecutionContext = urlsContext.executionContext(); var _urlsIsRunMode = urlsExecutionContext.isRunMode(); var callbackEndpoint = urlsContext.getEndpoint("http"); urlsLog.debug("URLs callback logger"); urlsContext.urls().add(ReferenceExpression.refExpr("https://%s", callbackEndpoint), null); });
         cache.withConnectionProperty("Endpoint", expr);
         cache.withConnectionProperty("Protocol", "https");
         container.excludeFromManifest();

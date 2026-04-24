@@ -173,18 +173,33 @@ await container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
 // callback editors/facades
 await container.withEnvironmentCallback(async (context) => {
     const environment = await context.environment();
+    const environmentLog = await context.log();
+    const _environmentResource = await context.resource();
+    const environmentExecutionContext = await context.executionContext();
+    const _environmentIsRunMode: boolean = await environmentExecutionContext.isRunMode();
+    await environmentLog.warning("Environment callback logger");
     await environment.set("MY_CALLBACK_ENDPOINT", endpoint);
 });
 
 await container.withArgsCallback(async (context) => {
     const args = await context.args();
+    const argsLog = await context.log();
+    const _argsResource = await context.resource();
+    const argsExecutionContext = await context.executionContext();
+    const _argsIsRunMode: boolean = await argsExecutionContext.isRunMode();
+    await argsLog.error("Args callback logger");
     await args.add("--validation-callback");
     await args.add(expr);
 });
 
 await container.withUrlsCallback(async (context) => {
+    const _urlsResource = await context.resource();
+    const urlsLog = await context.log();
+    const urlsExecutionContext = await context.executionContext();
+    const _urlsIsRunMode: boolean = await urlsExecutionContext.isRunMode();
     const callbackEndpoint = await context.getEndpoint("http");
     const urls = await context.urls();
+    await urlsLog.debug("URLs callback logger");
     await urls.add(refExpr`https://${callbackEndpoint}`);
 });
 
