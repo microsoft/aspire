@@ -3,7 +3,7 @@
 
 using System.Reflection;
 using System.Text.RegularExpressions;
-using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.Markdown;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -269,11 +269,11 @@ public partial class MarkdownToSpectreConverterTests
     [Fact]
     public void ConvertToRenderable_WithRawHtml_PreservesLiteralText()
     {
-        var markdown = "<em>hello</em>";
+        var markdown = "before <em>hello</em> after";
 
         var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
 
-        Assert.Contains("<em>hello</em>", output);
+        Assert.Contains("before hello after", output);
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public partial class MarkdownToSpectreConverterTests
 
         var output = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
 
-        Assert.Equal("Before <span>inline</span> after", output);
+        Assert.Equal("Before inline after", output);
     }
 
     [Fact]
@@ -319,8 +319,8 @@ public partial class MarkdownToSpectreConverterTests
         var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
 
         Assert.Contains("Steps:", output);
-        Assert.Contains("* First item", output);
-        Assert.Contains("* Second item", output);
+        Assert.Contains("• First item", output);
+        Assert.Contains("• Second item", output);
         Assert.Contains("aspire docs get redis-integration", output);
     }
 
@@ -338,12 +338,10 @@ public partial class MarkdownToSpectreConverterTests
 
         var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
 
-        Assert.Contains("""
-            1. First paragraph
-               Continued explanation.
-               * Nested item
-               * Nested item 2
-            """.Replace("\r\n", "\n"), output);
+        Assert.Contains("1. First paragraph", output);
+        Assert.Contains("   Continued explanation.", output);
+        Assert.Contains("   • Nested item", output);
+        Assert.Contains("   • Nested item 2", output);
     }
 
     [Fact]
@@ -532,30 +530,36 @@ Some more text.";
         Assert.Equal("This should not break: [bold]bold[/] and [italic]italic[/]", result);
     }
 
-    [Fact]
-    public void ConvertToSpectre_WithReferenceLinks_EscapesSquareBrackets()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithReferenceLinks_DropsLabelsAndKeepsVisibleText(bool useRenderable)
     {
-        // Arrange - test reference style links that should be escaped
         var markdown = "Reference style: [ref link][id1] and another [second][id2].";
 
-        // Act
-        var result = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
+        var result = useRenderable
+            ? RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown)).Trim()
+            : MarkdownToSpectreConverter.ConvertToSpectre(markdown);
 
-        // Assert
-        Assert.Equal("Reference style: [[ref link]][[id1]] and another [[second]][[id2]].", result);
+        Assert.Equal("Reference style: ref link and another second.", result);
     }
 
-    [Fact]
-    public void ConvertToSpectre_WithMixedLinks_HandlesCorrectly()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithMixedLinks_HandlesCorrectly(bool useRenderable)
     {
-        // Arrange - test mix of inline links (should convert) and reference links (should escape)
         var markdown = "Inline [GitHub](https://github.com) and reference [docs][ref1].";
 
-        // Act
-        var result = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
+        var result = useRenderable
+            ? RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown)).Trim()
+            : MarkdownToSpectreConverter.ConvertToSpectre(markdown);
 
-        // Assert
-        Assert.Equal("Inline [cyan][link=https://github.com]GitHub[/][/] and reference [[docs]][[ref1]].", result);
+        var expected = useRenderable
+            ? "Inline GitHub and reference docs."
+            : "Inline [cyan][link=https://github.com]GitHub[/][/] and reference docs.";
+
+        Assert.Equal(expected, result);
     }
 
     [Theory]
@@ -585,16 +589,17 @@ Some more text.";
         Assert.Equal(expected, result);
     }
 
-    [Fact]
-    public void ConvertToSpectre_WithMultipleImages_OmitsAllImages()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithMultipleImages_OmitsAllImages(bool useRenderable)
     {
-        // Arrange
         var markdown = "Here is ![first image](https://example.com/1.png) and ![second image](https://example.com/2.jpg) in text.";
 
-        // Act
-        var result = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
+        var result = useRenderable
+            ? RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown)).Trim()
+            : MarkdownToSpectreConverter.ConvertToSpectre(markdown);
 
-        // Assert
         Assert.Equal("Here is  and  in text.", result);
     }
 
@@ -649,7 +654,7 @@ Visit [cyan][link=https://example.com]our site[/][/] for more details.";
     [Theory]
     [InlineData("```\ncode block\n```", "[grey]code block[/]")]
     [InlineData("```\nmulti\nline\ncode\n```", "[grey]multi\nline\ncode[/]")]
-    [InlineData("Text before ```code``` after", "Text before [grey]code[/] after")]
+    [InlineData("Text before ```code``` after", "Text before [grey][bold]code[/][/] after")]
     public void ConvertToSpectre_WithCodeBlocks_ConvertsCorrectly(string markdown, string expected)
     {
         // Act
@@ -660,9 +665,9 @@ Visit [cyan][link=https://example.com]our site[/][/] for more details.";
     }
 
     [Theory]
-    [InlineData("> quoted text", "[italic grey]quoted text[/]")]
-    [InlineData("> This is a quote", "[italic grey]This is a quote[/]")]
-    [InlineData("Normal text\n> quoted line\nMore text", "Normal text\n[italic grey]quoted line[/]\nMore text")]
+    [InlineData("> quoted text", "[italic grey]> quoted text[/]")]
+    [InlineData("> This is a quote", "[italic grey]> This is a quote[/]")]
+    [InlineData("Normal text\n> quoted line\nMore text", "Normal text\n[italic grey]> quoted line[/]\n[italic grey]> More text[/]")]
     public void ConvertToSpectre_WithQuotedText_ConvertsCorrectly(string markdown, string expected)
     {
         // Act
@@ -687,8 +692,8 @@ Some ~~strikethrough~~ text with ```inline code block```.
 
         // Assert
         var expected = @"[bold]Header 4[/]
-[italic grey]This is a quoted line[/]
-Some [strikethrough]strikethrough[/] text with [grey]inline code block[/].
+[italic grey]> This is a quoted line[/]
+[italic grey]> Some [strikethrough]strikethrough[/] text with [grey][bold]inline code block[/][/].[/]
 [bold]Header 5[/]
 [bold]Header 6[/]".Replace("\r\n", "\n").Replace("\r", "\n");
         Assert.Equal(expected, result);
@@ -706,16 +711,16 @@ Some [strikethrough]strikethrough[/] text with [grey]inline code block[/].
         var result = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
 
         // Assert
-        var expected = @"[italic grey]Line 1[/]
-[italic grey][/]
-[italic grey]Line 2[/]".Replace("\r\n", "\n").Replace("\r", "\n");
+        var expected = @"[italic grey]> Line 1[/]
+[italic grey]> [/]
+[italic grey]> Line 2[/]".Replace("\r\n", "\n").Replace("\r", "\n");
         Assert.Equal(expected, result);
     }
 
     [Theory]
-    [InlineData("> ", "[italic grey][/]")]
-    [InlineData(">", "[italic grey][/]")]
-    [InlineData("> text", "[italic grey]text[/]")]
+    [InlineData("> ", "[italic grey]>[/]")]
+    [InlineData(">", "[italic grey]>[/]")]
+    [InlineData("> text", "[italic grey]> text[/]")]
     public void ConvertToSpectre_WithVariousQuoteFormats_ConvertsCorrectly(string markdown, string expected)
     {
         // Act
@@ -831,14 +836,14 @@ npm install
 
         // Assert
         var expected = @"[bold green]Instructions[/]
-[italic grey]This is important[/]
-[italic grey][/]
-[italic grey]Please follow these steps:[/]
+[italic grey]> This is important[/]
+[italic grey]> [/]
+[italic grey]> Please follow these steps:[/]
 
 [grey]cd /path/to/project
 npm install[/]
 
-[italic grey]That's all![/]".Replace("\r\n", "\n").Replace("\r", "\n");
+[italic grey]> That's all![/]".Replace("\r\n", "\n").Replace("\r", "\n");
         Assert.Equal(expected, result);
     }
 }

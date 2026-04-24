@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using Spectre.Console.Rendering;

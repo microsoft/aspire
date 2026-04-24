@@ -5,11 +5,16 @@
 
 using System.CommandLine;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -39,7 +44,9 @@ internal sealed class RenderCommand : BaseCommand
         ["choice-simple"] = "Selection prompt without formatter",
         ["mixed"] = "Mixed interaction service methods",
         ["markdown"] = "Render markdown feature showcase",
-        ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
+        ["debug-activities"] = "Debug pipeline activities (calls ProcessPublishingActivitiesDebugAsync)",
+        ["pipeline-activities"] = "Pipeline activities with spinner (calls ProcessAndDisplayPublishingActivitiesAsync)",
+        ["publish-summary-all"] = "Publish summary timeline (stress scenarios),",
         ["exit"] = "Exit",
     };
 
@@ -51,6 +58,7 @@ internal sealed class RenderCommand : BaseCommand
         ["publish-summary-markup"] = "Render step names and failures containing markup characters",
         ["publish-summary-mixed-hierarchy"] = "Render a mix of rooted, orphaned, and parentless steps",
         ["publish-summary-duration-extremes"] = "Render very short and very long durations together",
+        ["publish-summary-markdown-values"] = "Render pipeline summary items with markdown-enabled values",
     };
 
     private static readonly Option<string?> s_scenarioOption = new("--scenario")
@@ -73,6 +81,13 @@ internal sealed class RenderCommand : BaseCommand
 
     private readonly IAnsiConsole _ansiConsole;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IFeatures _features;
+    private readonly ICliUpdateNotifier _updateNotifier;
+    private readonly IDotNetCliRunner _runner;
+    private readonly IProjectLocator _projectLocator;
+    private readonly IAppHostProjectFactory _projectFactory;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger _logger;
 
     public RenderCommand(
         IFeatures features,
@@ -81,11 +96,23 @@ internal sealed class RenderCommand : BaseCommand
         IInteractionService interactionService,
         AspireCliTelemetry telemetry,
         IAnsiConsole ansiConsole,
-        ICliHostEnvironment hostEnvironment)
+        ICliHostEnvironment hostEnvironment,
+        IDotNetCliRunner runner,
+        IProjectLocator projectLocator,
+        IAppHostProjectFactory projectFactory,
+        IConfiguration configuration,
+        ILogger<RenderCommand> logger)
         : base("render", "Smoke test CLI rendering", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _ansiConsole = ansiConsole;
         _hostEnvironment = hostEnvironment;
+        _features = features;
+        _updateNotifier = updateNotifier;
+        _runner = runner;
+        _projectLocator = projectLocator;
+        _projectFactory = projectFactory;
+        _configuration = configuration;
+        _logger = logger;
 
         Options.Add(s_scenarioOption);
         Options.Add(s_consoleWidthOption);
@@ -157,6 +184,10 @@ internal sealed class RenderCommand : BaseCommand
                     return ExitCodeConstants.Success;
                 case "markdown":
                     return TestMarkdownRender();
+                case "debug-activities":
+                    return await RenderDebugActivitiesAsync(cancellationToken);
+                case "pipeline-activities":
+                    return await RenderPipelineActivitiesAsync(cancellationToken);
                 case "publish-summary-all":
                     return RenderPublishSummaryScenarios(s_publishSummaryScenarioDescriptions.Keys.Where(k => !StringComparers.CommandName.Equals(k, "publish-summary-all")));
                 case "exit":
@@ -379,6 +410,11 @@ internal sealed class RenderCommand : BaseCommand
                 new("level-5", "Finalize output", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "level-4", 5, 6, TimeSpan.FromSeconds(9), TimeSpan.FromSeconds(11)),
                 new("level-10", "Leaf nested 10 levels deep", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromSeconds(1), null, "level-5", 10, 7, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(11)),
                 new("level-11", "This is a very very very very very long name", ConsoleActivityLogger.ActivityState.Warning, TimeSpan.FromSeconds(1), null, "level-10", 11, 8, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(11)),
+            ],
+            PipelineSummary:
+            [
+                new() { Key = "Endpoint", Value = "https://myapp.azurecontainerapps.io", EnableMarkdown = false },
+                new() { Key = "Resource Group", Value = "rg-myapp-dev", EnableMarkdown = false },
             ]),
         "publish-summary-long-text" => new(
             "Long text and constrained width",
@@ -413,6 +449,23 @@ internal sealed class RenderCommand : BaseCommand
                 new("late", "Finalize", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(2), null, "root", 1, 4, TimeSpan.FromMinutes(2.5), TimeSpan.FromMinutes(2.53333333333333)),
                 new("zero", "Zero event", ConsoleActivityLogger.ActivityState.Success, TimeSpan.Zero, null, "root", 1, 5, TimeSpan.FromMinutes(2.51), TimeSpan.FromMinutes(2.51)),
             ]),
+        "publish-summary-markdown-values" => new(
+            "Markdown in pipeline summary values",
+            [
+                new("root", "Deploy to Azure", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(30), null, null, 0, 1, TimeSpan.Zero, TimeSpan.FromSeconds(30)),
+                new("provision", "Provision resources", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(18), null, "root", 1, 2, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(20)),
+                new("configure", "Configure endpoints", ConsoleActivityLogger.ActivityState.Success, TimeSpan.FromSeconds(8), null, "root", 1, 3, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(28)),
+            ],
+            PipelineSummary:
+            [
+                new() { Key = "Endpoint", Value = "Application deployed to [https://myapp.azurecontainerapps.io](https://myapp.azurecontainerapps.io)", EnableMarkdown = true },
+                new() { Key = "Dashboard", Value = "View resources at [Azure Portal](https://portal.azure.com/#view/resource/123)", EnableMarkdown = true },
+                new() { Key = "API Docs", Value = "See the **API reference** at [docs](https://learn.microsoft.com/aspire) for more info", EnableMarkdown = true },
+                new() { Key = "Connection String", Value = "`Server=tcp:myserver.database.windows.net;Database=mydb`", EnableMarkdown = true },
+                new() { Key = "Region", Value = "East US 2", EnableMarkdown = false },
+                new() { Key = "Resource Group", Value = "rg-myapp-prod", EnableMarkdown = false },
+                new() { Key = "Next Steps", Value = "Run `aspire publish --env staging` to deploy to **staging**, or visit [the docs](https://learn.microsoft.com/aspire/deployment) for more options.", EnableMarkdown = true },
+            ]),
         _ => throw new InvalidOperationException($"Unknown publish summary scenario '{scenarioKey}'.")
     };
 
@@ -421,6 +474,271 @@ internal sealed class RenderCommand : BaseCommand
         IReadOnlyList<ConsoleActivityLogger.StepDurationRecord> Records,
         bool Succeeded = true,
         IReadOnlyList<BackchannelPipelineSummaryItem>? PipelineSummary = null);
+
+    private TestPipelineCommand CreateTestPipelineCommand() => new(
+        _runner, InteractionService, _projectLocator, Telemetry,
+        _features, _updateNotifier, ExecutionContext,
+        _hostEnvironment, _projectFactory, _configuration, _logger, _ansiConsole);
+
+    private async Task<int> RenderDebugActivitiesAsync(CancellationToken cancellationToken)
+    {
+        var command = CreateTestPipelineCommand();
+        var activities = CreateFakePublishingActivities(cancellationToken);
+        var succeeded = await command.ProcessPublishingActivitiesDebugAsync(activities, backchannel: null!, cancellationToken);
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplaySubtleMessage($"ProcessPublishingActivitiesDebugAsync returned succeeded={succeeded}", allowMarkup: false);
+        return ExitCodeConstants.Success;
+    }
+
+    private async Task<int> RenderPipelineActivitiesAsync(CancellationToken cancellationToken)
+    {
+        var command = CreateTestPipelineCommand();
+        var activities = CreateFakePublishingActivities(cancellationToken);
+        var succeeded = await command.ProcessAndDisplayPublishingActivitiesAsync(activities, backchannel: null!, isDebugOrTraceLoggingEnabled: true, cancellationToken);
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplaySubtleMessage($"ProcessAndDisplayPublishingActivitiesAsync returned succeeded={succeeded}", allowMarkup: false);
+        return ExitCodeConstants.Success;
+    }
+
+#pragma warning disable IDE0060 // Remove unused parameter — cancellationToken is used by the generated async iterator via [EnumeratorCancellation]
+    private static async IAsyncEnumerable<PublishingActivity> CreateFakePublishingActivities([EnumeratorCancellation] CancellationToken cancellationToken = default)
+#pragma warning restore IDE0060
+    {
+        await Task.CompletedTask; // Async iterator
+
+        // Step 1: Provision (markdown)
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Step,
+            Data = new PublishingActivityData
+            {
+                Id = "provision",
+                StatusText = "Provision **Azure** resources for [myapp](https://portal.azure.com)",
+                EnableMarkdown = true,
+            }
+        };
+
+        // Step 2: Build (plain text)
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Step,
+            Data = new PublishingActivityData
+            {
+                Id = "build",
+                StatusText = "Build container images",
+                EnableMarkdown = false,
+            }
+        };
+
+        // Task under provision – in progress (markdown)
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Task,
+            Data = new PublishingActivityData
+            {
+                Id = "deploy-web",
+                StepId = "provision",
+                StatusText = "Deploying [webfrontend](https://myapp.azurecontainerapps.io)...",
+                EnableMarkdown = true,
+            }
+        };
+
+        // Log: INF with markdown
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Log,
+            Data = new PublishingActivityData
+            {
+                Id = "log-1",
+                StepId = "provision",
+                StatusText = "Deploying **webfrontend** to [Azure Container Apps](https://learn.microsoft.com/azure/container-apps/)",
+                LogLevel = "Information",
+                Timestamp = new DateTimeOffset(2026, 4, 23, 10, 30, 1, TimeSpan.Zero),
+                EnableMarkdown = true,
+            }
+        };
+
+        // Log: DBG with markdown (dim prefix)
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Log,
+            Data = new PublishingActivityData
+            {
+                Id = "log-2",
+                StepId = "provision",
+                StatusText = "Checking health at `https://myapp.azurecontainerapps.io/health`",
+                LogLevel = "Debug",
+                Timestamp = new DateTimeOffset(2026, 4, 23, 10, 30, 5, TimeSpan.Zero),
+                EnableMarkdown = true,
+            }
+        };
+
+        // Log: INF plain text
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Log,
+            Data = new PublishingActivityData
+            {
+                Id = "log-3",
+                StepId = "build",
+                StatusText = "Uploading manifest for apiservice",
+                LogLevel = "Information",
+                Timestamp = new DateTimeOffset(2026, 4, 23, 10, 30, 2, TimeSpan.Zero),
+                EnableMarkdown = false,
+            }
+        };
+
+        // Log: WRN with markdown
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Log,
+            Data = new PublishingActivityData
+            {
+                Id = "log-4",
+                StepId = "provision",
+                StatusText = "Scaling *down* to **0** instances — see [docs](https://learn.microsoft.com/azure/container-apps/scale)",
+                LogLevel = "Warning",
+                Timestamp = new DateTimeOffset(2026, 4, 23, 10, 30, 8, TimeSpan.Zero),
+                EnableMarkdown = true,
+            }
+        };
+
+        // Task completed – markdown (success)
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Task,
+            Data = new PublishingActivityData
+            {
+                Id = "deploy-web",
+                StepId = "provision",
+                StatusText = "Deployed [webfrontend](https://myapp.azurecontainerapps.io) successfully",
+                CompletionState = CompletionStates.Completed,
+                CompletionMessage = "Deployed to [https://myapp.azurecontainerapps.io](https://myapp.azurecontainerapps.io)",
+                EnableMarkdown = true,
+            }
+        };
+
+        // Task under build – in progress then completed (plain text)
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Task,
+            Data = new PublishingActivityData
+            {
+                Id = "build-img",
+                StepId = "build",
+                StatusText = "Building image myapp/web:latest",
+                EnableMarkdown = false,
+            }
+        };
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Task,
+            Data = new PublishingActivityData
+            {
+                Id = "build-img",
+                StepId = "build",
+                StatusText = "Built image myapp/web:latest",
+                CompletionState = CompletionStates.Completed,
+                CompletionMessage = "Built image myapp/web:latest (12.4s)",
+                EnableMarkdown = false,
+            }
+        };
+
+        // Task failed – markdown
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Task,
+            Data = new PublishingActivityData
+            {
+                Id = "deploy-api",
+                StepId = "provision",
+                StatusText = "Deploying **apiservice**...",
+                EnableMarkdown = true,
+            }
+        };
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Task,
+            Data = new PublishingActivityData
+            {
+                Id = "deploy-api",
+                StepId = "provision",
+                StatusText = "Failed to deploy **apiservice**: timeout after `300s`",
+                CompletionState = CompletionStates.CompletedWithError,
+                CompletionMessage = "See [troubleshooting guide](https://learn.microsoft.com/aspire/troubleshoot) for help.",
+                EnableMarkdown = true,
+            }
+        };
+
+        // Step completions
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Step,
+            Data = new PublishingActivityData
+            {
+                Id = "provision",
+                StatusText = "Provisioning completed with errors",
+                CompletionState = CompletionStates.CompletedWithError,
+                EnableMarkdown = true,
+            }
+        };
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.Step,
+            Data = new PublishingActivityData
+            {
+                Id = "build",
+                StatusText = "Build completed",
+                CompletionState = CompletionStates.Completed,
+                EnableMarkdown = false,
+            }
+        };
+
+        // Publish complete with pipeline summary
+        yield return new PublishingActivity
+        {
+            Type = PublishingActivityTypes.PublishComplete,
+            Data = new PublishingActivityData
+            {
+                Id = "publish-complete",
+                StatusText = "Publish completed with errors. See [troubleshooting](https://learn.microsoft.com/aspire/troubleshoot).",
+                CompletionState = CompletionStates.CompletedWithError,
+                EnableMarkdown = true,
+                PipelineSummary =
+                [
+                    new() { Key = "Endpoint", Value = "Application deployed to [https://myapp.azurecontainerapps.io](https://myapp.azurecontainerapps.io)", EnableMarkdown = true },
+                    new() { Key = "Region", Value = "East US 2", EnableMarkdown = false },
+                    new() { Key = "Next Steps", Value = "Run `aspire publish --env staging` to deploy to **staging**.", EnableMarkdown = true },
+                ],
+            }
+        };
+    }
+
+    /// <summary>
+    /// Minimal concrete PipelineCommandBase subclass for exercising rendering methods.
+    /// </summary>
+    private sealed class TestPipelineCommand(
+        IDotNetCliRunner runner,
+        IInteractionService interactionService,
+        IProjectLocator projectLocator,
+        AspireCliTelemetry telemetry,
+        IFeatures features,
+        ICliUpdateNotifier updateNotifier,
+        CliExecutionContext executionContext,
+        ICliHostEnvironment hostEnvironment,
+        IAppHostProjectFactory projectFactory,
+        IConfiguration configuration,
+        ILogger logger,
+        IAnsiConsole ansiConsole)
+        : PipelineCommandBase("test-render", "Test rendering", runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
+    {
+        protected override string OperationCompletedPrefix => "Publish";
+        protected override string OperationFailedPrefix => "Publish failed";
+        protected override string GetOutputPathDescription() => "Test output path";
+        protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken) => Task.FromResult(Array.Empty<string>());
+        protected override string GetCanceledMessage() => "Test canceled";
+        protected override string GetProgressMessage(ParseResult parseResult) => "Test progress";
+    }
 
     private int TestMarkdownRender()
     {
