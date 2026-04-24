@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppService;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.ApplicationInsights;
@@ -24,14 +26,48 @@ public static partial class AzureAppServiceEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddAzureAppServiceInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        // ensure AzureProvisioning is added first so the AzureResourcePreparer lifecycle hook runs before AzureAppServiceInfrastructure
         builder.AddAzureProvisioning();
 
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
 
-        builder.Services.TryAddEventingSubscriber<AzureAppServiceInfrastructure>();
+        // Register the pipeline step idempotently. AddAzureAppServiceInfrastructureCore can be
+        // called more than once (e.g. when AddAzureAppServiceEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating App Service resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on AzureAppServiceEnvironmentResource.
+        // This global step only validates that no resource has a PublishAs* annotation when there are
+        // no AzureAppServiceEnvironmentResource instances in the model.
+        if (builder.Services.All(d => d.ServiceType != typeof(AppServicePipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<AppServicePipelineStepMarker>();
+
+            builder.Pipeline.AddStep(
+                name: AppServicePipelineStepMarker.StepName,
+                action: ctx =>
+                {
+                    if (!ctx.Model.Resources.OfType<AzureAppServiceEnvironmentResource>().Any())
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<AzureAppServiceWebsiteCustomizationAnnotation>())
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as an Azure AppService Website, but there are no '{nameof(AzureAppServiceEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddAzureAppServiceEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+        }
 
         return builder;
+    }
+
+    private sealed class AppServicePipelineStepMarker
+    {
+        public const string StepName = "validate-azure-app-service";
     }
 
     /// <summary>
