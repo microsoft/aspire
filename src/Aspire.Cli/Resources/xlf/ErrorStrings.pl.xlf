@@ -12,6 +12,11 @@
         <target state="needs-review-translation">Host aplikacji jest niezgodny z interfejsem wiersza polecenia. Host aplikacji musi zostać zaktualizowany do wersji obsługującej funkcję {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostPathNotAllowedInGlobalSettings">
+        <source>The '{0}' setting is project-specific and cannot be set globally. Use 'aspire config set {0} &lt;value&gt;' (without --global) to set it for the current project.</source>
+        <target state="new">The '{0}' setting is project-specific and cannot be set globally. Use 'aspire config set {0} &lt;value&gt;' (without --global) to set it for the current project.</target>
+        <note>{0} is the configuration key name (e.g. appHost.path or appHostPath). Do not translate 'aspire config set'.</note>
+      </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
         <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
         <target state="needs-review-translation">Plik AppHost został określony w ścieżce „{0}”, ale nie istnieje w lokalizacji „{1}”.</target>

@@ -12,6 +12,11 @@
         <target state="needs-review-translation">AppHost가 CLI와 호환되지 않습니다. AppHost를 {0} 기능을 지원하는 버전으로 업데이트해야 합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostPathNotAllowedInGlobalSettings">
+        <source>The '{0}' setting is project-specific and cannot be set globally. Use 'aspire config set {0} &lt;value&gt;' (without --global) to set it for the current project.</source>
+        <target state="new">The '{0}' setting is project-specific and cannot be set globally. Use 'aspire config set {0} &lt;value&gt;' (without --global) to set it for the current project.</target>
+        <note>{0} is the configuration key name (e.g. appHost.path or appHostPath). Do not translate 'aspire config set'.</note>
+      </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
         <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
         <target state="needs-review-translation">appHost 파일이 '{0}'에 지정되었지만, '{1}'에 존재하지 않습니다.</target>

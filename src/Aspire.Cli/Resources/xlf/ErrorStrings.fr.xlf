@@ -12,6 +12,11 @@
         <target state="needs-review-translation">AppHost est incompatible avec l’interface CLI. AppHost doit être mis à jour vers une version qui prend en charge la fonctionnalité {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostPathNotAllowedInGlobalSettings">
+        <source>The '{0}' setting is project-specific and cannot be set globally. Use 'aspire config set {0} &lt;value&gt;' (without --global) to set it for the current project.</source>
+        <target state="new">The '{0}' setting is project-specific and cannot be set globally. Use 'aspire config set {0} &lt;value&gt;' (without --global) to set it for the current project.</target>
+        <note>{0} is the configuration key name (e.g. appHost.path or appHostPath). Do not translate 'aspire config set'.</note>
+      </trans-unit>
       <trans-unit id="AppHostWasSpecifiedButDoesntExist">
         <source>AppHost file was specified in '{0}' but it does not exist at '{1}'.</source>
         <target state="needs-review-translation">Le fichier AppHost a été spécifié dans « {0} » mais il n’existe pas dans « {1} ».</target>

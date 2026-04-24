@@ -243,4 +243,8 @@
     <value>The configuration file '{0}' contains invalid JSON: {1}</value>
     <comment>{0} is the file path, {1} is the exception message</comment>
   </data>
+  <data name="AppHostPathNotAllowedInGlobalSettings" xml:space="preserve">
+    <value>The '{0}' setting is project-specific and cannot be set globally. Use 'aspire config set {0} &lt;value&gt;' (without --global) to set it for the current project.</value>
+    <comment>{0} is the configuration key name (e.g. appHost.path or appHostPath). Do not translate 'aspire config set'.</comment>
+  </data>
 </root>

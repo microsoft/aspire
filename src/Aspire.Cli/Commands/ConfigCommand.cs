@@ -177,6 +177,12 @@ internal sealed class ConfigCommand : BaseCommand
 
         private async Task<int> ExecuteAsync(string key, string value, bool isGlobal, CancellationToken cancellationToken)
         {
+            if (isGlobal && IsLocalOnlyKey(key))
+            {
+                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostPathNotAllowedInGlobalSettings, key));
+                return ExitCodeConstants.InvalidCommand;
+            }
+
             try
             {
                 await ConfigurationService.SetConfigurationAsync(key, value, isGlobal, cancellationToken);
@@ -195,6 +201,30 @@ internal sealed class ConfigCommand : BaseCommand
                 InteractionService.DisplayError(errorMessage);
                 return ExitCodeConstants.InvalidCommand;
             }
+        }
+
+        /// <summary>
+        /// Returns true if the given configuration key is local-only and cannot be set globally.
+        /// </summary>
+        private static bool IsLocalOnlyKey(string key)
+        {
+            // Normalize separators (colon and dot are both used for nested keys)
+            var normalizedKey = key.Replace(':', '.').ToLowerInvariant();
+
+            // appHost and appHost.* (new aspire.config.json format)
+            if (normalizedKey == "apphost" ||
+                normalizedKey.StartsWith("apphost.", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            // appHostPath (legacy .aspire/settings.json format)
+            if (normalizedKey == "apphostpath")
+            {
+                return true;
+            }
+
+            return false;
         }
     }
 

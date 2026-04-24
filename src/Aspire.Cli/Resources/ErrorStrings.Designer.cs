@@ -368,5 +368,14 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidJsonInConfigFile", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The '{0}' setting is project-specific and cannot be set globally.
+        /// </summary>
+        public static string AppHostPathNotAllowedInGlobalSettings {
+            get {
+                return ResourceManager.GetString("AppHostPathNotAllowedInGlobalSettings", resourceCulture);
+            }
+        }
     }
 }

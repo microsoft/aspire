@@ -109,22 +109,6 @@
           "description": "Enable or disable experimental Rust language support for polyglot Aspire applications",
           "default": false
         },
-        "nugetSignatureVerificationEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
-          "default": true
-        },
         "showAllTemplates": {
           "anyOf": [
             {
@@ -200,7 +184,8 @@
       "description": "Package references as an object literal (like npm's package.json). Key is package name, value is version.",
       "type": "object",
       "additionalProperties": {
-        "type": "string"
+        "type": "string",
+        "description": "Package version"
       }
     },
     "sdkVersion": {

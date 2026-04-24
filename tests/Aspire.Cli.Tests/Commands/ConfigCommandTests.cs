@@ -756,6 +756,43 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         var featuresObject = settings["features"]!.AsObject();
         Assert.Equal("nested-value", featuresObject["polyglotSupportEnabled"]?.ToString());
     }
+
+    [Theory]
+    [InlineData("appHost.path")]
+    [InlineData("appHost.language")]
+    [InlineData("appHost")]
+    [InlineData("appHostPath")]
+    [InlineData("apphost.path")]
+    [InlineData("apphost:path")]
+    [InlineData("APPHOST.PATH")]
+    public async Task ConfigSetCommand_WithGlobalFlag_RejectsAppHostKeys(string key)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse($"config set {key} somevalue --global");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+    }
+
+    [Theory]
+    [InlineData("appHost.path")]
+    [InlineData("appHostPath")]
+    public async Task ConfigSetCommand_WithoutGlobalFlag_AllowsAppHostKeys(string key)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse($"config set {key} somevalue");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
 }
 
 public class TestConfigurationService : IConfigurationService

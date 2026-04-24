@@ -24,28 +24,6 @@
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"
     },
-    "docs": {
-      "description": "Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.",
-      "type": "object",
-      "properties": {
-        "llmsTxtUrl": {
-          "description": "Optional override for the llms.txt documentation source consumed by aspire docs. Defaults to https://aspire.dev/llms-small.txt.",
-          "type": "string"
-        },
-        "api": {
-          "description": "Optional API reference source overrides consumed by aspire docs api. Leave these unset to use the built-in aspire.dev API sources.",
-          "type": "object",
-          "properties": {
-            "sitemapUrl": {
-              "description": "Optional override for the API sitemap consumed by aspire docs api. Defaults to https://aspire.dev/sitemap-0.xml.",
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    },
     "features": {
       "description": "Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).",
       "type": "object",
@@ -145,22 +123,6 @@
           ],
           "description": "Enable or disable experimental Rust language support for polyglot Aspire applications",
           "default": false
-        },
-        "nugetSignatureVerificationEnabled": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
-          "default": true
         },
         "showAllTemplates": {
           "anyOf": [
