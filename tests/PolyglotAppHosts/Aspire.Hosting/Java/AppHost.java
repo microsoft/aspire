@@ -53,7 +53,7 @@ void main() throws Exception {
         subnet.allowInbound(new AllowInboundOptions().port("443").from(AzureServiceTags.AzureLoadBalancer));
         subnet.denyInbound(new DenyInboundOptions().from(AzureServiceTags.Internet));
         var aks = builder.addAzureKubernetesEnvironment("aks");
-        aks.addNodePool("system", new AddNodePoolOptions().vmSize(AksNodeVmSizes.GeneralPurpose.StandardD2sV5));
+        aks.addNodePool("system", new AddNodePoolOptions().vmSize(AksNodeVmSizes.StandardDSv5.StandardD2sV5));
         var pipeline = builder.pipeline();
         pipeline.addStep("custom-builder-step", (stepContext) -> { var builderSummary = stepContext.summary(); builderSummary.add("BuilderPipelineStep", "Validated"); }, new AddStepOptions().dependsOn(new String[] { WellKnownPipelineSteps.Build }).requiredBy(new String[] { WellKnownPipelineSteps.Publish }));
         pipeline.configure((configContext) -> { var _allSteps = configContext.steps(); });

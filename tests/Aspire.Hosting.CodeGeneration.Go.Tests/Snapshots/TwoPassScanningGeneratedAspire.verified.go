@@ -551,6 +551,46 @@ var TestConfigs = struct {
 	Secure: &TestConfigDto{Name: "secure", Port: 6380, Enabled: true, OptionalField: nil},
 }
 
+var WellKnownPipelineSteps = struct {
+	Build string
+	BuildPrereq string
+	Deploy string
+	DeployPrereq string
+	Destroy string
+	DestroyPrereq string
+	Diagnostics string
+	ProcessParameters string
+	Publish string
+	PublishPrereq string
+	Push string
+	PushPrereq string
+}{
+	Build: "build",
+	BuildPrereq: "build-prereq",
+	Deploy: "deploy",
+	DeployPrereq: "deploy-prereq",
+	Destroy: "destroy",
+	DestroyPrereq: "destroy-prereq",
+	Diagnostics: "diagnostics",
+	ProcessParameters: "process-parameters",
+	Publish: "publish",
+	PublishPrereq: "publish-prereq",
+	Push: "push",
+	PushPrereq: "push-prereq",
+}
+
+var WellKnownPipelineTags = struct {
+	BuildCompute string
+	DeployCompute string
+	ProvisionInfrastructure string
+	PushContainerImage string
+}{
+	BuildCompute: "build-compute",
+	DeployCompute: "deploy-compute",
+	ProvisionInfrastructure: "provision-infra",
+	PushContainerImage: "push-container-image",
+}
+
 // ============================================================================
 // Handle Wrappers
 // ============================================================================

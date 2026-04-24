@@ -98,7 +98,7 @@ with create_builder() as builder:
     subnet.allow_inbound(port="443", from_=AzureServiceTags.AzureLoadBalancer)
     subnet.deny_inbound(from_=AzureServiceTags.Internet)
     aks = builder.add_azure_kubernetes_environment("aks")
-    aks.add_node_pool("system", vm_size=AksNodeVmSizes.GeneralPurpose.StandardD2sV5)
+    aks.add_node_pool("system", vm_size=AksNodeVmSizes.StandardDSv5.StandardD2sV5)
     # builder-level pipeline APIs
     pipeline = builder.pipeline
 

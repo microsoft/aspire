@@ -930,6 +930,92 @@ pub mod test_configs {
     }
 }
 
+pub mod well_known_pipeline_steps {
+    /// The well-known step for building resources.
+    pub fn build() -> String {
+        serde_json::from_value::<String>(json!("build"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any build operations.
+    pub fn build_prereq() -> String {
+        serde_json::from_value::<String>(json!("build-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Aggregation step for all deploy operations. All deploy steps should be required by this step.
+    pub fn deploy() -> String {
+        serde_json::from_value::<String>(json!("deploy"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any deploy operations.
+    pub fn deploy_prereq() -> String {
+        serde_json::from_value::<String>(json!("deploy-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Aggregation step for all destroy operations. All destroy steps should be required by this step.
+    pub fn destroy() -> String {
+        serde_json::from_value::<String>(json!("destroy"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any destroy operations.
+    pub fn destroy_prereq() -> String {
+        serde_json::from_value::<String>(json!("destroy-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The diagnostic step that dumps dependency graph information for troubleshooting.
+    pub fn diagnostics() -> String {
+        serde_json::from_value::<String>(json!("diagnostics"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The step that prompts for parameter values before build, publish, or deployment operations.
+    pub fn process_parameters() -> String {
+        serde_json::from_value::<String>(json!("process-parameters"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Aggregation step for all publish operations. All publish steps should be required by this step.
+    pub fn publish() -> String {
+        serde_json::from_value::<String>(json!("publish"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any publish operations.
+    pub fn publish_prereq() -> String {
+        serde_json::from_value::<String>(json!("publish-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The meta-step that coordinates all push operations. All push steps should be required by this step.
+    pub fn push() -> String {
+        serde_json::from_value::<String>(json!("push"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any push operations.
+    pub fn push_prereq() -> String {
+        serde_json::from_value::<String>(json!("push-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+}
+
+pub mod well_known_pipeline_tags {
+    /// Tag for steps that build compute resources.
+    pub fn build_compute() -> String {
+        serde_json::from_value::<String>(json!("build-compute"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Tag for steps that deploy to compute infrastructure.
+    pub fn deploy_compute() -> String {
+        serde_json::from_value::<String>(json!("deploy-compute"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Tag for steps that provision infrastructure resources.
+    pub fn provision_infrastructure() -> String {
+        serde_json::from_value::<String>(json!("provision-infra"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Tag for steps that push container images to a registry.
+    pub fn push_container_image() -> String {
+        serde_json::from_value::<String>(json!("push-container-image"))
+            .expect("generated exported value should deserialize")
+    }
+}
+
 // ============================================================================
 // Handle Wrappers
 // ============================================================================

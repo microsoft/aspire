@@ -153,7 +153,7 @@ await subnet.allowInbound({ port: "443", from: AzureServiceTags.AzureLoadBalance
 await subnet.denyInbound({ from: AzureServiceTags.Internet });
 
 const aks = await builder.addAzureKubernetesEnvironment("aks");
-await aks.addNodePool("system", { vmSize: AksNodeVmSizes.GeneralPurpose.StandardD2sV5 });
+await aks.addNodePool("system", { vmSize: AksNodeVmSizes.StandardDSv5.StandardD2sV5 });
 
 // ===================================================================
 // Application pipeline on builder

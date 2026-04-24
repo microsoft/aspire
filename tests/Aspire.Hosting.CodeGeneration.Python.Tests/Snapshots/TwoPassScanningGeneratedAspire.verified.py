@@ -1835,6 +1835,42 @@ TestConfigs.Profiles = types.SimpleNamespace()
 TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "Name": "development", "Port": 5001, "Enabled": False, "OptionalField": None })
 TestConfigs.Secure = typing.cast(TestConfigDto, { "Name": "secure", "Port": 6380, "Enabled": True, "OptionalField": None })
 
+WellKnownPipelineSteps = types.SimpleNamespace()
+# The well-known step for building resources.
+WellKnownPipelineSteps.Build = "build"
+# The prerequisite step that runs before any build operations.
+WellKnownPipelineSteps.BuildPrereq = "build-prereq"
+# Aggregation step for all deploy operations. All deploy steps should be required by this step.
+WellKnownPipelineSteps.Deploy = "deploy"
+# The prerequisite step that runs before any deploy operations.
+WellKnownPipelineSteps.DeployPrereq = "deploy-prereq"
+# Aggregation step for all destroy operations. All destroy steps should be required by this step.
+WellKnownPipelineSteps.Destroy = "destroy"
+# The prerequisite step that runs before any destroy operations.
+WellKnownPipelineSteps.DestroyPrereq = "destroy-prereq"
+# The diagnostic step that dumps dependency graph information for troubleshooting.
+WellKnownPipelineSteps.Diagnostics = "diagnostics"
+# The step that prompts for parameter values before build, publish, or deployment operations.
+WellKnownPipelineSteps.ProcessParameters = "process-parameters"
+# Aggregation step for all publish operations. All publish steps should be required by this step.
+WellKnownPipelineSteps.Publish = "publish"
+# The prerequisite step that runs before any publish operations.
+WellKnownPipelineSteps.PublishPrereq = "publish-prereq"
+# The meta-step that coordinates all push operations. All push steps should be required by this step.
+WellKnownPipelineSteps.Push = "push"
+# The prerequisite step that runs before any push operations.
+WellKnownPipelineSteps.PushPrereq = "push-prereq"
+
+WellKnownPipelineTags = types.SimpleNamespace()
+# Tag for steps that build compute resources.
+WellKnownPipelineTags.BuildCompute = "build-compute"
+# Tag for steps that deploy to compute infrastructure.
+WellKnownPipelineTags.DeployCompute = "deploy-compute"
+# Tag for steps that provision infrastructure resources.
+WellKnownPipelineTags.ProvisionInfrastructure = "provision-infra"
+# Tag for steps that push container images to a registry.
+WellKnownPipelineTags.PushContainerImage = "push-container-image"
+
 
 # ============================================================================
 # Type Classes
