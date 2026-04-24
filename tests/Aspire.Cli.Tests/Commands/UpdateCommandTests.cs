@@ -26,7 +26,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update --help");
@@ -69,7 +69,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService();
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -182,7 +182,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -257,7 +257,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -416,7 +416,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -461,7 +461,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -506,7 +506,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -547,7 +547,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -610,7 +610,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -675,7 +675,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -729,7 +729,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -796,7 +796,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act - specify both --channel and --quality, --channel should win
         var command = provider.GetRequiredService<RootCommand>();
@@ -856,7 +856,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -918,7 +918,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act - without hives, should automatically use implicit channel
         var command = provider.GetRequiredService<RootCommand>();
@@ -960,7 +960,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot);
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         // Act
         var command = provider.GetRequiredService<RootCommand>();
@@ -1002,7 +1002,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update --self");
@@ -1047,7 +1047,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update --self");
@@ -1080,7 +1080,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        using var provider = services.BuildServiceProvider();
+        await using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         
         // Act - Parse command with --self option

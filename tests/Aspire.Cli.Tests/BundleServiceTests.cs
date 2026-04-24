@@ -53,17 +53,102 @@ public class BundleServiceTests
     }
 
     [Fact]
-    public void GetDefaultExtractDir_ReturnsParentOfParent()
+    public void GetDefaultExtractDir_ReturnsContainingDirectory()
     {
+        // Flat layout: managed/ and dcp/ are siblings of the CLI binary
         if (OperatingSystem.IsWindows())
         {
             var result = BundleService.GetDefaultExtractDir(@"C:\Users\test\.aspire\bin\aspire.exe");
-            Assert.Equal(@"C:\Users\test\.aspire", result);
+            Assert.Equal(@"C:\Users\test\.aspire\bin", result);
         }
         else
         {
             var result = BundleService.GetDefaultExtractDir("/home/test/.aspire/bin/aspire");
-            Assert.Equal("/home/test/.aspire", result);
+            Assert.Equal("/home/test/.aspire/bin", result);
+        }
+    }
+
+    [Fact]
+    public void GetDefaultExtractDir_WorksForDotnetToolStorePath()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            var result = BundleService.GetDefaultExtractDir(
+                @"C:\Users\test\.dotnet\tools\.store\aspire\13.2.0\aspire\13.2.0\tools\net10.0\win-x64\aspire.exe");
+            Assert.Equal(@"C:\Users\test\.dotnet\tools\.store\aspire\13.2.0\aspire\13.2.0\tools\net10.0\win-x64", result);
+        }
+        else
+        {
+            var result = BundleService.GetDefaultExtractDir(
+                "/home/test/.dotnet/tools/.store/aspire/13.2.0/aspire/13.2.0/tools/net10.0/osx-arm64/aspire");
+            Assert.Equal("/home/test/.dotnet/tools/.store/aspire/13.2.0/aspire/13.2.0/tools/net10.0/osx-arm64", result);
+        }
+    }
+
+    [Fact]
+    public void GetDefaultExtractDir_ReturnsNull_ForRootFile()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            // File at the root of a drive has no parent directory
+            var result = BundleService.GetDefaultExtractDir(@"aspire.exe");
+            // Path.GetDirectoryName returns "" for relative filename with no directory
+            Assert.True(result is null or "", $"Expected null or empty but got: {result}");
+        }
+        else
+        {
+            var result = BundleService.GetDefaultExtractDir("aspire");
+            Assert.True(result is null or "", $"Expected null or empty but got: {result}");
+        }
+    }
+
+    [Fact]
+    public void CleanLayoutDirectories_RemovesExpectedDirs()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            // Create managed/ and dcp/ directories plus a version marker
+            var managedDir = Path.Combine(tempDir.FullName, "managed");
+            var dcpDir = Path.Combine(tempDir.FullName, "dcp");
+            Directory.CreateDirectory(managedDir);
+            Directory.CreateDirectory(dcpDir);
+            File.WriteAllText(Path.Combine(managedDir, "test.dll"), "test");
+            File.WriteAllText(Path.Combine(dcpDir, "dcp.exe"), "test");
+            BundleService.WriteVersionMarker(tempDir.FullName, "old-version");
+
+            BundleService.CleanLayoutDirectories(tempDir.FullName);
+
+            Assert.False(Directory.Exists(managedDir));
+            Assert.False(Directory.Exists(dcpDir));
+            Assert.Null(BundleService.ReadVersionMarker(tempDir.FullName));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CleanLayoutDirectories_PreservesOtherFiles()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            // Simulate the CLI binary sitting alongside managed/ and dcp/
+            var cliBinary = Path.Combine(tempDir.FullName, "aspire");
+            File.WriteAllText(cliBinary, "cli-binary");
+            Directory.CreateDirectory(Path.Combine(tempDir.FullName, "managed"));
+            Directory.CreateDirectory(Path.Combine(tempDir.FullName, "dcp"));
+
+            BundleService.CleanLayoutDirectories(tempDir.FullName);
+
+            // CLI binary should not be touched
+            Assert.True(File.Exists(cliBinary));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
         }
     }
 
