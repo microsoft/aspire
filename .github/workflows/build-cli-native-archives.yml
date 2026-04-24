@@ -41,11 +41,15 @@ jobs:
       # Build RID-specific NuGet packages (DCP + Dashboard) locally instead of
       # downloading them from the build_packages job. This allows the CLI archive
       # build to run in parallel with build_packages.
-      - name: Build RID-specific packages (Windows)
-        if: ${{ runner.os == 'Windows' }}
-        shell: pwsh
+      #
+      # No shell: specified — GH Actions defaults to bash on Linux/macOS, pwsh on
+      # Windows. The /p: and /bl: prefixes are safe in both (bash has no MSYS2
+      # mangling, pwsh does not treat / as a parameter prefix). build.sh accepts
+      # single-dash flags (-ci, -restore) because eng/common/build.sh normalizes
+      # -- to - before matching.
+      - name: Build RID-specific packages
         run: >
-          .\build.cmd
+          ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
           -ci
           -restore
           -build
@@ -56,69 +60,48 @@ jobs:
           /p:BuildBundleDepsOnly=true
           ${{ inputs.versionOverrideArg }}
 
-      - name: Build RID-specific packages (Unix)
-        if: ${{ runner.os != 'Windows' }}
-        shell: bash
+      # Steps 2–5 mirror the AzDO build_sign_native.yml pipeline (minus signing).
+      # AzDO inserts signing steps between these; GH runs them consecutively.
+
+      # Publish aspire-managed as a self-contained single-file binary.
+      # On AzDO, this binary is signed before being packed into the bundle.
+      - name: Publish aspire-managed
         run: >
-          ./build.sh
-          --ci
-          --restore
-          --build
-          --pack
-          --configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog
+          ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
+          publish
+          src/Aspire.Managed/Aspire.Managed.csproj
+          -c ${{ inputs.configuration }}
+          -r ${{ matrix.targets.rids }}
+          --self-contained
+          /p:GenerateDocumentationFile=false
+          /p:EnforceCodeStyleInBuild=false
           /p:ContinuousIntegrationBuild=true
-          /p:BuildBundleDepsOnly=true
+          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/PublishManaged.binlog
           ${{ inputs.versionOverrideArg }}
 
-      # Upload DCP + Dashboard NuGets so test/polyglot jobs can download them
-      - name: Upload RID-specific NuGets
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: built-nugets-for-${{ matrix.targets.rids }}
-          path: |
-            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
-            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
-          if-no-files-found: error
-          retention-days: 15
-
-      - name: Build bundle payload archive (Windows)
-        if: ${{ runner.os == 'Windows' }}
-        shell: pwsh
+      # Create the bundle layout (managed/ + dcp/) and archive it as a tar.gz.
+      # SkipManagedBuild: aspire-managed was published in the previous step.
+      # SkipNativeBuild: native CLI is built separately in the next step.
+      - name: Create bundle layout
         run: >
-          .\dotnet.cmd
+          ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
           msbuild
           eng/Bundle.proj
           /restore
           /p:Configuration=${{ inputs.configuration }}
           /p:TargetRid=${{ matrix.targets.rids }}
           /p:BundleVersion=ci-bundlepayload
+          /p:SkipManagedBuild=true
           /p:SkipNativeBuild=true
           /p:ContinuousIntegrationBuild=true
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
           ${{ inputs.versionOverrideArg }}
 
-      - name: Build bundle payload archive (Unix)
-        if: ${{ runner.os != 'Windows' }}
-        shell: bash
+      # Build the NativeAOT CLI binaries (flat for archive + bundled for nupkg).
+      # BundlePayloadPath is passed explicitly to avoid relying on convention paths.
+      - name: Build native packages
         run: >
-          ./dotnet.sh
-          msbuild
-          eng/Bundle.proj
-          /restore
-          /p:Configuration=${{ inputs.configuration }}
-          /p:TargetRid=${{ matrix.targets.rids }}
-          /p:BundleVersion=ci-bundlepayload
-          /p:SkipNativeBuild=true
-          /p:ContinuousIntegrationBuild=true
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
-          ${{ inputs.versionOverrideArg }}
-
-      - name: Build CLI packages (Windows)
-        if: ${{ runner.os == 'Windows' }}
-        shell: pwsh
-        run: >
-          .\build.cmd
+          ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
           -ci
           -build
           -restore
@@ -130,21 +113,71 @@ jobs:
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
           ${{ inputs.versionOverrideArg }}
 
-      - name: Build CLI packages (Unix)
-        if: ${{ runner.os != 'Windows' }}
-        shell: bash
+      # Pack the bundled NativeAOT binary into dotnet-tool nupkgs.
+      # Separated from the build step so AzDO can sign the binary in between.
+      - name: Pack CLI tool nupkg
         run: >
-          ./build.sh
-          --ci
-          --build
-          --restore
-          --configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildCli.binlog
-          /p:ContinuousIntegrationBuild=true
-          /p:SkipManagedBuild=true
-          /p:TargetRids=${{ matrix.targets.rids }}
+          ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
+          msbuild
+          eng/clipack/Aspire.Cli.${{ matrix.targets.rids }}.csproj
+          -t:_PackCliTool
+          /p:PackCliTool=true
+          /p:Configuration=${{ inputs.configuration }}
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
+          /p:ContinuousIntegrationBuild=true
+          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/PackCliTool.binlog
           ${{ inputs.versionOverrideArg }}
+
+      # Verify the flat-layout CLI archive. Only run for RIDs that can execute on the runner.
+      - name: Verify CLI archive (${{ matrix.targets.rids }})
+        if: >
+          (runner.os == 'Linux' && matrix.targets.rids == 'linux-x64') ||
+          (runner.os == 'macOS' && matrix.targets.rids == 'osx-arm64')
+        shell: bash
+        run: |
+          ARCHIVE=$(find artifacts/packages -name "aspire-cli-${{ matrix.targets.rids }}-*.tar.gz" | head -1)
+          if [[ -z "$ARCHIVE" ]]; then
+            echo "::error::No archive found for ${{ matrix.targets.rids }}"
+            exit 1
+          fi
+          chmod +x eng/scripts/verify-cli-archive.sh
+          eng/scripts/verify-cli-archive.sh "$ARCHIVE"
+
+      - name: Verify CLI archive (${{ matrix.targets.rids }})
+        if: runner.os == 'Windows' && (matrix.targets.rids == 'win-x64' || matrix.targets.rids == 'win-arm64')
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -Path artifacts/packages -Filter "aspire-cli-${{ matrix.targets.rids }}-*.zip" -Recurse | Select-Object -First 1
+          if (-not $archive) {
+            Write-Error "No archive found for ${{ matrix.targets.rids }}"
+            exit 1
+          }
+          & eng/scripts/verify-cli-archive.ps1 -ArchivePath $archive.FullName
+
+      # Verify the CLI tool nupkg structure (size, binary file type, pointer package).
+      # Functional tests (dotnet tool install + aspire commands) are covered by the
+      # Aspire.Cli.DotnetTool.Tests and Aspire.Cli.EndToEnd.Tests test projects.
+      - name: Verify CLI tool nupkg (${{ matrix.targets.rids }})
+        shell: pwsh
+        run: |
+          # Use hashtable splatting — array splatting doesn't work with advanced scripts
+          $verifyParams = @{
+            PackagesDir = "artifacts/packages/${{ inputs.configuration }}"
+            Rid = "${{ matrix.targets.rids }}"
+          }
+          & eng/scripts/verify-cli-tool-nupkg.ps1 @verifyParams
+
+      # Upload DCP, Dashboard, and CLI tool NuGets so test/polyglot jobs can download them
+      - name: Upload RID-specific NuGets
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: built-nugets-for-${{ matrix.targets.rids }}
+          path: |
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
+          if-no-files-found: error
+          retention-days: 15
 
       - name: Upload CLI archives
         if: success()

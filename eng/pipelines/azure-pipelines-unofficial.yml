@@ -172,6 +172,71 @@ extends:
                   # validation (Homebrew cask audit, WinGet manifest) against published URLs.
                   targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
+              # Download CLI tool nupkgs produced by the per-RID native build stage
+              # (all platforms). These are merged into the Shipping directory so Arcade's
+              # publish-using-pipelines publishes them alongside the managed nupkgs.
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download CLI tool nupkgs from native builds
+                inputs:
+                  itemPattern: |
+                    **/Aspire.Cli.*.nupkg
+                  targetPath: '$(Pipeline.Workspace)/tool-nupkgs'
+
+              - pwsh: |
+                  $targetDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+                  $nupkgs = Get-ChildItem -Path "$(Pipeline.Workspace)/tool-nupkgs" -Filter "Aspire.Cli.*.nupkg" -Recurse
+                  if ($nupkgs.Count -eq 0) {
+                    Write-Error "No CLI tool nupkgs found in downloaded artifacts"
+                    exit 1
+                  }
+                  foreach ($pkg in $nupkgs) {
+                    Copy-Item $pkg.FullName -Destination $targetDir -Force
+                    Write-Host "Copied: $($pkg.Name)"
+                  }
+                  Write-Host "Total CLI tool nupkgs copied: $($nupkgs.Count)"
+                displayName: 🟣Copy CLI tool nupkgs to Shipping
+
+              # Validate that ALL expected CLI tool nupkgs are present.
+              # Derives the expected RID set from eng/clipack/Aspire.Cli.*.csproj.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                  $ridProjects = Get-ChildItem "$(Build.SourcesDirectory)/eng/clipack/Aspire.Cli.*.csproj"
+                  $expectedRids = $ridProjects | ForEach-Object { $_.BaseName -replace '^Aspire\.Cli\.', '' }
+                  $errors = @()
+
+                  foreach ($rid in $expectedRids) {
+                    $pkg = Get-ChildItem -Path $shippingDir -Filter "Aspire.Cli.$rid.*.nupkg" -ErrorAction SilentlyContinue |
+                      Where-Object { $_.Name -notmatch '\.symbols\.' } | Select-Object -First 1
+                    if ($pkg) {
+                      Write-Host "  [ok] $($pkg.Name) ($([math]::Round($pkg.Length/1MB,1)) MB)"
+                    } else {
+                      $errors += "Missing RID-specific nupkg for $rid"
+                    }
+                  }
+
+                  $pointer = Get-ChildItem -Path $shippingDir -Filter "Aspire.Cli.*.nupkg" -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Name -notmatch '\.symbols\.' -and $_.Name -notmatch 'Aspire\.Cli\.(win|linux|osx|musl)-' } |
+                    Select-Object -First 1
+                  if ($pointer) {
+                    Write-Host "  [ok] Pointer: $($pointer.Name)"
+                  } else {
+                    $errors += "Missing pointer package (Aspire.Cli.*.nupkg)"
+                  }
+
+                  $expectedCount = $expectedRids.Count + 1
+                  Write-Host "Expected $expectedCount tool nupkgs ($($expectedRids.Count) RID + 1 pointer)"
+
+                  if ($errors.Count -gt 0) {
+                    foreach ($e in $errors) { Write-Host "##[error]$e" }
+                    Write-Host "Contents of Shipping:"
+                    Get-ChildItem $shippingDir -Filter "Aspire.Cli*.nupkg" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
+                    exit 1
+                  }
+                  Write-Host "All $expectedCount CLI tool nupkgs present"
+                displayName: 🟣Validate CLI tool nupkg completeness
+
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
                 inputs:

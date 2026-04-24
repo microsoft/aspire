@@ -126,10 +126,12 @@ jobs:
               $(Build.SourcesDirectory)/$(dotnetScript)
               msbuild
               $(Build.SourcesDirectory)/eng/Bundle.proj
-              "/t:_RestoreDcpPackage;_RunCreateLayout"
+              -restore
               /p:Configuration=$(_BuildConfig)
               /p:TargetRid=${{ targetRid }}
               /p:BundleVersion=ci-bundlepayload
+              /p:SkipManagedBuild=true
+              /p:SkipNativeBuild=true
               /p:ContinuousIntegrationBuild=true
               /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
             displayName: 🟣Create bundle layout
@@ -148,6 +150,23 @@ jobs:
             displayName: 🟣Build native packages
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
+
+          # Pack the CLI dotnet-tool nupkg SEPARATELY from the signed build.
+          # NuGet package signing only works on Windows. On Linux/macOS the Arcade -sign
+          # step signs binaries and archives, but cannot NuGet-sign nupkgs.
+          # The nupkg is packed here unsigned; post-build signing (1ES pipeline template)
+          # handles the NuGet signature for all platforms.
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript) msbuild
+              $(Build.SourcesDirectory)/eng/clipack/Aspire.Cli.${{ targetRid }}.csproj
+              -t:_PackCliTool
+              -p:PackCliTool=true
+              -p:Configuration=$(_BuildConfig)
+              -p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
+              -p:ContinuousIntegrationBuild=true
+              $(_OfficialBuildIdArgs)
+              -bl:$(Build.Arcade.LogsPath)PackCliTool-${{ targetRid }}.binlog
+            displayName: 🟣Pack CLI tool nupkg (${{ targetRid }})
 
           # Verify the signed CLI archive can execute and create a project.
           # Only runs when the target RID architecture matches the build agent
@@ -191,6 +210,44 @@ jobs:
               env:
                 ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+          # Verify the CLI dotnet-tool nupkg structure (size, binary file type, pointer package).
+          # Functional tests (dotnet tool install + aspire commands) are covered by the
+          # Aspire.Cli.DotnetTool.Tests and Aspire.Cli.EndToEnd.Tests test projects.
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              # Use hashtable splatting — array splatting doesn't work with advanced scripts
+              $verifyParams = @{
+                PackagesDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
+                Rid = '${{ targetRid }}'
+              }
+              # Note: NuGet package signing (.signature.p7s) is performed by the 1ES post-build
+              # signing step, AFTER the build phase. At this point the nupkgs are NOT yet
+              # NuGet-signed on ANY platform, so VerifySignature is not passed here.
+              # Binary code-signing (inside the nupkg) is validated by the archive verification step.
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @verifyParams
+              if ($LASTEXITCODE -ne 0) {
+                Write-Host "##[error]CLI tool nupkg verification failed for ${{ targetRid }}"
+                exit 1
+              }
+            displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
+            condition: succeeded()
+
+          # Remove the pointer package before publishing native artifacts.
+          # The pointer package is identical from every platform and is kept
+          # only from the win-x64 job. The main build copies it to Shipping
+          # alongside the RID-specific nupkgs from all platforms.
+          - ${{ if ne(targetRid, 'win-x64') }}:
+            - pwsh: |
+                $ErrorActionPreference = 'Stop'
+                $pointerPkgs = Get-ChildItem -Path "$(Build.Arcade.ArtifactsPath)packages/" -Recurse -Filter "Aspire.Cli.*.nupkg" |
+                  Where-Object { $_.Name -notmatch 'Aspire\.Cli\.(win|linux|osx|musl)-' }
+                foreach ($pkg in $pointerPkgs) {
+                  Write-Host "Removing pointer package: $($pkg.Name)"
+                  Remove-Item $pkg.FullName -Force
+                }
+              displayName: 🟣Remove pointer nupkg from native artifacts
+              condition: succeeded()
 
           - task: 1ES.PublishBuildArtifacts@1
             displayName: 🟣Publish Artifacts
