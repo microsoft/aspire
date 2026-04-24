@@ -215,7 +215,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("`aspire run`", output);
         Assert.Contains("1. First item", output);
         Assert.Contains("Continued explanation.", output);
-        Assert.Contains("* Nested item", output);
+        Assert.Contains("Nested item", output);
         Assert.Contains("aspire docs get docs-smoke-test", output);
         Assert.Contains("Setting", output);
         Assert.Contains("Azure:SubscriptionId", output);

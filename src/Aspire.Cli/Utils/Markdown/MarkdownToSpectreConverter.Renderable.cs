@@ -13,22 +13,24 @@ using MarkdigTableRow = Markdig.Extensions.Tables.TableRow;
 
 namespace Aspire.Cli.Utils.Markdown;
 
-internal static partial class MarkdownToSpectreConverter
+internal partial class MarkdownToSpectreConverter
 {
     /// <summary>
     /// Converts markdown text to a Spectre.Console renderable tree for CLI display.
     /// </summary>
     /// <param name="markdown">The markdown text to convert.</param>
+    /// <param name="plainTextLinks">When <c>true</c>, links are rendered as <c>text (url)</c> instead of terminal hyperlinks.</param>
     /// <returns>The converted Spectre.Console renderable.</returns>
-    public static IRenderable ConvertToRenderable(string markdown)
+    public static IRenderable ConvertToRenderable(string markdown, bool plainTextLinks = false)
     {
         if (string.IsNullOrWhiteSpace(markdown))
         {
             return Text.Empty;
         }
 
+        var converter = new MarkdownToSpectreConverter(plainTextLinks);
         var document = ParseMarkdown(markdown, out var normalizedMarkdown);
-        var renderables = RenderBlocksToRenderables(document, normalizedMarkdown);
+        var renderables = converter.RenderBlocksToRenderables(document, normalizedMarkdown);
         return renderables.Count switch
         {
             0 => Text.Empty,
@@ -37,7 +39,7 @@ internal static partial class MarkdownToSpectreConverter
         };
     }
 
-    private static List<IRenderable> RenderBlocksToRenderables(ContainerBlock container, string markdown)
+    private List<IRenderable> RenderBlocksToRenderables(ContainerBlock container, string markdown)
     {
         var renderables = new List<IRenderable>();
 
@@ -58,12 +60,12 @@ internal static partial class MarkdownToSpectreConverter
         return renderables;
     }
 
-    private static IRenderable? RenderBlockToRenderable(Block block, string markdown)
+    private IRenderable? RenderBlockToRenderable(Block block, string markdown)
     {
         return RenderBlockContentToRenderable(block, markdown);
     }
 
-    private static IRenderable? RenderBlockContentToRenderable(Block block, string markdown) => block switch
+    private IRenderable? RenderBlockContentToRenderable(Block block, string markdown) => block switch
     {
         ThematicBreakBlock => new Markup(GetOriginalMarkdownSpan(block.Span, markdown).ToString().EscapeMarkup()),
         QuoteBlock quote => RenderQuoteToRenderable(quote, markdown),
@@ -72,7 +74,7 @@ internal static partial class MarkdownToSpectreConverter
         _ => CreateMarkupRenderable(block, markdown)
     };
 
-    private static IRenderable? CreateMarkupRenderable(Block block, string markdown)
+    private IRenderable? CreateMarkupRenderable(Block block, string markdown)
     {
         var builder = new StringBuilder();
         AppendBlockToMarkup(builder, block, markdown);
@@ -82,7 +84,7 @@ internal static partial class MarkdownToSpectreConverter
             : new Markup(builder.ToString());
     }
 
-    private static IRenderable? RenderContainerContentToRenderable(ContainerBlock container, string markdown)
+    private IRenderable? RenderContainerContentToRenderable(ContainerBlock container, string markdown)
     {
         var renderables = new List<IRenderable>();
         Block? previousBlock = null;
@@ -123,7 +125,7 @@ internal static partial class MarkdownToSpectreConverter
         return current is not ListBlock and not QuoteBlock;
     }
 
-    private static IRenderable RenderQuoteToRenderable(QuoteBlock quote, string markdown)
+    private IRenderable RenderQuoteToRenderable(QuoteBlock quote, string markdown)
     {
         var grid = new Grid();
         grid.AddColumn();
@@ -139,7 +141,7 @@ internal static partial class MarkdownToSpectreConverter
         return grid;
     }
 
-    private static IRenderable RenderListToRenderable(ListBlock list, string markdown)
+    private IRenderable RenderListToRenderable(ListBlock list, string markdown)
     {
         var items = list.OfType<ListItemBlock>().ToList();
         if (items.Count == 0)
@@ -172,7 +174,7 @@ internal static partial class MarkdownToSpectreConverter
         return grid;
     }
 
-    private static IRenderable RenderTableToRenderable(MarkdigTable markdownTable, string markdown)
+    private IRenderable RenderTableToRenderable(MarkdigTable markdownTable, string markdown)
     {
         var rows = markdownTable.OfType<MarkdigTableRow>().ToList();
         if (rows.Count == 0)

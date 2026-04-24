@@ -10,7 +10,7 @@ using MarkdigTableRow = Markdig.Extensions.Tables.TableRow;
 
 namespace Aspire.Cli.Utils.Markdown;
 
-internal static partial class MarkdownToSpectreConverter
+internal partial class MarkdownToSpectreConverter
 {
     /// <summary>
     /// Converts markdown text to Spectre.Console markup.
@@ -27,9 +27,10 @@ internal static partial class MarkdownToSpectreConverter
             return markdown;
         }
 
+        var converter = new MarkdownToSpectreConverter(plainTextLinks: false);
         var document = ParseMarkdown(markdown, out var normalizedMarkdown);
         var builder = new StringBuilder();
-        AppendDocumentBlocksToSpectreMarkup(builder, document, normalizedMarkdown);
+        converter.AppendDocumentBlocksToSpectreMarkup(builder, document, normalizedMarkdown);
         return builder.ToString();
     }
 
@@ -37,7 +38,7 @@ internal static partial class MarkdownToSpectreConverter
     /// Walks top-level blocks of a parsed document and emits Spectre markup strings,
     /// preserving blank-line spacing from the original source.
     /// </summary>
-    private static void AppendDocumentBlocksToSpectreMarkup(StringBuilder builder, MarkdownDocument document, string markdown)
+    private void AppendDocumentBlocksToSpectreMarkup(StringBuilder builder, MarkdownDocument document, string markdown)
     {
         Block? previousBlock = null;
         var hasContent = false;
@@ -78,7 +79,7 @@ internal static partial class MarkdownToSpectreConverter
     /// Structural blocks (quotes, lists, tables, thematic breaks) keep their markdown
     /// text layout; all other blocks use <see cref="AppendBlockToMarkup"/>.
     /// </summary>
-    private static bool AppendSpectreBlock(StringBuilder builder, Block block, string markdown)
+    private bool AppendSpectreBlock(StringBuilder builder, Block block, string markdown)
     {
         var start = builder.Length;
 
@@ -108,7 +109,7 @@ internal static partial class MarkdownToSpectreConverter
     /// Renders a quote block with <c>&gt; </c> prefixes preserved as markdown text,
     /// while converting inline content to Spectre markup.
     /// </summary>
-    private static void AppendSpectreQuote(StringBuilder builder, QuoteBlock quote, string markdown)
+    private void AppendSpectreQuote(StringBuilder builder, QuoteBlock quote, string markdown)
     {
         var contentBuilder = new StringBuilder();
         var hasChildContent = false;
@@ -170,7 +171,7 @@ internal static partial class MarkdownToSpectreConverter
     /// Renders a Markdig table in pipe-delimited markdown format, converting cell
     /// content to Spectre markup while preserving the table text layout.
     /// </summary>
-    private static void AppendSpectreTable(StringBuilder builder, MarkdigTable markdownTable, string markdown)
+    private void AppendSpectreTable(StringBuilder builder, MarkdigTable markdownTable, string markdown)
     {
         var rows = markdownTable.OfType<MarkdigTableRow>().ToList();
         if (rows.Count == 0)
@@ -236,7 +237,7 @@ internal static partial class MarkdownToSpectreConverter
         }
     }
 
-    private static bool AppendBlockToMarkup(StringBuilder builder, Block block, string markdown)
+    private bool AppendBlockToMarkup(StringBuilder builder, Block block, string markdown)
     {
         var start = builder.Length;
 
@@ -279,7 +280,7 @@ internal static partial class MarkdownToSpectreConverter
         return builder.Length > start;
     }
 
-    private static bool AppendBlocksToMarkup(StringBuilder builder, ContainerBlock container, string markdown)
+    private bool AppendBlocksToMarkup(StringBuilder builder, ContainerBlock container, string markdown)
     {
         var hasContent = false;
 
@@ -303,7 +304,7 @@ internal static partial class MarkdownToSpectreConverter
         return hasContent;
     }
 
-    private static void AppendHeadingToMarkup(StringBuilder builder, int level, ContainerInline? inline, string markdown)
+    private void AppendHeadingToMarkup(StringBuilder builder, int level, ContainerInline? inline, string markdown)
     {
         builder.Append(level switch
         {
@@ -317,7 +318,7 @@ internal static partial class MarkdownToSpectreConverter
         builder.Append("[/]");
     }
 
-    private static void AppendQuoteToMarkup(StringBuilder builder, QuoteBlock quote, string markdown)
+    private void AppendQuoteToMarkup(StringBuilder builder, QuoteBlock quote, string markdown)
     {
         var quoteStart = builder.Length;
         if (!AppendBlocksToMarkup(builder, quote, markdown))
@@ -329,7 +330,7 @@ internal static partial class MarkdownToSpectreConverter
         WrapAppendedLines(builder, quoteStart, "[italic grey]", "[/]");
     }
 
-    private static bool AppendListToMarkup(StringBuilder builder, ListBlock list, string markdown)
+    private bool AppendListToMarkup(StringBuilder builder, ListBlock list, string markdown)
     {
         var start = builder.Length;
         var hasContent = false;
@@ -356,7 +357,7 @@ internal static partial class MarkdownToSpectreConverter
         return builder.Length > start;
     }
 
-    private static bool AppendListItemToMarkup(StringBuilder builder, ListItemBlock item, string prefix, int continuationIndent, string markdown)
+    private bool AppendListItemToMarkup(StringBuilder builder, ListItemBlock item, string prefix, int continuationIndent, string markdown)
     {
         var start = builder.Length;
         var hasContent = false;
@@ -424,14 +425,14 @@ internal static partial class MarkdownToSpectreConverter
         builder.Append("[/]");
     }
 
-    private static string RenderTableCellToMarkup(MarkdigTableCell cell, string markdown)
+    private string RenderTableCellToMarkup(MarkdigTableCell cell, string markdown)
     {
         var builder = new StringBuilder();
         AppendBlocksToMarkup(builder, cell, markdown);
         return builder.ToString();
     }
 
-    private static void AppendInlinesToMarkup(StringBuilder builder, ContainerInline? inline, string markdown)
+    private void AppendInlinesToMarkup(StringBuilder builder, ContainerInline? inline, string markdown)
     {
         if (inline is null)
         {
@@ -446,7 +447,7 @@ internal static partial class MarkdownToSpectreConverter
         }
     }
 
-    private static void AppendInlineToMarkup(StringBuilder builder, Inline inline, string markdown)
+    private void AppendInlineToMarkup(StringBuilder builder, Inline inline, string markdown)
     {
         switch (inline)
         {
@@ -472,11 +473,18 @@ internal static partial class MarkdownToSpectreConverter
                 }
                 break;
             case AutolinkInline autolink:
-                builder.Append("[cyan][link=");
-                AppendEscapedMarkup(builder, autolink.Url.AsSpan());
-                builder.Append(']');
-                AppendEscapedMarkup(builder, autolink.Url.AsSpan());
-                builder.Append("[/][/]");
+                if (_plainTextLinks)
+                {
+                    AppendEscapedMarkup(builder, autolink.Url.AsSpan());
+                }
+                else
+                {
+                    builder.Append("[cyan][link=");
+                    AppendEscapedMarkup(builder, autolink.Url.AsSpan());
+                    builder.Append(']');
+                    AppendEscapedMarkup(builder, autolink.Url.AsSpan());
+                    builder.Append("[/][/]");
+                }
                 break;
             case EmphasisInline emphasis:
                 AppendEmphasisToMarkup(builder, emphasis, markdown);
@@ -501,7 +509,7 @@ internal static partial class MarkdownToSpectreConverter
         }
     }
 
-    private static void AppendEmphasisToMarkup(StringBuilder builder, EmphasisInline emphasis, string markdown)
+    private void AppendEmphasisToMarkup(StringBuilder builder, EmphasisInline emphasis, string markdown)
     {
         var (startTag, endTag) = emphasis.DelimiterChar switch
         {
@@ -526,7 +534,7 @@ internal static partial class MarkdownToSpectreConverter
         }
     }
 
-    private static void AppendLinkToMarkup(StringBuilder builder, LinkInline link, string markdown)
+    private void AppendLinkToMarkup(StringBuilder builder, LinkInline link, string markdown)
     {
         if (string.IsNullOrWhiteSpace(link.Url))
         {
@@ -535,13 +543,35 @@ internal static partial class MarkdownToSpectreConverter
             return;
         }
 
+        if (_plainTextLinks)
+        {
+            var contentStart = builder.Length;
+            AppendInlinesToMarkup(builder, link, markdown);
+
+            var appendedLength = builder.Length - contentStart;
+            if (appendedLength == 0 || appendedLength == link.Url.Length && AppendedTextEquals(builder, contentStart, link.Url))
+            {
+                if (appendedLength == 0)
+                {
+                    AppendEscapedMarkup(builder, link.Url.AsSpan());
+                }
+
+                return;
+            }
+
+            builder.Append(" (");
+            AppendEscapedMarkup(builder, link.Url.AsSpan());
+            builder.Append(')');
+            return;
+        }
+
         builder.Append("[cyan][link=");
         AppendEscapedMarkup(builder, link.Url.AsSpan());
         builder.Append(']');
 
-        var contentStart = builder.Length;
+        var linkContentStart = builder.Length;
         AppendInlinesToMarkup(builder, link, markdown);
-        if (builder.Length == contentStart)
+        if (builder.Length == linkContentStart)
         {
             AppendEscapedMarkup(builder, link.Url.AsSpan());
         }
@@ -549,7 +579,7 @@ internal static partial class MarkdownToSpectreConverter
         builder.Append("[/][/]");
     }
 
-    private static void AppendImageToMarkup(StringBuilder builder, LinkInline image, string markdown)
+    private void AppendImageToMarkup(StringBuilder builder, LinkInline image, string markdown)
     {
         // When the image is nested inside a link (linked image), emit the alt text
         // so it becomes the clickable link text of the parent link.

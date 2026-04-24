@@ -4,13 +4,14 @@
 using System.Text;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
+using Spectre.Console;
 using MarkdigTable = Markdig.Extensions.Tables.Table;
 using MarkdigTableCell = Markdig.Extensions.Tables.TableCell;
 using MarkdigTableRow = Markdig.Extensions.Tables.TableRow;
 
 namespace Aspire.Cli.Utils.Markdown;
 
-internal static partial class MarkdownToSpectreConverter
+internal partial class MarkdownToSpectreConverter
 {
     /// <summary>
     /// Converts markdown links to plain text.
@@ -26,7 +27,7 @@ internal static partial class MarkdownToSpectreConverter
     /// Converts markdown to a lossy plain-text representation suitable for redirected or non-interactive output.
     /// </summary>
     /// <param name="markdown">The markdown text to convert.</param>
-    /// <returns>Plain text with links rewritten to <c>text (url)</c>, image references removed, header markers stripped, and basic formatting markers for bold, italic, and strikethrough removed.</returns>
+    /// <returns>Plain text with links rewritten to <c>text (url)</c>, styling applied via Spectre renderable tree, and ANSI escape sequences stripped.</returns>
     public static string ConvertToPlainText(string markdown)
     {
         if (string.IsNullOrWhiteSpace(markdown))

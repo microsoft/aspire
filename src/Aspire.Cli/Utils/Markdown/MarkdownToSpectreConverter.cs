@@ -13,8 +13,15 @@ namespace Aspire.Cli.Utils.Markdown;
 /// <summary>
 /// Converts basic Markdown syntax to Spectre.Console markup for CLI display.
 /// </summary>
-internal static partial class MarkdownToSpectreConverter
+internal partial class MarkdownToSpectreConverter
 {
+    private readonly bool _plainTextLinks;
+
+    private MarkdownToSpectreConverter(bool plainTextLinks)
+    {
+        _plainTextLinks = plainTextLinks;
+    }
+
     private static readonly MarkdownPipeline s_markdownPipeline = new MarkdownPipelineBuilder()
         .UsePipeTables()
         .UseAutoLinks()
