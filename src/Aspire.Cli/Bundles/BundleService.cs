@@ -52,13 +52,12 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
     internal string? ProcessPathOverride { get; init; }
 
     /// <summary>
-    /// Well-known layout subdirectories that are exposed as reparse points pointing
-    /// at the active versioned bundle directory. The bin/ directory is intentionally
-    /// excluded since it contains the running CLI binary itself.
+    /// Well-known layout subdirectory that is exposed as a reparse point pointing
+    /// at the active versioned bundle directory. Components (<c>managed/</c> and
+    /// <c>dcp/</c>) are resolved as subdirectories of this link target.
     /// </summary>
     internal static readonly string[] s_linkedLayoutDirectories = [
-        BundleDiscovery.ManagedDirectoryName,
-        BundleDiscovery.DcpDirectoryName
+        BundleDiscovery.BundleDirectoryName,
     ];
 
     /// <inheritdoc/>
@@ -208,6 +207,11 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
             FileDeleteHelper.TryCleanupOldItems(destinationPath, dir);
         }
 
+        // Best-effort cleanup of legacy top-level managed/ and dcp/ paths from
+        // the old layout (before the single bundle/ link was introduced). These
+        // are no longer needed now that layout discovery resolves through bundle/.
+        TryCleanupLegacyLayoutPaths(destinationPath);
+
         logger.LogDebug("Bundle extraction verified successfully.");
         return BundleExtractResult.Extracted;
     }
@@ -331,23 +335,26 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
     }
 
     /// <summary>
-    /// Points the public link paths (<c>managed/</c>, <c>dcp/</c>) at the active
-    /// versioned directory, replacing any existing link or legacy real directory.
+    /// Points the public <c>bundle/</c> link at the active versioned directory.
+    /// Migrates any legacy real directory sitting at the link path by renaming it
+    /// to a <c>.old</c> sibling (preserved until post-flip validation succeeds).
     /// </summary>
     private bool TryFlipLinks(string layoutPath, string activeVersionDir)
     {
         foreach (var dir in s_linkedLayoutDirectories)
         {
             var linkPath = Path.Combine(layoutPath, dir);
-            var target = Path.Combine(activeVersionDir, dir);
+
+            // The bundle link points directly at the active version directory —
+            // components (managed/, dcp/) are subdirectories of the target.
+            var target = activeVersionDir;
 
             // Clear out legacy stale siblings from prior runs first.
             FileDeleteHelper.TryCleanupOldItems(layoutPath, dir);
 
-            // If a legacy real directory is sitting at the public path (pre-migration
-            // layout), rename it to a .old sibling so a reparse point can be created.
-            // The .old sibling is preserved until after post-flip validation succeeds,
-            // ensuring a working layout is never lost if link creation fails.
+            // If a legacy real directory is sitting at the public path, rename it
+            // to a .old sibling so a reparse point can be created. The .old sibling
+            // is preserved until after post-flip validation succeeds.
             if (Directory.Exists(linkPath) && !ReparsePoint.IsReparsePoint(linkPath))
             {
                 var renamedPath = $"{linkPath}.old.{Environment.TickCount64}";
@@ -485,6 +492,36 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
                 catch
                 {
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Best-effort removal of legacy top-level <c>managed/</c> and <c>dcp/</c>
+    /// directories from the old layout shape (before the single <c>bundle/</c> link
+    /// was introduced). Failures are silently ignored since the new layout via
+    /// <c>bundle/</c> is already functional.
+    /// </summary>
+    private void TryCleanupLegacyLayoutPaths(string layoutPath)
+    {
+        string[] legacyDirs = [BundleDiscovery.ManagedDirectoryName, BundleDiscovery.DcpDirectoryName];
+
+        foreach (var dir in legacyDirs)
+        {
+            var legacyPath = Path.Combine(layoutPath, dir);
+            if (!Directory.Exists(legacyPath))
+            {
+                continue;
+            }
+
+            try
+            {
+                FileDeleteHelper.TryDeleteDirectory(legacyPath);
+                logger.LogDebug("Removed legacy directory at {Path}.", legacyPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogDebug(ex, "Could not remove legacy path {Path}; will retry next run.", legacyPath);
             }
         }
     }

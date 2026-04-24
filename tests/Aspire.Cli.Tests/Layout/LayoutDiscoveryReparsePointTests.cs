@@ -11,8 +11,8 @@ namespace Aspire.Cli.Tests.LayoutTests;
 
 /// <summary>
 /// Verifies that <see cref="LayoutDiscovery"/> successfully discovers a bundle layout
-/// whose <c>managed/</c> and <c>dcp/</c> entries are reparse points pointing into a
-/// versioned subdirectory (the new on-disk shape introduced for transactional installs).
+/// whose <c>bundle/</c> entry is a reparse point pointing at a versioned subdirectory
+/// (the new on-disk shape introduced for transactional installs).
 /// </summary>
 public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
 {
@@ -31,13 +31,11 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
             Path.Combine(versionedManaged, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
             "stub");
 
-        var topManaged = Path.Combine(layoutRoot, BundleDiscovery.ManagedDirectoryName);
-        var topDcp = Path.Combine(layoutRoot, BundleDiscovery.DcpDirectoryName);
-        ReparsePoint.CreateOrReplace(topManaged, versionedManaged);
-        ReparsePoint.CreateOrReplace(topDcp, versionedDcp);
+        // Create a single bundle/ link pointing at the versioned directory.
+        var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
+        ReparsePoint.CreateOrReplace(bundleLink, versionsDir);
 
-        Assert.True(ReparsePoint.IsReparsePoint(topManaged));
-        Assert.True(ReparsePoint.IsReparsePoint(topDcp));
+        Assert.True(ReparsePoint.IsReparsePoint(bundleLink));
 
         var originalEnv = Environment.GetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar);
         try
@@ -53,6 +51,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         finally
         {
             Environment.SetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar, originalEnv);
+            ReparsePoint.RemoveIfExists(bundleLink);
         }
     }
 }

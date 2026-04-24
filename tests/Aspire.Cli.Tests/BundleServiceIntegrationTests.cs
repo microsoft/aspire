@@ -45,17 +45,16 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         var versions = Directory.GetDirectories(versionsDir);
         Assert.Single(versions);
 
-        // managed/ and dcp/ should be reparse points pointing into versions/.
-        var managedLink = Path.Combine(layoutRoot, BundleDiscovery.ManagedDirectoryName);
-        var dcpLink = Path.Combine(layoutRoot, BundleDiscovery.DcpDirectoryName);
+        // bundle/ should be a reparse point pointing into versions/.
+        var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
 
         try
         {
-            Assert.True(ReparsePoint.IsReparsePoint(managedLink), "managed/ should be a reparse point");
-            Assert.True(ReparsePoint.IsReparsePoint(dcpLink), "dcp/ should be a reparse point");
+            Assert.True(ReparsePoint.IsReparsePoint(bundleLink), "bundle/ should be a reparse point");
 
-            // Verify the managed exe is reachable through the reparse point.
-            var managedExe = Path.Combine(managedLink,
+            // Verify the managed exe is reachable through the bundle reparse point.
+            var managedExe = Path.Combine(bundleLink,
+                BundleDiscovery.ManagedDirectoryName,
                 BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
             Assert.True(File.Exists(managedExe), $"managed exe should exist at {managedExe}");
         }
@@ -143,7 +142,8 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             Assert.NotEqual(v1VersionDir, v2Dirs[0]);
 
             // The managed exe should be reachable and contain v2 content.
-            var managedExe = Path.Combine(layoutRoot, BundleDiscovery.ManagedDirectoryName,
+            var managedExe = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName,
+                BundleDiscovery.ManagedDirectoryName,
                 BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
             var content = File.ReadAllText(managedExe);
             Assert.Contains("v2-content", content);
@@ -236,8 +236,8 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         var v1Service = CreateService(new TestBundlePayloadProvider(v1Payload), layoutDiscovery, v1BinaryPath);
         await v1Service.ExtractAsync(layoutRoot, force: true);
 
-        var managedLink = Path.Combine(layoutRoot, BundleDiscovery.ManagedDirectoryName);
-        var v1Target = ReparsePoint.GetTarget(managedLink);
+        var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
+        var v1Target = ReparsePoint.GetTarget(bundleLink);
         Assert.NotNull(v1Target);
 
         try
@@ -247,7 +247,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             var v2Service = CreateService(new TestBundlePayloadProvider(v2Payload), layoutDiscovery, v2BinaryPath);
             await v2Service.ExtractAsync(layoutRoot, force: true);
 
-            var v2Target = ReparsePoint.GetTarget(managedLink);
+            var v2Target = ReparsePoint.GetTarget(bundleLink);
             Assert.NotNull(v2Target);
             Assert.NotEqual(v1Target, v2Target);
         }
@@ -330,14 +330,15 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
 
     /// <summary>
     /// A layout discovery implementation that discovers from a specific root path,
-    /// checking for managed/ and dcp/ subdirectories.
+    /// checking for bundle/managed/ and bundle/dcp/ subdirectories.
     /// </summary>
     private sealed class TestLayoutDiscovery(string layoutRoot) : ILayoutDiscovery
     {
         public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null)
         {
-            var managedDir = Path.Combine(layoutRoot, BundleDiscovery.ManagedDirectoryName);
-            var dcpDir = Path.Combine(layoutRoot, BundleDiscovery.DcpDirectoryName);
+            var bundleDir = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
+            var managedDir = Path.Combine(bundleDir, BundleDiscovery.ManagedDirectoryName);
+            var dcpDir = Path.Combine(bundleDir, BundleDiscovery.DcpDirectoryName);
             var managedExeName = BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName);
             var managedExe = Path.Combine(managedDir, managedExeName);
 
@@ -351,19 +352,20 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
                 LayoutPath = layoutRoot,
                 Components = new LayoutComponents
                 {
-                    Managed = Path.Combine(BundleDiscovery.ManagedDirectoryName, managedExeName),
-                    Dcp = BundleDiscovery.DcpDirectoryName,
+                    Managed = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.ManagedDirectoryName),
+                    Dcp = Path.Combine(BundleDiscovery.BundleDirectoryName, BundleDiscovery.DcpDirectoryName),
                 }
             };
         }
 
         public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null)
         {
+            var bundleDir = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
             return component switch
             {
-                LayoutComponent.Managed => Path.Combine(layoutRoot, BundleDiscovery.ManagedDirectoryName,
+                LayoutComponent.Managed => Path.Combine(bundleDir, BundleDiscovery.ManagedDirectoryName,
                     BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
-                LayoutComponent.Dcp => Path.Combine(layoutRoot, BundleDiscovery.DcpDirectoryName),
+                LayoutComponent.Dcp => Path.Combine(bundleDir, BundleDiscovery.DcpDirectoryName),
                 _ => null,
             };
         }

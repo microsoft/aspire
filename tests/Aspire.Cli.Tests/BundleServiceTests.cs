@@ -171,13 +171,14 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
-        // managed/ does not exist → null entry.
-        // dcp/ is a real (non-reparse) directory → null entry.
-        Directory.CreateDirectory(Path.Combine(dir, BundleDiscovery.DcpDirectoryName));
-
+        // bundle/ does not exist → null entry.
         var captured = BundleService.CaptureLinkTargets(dir);
-        Assert.Null(captured[BundleDiscovery.ManagedDirectoryName]);
-        Assert.Null(captured[BundleDiscovery.DcpDirectoryName]);
+        Assert.Null(captured[BundleDiscovery.BundleDirectoryName]);
+
+        // bundle/ is a real (non-reparse) directory → also null entry.
+        Directory.CreateDirectory(Path.Combine(dir, BundleDiscovery.BundleDirectoryName));
+        captured = BundleService.CaptureLinkTargets(dir);
+        Assert.Null(captured[BundleDiscovery.BundleDirectoryName]);
     }
 
     private static void CreateFakeBundleLayout(string root)
