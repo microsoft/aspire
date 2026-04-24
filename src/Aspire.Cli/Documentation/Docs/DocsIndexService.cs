@@ -545,6 +545,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         builder.Append(NormalizeMarkdownSegment(content[position..]));
 
         var normalized = TrailingWhitespaceBeforeNewlineRegex().Replace(builder.ToString(), "\n");
+        normalized = BlankLineAfterHeadingRegex().Replace(normalized, "$1\n");
+        normalized = BlankLineAfterTableRegex().Replace(normalized, "$1\n");
+        normalized = BlankLineAfterListRegex().Replace(normalized, "$1\n");
         normalized = ExcessBlankLinesRegex().Replace(normalized, "\n\n");
 
         return normalized.Trim();
@@ -649,6 +652,15 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
     [GeneratedRegex(@"(?m)^[ \t]+")]
     private static partial Regex LeadingWhitespaceRegex();
+
+    [GeneratedRegex(@"(?m)(^#{1,6}\s+[^\n]+\n)(?!\n|#|```)")]
+    private static partial Regex BlankLineAfterHeadingRegex();
+
+    [GeneratedRegex(@"(?m)(^\|[^\n]*\|[^\n]*\n)(?!\n|\||```)")]
+    private static partial Regex BlankLineAfterTableRegex();
+
+    [GeneratedRegex(@"(?m)(^(?:\*\s|\d+\.\s)[^\n]*\n)(?!\n|\*\s|\d+\.\s|```)")]
+    private static partial Regex BlankLineAfterListRegex();
 
     /// <summary>
     /// Pre-indexed document with lowercase text for faster searching.

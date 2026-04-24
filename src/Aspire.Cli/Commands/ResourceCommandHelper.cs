@@ -128,7 +128,7 @@ internal static class ResourceCommandHelper
     {
         if (result.Format is CommandResultFormat.Markdown)
         {
-            interactionService.DisplayMarkdown(result.Value, ConsoleOutput.Standard);
+            interactionService.DisplayMarkdown(result.Value, ConsoleOutput.Standard, maxWidth: 100);
         }
         else
         {

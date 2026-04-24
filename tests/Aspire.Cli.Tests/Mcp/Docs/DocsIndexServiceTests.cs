@@ -1218,11 +1218,13 @@ public class DocsIndexServiceTests
     [Fact]
     public void NormalizeContent_SplitsInlineHeadings()
     {
-        var result = DocsIndexService.NormalizeContent("Some text ## Heading");
+        var result = DocsIndexService.NormalizeContent("Some text ## Heading\nMore text");
         Assert.Equal("""
             Some text
 
             ## Heading
+
+            More text
             """, result, ignoreLineEndingDifferences: true);
     }
 
@@ -1374,9 +1376,11 @@ public class DocsIndexServiceTests
 
         Assert.Equal("""
             # Title
+
             Some intro text
 
             ## Configuration
+
             Use `aspire run`.
             1. Step one
             2. Step two
@@ -1385,6 +1389,79 @@ public class DocsIndexServiceTests
             aspire run
             ```
 
+            Done.
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterTable()
+    {
+        var result = DocsIndexService.NormalizeContent("Header text |Col1|Col2| |---|---| |A|B| Footer text");
+        Assert.Equal("""
+            Header text
+            |Col1|Col2|
+            |---|---|
+            |A|B|
+
+            Footer text
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro text 1. First 2. Second\nFollowing paragraph");
+        Assert.Equal("""
+            Intro text
+            1. First
+            2. Second
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineAfterUnorderedList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro text * Item one * Item two\nFollowing paragraph");
+        Assert.Equal("""
+            Intro text
+            * Item one
+            * Item two
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_AddsBlankLineOnlyAfterRootList()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro 1. First * Sub A * Sub B 2. Second\nFollowing paragraph");
+        Assert.Equal("""
+            Intro
+            1. First
+            * Sub A
+            * Sub B
+            2. Second
+
+            Following paragraph
+            """, result, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public void NormalizeContent_NoBlankLineAfterListBeforeCodeBlock()
+    {
+        var result = DocsIndexService.NormalizeContent("Intro * Bash ```bash echo hello``` * PowerShell ```powershell Write-Host hello``` Done.");
+        Assert.Equal("""
+            Intro
+            * Bash
+            ```bash
+            echo hello
+            ```
+            * PowerShell
+            ```powershell
+            Write-Host hello
+            ```
             Done.
             """, result, ignoreLineEndingDifferences: true);
     }

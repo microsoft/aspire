@@ -245,6 +245,10 @@ internal partial class MarkdownToSpectreConverter
         {
             case ParagraphBlock paragraph:
                 AppendInlinesToMarkup(builder, paragraph.Inline, markdown);
+                while (builder.Length > start && builder[builder.Length - 1] == '\n')
+                {
+                    builder.Length--;
+                }
                 break;
             case HtmlBlock htmlBlock:
                 AppendEscapedMarkup(builder, StripHtmlTags(GetOriginalMarkdownSpan(htmlBlock.Span, markdown)).AsSpan());
