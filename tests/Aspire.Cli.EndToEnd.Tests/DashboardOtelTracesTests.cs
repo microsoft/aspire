@@ -19,11 +19,11 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
     public async Task DashboardRunWithOtelTracesReturnsNoTraces()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: false, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: false, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -31,7 +31,7 @@ public sealed class DashboardOtelTracesTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Store the dashboard log path inside the workspace so it gets captured on failure
         var dashboardLogPath = $"/workspace/{workspace.WorkspaceRoot.Name}/dashboard.log";

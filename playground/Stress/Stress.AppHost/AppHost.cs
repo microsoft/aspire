@@ -28,6 +28,8 @@ for (var i = 0; i < 2; i++)
 }
 
 builder.AddParameter("testParameterResource", () => "value", secret: true);
+var apiKeyParam = builder.AddParameter("api-key", secret: true);
+var connectionStringParam = builder.AddParameter("db-connection-string");
 builder.AddContainer("hiddenContainer", "alpine")
     .WithInitialState(new CustomResourceSnapshot
     {
@@ -40,6 +42,8 @@ builder.AddContainer("hiddenContainer", "alpine")
 // See https://github.com/open-telemetry/opentelemetry-dotnet/blob/main/RELEASENOTES.md#1100
 var serviceBuilder = builder.AddProject<Projects.Stress_ApiService>("stress-apiservice", launchProfileName: null)
     .WithEnvironment("OTEL_DOTNET_EXPERIMENTAL_METRICS_EMIT_OVERFLOW_ATTRIBUTE", "true")
+    .WithEnvironment("API_KEY", apiKeyParam)
+    .WithEnvironment("DB_CONNECTION_STRING", connectionStringParam)
     .WithIconName("Server");
 serviceBuilder
     .WithEnvironment("HOST", $"{serviceBuilder.GetEndpoint("http").Property(EndpointProperty.Host)}")

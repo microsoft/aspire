@@ -25,9 +25,9 @@ public class ContainerRuntimeBaseTests
         Assert.Contains("stderr-final-line", exception.Message);
     }
 
-    private sealed class TestContainerRuntime() : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance)
+    private sealed class TestContainerRuntime(string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance)
     {
-        protected override string RuntimeExecutable => OperatingSystem.IsWindows() ? "cmd" : "sh";
+        protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
 
         public override string Name => "test-runtime";
 

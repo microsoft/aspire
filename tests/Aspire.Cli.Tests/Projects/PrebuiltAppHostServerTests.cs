@@ -164,7 +164,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
-            new Aspire.Cli.Tests.Mcp.MockPackagingService(),
+            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             new TestConfigurationService(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
@@ -218,7 +218,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
-            new Aspire.Cli.Tests.Mcp.MockPackagingService(),
+            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
             configurationService,
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 

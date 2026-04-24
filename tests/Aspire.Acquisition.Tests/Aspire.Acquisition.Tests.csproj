@@ -5,6 +5,7 @@
 
     <XunitRunnerJson>xunit.runner.json</XunitRunnerJson>
     <RunOnGithubActionsMacOS>true</RunOnGithubActionsMacOS>
+    <RequiresGitHubToken>true</RequiresGitHubToken>
 
     <!--
       FIXME: https://github.com/dotnet/aspire/issues/8488

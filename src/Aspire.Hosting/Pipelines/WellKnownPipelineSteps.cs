@@ -65,6 +65,17 @@ public static class WellKnownPipelineSteps
     public const string Diagnostics = "diagnostics";
 
     /// <summary>
+    /// The step that runs before the application starts.
+    /// </summary>
+    public const string BeforeStart = "before-start";
+
+    /// <summary>
+    /// The step that checks whether the container runtime (e.g., Docker or Podman) is running.
+    /// Build steps that need a container runtime should depend on this step.
+    /// </summary>
+    public const string CheckContainerRuntime = "check-container-runtime";
+
+    /// <summary>
     /// Aggregation step for all destroy operations.
     /// All destroy steps should be required by this step.
     /// </summary>

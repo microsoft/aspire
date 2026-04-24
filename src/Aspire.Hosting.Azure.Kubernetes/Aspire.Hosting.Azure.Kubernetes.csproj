@@ -17,6 +17,7 @@
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessResult.cs" Link="Process\ProcessResult.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessSpec.cs" Link="Process\ProcessSpec.cs" />
+    <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessOutputCapture.cs" Link="Process\ProcessOutputCapture.cs" />
     <Compile Include="..\Aspire.Hosting\Dcp\Process\ProcessUtil.cs" Link="Process\ProcessUtil.cs" />
   </ItemGroup>
 

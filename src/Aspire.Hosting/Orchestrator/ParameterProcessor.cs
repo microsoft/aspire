@@ -144,7 +144,7 @@ public sealed class ParameterProcessor(
     {
         // Add the "Set parameter" command if the app is running and the interaction service is available.
         // This command allows the user to set the parameter value at runtime.
-        if (executionContext.IsRunMode && interactionService.IsAvailable && !parameterResource.Annotations.OfType<ResourceCommandAnnotation>().Any(a => a.Name == KnownResourceCommands.SetParameterCommand))
+        if (executionContext.IsRunMode && interactionService.IsAvailable && !parameterResource.Annotations.OfType<ResourceCommandAnnotation>().Any(a => a.Name.Equals(KnownResourceCommands.SetParameterCommand, StringComparisons.CommandName)))
         {
             AddSetParameterCommand(parameterResource);
         }
@@ -179,7 +179,7 @@ public sealed class ParameterProcessor(
             }
 
             var stateText = ex is MissingParameterValueException ?
-                "Value missing" :
+                KnownResourceStates.ValueMissing :
                 "Error initializing parameter";
 
             // Use warning style for missing parameters to match the notification banner,
@@ -314,7 +314,7 @@ public sealed class ParameterProcessor(
             Value = hasExistingValue ? "true" : null,
             Description = !userSecretsManager.IsAvailable
                 ? InteractionStrings.ParametersInputsRememberDescriptionNotConfigured
-                : null,
+                : InteractionStrings.ParametersInputsRememberDescriptionConfigured,
             EnableDescriptionMarkdown = true,
             Disabled = !userSecretsManager.IsAvailable
         };
@@ -333,10 +333,7 @@ public sealed class ParameterProcessor(
             var parameterSection = await deploymentStateManager.AcquireSectionAsync(parameterResource.ConfigurationKey, cancellationToken).ConfigureAwait(false);
             var hasSavedState = parameterSection.Data.Count > 0;
 
-            // Show different message based on whether value is saved in user secrets
-            var message = hasSavedState
-                ? string.Format(CultureInfo.CurrentCulture, InteractionStrings.DeleteParameterMessageWithUserSecrets, parameterResource.Name)
-                : string.Format(CultureInfo.CurrentCulture, InteractionStrings.DeleteParameterMessage, parameterResource.Name);
+            var message = string.Format(CultureInfo.CurrentCulture, InteractionStrings.DeleteParameterMessage, parameterResource.Name);
 
             var inputs = new List<InteractionInput>();
             InteractionInput? deleteFromUserSecretsInput = null;
@@ -348,7 +345,9 @@ public sealed class ParameterProcessor(
                 {
                     Name = DeleteFromUserSecretsName,
                     InputType = InputType.Boolean,
-                    Label = InteractionStrings.ParametersInputsDeleteLabel
+                    Label = InteractionStrings.ParametersInputsDeleteLabel,
+                    Description = InteractionStrings.ParametersInputsDeleteDescription,
+                    EnableDescriptionMarkdown = true
                 };
                 inputs.Add(deleteFromUserSecretsInput);
             }
@@ -402,7 +401,7 @@ public sealed class ParameterProcessor(
                 parameterResource.WaitForValueTcs = tcs;
 
                 // Update the parameter's state to show it's missing a value
-                await UpdateParameterStateAsync(parameterResource, "Parameter value has been deleted", new("Value missing", KnownResourceStateStyles.Warn)).ConfigureAwait(false);
+                await UpdateParameterStateAsync(parameterResource, "Parameter value has been deleted", new(KnownResourceStates.ValueMissing, KnownResourceStateStyles.Warn)).ConfigureAwait(false);
 
                 // Start the resolution task if it's not running
                 _ = EnsureParameterResolutionTaskRunningAsync();

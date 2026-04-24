@@ -47,7 +47,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
                 Action = BuildProjectImage,
                 Tags = [WellKnownPipelineTags.BuildCompute],
                 RequiredBySteps = [WellKnownPipelineSteps.Build],
-                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
+                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq, WellKnownPipelineSteps.CheckContainerRuntime],
                 Resource = this
             };
             steps.Add(buildStep);

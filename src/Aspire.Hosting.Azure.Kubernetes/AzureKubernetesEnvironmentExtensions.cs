@@ -188,6 +188,50 @@ public static class AzureKubernetesEnvironmentExtensions
     }
 
     /// <summary>
+    /// Replaces the default system node pool with a customized configuration.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="vmSize">The VM size for system pool nodes. Defaults to <c>Standard_D2s_v5</c> if not specified.</param>
+    /// <param name="minCount">The minimum node count for autoscaling. Defaults to 1.</param>
+    /// <param name="maxCount">The maximum node count for autoscaling. Defaults to 3.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// Every AKS cluster requires exactly one system node pool for hosting system pods.
+    /// By default, the system pool uses <c>Standard_D2s_v5</c>. Use this method to change
+    /// the VM size when the default SKU is not available in your subscription or region.
+    /// Calling this method multiple times replaces the previous system pool configuration.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks")
+    ///     .WithSystemNodePool("Standard_B2s");
+    ///
+    /// // With explicit scaling
+    /// var aks2 = builder.AddAzureKubernetesEnvironment("aks2")
+    ///     .WithSystemNodePool("Standard_B2s", minCount: 2, maxCount: 5);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Replaces the default system node pool with a customized configuration")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSystemNodePool(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        string vmSize = "Standard_D2s_v5",
+        int minCount = 1,
+        int maxCount = 3)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(vmSize);
+        ArgumentOutOfRangeException.ThrowIfLessThan(minCount, 1);
+        ArgumentOutOfRangeException.ThrowIfLessThan(maxCount, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(minCount, maxCount);
+
+        // Remove existing system pool(s) and replace with the new configuration
+        builder.Resource.NodePools.RemoveAll(p => p.Mode is AksNodePoolMode.System);
+        builder.Resource.NodePools.Insert(0, new AksNodePoolConfig("system", vmSize, minCount, maxCount, AksNodePoolMode.System));
+
+        return builder;
+    }
+
+    /// <summary>
     /// Configures the AKS cluster to use a VNet subnet for node pool networking.
     /// Unlike <see cref="AzureVirtualNetworkExtensions.WithDelegatedSubnet{T}"/>, this does NOT
     /// add a service delegation to the subnet — AKS uses plain (non-delegated) subnets.
@@ -232,7 +276,7 @@ public static class AzureKubernetesEnvironmentExtensions
     /// var aks = builder.AddAzureKubernetesEnvironment("aks")
     ///     .WithSubnet(defaultSubnet);
     ///
-    /// var gpuPool = aks.AddNodePool("gpu", AksNodeVmSizes.GpuAccelerated.StandardNC6sV3, 0, 5)
+    /// var gpuPool = aks.AddNodePool("gpu", AksNodeVmSizes.StandardNCSv3.StandardNC6sV3, 0, 5)
     ///     .WithSubnet(gpuSubnet);
     /// </code>
     /// </example>
@@ -342,12 +386,11 @@ public static class AzureKubernetesEnvironmentExtensions
         };
 
         // Create the AKS managed cluster
-        var aks = new ContainerServiceManagedCluster(aksResource.GetBicepIdentifier(),
-            ContainerServiceManagedCluster.ResourceVersions.V2025_03_01)
+        var aks = new ContainerServiceManagedCluster(aksResource.GetBicepIdentifier())
         {
             ClusterIdentity = new ManagedClusterIdentity
             {
-                ResourceIdentityType = ManagedServiceIdentityType.SystemAssigned
+                IdentityType = ManagedServiceIdentityType.SystemAssigned
             },
             Sku = new ManagedClusterSku
             {
@@ -401,7 +444,7 @@ public static class AzureKubernetesEnvironmentExtensions
                 MinCount = pool.MinCount,
                 MaxCount = pool.MaxCount,
                 Count = pool.MinCount,
-                EnableAutoScaling = true,
+                IsAutoScalingEnabled = true,
                 Mode = mode,
                 OSType = ContainerServiceOSType.Linux,
             };
@@ -442,7 +485,7 @@ public static class AzureKubernetesEnvironmentExtensions
         {
             aks.ApiServerAccessProfile = new ManagedClusterApiServerAccessProfile
             {
-                EnablePrivateCluster = true
+                IsPrivateClusterEnabled = true
             };
         }
 

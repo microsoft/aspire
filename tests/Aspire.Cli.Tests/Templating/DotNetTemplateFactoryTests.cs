@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.CommandLine;
 using Microsoft.AspNetCore.InternalTesting;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
@@ -9,7 +10,6 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
@@ -29,26 +29,6 @@ public class DotNetTemplateFactoryTests
     public DotNetTemplateFactoryTests(ITestOutputHelper outputHelper)
     {
         _outputHelper = outputHelper;
-    }
-
-    private sealed class FakeNuGetPackageCache : INuGetPackageCache
-    {
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = packageId; _ = filter; _ = prerelease; _ = nugetConfigFile; _ = useCache; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
     }
 
     private static PackageChannel CreateExplicitChannel(PackageMapping[] mappings) =>
@@ -435,19 +415,19 @@ public class DotNetTemplateFactoryTests
     {
         public ConsoleOutput Console { get; set; }
 
-        public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, CancellationToken cancellationToken) where T : notnull
+        public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
-        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, CancellationToken cancellationToken = default) where T : notnull
+        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
-        public Task<string> PromptForStringAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, CancellationToken cancellationToken = default)
+        public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForFilePathAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, CancellationToken cancellationToken = default)
+        public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<bool> ConfirmAsync(string prompt, bool defaultAnswer, CancellationToken cancellationToken)
+        public Task<bool> PromptConfirmAsync(string prompt, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<TResult> ShowStatusAsync<TResult>(string message, Func<Task<TResult>> work, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -503,7 +483,7 @@ public class DotNetTemplateFactoryTests
         public Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProjectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
@@ -525,21 +505,19 @@ public class DotNetTemplateFactoryTests
     private sealed class TestCertificateService : ICertificateService
     {
         public Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new EnsureCertificatesTrustedResult { EnvironmentVariables = new Dictionary<string, string>() });
-    }
-
-    private sealed class TestPackagingService : IPackagingService
-    {
-        public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+            => Task.FromResult(new EnsureCertificatesTrustedResult
+            {
+                EnvironmentVariables = new Dictionary<string, string>(),
+                Success = true
+            });
     }
 
     private sealed class TestNewCommandPrompter : INewCommandPrompter, ITemplateVersionPrompter
     {
-        public Task<string> PromptForProjectNameAsync(string defaultName, CancellationToken cancellationToken)
+        public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForOutputPath(string defaultPath, CancellationToken cancellationToken)
+        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)

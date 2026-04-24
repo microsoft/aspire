@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003
+#pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
@@ -152,6 +153,66 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Action = context => Task.CompletedTask
         });
 
+        // Container runtime health check step. Checks if the Docker/Podman daemon is running.
+        // Build steps that need a container runtime depend on this step via DependsOnSteps.
+        // In interactive mode, prompts the user to start the runtime instead of failing immediately.
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.CheckContainerRuntime,
+            Description = "Checks whether the container runtime (Docker/Podman) is running.",
+            Action = async context =>
+            {
+                var runtimeResolver = context.Services.GetRequiredService<IContainerRuntimeResolver>();
+                var containerRuntime = await runtimeResolver.ResolveAsync(context.CancellationToken).ConfigureAwait(false);
+
+                if (await containerRuntime.CheckIfRunningAsync(context.CancellationToken).ConfigureAwait(false))
+                {
+                    return;
+                }
+
+                // In interactive mode, prompt the user to start the runtime and retry
+                var interactionService = context.Services.GetService<IInteractionService>();
+                if (interactionService?.IsAvailable == true)
+                {
+                    var result = await interactionService.PromptNotificationAsync(
+                        $"{containerRuntime.Name} is not running",
+                        $"Start {containerRuntime.Name} and confirm to continue.",
+                        new NotificationInteractionOptions
+                        {
+                            Intent = MessageIntent.Warning
+                        },
+                        cancellationToken: context.CancellationToken).ConfigureAwait(false);
+
+                    if (!result.Canceled && result.Data)
+                    {
+                        // Poll for the runtime to become available — Docker can take
+                        // a while to start, especially on slower machines.
+                        // Give it up to 5 minutes before giving up.
+                        var timeProvider = context.Services.GetRequiredService<TimeProvider>();
+                        using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
+                        waitCts.CancelAfter(TimeSpan.FromMinutes(5));
+
+                        try
+                        {
+                            while (!await containerRuntime.CheckIfRunningAsync(waitCts.Token).ConfigureAwait(false))
+                            {
+                                await Task.Delay(TimeSpan.FromSeconds(2), timeProvider, waitCts.Token).ConfigureAwait(false);
+                            }
+
+                            return;
+                        }
+                        catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
+                        {
+                            // Timed out waiting for the runtime to start — fall through to the error below
+                        }
+                    }
+                }
+
+                throw new DistributedApplicationException(
+                    $"{containerRuntime.Name} is not running. Start {containerRuntime.Name} and try again.");
+            }
+        });
+
         // Add a default "Push" meta-step that all push steps should be required by
         // Push unconditionally depends on PushPrereq to ensure annotations are set up
         var pushStep = new PipelineStep
@@ -263,6 +324,14 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 // Generate the diagnostic output using the resolved data
                 DumpDependencyGraphDiagnostics(stepsToAnalyze, context);
             }
+        });
+
+        // Add the before-start step that runs during application startup
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.BeforeStart,
+            Description = "Aggregation step for operations that run before the application starts.",
+            Action = _ => Task.CompletedTask
         });
 
         // Add a "destroy" aggregation step for teardown operations
@@ -378,6 +447,32 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         _configurationCallbacks.Add(callback);
     }
 
+    /// <summary>
+    /// Creates a clone of this pipeline whose built-in steps are independent
+    /// copies (with fresh <see cref="PipelineStep.DependsOnSteps"/> /
+    /// <see cref="PipelineStep.RequiredBySteps"/> lists). Configuration callbacks
+    /// are shallow-copied — the same delegates are reused.
+    /// </summary>
+    /// <remarks>
+    /// Used by <c>DistributedApplication</c> to run the BeforeStart phase against
+    /// a throwaway pipeline instance so that step-graph mutations performed by
+    /// <see cref="ResolveStepsAsync"/> (e.g. <see cref="NormalizeRequiredByToDependsOn"/>
+    /// appending entries to <see cref="PipelineStep.DependsOnSteps"/> on built-in
+    /// steps) do not leak into the singleton pipeline used later for publish.
+    /// </remarks>
+    internal DistributedApplicationPipeline Clone()
+    {
+        var clone = new DistributedApplicationPipeline();
+        clone._steps.Clear();
+        foreach (var step in _steps)
+        {
+            clone._steps.Add(step.Clone());
+        }
+        clone._configurationCallbacks.Clear();
+        clone._configurationCallbacks.AddRange(_configurationCallbacks);
+        return clone;
+    }
+
     public async Task ExecuteAsync(PipelineContext context)
     {
         var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
@@ -391,6 +486,37 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Executes a specific pipeline step and all its dependencies sequentially.
+    /// </summary>
+    /// <param name="stepName">The name of the step to execute.</param>
+    /// <param name="context">The pipeline context for execution.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal async Task ExecuteStepSequentiallyAsync(
+        string stepName,
+        PipelineContext context)
+    {
+        var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
+
+        if (allSteps.Count == 0)
+        {
+            return;
+        }
+
+        var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+
+        if (!allStepsByName.TryGetValue(stepName, out var targetStep))
+        {
+            var availableSteps = string.Join(", ", allSteps.Select(s => $"'{s.Name}'"));
+            throw new InvalidOperationException(
+                $"Step '{stepName}' not found in pipeline. Available steps: {availableSteps}");
+        }
+
+        var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+
+        await ExecuteStepsSequentially(stepsToExecute, context).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -617,7 +743,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
     /// <summary>
     /// Executes pipeline steps by building a Task DAG where each step waits on its dependencies.
-    /// Uses CancellationToken to stop remaining work when any step fails.
+    /// Failed steps prevent dependent steps from executing, while independent steps continue running.
     /// </summary>
     private static async Task ExecuteStepsAsTaskDag(
         List<PipelineStep> steps,
@@ -627,161 +753,190 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         // Validate no cycles exist in the dependency graph
         ValidateDependencyGraph(steps, stepsByName);
 
-        // Create a linked CancellationTokenSource that will be cancelled when any step fails
-        // or when the original context token is cancelled
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
-
-        // Store the original token and set the linked token on the context
-        var originalToken = context.CancellationToken;
-        context.CancellationToken = linkedCts.Token;
-
-        try
+        // Create a TaskCompletionSource for each step
+        var stepCompletions = new Dictionary<string, TaskCompletionSource>(steps.Count, StringComparer.Ordinal);
+        var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
+        foreach (var step in steps)
         {
-            // Create a TaskCompletionSource for each step
-            var stepCompletions = new Dictionary<string, TaskCompletionSource>(steps.Count, StringComparer.Ordinal);
-            var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
-            foreach (var step in steps)
+            stepCompletions[step.Name] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
+
+        // Execute a step after its dependencies complete
+        async Task ExecuteStepWithDependencies(PipelineStep step)
+        {
+            var stepTcs = stepCompletions[step.Name];
+
+            // Wait for all dependencies to complete (will throw if any dependency failed)
+            if (step.DependsOnSteps.Count > 0)
             {
-                stepCompletions[step.Name] = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            }
-
-            // Execute a step after its dependencies complete
-            async Task ExecuteStepWithDependencies(PipelineStep step)
-            {
-                var stepTcs = stepCompletions[step.Name];
-
-                // Wait for all dependencies to complete (will throw if any dependency failed)
-                if (step.DependsOnSteps.Count > 0)
-                {
-                    try
-                    {
-                        var depTasks = step.DependsOnSteps
-                            .Where(stepCompletions.ContainsKey)
-                            .Select(depName => stepCompletions[depName].Task);
-                        await Task.WhenAll(depTasks).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        // Find all dependencies that failed
-                        var failedDeps = step.DependsOnSteps
-                            .Where(depName => stepCompletions.ContainsKey(depName) && stepCompletions[depName].Task.IsFaulted)
-                            .ToList();
-
-                        var message = failedDeps.Count > 0
-                            ? $"Step '{step.Name}' cannot run because {(failedDeps.Count == 1 ? "dependency" : "dependencies")} {string.Join(", ", failedDeps.Select(d => $"'{d}'"))} failed"
-                            : $"Step '{step.Name}' cannot run because a dependency failed";
-
-                        // Wrap the dependency failure with context about this step
-                        var wrappedException = new InvalidOperationException(message, ex);
-                        stepTcs.TrySetException(wrappedException);
-                        return;
-                    }
-                }
-
                 try
                 {
-                    var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
-                    var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
-                    var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
-
-                    await using (reportingStep.ConfigureAwait(false))
-                    {
-                        var stepContext = new PipelineStepContext
-                        {
-                            PipelineContext = context,
-                            ReportingStep = reportingStep
-                        };
-
-                        try
-                        {
-                            PipelineLoggerProvider.CurrentStep = reportingStep;
-
-                            await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
-                        }
-                        catch (Exception ex)
-                        {
-                            stepContext.Logger.LogError(ex, "Step '{StepName}' failed.", step.Name);
-
-                            // Report the failure to the activity reporter before disposing
-                            await reportingStep.FailAsync(ex.Message).ConfigureAwait(false);
-                            throw;
-                        }
-                        finally
-                        {
-                            PipelineLoggerProvider.CurrentStep = null;
-                        }
-                    }
-
-                    stepTcs.TrySetResult();
+                    var depTasks = step.DependsOnSteps
+                        .Where(stepCompletions.ContainsKey)
+                        .Select(depName => stepCompletions[depName].Task);
+                    await Task.WhenAll(depTasks).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    // Execution failure - mark as failed, cancel all other work, and re-throw
-                    stepTcs.TrySetException(ex);
+                    // Find all dependencies that failed
+                    var failedDeps = step.DependsOnSteps
+                        .Where(depName => stepCompletions.ContainsKey(depName) && stepCompletions[depName].Task.IsFaulted)
+                        .ToList();
 
-                    // Cancel all remaining work
-                    try
-                    {
-                        linkedCts.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // Ignore cancellation errors
-                    }
+                    var message = failedDeps.Count > 0
+                        ? $"Step '{step.Name}' cannot run because {(failedDeps.Count == 1 ? "dependency" : "dependencies")} {string.Join(", ", failedDeps.Select(d => $"'{d}'"))} failed"
+                        : $"Step '{step.Name}' cannot run because a dependency failed";
 
-                    throw;
+                    // Wrap the dependency failure with context about this step
+                    var wrappedException = new InvalidOperationException(message, ex);
+                    stepTcs.TrySetException(wrappedException);
+                    return;
                 }
             }
 
-            // Start all steps (they'll wait on their dependencies internally)
-            var allStepTasks = new Task[steps.Count];
-            for (var i = 0; i < steps.Count; i++)
-            {
-                var step = steps[i];
-                allStepTasks[i] = Task.Run(() => ExecuteStepWithDependencies(step));
-            }
-
-            // Wait for all steps to complete (or fail)
             try
             {
-                await Task.WhenAll(allStepTasks).ConfigureAwait(false);
-            }
-            catch
-            {
-                // Collect all failed steps and their names
-                var failures = allStepTasks
-                    .Where(t => t.IsFaulted)
-                    .Select(t => t.Exception!)
-                    .SelectMany(ae => ae.InnerExceptions)
-                    .ToList();
+                var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
+                var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
+                var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
 
-                if (failures.Count > 1)
+                await using (reportingStep.ConfigureAwait(false))
                 {
-                    // Match failures to steps to get their names
-                    var failedStepNames = new List<string>();
-                    for (var i = 0; i < allStepTasks.Length; i++)
+                    var stepContext = new PipelineStepContext
                     {
-                        if (allStepTasks[i].IsFaulted)
-                        {
-                            failedStepNames.Add(steps[i].Name);
-                        }
+                        PipelineContext = context,
+                        ReportingStep = reportingStep
+                    };
+
+                    try
+                    {
+                        PipelineLoggerProvider.CurrentStep = reportingStep;
+
+                        await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
                     }
+                    catch (Exception ex)
+                    {
+                        stepContext.Logger.LogError(ex, "Step '{StepName}' failed.", step.Name);
 
-                    var message = failedStepNames.Count > 0
-                        ? $"Multiple pipeline steps failed: {string.Join(", ", failedStepNames.Distinct())}"
-                        : "Multiple pipeline steps failed.";
-
-                    throw new AggregateException(message, failures);
+                        // Report the failure to the activity reporter before disposing
+                        await reportingStep.FailAsync(ex.Message).ConfigureAwait(false);
+                        throw;
+                    }
+                    finally
+                    {
+                        PipelineLoggerProvider.CurrentStep = null;
+                    }
                 }
 
-                // Single failure - just rethrow
+                stepTcs.TrySetResult();
+            }
+            catch (Exception ex)
+            {
+                // Execution failure - mark as faulted so dependent steps won't run.
+                // Independent steps continue — the dependency graph handles blocking.
+                stepTcs.TrySetException(ex);
                 throw;
             }
         }
-        finally
+
+        // Start all steps (they'll wait on their dependencies internally)
+        var allStepTasks = new Task[steps.Count];
+        for (var i = 0; i < steps.Count; i++)
         {
-            // Restore the original token
-            context.CancellationToken = originalToken;
+            var step = steps[i];
+            allStepTasks[i] = Task.Run(() => ExecuteStepWithDependencies(step));
+        }
+
+        // Wait for all steps to complete (or fail)
+        try
+        {
+            await Task.WhenAll(allStepTasks).ConfigureAwait(false);
+        }
+        catch
+        {
+            // Collect all failed steps and their names
+            var failures = allStepTasks
+                .Where(t => t.IsFaulted)
+                .Select(t => t.Exception!)
+                .SelectMany(ae => ae.InnerExceptions)
+                .ToList();
+
+            if (failures.Count > 1)
+            {
+                // Match failures to steps to get their names
+                var failedStepNames = new List<string>();
+                for (var i = 0; i < allStepTasks.Length; i++)
+                {
+                    if (allStepTasks[i].IsFaulted)
+                    {
+                        failedStepNames.Add(steps[i].Name);
+                    }
+                }
+
+                var message = failedStepNames.Count > 0
+                    ? $"Multiple pipeline steps failed: {string.Join(", ", failedStepNames.Distinct())}"
+                    : "Multiple pipeline steps failed.";
+
+                throw new AggregateException(message, failures);
+            }
+
+            // Single failure - just rethrow
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Executes pipeline steps sequentially in topological order.
+    /// Each step waits for the previous step to complete before starting.
+    /// </summary>
+    private static async Task ExecuteStepsSequentially(
+        List<PipelineStep> steps,
+        PipelineContext context)
+    {
+        // Validate no cycles exist in the dependency graph
+        var stepsByName = steps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+        ValidateDependencyGraph(steps, stepsByName);
+
+        // Compute parent/level hierarchy so reported steps render nested in the activity reporter,
+        // matching the behavior of ExecuteStepsAsTaskDag.
+        var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
+
+        // Get topological order
+        var orderedSteps = GetTopologicalOrder(steps);
+
+        // Execute each step in order
+        foreach (var step in orderedSteps)
+        {
+            var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
+            var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
+            var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
+
+            await using (reportingStep.ConfigureAwait(false))
+            {
+                var stepContext = new PipelineStepContext
+                {
+                    PipelineContext = context,
+                    ReportingStep = reportingStep
+                };
+
+                try
+                {
+                    PipelineLoggerProvider.CurrentStep = reportingStep;
+                    await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    stepContext.Logger.LogError(ex, "Step '{StepName}' failed.", step.Name);
+
+                    // Report the failure to the activity reporter before disposing
+                    await reportingStep.FailAsync(ex.Message).ConfigureAwait(false);
+                    throw;
+                }
+                finally
+                {
+                    PipelineLoggerProvider.CurrentStep = null;
+                }
+            }
         }
     }
 

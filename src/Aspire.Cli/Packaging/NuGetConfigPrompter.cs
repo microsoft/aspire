@@ -47,14 +47,15 @@ internal class NuGetConfigPrompter
 
         if (!hasConfigInTargetDir)
         {
-            // Ask for confirmation before creating the file
             var choice = await _interactionService.PromptForSelectionAsync(
                 TemplatingStrings.CreateNugetConfigConfirmation,
                 [TemplatingStrings.Yes, TemplatingStrings.No],
                 c => c,
-                cancellationToken);
+                binding: PromptBinding.CreateDefault<string?>(TemplatingStrings.Yes),
+                cancellationToken: cancellationToken);
+            var shouldCreate = string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput);
 
-            if (string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
+            if (shouldCreate)
             {
                 await NuGetConfigMerger.CreateOrUpdateAsync(targetDirectory, channel, cancellationToken: cancellationToken);
                 _interactionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedConfirmationMessage);
@@ -66,9 +67,11 @@ internal class NuGetConfigPrompter
                 TemplatingStrings.UpdateNuGetConfigConfirmation,
                 [TemplatingStrings.Yes, TemplatingStrings.No],
                 c => c,
-                cancellationToken);
+                binding: PromptBinding.CreateDefault<string?>(TemplatingStrings.Yes),
+                cancellationToken: cancellationToken);
+            var shouldUpdate = string.Equals(updateChoice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput);
 
-            if (string.Equals(updateChoice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
+            if (shouldUpdate)
             {
                 await NuGetConfigMerger.CreateOrUpdateAsync(targetDirectory, channel, cancellationToken: cancellationToken);
                 _interactionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigUpdatedConfirmationMessage);

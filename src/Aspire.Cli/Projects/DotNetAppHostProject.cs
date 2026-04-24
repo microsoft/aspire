@@ -574,7 +574,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public async Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
     {
-        var result = await _projectUpdater.UpdateProjectAsync(context.AppHostFile, context.Channel, cancellationToken);
+        var result = await _projectUpdater.UpdateProjectAsync(context, cancellationToken);
         return new UpdatePackagesResult { UpdatesApplied = result.UpdatedApplied };
     }
 

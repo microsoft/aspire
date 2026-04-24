@@ -64,8 +64,7 @@ internal class DotNetTemplateFactory(
         }
 
         var showAllTemplates = features.IsFeatureEnabled(KnownFeatures.ShowAllTemplates, false);
-        var nonInteractive = !hostEnvironment.SupportsInteractiveInput;
-        return GetTemplatesCore(showAllTemplates, nonInteractive);
+        return GetTemplatesCore(showAllTemplates);
     }
 
     public async Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default)
@@ -76,8 +75,7 @@ internal class DotNetTemplateFactory(
         }
 
         var showAllTemplates = features.IsFeatureEnabled(KnownFeatures.ShowAllTemplates, false);
-        var nonInteractive = !hostEnvironment.SupportsInteractiveInput;
-        return GetTemplatesCore(showAllTemplates, nonInteractive);
+        return GetTemplatesCore(showAllTemplates);
     }
 
     public async Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default)
@@ -87,7 +85,7 @@ internal class DotNetTemplateFactory(
             return [];
         }
 
-        return [CreateSingleFileTemplate(nonInteractive: true)];
+        return [CreateSingleFileTemplate()];
     }
 
     private async Task<bool> IsDotNetSdkAvailableAsync(CancellationToken cancellationToken)
@@ -134,16 +132,14 @@ internal class DotNetTemplateFactory(
         return false;
     }
 
-    private IEnumerable<ITemplate> GetTemplatesCore(bool showAllTemplates, bool nonInteractive = false)
+    private IEnumerable<ITemplate> GetTemplatesCore(bool showAllTemplates)
     {
         yield return new CallbackTemplate(
             "aspire-starter",
             TemplatingStrings.AspireStarter_Description,
             projectName => $"./{projectName}",
             ApplyExtraAspireStarterOptions,
-            nonInteractive
-                ? ApplyTemplateWithNoExtraArgsAsync
-                : (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireStarterOptionsAsync, ct),
+            (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireStarterOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
             );
 
@@ -152,9 +148,7 @@ internal class DotNetTemplateFactory(
             TemplatingStrings.AspireJsFrontendStarter_Description,
             projectName => $"./{projectName}",
             ApplyExtraAspireJsFrontendStarterOptions,
-            nonInteractive
-                ? ApplyTemplateWithNoExtraArgsAsync
-                : (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireJsFrontendStarterOptionsAsync, ct),
+            (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireJsFrontendStarterOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
             );
 
@@ -215,9 +209,7 @@ internal class DotNetTemplateFactory(
             TemplatingStrings.AspireXUnit_Description,
             projectName => $"./{projectName}",
             _ => { },
-            nonInteractive
-                ? ApplyTemplateWithNoExtraArgsAsync
-                : (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireXUnitOptionsAsync, ct),
+            (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireXUnitOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
             );
 
@@ -244,16 +236,14 @@ internal class DotNetTemplateFactory(
         }
     }
 
-    private CallbackTemplate CreateSingleFileTemplate(bool nonInteractive)
+    private CallbackTemplate CreateSingleFileTemplate()
     {
         return new CallbackTemplate(
             "aspire-apphost-singlefile",
             TemplatingStrings.AspireAppHostSingleFile_Description,
             projectName => $"./{projectName}",
             ApplyDevLocalhostTldOption,
-            nonInteractive
-                ? ApplySingleFileTemplateWithNoExtraArgsAsync
-                : (template, inputs, parseResult, ct) => ApplySingleFileTemplate(template, inputs, parseResult, PromptForExtraAspireSingleFileOptionsAsync, ct),
+            (template, inputs, parseResult, ct) => ApplySingleFileTemplate(template, inputs, parseResult, PromptForExtraAspireSingleFileOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp,
             isEmpty: true
             );
@@ -300,55 +290,57 @@ internal class DotNetTemplateFactory(
 
     private async Task PromptForDevLocalhostTldOptionAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
     {
-        var useLocalhostTld = result.GetValue(_localhostTldOption);
-        if (!useLocalhostTld.HasValue)
-        {
-            useLocalhostTld = await interactionService.PromptForSelectionAsync(TemplatingStrings.UseLocalhostTld_Prompt, [TemplatingStrings.No, TemplatingStrings.Yes], choice => choice, cancellationToken) switch
-            {
-                var choice when string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput) => true,
-                var choice when string.Equals(choice, TemplatingStrings.No, StringComparisons.CliInputOrOutput) => false,
-                _ => throw new InvalidOperationException(TemplatingStrings.UseLocalhostTld_UnexpectedChoice)
-            };
-        }
+        var binding = PromptBinding.CreateBoolAsSelection(result, _localhostTldOption);
 
-        if (useLocalhostTld ?? false)
+        var selected = await interactionService.PromptForSelectionAsync(
+            TemplatingStrings.UseLocalhostTld_Prompt,
+            [TemplatingStrings.No, TemplatingStrings.Yes],
+            choice => choice,
+            binding: binding,
+            cancellationToken: cancellationToken);
+
+        if (string.Equals(selected, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
         {
-            interactionService.DisplayMessage(KnownEmojis.CheckMark, TemplatingStrings.UseLocalhostTld_UsingLocalhostTld);
+            interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseLocalhostTld_UsingLocalhostTld);
             extraArgs.Add("--localhost-tld");
         }
     }
 
     private async Task PromptForRedisCacheOptionAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
     {
-        var useRedisCache = result.GetValue(_useRedisCacheOption);
-        if (!useRedisCache.HasValue)
-        {
-            useRedisCache = await interactionService.PromptForSelectionAsync(TemplatingStrings.UseRedisCache_Prompt, [TemplatingStrings.Yes, TemplatingStrings.No], choice => choice, cancellationToken) switch
-            {
-                var choice when string.Equals(choice, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput) => true,
-                var choice when string.Equals(choice, TemplatingStrings.No, StringComparisons.CliInputOrOutput) => false,
-                _ => throw new InvalidOperationException(TemplatingStrings.UseRedisCache_UnexpectedChoice)
-            };
-        }
+        var binding = PromptBinding.CreateBoolAsSelection(result, _useRedisCacheOption);
 
-        if (useRedisCache ?? false)
+        var selected = await interactionService.PromptForSelectionAsync(
+            TemplatingStrings.UseRedisCache_Prompt,
+            [TemplatingStrings.Yes, TemplatingStrings.No],
+            choice => choice,
+            binding: binding,
+            cancellationToken: cancellationToken);
+
+        if (string.Equals(selected, TemplatingStrings.Yes, StringComparisons.CliInputOrOutput))
         {
-            interactionService.DisplayMessage(KnownEmojis.CheckMark, TemplatingStrings.UseRedisCache_UsingRedisCache);
+            interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseRedisCache_UsingRedisCache);
             extraArgs.Add("--use-redis-cache");
         }
     }
 
     private async Task PromptForTestFrameworkOptionsAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
     {
-        var testFramework = result.GetValue(_testFrameworkOption);
+        var binding = PromptBinding.Create(result, _testFrameworkOption);
+        var (wasProvided, _) = binding.Resolve();
 
-        if (testFramework is null)
+        if (!wasProvided)
         {
+            if (!hostEnvironment.SupportsInteractiveInput)
+            {
+                return;
+            }
+
             var createTestProject = await interactionService.PromptForSelectionAsync(
                 TemplatingStrings.PromptForTFMOptions_Prompt,
                 [TemplatingStrings.No, TemplatingStrings.Yes],
                 choice => choice,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (string.Equals(createTestProject, TemplatingStrings.No, StringComparisons.CliInputOrOutput))
             {
@@ -356,23 +348,21 @@ internal class DotNetTemplateFactory(
             }
         }
 
-        if (string.IsNullOrEmpty(testFramework))
-        {
-            testFramework = await interactionService.PromptForSelectionAsync(
-                TemplatingStrings.PromptForTFM_Prompt,
-                ["MSTest", "NUnit", "xUnit.net", TemplatingStrings.None],
-                choice => choice,
-                cancellationToken);
-        }
+        var testFramework = await interactionService.PromptForSelectionAsync(
+            TemplatingStrings.PromptForTFM_Prompt,
+            ["MSTest", "NUnit", "xUnit.net", TemplatingStrings.None],
+            choice => choice,
+            binding: binding,
+            cancellationToken: cancellationToken);
 
-        if (testFramework is { } && !string.Equals(testFramework, TemplatingStrings.None, StringComparisons.CliInputOrOutput))
+        if (!string.Equals(testFramework, TemplatingStrings.None, StringComparisons.CliInputOrOutput))
         {
-            if (testFramework.ToLower() == "xunit.net")
+            if (string.Equals(testFramework, "xUnit.net", StringComparison.OrdinalIgnoreCase))
             {
                 await PromptForXUnitVersionOptionsAsync(result, extraArgs, cancellationToken);
             }
 
-            interactionService.DisplayMessage(KnownEmojis.CheckMark, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.PromptForTFM_UsingForTesting, testFramework));
+            interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.PromptForTFM_UsingForTesting, testFramework));
 
             extraArgs.Add("--test-framework");
             extraArgs.Add(testFramework);
@@ -381,15 +371,14 @@ internal class DotNetTemplateFactory(
 
     private async Task PromptForXUnitVersionOptionsAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
     {
-        var xunitVersion = result.GetValue(_xunitVersionOption);
-        if (string.IsNullOrEmpty(xunitVersion))
-        {
-            xunitVersion = await interactionService.PromptForSelectionAsync(
-                TemplatingStrings.EnterXUnitVersion_Prompt,
-                ["v2", "v3", "v3mtp"],
-                choice => choice,
-                cancellationToken: cancellationToken);
-        }
+        var binding = PromptBinding.Create(result, _xunitVersionOption, "v3mtp");
+
+        var xunitVersion = await interactionService.PromptForSelectionAsync(
+            TemplatingStrings.EnterXUnitVersion_Prompt,
+            ["v2", "v3", "v3mtp"],
+            choice => choice,
+            binding: binding,
+            cancellationToken: cancellationToken);
 
         extraArgs.Add("--xunit-version");
         extraArgs.Add(xunitVersion);
@@ -456,16 +445,6 @@ internal class DotNetTemplateFactory(
         }
     }
 
-    private Task<TemplateResult> ApplySingleFileTemplateWithNoExtraArgsAsync(CallbackTemplate template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        return ApplySingleFileTemplate(
-            template,
-            inputs,
-            parseResult,
-            (_, _) => Task.FromResult(Array.Empty<string>()),
-            cancellationToken);
-    }
-
     private async Task<TemplateResult> ApplyTemplateAsync(CallbackTemplate template, TemplateInputs inputs, ParseResult parseResult, Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback, CancellationToken cancellationToken)
     {
         if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken))
@@ -473,8 +452,8 @@ internal class DotNetTemplateFactory(
             return new TemplateResult(ExitCodeConstants.SdkNotInstalled);
         }
 
-        var name = await GetProjectNameAsync(inputs, cancellationToken);
-        var outputPath = await GetOutputPathAsync(inputs, template.PathDeriver, name, cancellationToken);
+        var name = await GetProjectNameAsync(inputs, parseResult, cancellationToken);
+        var outputPath = await GetOutputPathAsync(inputs, template.PathDeriver, name, parseResult, cancellationToken);
 
         return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken);
     }
@@ -598,22 +577,23 @@ internal class DotNetTemplateFactory(
         }
     }
 
-    private async Task<string> GetProjectNameAsync(TemplateInputs inputs, CancellationToken cancellationToken)
+    private async Task<string> GetProjectNameAsync(TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (inputs.Name is not { } name || !ProjectNameValidator.IsProjectNameValid(name))
         {
             var defaultName = executionContext.WorkingDirectory.Name;
-            name = await prompter.PromptForProjectNameAsync(defaultName, cancellationToken);
+            name = await prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
         return name;
     }
 
-    private async Task<string> GetOutputPathAsync(TemplateInputs inputs, Func<string, string> pathDeriver, string projectName, CancellationToken cancellationToken)
+    private async Task<string> GetOutputPathAsync(TemplateInputs inputs, Func<string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (inputs.Output is not { } outputPath)
         {
-            outputPath = await prompter.PromptForOutputPath(pathDeriver(projectName), cancellationToken);
+            var defaultPath = pathDeriver(projectName);
+            outputPath = await prompter.PromptForOutputPath(defaultPath, parseResult, cancellationToken);
         }
 
         outputPath = Path.GetFullPath(outputPath);
@@ -643,19 +623,20 @@ internal class DotNetTemplateFactory(
     private async Task<(NuGetPackage Package, PackageChannel Channel)> GetProjectTemplatesVersionAsync(TemplateInputs inputs, CancellationToken cancellationToken)
     {
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
-        
+
         // Check if channel was provided via inputs (highest priority)
         var channelName = inputs.Channel;
-        
+
         // If no channel in inputs, check for global channel setting
         if (string.IsNullOrEmpty(channelName))
         {
             channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
         }
-        
+
         IEnumerable<PackageChannel> channels;
+        var hasPrHives = executionContext.GetPrHiveCount() > 0;
         bool hasChannelSetting = !string.IsNullOrEmpty(channelName);
-        
+
         if (hasChannelSetting)
         {
             // If --channel option is provided or global channel setting exists, find the matching channel
@@ -671,9 +652,8 @@ internal class DotNetTemplateFactory(
         {
             // If there are hives (PR build directories), include all channels.
             // Otherwise, only use the implicit/default channel to avoid prompting.
-            var hasHives = executionContext.GetPrHiveCount() > 0;
-            channels = hasHives 
-                ? allChannels 
+            channels = hasPrHives
+                ? allChannels
                 : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
         }
 
@@ -710,9 +690,25 @@ internal class DotNetTemplateFactory(
             }
         }
 
-        // If channel was specified via --channel option or global setting (but no --version), 
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            orderedPackagesFromChannels,
+            p => p.Package.Version,
+            out var cliVersionPackageFromChannel,
+            channelName: channelName,
+            hasPrHives: hasPrHives))
+        {
+            return cliVersionPackageFromChannel;
+        }
+
+        // If channel was specified via --channel option or global setting (but no --version),
         // automatically select the highest version from that channel without prompting
         if (hasChannelSetting)
+        {
+            return orderedPackagesFromChannels.First();
+        }
+
+        // In non-interactive mode, automatically select the highest version
+        if (!hostEnvironment.SupportsInteractiveInput)
         {
             return orderedPackagesFromChannels.First();
         }

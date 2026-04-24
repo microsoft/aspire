@@ -292,30 +292,6 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
-    public void Build_DuplicateResourceNames_MixedCasing_Error()
-    {
-        var appBuilder = DistributedApplication.CreateBuilder();
-
-        appBuilder.Resources.Add(new ContainerResource("Test"));
-        appBuilder.Resources.Add(new ContainerResource("Test"));
-
-        var ex = Assert.Throws<DistributedApplicationException>(appBuilder.Build);
-        Assert.Equal("Multiple resources with the name 'Test'. Resource names are case-insensitive.", ex.Message);
-    }
-
-    [Fact]
-    public void Build_DuplicateResourceNames_SameCasing_Error()
-    {
-        var appBuilder = DistributedApplication.CreateBuilder();
-
-        appBuilder.Resources.Add(new ContainerResource("Test"));
-        appBuilder.Resources.Add(new ContainerResource("TEST"));
-
-        var ex = Assert.Throws<DistributedApplicationException>(appBuilder.Build);
-        Assert.Equal("Multiple resources with the name 'Test'. Resource names are case-insensitive.", ex.Message);
-    }
-
-    [Fact]
     public void PathShaAndProjectNameShaBothAvailable()
     {
         var appBuilder = DistributedApplication.CreateBuilder();

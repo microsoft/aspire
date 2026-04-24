@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Dependencies>
   <ProductDependencies>
-    <Dependency Name="Microsoft.DeveloperControlPlane.darwin-amd64" Version="0.23.0">
+    <Dependency Name="Microsoft.DeveloperControlPlane.darwin-amd64" Version="0.23.1">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>1add83daefbe714c85eab1a057876c1c416b35c8</Sha>
+      <Sha>3801ddeb926fe2421f086270f485be7e3948a86d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.darwin-arm64" Version="0.23.0">
+    <Dependency Name="Microsoft.DeveloperControlPlane.darwin-arm64" Version="0.23.1">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>1add83daefbe714c85eab1a057876c1c416b35c8</Sha>
+      <Sha>3801ddeb926fe2421f086270f485be7e3948a86d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.linux-amd64" Version="0.23.0">
+    <Dependency Name="Microsoft.DeveloperControlPlane.linux-amd64" Version="0.23.1">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>1add83daefbe714c85eab1a057876c1c416b35c8</Sha>
+      <Sha>3801ddeb926fe2421f086270f485be7e3948a86d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.linux-arm64" Version="0.23.0">
+    <Dependency Name="Microsoft.DeveloperControlPlane.linux-arm64" Version="0.23.1">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>1add83daefbe714c85eab1a057876c1c416b35c8</Sha>
+      <Sha>3801ddeb926fe2421f086270f485be7e3948a86d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.linux-musl-amd64" Version="0.23.0">
+    <Dependency Name="Microsoft.DeveloperControlPlane.linux-musl-amd64" Version="0.23.1">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>1add83daefbe714c85eab1a057876c1c416b35c8</Sha>
+      <Sha>3801ddeb926fe2421f086270f485be7e3948a86d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.windows-amd64" Version="0.23.0">
+    <Dependency Name="Microsoft.DeveloperControlPlane.windows-amd64" Version="0.23.1">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>1add83daefbe714c85eab1a057876c1c416b35c8</Sha>
+      <Sha>3801ddeb926fe2421f086270f485be7e3948a86d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.windows-arm64" Version="0.23.0">
+    <Dependency Name="Microsoft.DeveloperControlPlane.windows-arm64" Version="0.23.1">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>1add83daefbe714c85eab1a057876c1c416b35c8</Sha>
+      <Sha>3801ddeb926fe2421f086270f485be7e3948a86d</Sha>
     </Dependency>
     <Dependency Name="Microsoft.Extensions.DependencyInjection.AutoActivation" Version="10.5.0">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-extensions</Uri>
@@ -179,33 +179,33 @@
     </Dependency>
   </ProductDependencies>
   <ToolsetDependencies>
-    <Dependency Name="Microsoft.DotNet.Arcade.Sdk" Version="10.0.0-beta.26123.2">
+    <Dependency Name="Microsoft.DotNet.Arcade.Sdk" Version="10.0.0-beta.26208.4">
       <Uri>https://github.com/dotnet/arcade</Uri>
-      <Sha>4d898652733deb7dd274237ac06d27ee2ad85b36</Sha>
+      <Sha>ecdd5c6a7986cafabbf6a322ea09a07736a01a0d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Build.Tasks.Archives" Version="10.0.0-beta.26123.2">
+    <Dependency Name="Microsoft.DotNet.Build.Tasks.Archives" Version="10.0.0-beta.26208.4">
       <Uri>https://github.com/dotnet/arcade</Uri>
-      <Sha>4d898652733deb7dd274237ac06d27ee2ad85b36</Sha>
+      <Sha>ecdd5c6a7986cafabbf6a322ea09a07736a01a0d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.Helix.Sdk" Version="10.0.0-beta.26123.2">
+    <Dependency Name="Microsoft.DotNet.Helix.Sdk" Version="10.0.0-beta.26208.4">
       <Uri>https://github.com/dotnet/arcade</Uri>
-      <Sha>4d898652733deb7dd274237ac06d27ee2ad85b36</Sha>
+      <Sha>ecdd5c6a7986cafabbf6a322ea09a07736a01a0d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.SharedFramework.Sdk" Version="10.0.0-beta.26123.2">
+    <Dependency Name="Microsoft.DotNet.SharedFramework.Sdk" Version="10.0.0-beta.26208.4">
       <Uri>https://github.com/dotnet/arcade</Uri>
-      <Sha>4d898652733deb7dd274237ac06d27ee2ad85b36</Sha>
+      <Sha>ecdd5c6a7986cafabbf6a322ea09a07736a01a0d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.RemoteExecutor" Version="10.0.0-beta.26123.2">
+    <Dependency Name="Microsoft.DotNet.RemoteExecutor" Version="10.0.0-beta.26208.4">
       <Uri>https://github.com/dotnet/arcade</Uri>
-      <Sha>4d898652733deb7dd274237ac06d27ee2ad85b36</Sha>
+      <Sha>ecdd5c6a7986cafabbf6a322ea09a07736a01a0d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.XUnitV3Extensions" Version="10.0.0-beta.26123.2">
+    <Dependency Name="Microsoft.DotNet.XUnitV3Extensions" Version="10.0.0-beta.26208.4">
       <Uri>https://github.com/dotnet/arcade</Uri>
-      <Sha>4d898652733deb7dd274237ac06d27ee2ad85b36</Sha>
+      <Sha>ecdd5c6a7986cafabbf6a322ea09a07736a01a0d</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DotNet.XliffTasks" Version="10.0.0-beta.26123.2">
+    <Dependency Name="Microsoft.DotNet.XliffTasks" Version="10.0.0-beta.26208.4">
       <Uri>https://github.com/dotnet/arcade</Uri>
-      <Sha>4d898652733deb7dd274237ac06d27ee2ad85b36</Sha>
+      <Sha>ecdd5c6a7986cafabbf6a322ea09a07736a01a0d</Sha>
     </Dependency>
   </ToolsetDependencies>
 </Dependencies>

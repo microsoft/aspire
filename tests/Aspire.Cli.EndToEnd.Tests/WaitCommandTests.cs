@@ -21,11 +21,11 @@ public sealed class WaitCommandTests(ITestOutputHelper output)
     public async Task CreateStartWaitAndStopAspireProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect();
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -36,7 +36,7 @@ public sealed class WaitCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         // Install the Aspire CLI
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireWaitApp", counter);

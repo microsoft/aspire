@@ -283,6 +283,168 @@ internal static class Hex1bAutomatorTestHelpers
     }
 
     /// <summary>
+    /// Types a shell command, waits for it to complete successfully, and advances the prompt counter.
+    /// </summary>
+    internal static async Task RunCommandAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, timeout);
+    }
+
+    /// <summary>
+    /// Types a shell command, waits for it to complete successfully, and fails immediately on a shell error prompt.
+    /// </summary>
+    internal static async Task RunCommandFailFastAsync(
+        this Hex1bTerminalAutomator auto,
+        string command,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout);
+    }
+
+    /// <summary>
+    /// Configures a numbered bash prompt and changes into the provided workspace directory.
+    /// </summary>
+    internal static async Task PrepareBashEnvironmentAsync(
+        this Hex1bTerminalAutomator auto,
+        string workspacePath,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(30);
+        var waitingForInputPattern = new CellPatternSearcher()
+            .Find("b")
+            .RightUntil("$")
+            .Right(' ')
+            .Right(' ');
+
+        await auto.WaitUntilAsync(
+            s => waitingForInputPattern.Search(s).Count > 0,
+            timeout: effectiveTimeout,
+            description: "initial bash prompt");
+        await auto.WaitAsync(500);
+
+        await auto.TypeAsync(AspireCliShellCommandHelpers.NumberedPromptSetupCommand);
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(workspacePath)}", counter);
+    }
+
+    /// <summary>
+    /// Extracts a localhive archive into <c>~/.aspire</c>.
+    /// </summary>
+    internal static async Task ExtractLocalHiveArchiveAsync(
+        this Hex1bTerminalAutomator auto,
+        string archivePath,
+        SequenceCounter counter)
+    {
+        await auto.RunCommandAsync(
+            AspireCliShellCommandHelpers.GetExtractLocalHiveArchiveCommand(archivePath),
+            counter,
+            TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>
+    /// Configures Aspire to use the extracted localhive packages.
+    /// </summary>
+    internal static async Task ConfigureLocalHiveAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        foreach (var command in AspireCliShellCommandHelpers.GetConfigureLocalHiveCommands())
+        {
+            await auto.RunCommandAsync(command, counter);
+        }
+    }
+
+    /// <summary>
+    /// Sources the standard <c>~/.aspire</c> environment for CLI or bundle execution.
+    /// </summary>
+    internal static async Task SourceAspireEnvironmentAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        bool includeBundlePath = false)
+    {
+        await auto.RunCommandAsync(
+            AspireCliShellCommandHelpers.GetSourceAspireEnvironmentCommand(includeBundlePath),
+            counter,
+            TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>
+    /// Logs the installed Aspire CLI version.
+    /// </summary>
+    internal static async Task LogAspireCliVersionAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.RunCommandAsync(
+            AspireCliShellCommandHelpers.AspireCliVersionCommand,
+            counter,
+            TimeSpan.FromSeconds(30));
+    }
+
+    /// <summary>
+    /// Waits for <c>aspire add</c> to either finish directly or stop on the version-selection prompt.
+    /// </summary>
+    internal static async Task WaitForAspireAddCompletionAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(2);
+        var sawVersionPrompt = false;
+        var successPrompt = new CellPatternSearcher()
+            .FindPattern(counter.Value.ToString())
+            .RightText(" OK] $ ");
+        var errorPrompt = new CellPatternSearcher()
+            .FindPattern(counter.Value.ToString())
+            .RightText(" ERR:");
+        var waitingForVersionSelection = new CellPatternSearcher()
+            .Find("What version would you like to install?");
+        var waitingForLegacyVersionSelection = new CellPatternSearcher()
+            .Find("based on NuGet.config");
+        var addCompleted = new CellPatternSearcher()
+            .Find("added to your AppHost project");
+        var addFailed = new CellPatternSearcher()
+            .Find("already exists in the project");
+
+        await auto.WaitUntilAsync(s =>
+            {
+                if (waitingForVersionSelection.Search(s).Count > 0 || waitingForLegacyVersionSelection.Search(s).Count > 0)
+                {
+                    sawVersionPrompt = true;
+                    return true;
+                }
+
+                return addCompleted.Search(s).Count > 0
+                    || addFailed.Search(s).Count > 0
+                    || successPrompt.Search(s).Count > 0
+                    || errorPrompt.Search(s).Count > 0;
+            },
+            timeout: effectiveTimeout,
+            description: "aspire add completion or version-selection prompt");
+
+        if (!sawVersionPrompt)
+        {
+            await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+            return;
+        }
+
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+    }
+
+    /// <summary>
     /// Handles the agent init confirmation prompt that appears after aspire init/new,
     /// then waits for the shell success prompt. Supports CLI versions with and without agent init chaining.
     /// </summary>
@@ -312,15 +474,16 @@ internal static class Hex1bAutomatorTestHelpers
             return successSearcher.Search(s).Count > 0;
         }, timeout: effectiveTimeout, description: $"agent init prompt or success prompt [{counter.Value} OK] $");
 
-        await auto.WaitAsync(500);
+        if (!agentInitFound)
+        {
+            counter.Increment();
+            return;
+        }
 
-        // Type 'n' + Enter unconditionally:
-        // - Agent init: declines the prompt, CLI exits, success prompt appears
-        // - No agent init: 'n' runs at bash (command not found), produces error prompt
+        await auto.WaitAsync(500);
         await auto.TypeAsync("n");
         await auto.EnterAsync();
 
-        // Wait for the aspire command's success prompt
         await auto.WaitUntilAsync(s =>
         {
             var successSearcher = new CellPatternSearcher()
@@ -329,11 +492,6 @@ internal static class Hex1bAutomatorTestHelpers
             return successSearcher.Search(s).Count > 0;
         }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ after agent init");
 
-        // Increment counter correctly for both cases
-        if (!agentInitFound)
-        {
-            counter.Increment();
-        }
         counter.Increment();
     }
 

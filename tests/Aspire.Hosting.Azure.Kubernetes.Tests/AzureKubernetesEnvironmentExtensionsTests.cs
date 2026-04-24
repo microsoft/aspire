@@ -298,6 +298,107 @@ public class AzureKubernetesEnvironmentExtensionsTests
         Assert.Same(aks.Resource.DefaultContainerRegistry, annotation.Registry);
     }
 
+    [Fact]
+    public void WithSystemNodePool_CustomVmSize()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool("Standard_B2s");
+
+        Assert.Single(aks.Resource.NodePools, p => p.Mode is AksNodePoolMode.System);
+        var systemPool = aks.Resource.NodePools.First(p => p.Mode is AksNodePoolMode.System);
+        Assert.Equal("system", systemPool.Name);
+        Assert.Equal("Standard_B2s", systemPool.VmSize);
+        Assert.Equal(1, systemPool.MinCount);
+        Assert.Equal(3, systemPool.MaxCount);
+    }
+
+    [Fact]
+    public void WithSystemNodePool_CustomVmSizeAndScaling()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool("Standard_B4ms", minCount: 2, maxCount: 5);
+
+        var systemPool = aks.Resource.NodePools.First(p => p.Mode is AksNodePoolMode.System);
+        Assert.Equal("Standard_B4ms", systemPool.VmSize);
+        Assert.Equal(2, systemPool.MinCount);
+        Assert.Equal(5, systemPool.MaxCount);
+    }
+
+    [Fact]
+    public void WithSystemNodePool_ReplacesDefaultSystemPool()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        // Default system pool should exist
+        Assert.Equal("Standard_D2s_v5", aks.Resource.NodePools[0].VmSize);
+
+        // Replace it
+        aks.WithSystemNodePool("Standard_B2s");
+
+        // Should still be exactly one system pool
+        Assert.Single(aks.Resource.NodePools, p => p.Mode is AksNodePoolMode.System);
+        Assert.Equal("Standard_B2s", aks.Resource.NodePools.First(p => p.Mode is AksNodePoolMode.System).VmSize);
+    }
+
+    [Fact]
+    public void WithSystemNodePool_CalledMultipleTimesUsesLastValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool("Standard_B2s")
+            .WithSystemNodePool("Standard_D4s_v5", minCount: 3, maxCount: 10);
+
+        Assert.Single(aks.Resource.NodePools, p => p.Mode is AksNodePoolMode.System);
+        var systemPool = aks.Resource.NodePools.First(p => p.Mode is AksNodePoolMode.System);
+        Assert.Equal("Standard_D4s_v5", systemPool.VmSize);
+        Assert.Equal(3, systemPool.MinCount);
+        Assert.Equal(10, systemPool.MaxCount);
+    }
+
+    [Fact]
+    public void WithSystemNodePool_ChainsWithAddNodePool()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool("Standard_B2s");
+
+        var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
+
+        // 1 system pool + 1 user pool
+        Assert.Equal(2, aks.Resource.NodePools.Count);
+        Assert.Equal("Standard_B2s", aks.Resource.NodePools.First(p => p.Mode is AksNodePoolMode.System).VmSize);
+        Assert.Equal("gpu", gpuPool.Resource.Name);
+    }
+
+    [Fact]
+    public void WithSystemNodePool_RejectsZeroMinCount()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        Assert.Throws<ArgumentOutOfRangeException>(() => aks.WithSystemNodePool("Standard_B2s", minCount: 0));
+    }
+
+    [Fact]
+    public async Task WithSystemNodePool_BicepReflectsCustomVmSize()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks")
+            .WithSystemNodePool("Standard_B2s");
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 }

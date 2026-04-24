@@ -26,12 +26,12 @@ var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
 
 builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
     .WithUv()
-    .WithReference(chat).WaitFor(chat)
+    .WithReference(project).WithReference(chat).WaitFor(chat)
     .PublishAsHostedAgent(project);
 
 builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
     .WithHttpEndpoint(targetPort: 9000)
-    .WithReference(chat).WaitFor(chat)
+    .WithReference(project).WithReference(chat).WaitFor(chat)
     .PublishAsHostedAgent(project);
 
 builder.Build().Run();

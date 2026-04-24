@@ -150,6 +150,12 @@
   <data name="DeleteParameterName" xml:space="preserve">
     <value>Delete parameter</value>
   </data>
+  <data name="OpenTrackedBrowserDescription" xml:space="preserve">
+    <value>Open the app in a tracked browser session and stream browser logs to this resource.</value>
+  </data>
+  <data name="OpenTrackedBrowserName" xml:space="preserve">
+    <value>Open tracked browser</value>
+  </data>
   <data name="RebuildDescription" xml:space="preserve">
     <value>Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</value>
   </data>

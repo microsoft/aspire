@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledMessage">
-        <source>Container runtime could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes.</source>
-        <target state="translated">Non è possibile trovare il runtime del contenitore. Vedi https://aka.ms/dotnet/aspire/containers per altri dettagli sui runtime del contenitore supportati.</target>
+        <source>Container runtime could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.</source>
+        <target state="translated">Non è possibile trovare il runtime del contenitore. Vedi https://aka.ms/aspire/containers per altri dettagli sui runtime del contenitore supportati.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledTitle">
@@ -43,17 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DeleteParameterMessage">
-        <source>Are you sure you want to delete the value for parameter `{0}`? </source>
-        <target state="translated">Eliminare il valore del parametro '{0}'? </target>
-        <note>Contains markdown. {0} is the parameter name.</note>
-      </trans-unit>
-      <trans-unit id="DeleteParameterMessageWithUserSecrets">
-        <source>Are you sure you want to delete the value for parameter `{0}`?
-
-The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets). You can choose to also delete it from there.</source>
-        <target state="needs-review-translation">Eliminare il valore del parametro '{0}'?
-
-Il valore è attualmente salvato nei [segreti utente](https://learn.microsoft.com/aspnet/core/security/app-secrets). È possibile scegliere di eliminarlo anche da lì.</target>
+        <source>Are you sure you want to delete the value for parameter `{0}`?</source>
+        <target state="needs-review-translation">Eliminare il valore del parametro '{0}'? </target>
         <note>Contains markdown. {0} is the parameter name.</note>
       </trans-unit>
       <trans-unit id="DeleteParameterPrimaryButtonText">
@@ -101,6 +92,11 @@ Il valore è attualmente salvato nei [segreti utente](https://learn.microsoft.co
         <target state="translated">Parametri non risolti</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParametersInputsDeleteDescription">
+        <source>The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets).</source>
+        <target state="new">The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets).</target>
+        <note>Contains markdown</note>
+      </trans-unit>
       <trans-unit id="ParametersInputsDeleteLabel">
         <source>Delete from user secrets</source>
         <target state="translated">Elimina dai segreti utente</target>
@@ -126,10 +122,15 @@ Il valore è attualmente salvato nei [segreti utente](https://learn.microsoft.co
         <target state="translated">Salva</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParametersInputsRememberDescriptionConfigured">
+        <source>Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</source>
+        <target state="new">Save value to [user secrets](https://aka.ms/aspire/user-secrets) for future use.</target>
+        <note>Contains markdown</note>
+      </trans-unit>
       <trans-unit id="ParametersInputsRememberDescriptionNotConfigured">
         <source>Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</source>
         <target state="new">Requires user secrets to be configured for the AppHost. Run `aspire secret set &lt;key&gt; &lt;value&gt;` to initialize user secrets, or see [user secrets](https://aka.ms/aspire/user-secrets) for more information.</target>
-        <note />
+        <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsRememberLabel">
         <source>Save to user secrets</source>
@@ -162,9 +163,7 @@ Il valore è attualmente salvato nei [segreti utente](https://learn.microsoft.co
         <note />
       </trans-unit>
       <trans-unit id="SetParameterMessage">
-        <source>Please provide a value for the parameter. The parameter can be saved to [user secrets](https://aka.ms/aspire/user-secrets) for future use.
-
-New parameter values may not be used until dependent resources are restarted.</source>
+        <source>Please provide a value for the parameter. New parameter values may not be used until dependent resources are restarted.</source>
         <target state="needs-review-translation">Specificare un valore per il parametro. I parametri possono essere salvati nei [segreti utente](https://learn.microsoft.com/aspnet/core/security/app-secrets) per usi futuri.
 
 I nuovi valori del parametro potrebbero non essere usati finché le risorse dipendenti non vengono riavviate.</target>

@@ -73,11 +73,7 @@ public sealed class NspStorageKeyVaultDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create React + ASP.NET Core project
             output.WriteLine("Step 3: Creating React + ASP.NET Core project...");
@@ -94,52 +90,28 @@ public sealed class NspStorageKeyVaultDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5b: Add Aspire.Hosting.Azure.Network (for NSP)
             output.WriteLine("Step 5b: Adding Azure Network hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Network");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5c: Add Aspire.Hosting.Azure.Storage
             output.WriteLine("Step 5c: Adding Azure Storage hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.Storage");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5d: Add Aspire.Hosting.Azure.KeyVault
             output.WriteLine("Step 5d: Adding Azure Key Vault hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.KeyVault");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 6a: Add Storage Blob client package to the Server project
             output.WriteLine("Step 6a: Adding blob client package to Server project...");

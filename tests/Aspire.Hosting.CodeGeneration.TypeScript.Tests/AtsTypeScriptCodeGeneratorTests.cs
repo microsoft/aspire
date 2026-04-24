@@ -380,6 +380,20 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Scanner_HostingAssembly_WithBrowserLogsCapability()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var withBrowserLogs = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting/withBrowserLogs");
+        Assert.NotNull(withBrowserLogs);
+        Assert.Equal("withBrowserLogs", withBrowserLogs.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", withBrowserLogs.TargetTypeId);
+        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "browser" && p.Type?.TypeId == "string" && p.IsOptional);
+        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "profile" && p.Type?.TypeId == "string" && p.IsOptional);
+        Assert.True(withBrowserLogs.ReturnsBuilder);
+    }
+
+    [Fact]
     public async Task Scanner_HostingAssembly_ContainerResourceCapabilities()
     {
         // Verify all capabilities that target ContainerResource from Aspire.Hosting

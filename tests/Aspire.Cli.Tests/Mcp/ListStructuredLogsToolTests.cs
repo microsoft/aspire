@@ -33,7 +33,7 @@ public class ListStructuredLogsToolTests
     }
 
     [Fact]
-    public async Task ListStructuredLogsTool_ThrowsException_WhenDashboardApiNotAvailable()
+    public async Task ListStructuredLogsTool_ThrowsException_WhenDashboardNotAvailable()
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -47,7 +47,7 @@ public class ListStructuredLogsToolTests
         var exception = await Assert.ThrowsAsync<ModelContextProtocol.McpProtocolException>(
             () => tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).AsTask()).DefaultTimeout();
 
-        Assert.Contains("Dashboard is not available", exception.Message);
+        Assert.Contains(McpErrorMessages.DashboardNotAvailable, exception.Message);
     }
 
     [Fact]

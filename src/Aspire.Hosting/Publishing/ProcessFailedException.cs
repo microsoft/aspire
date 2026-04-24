@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Utils;
+
 namespace Aspire.Hosting.Publishing;
 
 /// <summary>
@@ -13,14 +15,14 @@ internal sealed class ProcessFailedException : DistributedApplicationException
     /// </summary>
     /// <param name="message">A summary of the failure (e.g., "Docker build failed with exit code 1.").</param>
     /// <param name="exitCode">The process exit code.</param>
-    /// <param name="buildOutput">The retained stdout/stderr lines from the build process.</param>
-    /// <param name="totalBuildOutputLineCount">The total number of stdout/stderr lines observed.</param>
-    public ProcessFailedException(string message, int exitCode, IReadOnlyList<string> buildOutput, int? totalBuildOutputLineCount = null)
+    /// <param name="processOutput">The retained stdout/stderr lines from the failed process.</param>
+    /// <param name="totalProcessOutputLineCount">The total number of stdout/stderr lines observed.</param>
+    public ProcessFailedException(string message, int exitCode, IReadOnlyList<string> processOutput, int? totalProcessOutputLineCount = null)
         : base(message)
     {
         ExitCode = exitCode;
-        BuildOutput = buildOutput;
-        TotalBuildOutputLineCount = totalBuildOutputLineCount ?? buildOutput.Count;
+        ProcessOutput = processOutput;
+        TotalProcessOutputLineCount = totalProcessOutputLineCount ?? processOutput.Count;
     }
 
     /// <summary>
@@ -29,25 +31,25 @@ internal sealed class ProcessFailedException : DistributedApplicationException
     public int ExitCode { get; }
 
     /// <summary>
-    /// The retained stdout/stderr lines from the build process.
+    /// The retained stdout/stderr lines from the failed process.
     /// </summary>
-    public IReadOnlyList<string> BuildOutput { get; }
+    public IReadOnlyList<string> ProcessOutput { get; }
 
     /// <summary>
     /// The total number of stdout/stderr lines observed for the failed process.
     /// </summary>
-    public int TotalBuildOutputLineCount { get; }
+    public int TotalProcessOutputLineCount { get; }
 
     /// <inheritdoc/>
-    public override string Message => BuildOutput.Count > 0
+    public override string Message => ProcessOutput.Count > 0
         ? $"{base.Message}{Environment.NewLine}{GetFormattedOutput()}"
         : base.Message;
 
     /// <summary>
-    /// Returns the last <paramref name="maxLines"/> lines of build output formatted for display.
+    /// Returns the last <paramref name="maxLines"/> lines of process output formatted for display.
     /// </summary>
     public string GetFormattedOutput(int maxLines = 50)
     {
-        return BuildOutputCapture.FormatOutput(BuildOutput, TotalBuildOutputLineCount, maxLines);
+        return ProcessOutputCapture.FormatOutput(ProcessOutput, TotalProcessOutputLineCount, maxLines, outputDescription: "Process output");
     }
 }

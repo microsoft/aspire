@@ -1,10 +1,14 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource aks 'Microsoft.ContainerService/managedClusters@2025-03-01' = {
+resource aks 'Microsoft.ContainerService/managedClusters@2026-01-01' = {
   name: take('aks-${uniqueString(resourceGroup().id)}', 63)
+  tags: {
+    'aspire-resource-name': 'aks'
+  }
   location: location
   properties: {
+    dnsPrefix: 'aks-dns'
     agentPoolProfiles: [
       {
         name: 'system'
@@ -17,7 +21,6 @@ resource aks 'Microsoft.ContainerService/managedClusters@2025-03-01' = {
         mode: 'System'
       }
     ]
-    dnsPrefix: 'aks-dns'
     oidcIssuerProfile: {
       enabled: true
     }
@@ -27,15 +30,12 @@ resource aks 'Microsoft.ContainerService/managedClusters@2025-03-01' = {
       }
     }
   }
-  identity: {
-    type: 'SystemAssigned'
-  }
   sku: {
     name: 'Base'
     tier: 'Free'
   }
-  tags: {
-    'aspire-resource-name': 'aks'
+  identity: {
+    type: 'SystemAssigned'
   }
 }
 

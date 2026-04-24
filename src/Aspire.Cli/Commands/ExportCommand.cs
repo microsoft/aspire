@@ -111,7 +111,7 @@ internal sealed class ExportCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, ExecutionContext.LogFilePath, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -130,8 +130,8 @@ internal sealed class ExportCommand : BaseCommand
         catch (HttpRequestException ex) when (dashboardUrl is not null)
         {
             _logger.LogError(ex, "Failed to export telemetry data from dashboard");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
             return ExitCodeConstants.DashboardFailure;
         }
         catch (Exception ex)
@@ -235,7 +235,7 @@ internal sealed class ExportCommand : BaseCommand
         var fullPath = Path.GetFullPath(outputPath);
         exportArchive.WriteToFile(fullPath);
 
-        _interactionService.DisplayMessage(KnownEmojis.CheckMark, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
+        _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
         return ExitCodeConstants.Success;
     }
 
