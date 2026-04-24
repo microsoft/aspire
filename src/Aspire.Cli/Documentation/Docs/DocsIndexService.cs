@@ -523,6 +523,12 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         return score;
     }
 
+    /// <summary>
+    /// Normalizes markdown content from llms.txt sources.
+    /// The llms.txt format strips most whitespace from markdown, collapsing headings,
+    /// lists, tables, and code blocks onto fewer lines. This method re-introduces
+    /// the blank lines and line breaks needed so the text parses as valid markdown.
+    /// </summary>
     internal static string NormalizeContent(string content)
     {
         if (string.IsNullOrWhiteSpace(content))

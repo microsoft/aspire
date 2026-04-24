@@ -86,19 +86,6 @@ internal sealed class DocsGetCommand : BaseCommand
         }
         else
         {
-            InteractionService.DisplayMarkdown(
-                """
-                ## API
-
-                The API section configures authentication for the dashboard’s HTTP API endpoints.
-                | Option | Description |
-                | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-                | `Dashboard:Api:Enabled` Default: `false` | Enables the Telemetry HTTP API (`/api/telemetry/*`) endpoints. When `false`, the endpoints are not registered. |
-                | `Dashboard:Api:AuthMode` Default: `Unsecured` | Can be set to `ApiKey` or `Unsecured`. `Unsecured` should only be used during local development. If an API key is configured and no auth mode is specified, defaults to `ApiKey`. |
-                | `Dashboard:Api:PrimaryApiKey` Default: `null` | Specifies the primary API key. The API key can be any text, but a value with at least 128 bits of entropy is recommended. This value is required if auth mode is API key. |
-                | `Dashboard:Api:SecondaryApiKey` Default: `null` | Specifies the secondary API key. The API key can be any text, but a value with at least 128 bits of entropy is recommended. This value is optional. |
-                """, maxWidth: 100);
-
             InteractionService.DisplayMarkdown(doc.Content, maxWidth: 100);
         }
 
