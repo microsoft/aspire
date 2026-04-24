@@ -61,7 +61,7 @@ internal sealed record ResourceSourceViewModel(string value, List<LaunchArgument
                 && !effectiveArguments.IsDefaultOrEmpty)
             {
                 var effectiveArgumentList = effectiveArguments.Select(arg => new LaunchArgument(arg, true)).ToList();
-                var effectiveArgsString = string.Join(" ", effectiveArguments);
+                var effectiveArgsString = string.Join(" ", effectiveArgumentList.Select(a => a.Value));
 
                 return new CommandLineInfo(Arguments: effectiveArgumentList, ArgumentsString: effectiveArgsString, TooltipString: effectiveArgsString);
             }
