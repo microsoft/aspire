@@ -50,11 +50,11 @@
     <MicrosoftExtensionsServiceDiscoveryVersion>10.2.0</MicrosoftExtensionsServiceDiscoveryVersion>
     <MicrosoftExtensionsServiceDiscoveryYarpVersion>10.2.0</MicrosoftExtensionsServiceDiscoveryYarpVersion>
     <!-- OpenTelemetry (OTel) -->
-    <OpenTelemetryInstrumentationAspNetCoreVersion>1.15.0</OpenTelemetryInstrumentationAspNetCoreVersion>
-    <OpenTelemetryInstrumentationHttpVersion>1.15.0</OpenTelemetryInstrumentationHttpVersion>
-    <OpenTelemetryInstrumentationExtensionsHostingVersion>1.15.0</OpenTelemetryInstrumentationExtensionsHostingVersion>
-    <OpenTelemetryInstrumentationRuntimeVersion>1.15.0</OpenTelemetryInstrumentationRuntimeVersion>
-    <OpenTelemetryExporterOpenTelemetryProtocolVersion>1.15.0</OpenTelemetryExporterOpenTelemetryProtocolVersion>
+    <OpenTelemetryInstrumentationAspNetCoreVersion>1.15.2</OpenTelemetryInstrumentationAspNetCoreVersion>
+    <OpenTelemetryInstrumentationHttpVersion>1.15.1</OpenTelemetryInstrumentationHttpVersion>
+    <OpenTelemetryInstrumentationExtensionsHostingVersion>1.15.3</OpenTelemetryInstrumentationExtensionsHostingVersion>
+    <OpenTelemetryInstrumentationRuntimeVersion>1.15.1</OpenTelemetryInstrumentationRuntimeVersion>
+    <OpenTelemetryExporterOpenTelemetryProtocolVersion>1.15.3</OpenTelemetryExporterOpenTelemetryProtocolVersion>
     <AzureMonitorOpenTelemetryExporterVersion>1.5.0</AzureMonitorOpenTelemetryExporterVersion>
     <!-- Aspire.Cli uses a preview version of StreamJsonRpc which is needed for native AOT support. -->
     <StreamJsonRpcPackageVersionForCli>2.23.32-alpha</StreamJsonRpcPackageVersionForCli>
