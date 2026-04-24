@@ -617,19 +617,21 @@ public class DistributedApplication : IHost, IAsyncDisposable
     }
 
     /// <summary>
-    /// Applies a default <see cref="ComputeEnvironmentAnnotation"/> when the model contains exactly one
-    /// compute environment.
+    /// When the model contains exactly one compute environment, applies a
+    /// <see cref="ComputeEnvironmentAnnotation"/> pointing to that environment to every
+    /// <see cref="IComputeResource"/> that doesn't already have one.
     /// </summary>
     /// <remarks>
-    /// This implements the "single compute environment is the default" convention: when exactly one
-    /// compute environment is present (for example, a single <c>AzureContainerAppEnvironmentResource</c>),
-    /// it is auto-assigned to every <see cref="IComputeResource"/> that does not already have an explicit
-    /// binding. Resources explicitly bound via <c>WithComputeEnvironment(...)</c> or otherwise are left
-    /// untouched.
+    /// This implements the "single compute environment is the default" convention: when only one
+    /// compute environment is present (e.g., a single <c>AzureContainerAppEnvironmentResource</c>),
+    /// developers don't need to call <c>WithComputeEnvironment(...)</c> on every compute resource —
+    /// the unique environment is auto-assigned here. Resources that have been explicitly bound to a
+    /// compute environment (via <c>WithComputeEnvironment</c> or otherwise) are left untouched.
     ///
-    /// When zero or multiple compute environments are present, this method deliberately does nothing.
-    /// Validation for ambiguous multi-environment models is handled by a required before-start pipeline
-    /// step.
+    /// When zero or more than one compute environment is present we deliberately do nothing.
+    /// - With zero compute environments there is no default to apply.
+    /// - With multiple compute environments there is no unambiguous default; the developer must pick one explicitly per
+    /// resource.
     ///
     /// Doing this once here, before the before-start pipeline runs, guarantees downstream
     /// consumers (per-environment prepare steps, deployment-target inspection helpers, etc.) see
