@@ -18,86 +18,369 @@
     <!-- Read the PE Machine field from the binary and compare against PEExpectedMachine (hex) — Windows only -->
     <_CheckPEMachine Condition="'$(PublishNativeAot)' == 'true' and $([System.OperatingSystem]::IsWindows())">true</_CheckPEMachine>
 
-    <_NativeBinaryPath>$([MSBuild]::NormalizePath($(OutputPath), 'aspire'))</_NativeBinaryPath>
-    <_NativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_NativeBinaryPath).exe</_NativeBinaryPath>
+    <!-- Binary names -->
+    <_NativeBinaryName>aspire</_NativeBinaryName>
+    <_NativeBinaryName Condition="$(CliRuntime.StartsWith('win-'))">aspire.exe</_NativeBinaryName>
+    <_ManagedBinaryName>aspire-managed</_ManagedBinaryName>
+    <_ManagedBinaryName Condition="$(CliRuntime.StartsWith('win-'))">aspire-managed.exe</_ManagedBinaryName>
+
+    <!-- Flat binary (no embedded bundle) — goes into the CLI archive -->
+    <_NativeBinaryPath>$([MSBuild]::NormalizePath($(OutputPath), '$(_NativeBinaryName)'))</_NativeBinaryPath>
+
+    <!-- Bundled binary (with embedded bundle.tar.gz) — goes into the dotnet-tool nupkg -->
+    <_BundledOutputPath>$([MSBuild]::NormalizePath($(OutputPath), '..', '$(MSBuildProjectName)_bundled'))</_BundledOutputPath>
+    <_BundledBinaryPath>$([MSBuild]::NormalizePath($(_BundledOutputPath), '$(_NativeBinaryName)'))</_BundledBinaryPath>
+
+    <!-- Bundle layout directory: the unarchived layout from CreateLayout (managed/ + dcp/).
+         Can be overridden by callers that produce the layout in a different location. -->
+    <BundleLayoutPath Condition="'$(BundleLayoutPath)' == ''">$([MSBuild]::NormalizePath($(RepoRoot), 'artifacts', 'bundle', '$(CliRuntime)'))</BundleLayoutPath>
+
+    <!-- ── Build mode properties ──────────────────────────────────────────────
+         Control which outputs PublishToDisk produces. Each caller should enable
+         the properties it needs with a comment explaining why.
+         ────────────────────────────────────────────────────────────────────── -->
+
+    <!-- Flat binary: NativeAOT publish WITHOUT embedded bundle. Produces the lean (~35 MB)
+         binary alongside managed/ + dcp/ directories for the CLI archive (tar.gz / zip).
+         Default: true — this is the primary output of the clipack build. -->
+    <BuildFlatBinary Condition="'$(BuildFlatBinary)' == ''">true</BuildFlatBinary>
+
+    <!-- Bundled binary: NativeAOT publish WITH embedded bundle.tar.gz. Produces the
+         self-extracting (~120 MB) binary that goes into the dotnet-tool nupkg.
+         Default: false — opt-in because it requires a second NativeAOT compilation.
+         Automatically enabled when PackCliTool=true or BundlePayloadPath is set. -->
+    <BuildBundledBinary Condition="'$(BuildBundledBinary)' == '' and '$(PackCliTool)' == 'true'">true</BuildBundledBinary>
+    <BuildBundledBinary Condition="'$(BuildBundledBinary)' == '' and '$(BundlePayloadPath)' != ''">true</BuildBundledBinary>
+    <BuildBundledBinary Condition="'$(BuildBundledBinary)' == ''">false</BuildBundledBinary>
+
+    <!-- PackCliTool: Pack the bundled binary into dotnet-tool nupkgs (Aspire.Cli.<RID>.nupkg
+         + Aspire.Cli.nupkg pointer). Default: false — opt-in. Implies BuildBundledBinary. -->
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.DotNet.Build.Tasks.Archives" />
   </ItemGroup>
 
-  <Target Name="PublishToDisk"
-          DependsOnTargets="_PublishProject;_ValidateNativeBinaryFileSignatureOnUnix;_ValidateNativeBinaryPEMachineOnWindows;PrepareOutputPathForPublishToDisk" />
+  <!-- Validate build mode property combinations before running any work. -->
+  <Target Name="_ValidateBuildModes">
+    <Error Condition="'$(BuildFlatBinary)' != 'true' and '$(BuildBundledBinary)' != 'true'"
+           Text="At least one of BuildFlatBinary or BuildBundledBinary must be true. PublishToDisk has nothing to do." />
+    <Error Condition="'$(PackCliTool)' == 'true' and '$(BuildBundledBinary)' != 'true'"
+           Text="PackCliTool=true requires BuildBundledBinary=true (the nupkg needs the bundled binary)." />
+    <Error Condition="'$(ExpectFlatLayout)' == 'true' and '$(BuildFlatBinary)' != 'true'"
+           Text="ExpectFlatLayout=true requires BuildFlatBinary=true." />
+  </Target>
 
-  <Target Name="PrepareOutputPathForPublishToDisk">
+  <!--
+    PublishToDisk: Main entry point. Which outputs are produced depends on build mode properties:
+      - BuildFlatBinary=true  → flat binary + layout for CLI archive (tar.gz / zip)
+      - BuildBundledBinary=true → bundled binary for dotnet-tool nupkg
+
+    Build flow (targets self-skip when their build mode is off):
+      1. _PublishFlatBinary:    NativeAOT publish WITHOUT bundle → $(OutputPath)/aspire[.exe]
+      2. _PublishBundledBinary: NativeAOT publish WITH bundle    → $(_BundledOutputPath)/aspire[.exe]
+      3. _AssembleFlatLayout:   Copy managed/ + dcp/ from BundleLayoutPath into $(OutputPath)
+      4. _ValidateFlatLayout:   Structural checks on the flat layout
+      5. _ValidateBundledBinary: Size + existence check on bundled binary
+      6. _ValidateNativeBinaryFileSignatureOnUnix: file signature on flat binary
+      7. PrepareOutputPathForPublishToDisk: cleanup (aspire.xml, xliff)
+
+    After this target completes:
+      - $(OutputPath) contains the flat layout (aspire + managed/ + dcp/) → Arcade archives it
+      - $(_BundledOutputPath) contains the bundled binary → _PackCliTool packs it into nupkg
+  -->
+  <Target Name="PublishToDisk"
+          DependsOnTargets="_ValidateBuildModes;
+                           _PublishFlatBinary;_PublishBundledBinary;
+                           _AssembleFlatLayout;_ValidateFlatLayout;
+                           _ValidateBundledBinary;
+                           _ValidateNativeBinaryFileSignatureOnUnix;
+                           _ValidateNativeBinaryPEMachineOnWindows;
+                           PrepareOutputPathForPublishToDisk" />
+
+  <Target Name="PrepareOutputPathForPublishToDisk" Condition="'$(BuildFlatBinary)' == 'true'">
     <!-- TODO: avoid generating the file instead of manually deleting it here -->
     <Delete Files="$(OutputPath)\aspire.xml" Condition="Exists('$(OutputPath)\aspire.xml')" />
 
-    <!-- work around https://github.com/dotnet/runtime/issues/116758 by removing the Xliff folders. -->
+    <!-- work around https://github.com/dotnet/runtime/issues/116758 by removing the Xliff folders.
+         Only remove known xliff language directories, NOT managed/ or dcp/ which are part of the flat layout. -->
     <ItemGroup>
       <DirectoriesToRemove Include="$(XlfLanguages)" />
     </ItemGroup>
     <RemoveDir Directories="$(OutputPath)\%(DirectoriesToRemove.Identity)" />
   </Target>
 
-  <Target Name="_PublishProject">
-    <!--
-      Bundle payload flow:
-        1. Bundle.proj runs CreateLayout which produces a tar.gz archive (managed runtime, DCP, etc.)
-        2. Pipeline steps (BuildAndTest.yml, build_sign_native.yml, GitHub Actions) pass BundlePayloadPath to that archive
-        3. Common.projitems forwards BundlePayloadPath to the CLI publish via AdditionalProperties
-        4. Aspire.Cli.csproj embeds it as an EmbeddedResource with LogicalName="bundle.tar.gz"
-        5. BundleService.cs reads the resource at runtime via Assembly.GetManifestResourceStream and extracts with TarReader
-    -->
-    <PropertyGroup>
-      <BundlePayloadPath Condition="'$(BundlePayloadPath)' == ''">$(RepoRoot)artifacts/bundle/aspire-ci-bundlepayload-$(CliRuntime).tar.gz</BundlePayloadPath>
-    </PropertyGroup>
+  <!--
+    _PublishFlatBinary: Publish NativeAOT binary WITHOUT the embedded bundle.
+    This lean binary (~35 MB) goes into the CLI archive alongside managed/ and dcp/.
+    At runtime, LayoutDiscovery finds the sibling directories automatically.
+  -->
+  <Target Name="_PublishFlatBinary" Condition="'$(BuildFlatBinary)' == 'true'">
     <ItemGroup>
-      <AdditionalProperties Include="RuntimeIdentifier=$(CliRuntime)" />
-      <AdditionalProperties Include="PublishDir=$(OutputPath)" />
-      <AdditionalProperties Include="SelfContained=true" />
-      <AdditionalProperties Condition="'$(BundlePayloadPath)' != ''" Include="BundlePayloadPath=$(BundlePayloadPath)" />
-      <!-- Pass through version properties so the CLI gets the correct version -->
-      <AdditionalProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
-      <AdditionalProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+      <_FlatPublishProperties Include="RuntimeIdentifier=$(CliRuntime)" />
+      <_FlatPublishProperties Include="PublishDir=$(OutputPath)" />
+      <_FlatPublishProperties Include="SelfContained=true" />
+      <!-- Empty BundlePayloadPath = no embedded resource, no bundle in the binary -->
+      <_FlatPublishProperties Include="BundlePayloadPath=" />
+      <_FlatPublishProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_FlatPublishProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
     </ItemGroup>
 
     <ItemGroup Condition="'$(PublishNativeAot)' == 'true'">
-      <!-- Always publish Release for native aot, since Debug hits a warning https://github.com/protocolbuffers/protobuf/issues/21824. -->
-      <AdditionalProperties Include="Configuration=Release" />
+      <_FlatPublishProperties Include="Configuration=Release" />
     </ItemGroup>
     <ItemGroup Condition="'$(PublishNativeAot)' != 'true'">
-      <AdditionalProperties Include="Configuration=$(Configuration)" />
-      <AdditionalProperties Include="PublishAot=false" />
-      <AdditionalProperties Include="PublishSingleFile=true" />
-
-      <!-- Windows pdb aren't really needed any more. See https://github.com/dotnet/arcade/issues/15724
-          As the pdb file is in the same location for all the RIDs it causes arcade's `_DeployPortableSymbolsToSymStore`
-          target to race.
-
-          `The process cannot access the file 'D:\a\_work\1\s\artifacts\SymStore\Release\Aspire.Cli\net8.0\aspire.pdb' because it is being used by another process`
-      -->
-      <AdditionalProperties Include="PublishWindowsPdb=false" />
+      <_FlatPublishProperties Include="Configuration=$(Configuration)" />
+      <_FlatPublishProperties Include="PublishAot=false" />
+      <_FlatPublishProperties Include="PublishSingleFile=true" />
+      <_FlatPublishProperties Include="PublishWindowsPdb=false" />
     </ItemGroup>
 
-    <!-- Explicitly Restore with the RID due to .NET SDK issue with getting runtime packs if you directly call the Publish target. -->
     <MSBuild
         Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj"
         Targets="Restore"
-        Properties="@(AdditionalProperties)"
+        Properties="@(_FlatPublishProperties)"
         RemoveProperties="OutputPath;TargetFramework" />
 
-    <!-- Remove OutputPath, and TargetFramework so the defaults can be used -->
     <MSBuild
         Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj"
         Targets="Publish"
-        Properties="@(AdditionalProperties)"
+        Properties="@(_FlatPublishProperties)"
         RemoveProperties="OutputPath;TargetFramework" />
 
-    <Error Condition="!Exists('$(_NativeBinaryPath)')" Text="Could not find expected `aspire` binary at $(_NativeBinaryPath)" />
+    <Error Condition="!Exists('$(_NativeBinaryPath)')" Text="Could not find flat binary at $(_NativeBinaryPath)" />
   </Target>
 
-  <Target Name="_ValidateNativeBinaryFileSignatureOnUnix" Condition="'$(_CheckFileSignature)' == 'true'">
+  <!--
+    _PublishBundledBinary: Publish NativeAOT binary WITH the embedded bundle.tar.gz.
+    This self-extracting binary (~120 MB) goes into the dotnet-tool nupkg.
+    At runtime, BundleService.IsBundle == true → self-extracts on first run.
+  -->
+  <Target Name="_PublishBundledBinary" Condition="'$(BuildBundledBinary)' == 'true'">
+    <PropertyGroup>
+      <BundlePayloadPath Condition="'$(BundlePayloadPath)' == ''">$(RepoRoot)artifacts/bundle/aspire-ci-bundlepayload-$(CliRuntime).tar.gz</BundlePayloadPath>
+    </PropertyGroup>
+
+    <Error Condition="!Exists('$(BundlePayloadPath)')"
+           Text="BundlePayloadPath does not exist: '$(BundlePayloadPath)'. Ensure the bundle payload has been created before building the bundled binary." />
+
+    <ItemGroup>
+      <_BundledPublishProperties Include="RuntimeIdentifier=$(CliRuntime)" />
+      <_BundledPublishProperties Include="PublishDir=$(_BundledOutputPath)" />
+      <_BundledPublishProperties Include="SelfContained=true" />
+      <_BundledPublishProperties Condition="'$(BundlePayloadPath)' != ''" Include="BundlePayloadPath=$(BundlePayloadPath)" />
+      <_BundledPublishProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_BundledPublishProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(PublishNativeAot)' == 'true'">
+      <_BundledPublishProperties Include="Configuration=Release" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(PublishNativeAot)' != 'true'">
+      <_BundledPublishProperties Include="Configuration=$(Configuration)" />
+      <_BundledPublishProperties Include="PublishAot=false" />
+      <_BundledPublishProperties Include="PublishSingleFile=true" />
+      <_BundledPublishProperties Include="PublishWindowsPdb=false" />
+    </ItemGroup>
+
+    <MSBuild
+        Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj"
+        Targets="Restore"
+        Properties="@(_BundledPublishProperties)"
+        RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild
+        Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj"
+        Targets="Publish"
+        Properties="@(_BundledPublishProperties)"
+        RemoveProperties="OutputPath;TargetFramework" />
+
+    <Error Condition="!Exists('$(_BundledBinaryPath)')" Text="Could not find bundled binary at $(_BundledBinaryPath)" />
+  </Target>
+
+  <!--
+    _AssembleFlatLayout: Copy managed/ and dcp/ from the bundle layout directory into $(OutputPath).
+    After this target, $(OutputPath) contains the complete flat layout:
+      aspire[.exe]       — NativeAOT binary (from _PublishFlatBinary)
+      managed/           — aspire-managed + wwwroot
+      dcp/               — DCP binaries
+
+    Condition: runs when BundleLayoutPath exists (auto-detected from the bundle workflow's output)
+    OR when ExpectFlatLayout=true is explicitly set by the caller. The latter case errors loudly
+    if BundleLayoutPath is missing, preventing silent production of a broken archive.
+  -->
+  <Target Name="_AssembleFlatLayout" DependsOnTargets="_PublishFlatBinary"
+          Condition="'$(BuildFlatBinary)' == 'true' and (Exists('$(BundleLayoutPath)') or '$(ExpectFlatLayout)' == 'true')">
+    <Error Condition="'$(ExpectFlatLayout)' == 'true' and !Exists('$(BundleLayoutPath)')"
+           Text="ExpectFlatLayout is true but BundleLayoutPath does not exist: '$(BundleLayoutPath)'. Ensure Bundle.proj has run first." />
+
+    <PropertyGroup>
+      <_LayoutManagedSource>$([MSBuild]::NormalizePath($(BundleLayoutPath), 'managed'))</_LayoutManagedSource>
+      <_LayoutDcpSource>$([MSBuild]::NormalizePath($(BundleLayoutPath), 'dcp'))</_LayoutDcpSource>
+      <_LayoutManagedDest>$([MSBuild]::NormalizePath($(OutputPath), 'managed'))</_LayoutManagedDest>
+      <_LayoutDcpDest>$([MSBuild]::NormalizePath($(OutputPath), 'dcp'))</_LayoutDcpDest>
+    </PropertyGroup>
+
+    <Error Condition="!Exists('$(_LayoutManagedSource)')"
+           Text="managed/ directory not found in bundle layout at '$(_LayoutManagedSource)'" />
+    <Error Condition="!Exists('$(_LayoutDcpSource)')"
+           Text="dcp/ directory not found in bundle layout at '$(_LayoutDcpSource)'" />
+
+    <!-- Collect files from managed/ and dcp/ -->
+    <ItemGroup>
+      <_ManagedFiles Include="$(_LayoutManagedSource)/**/*" />
+      <_DcpFiles Include="$(_LayoutDcpSource)/**/*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_ManagedFiles)"
+          DestinationFiles="@(_ManagedFiles->'$(_LayoutManagedDest)/%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="@(_DcpFiles)"
+          DestinationFiles="@(_DcpFiles->'$(_LayoutDcpDest)/%(RecursiveDir)%(Filename)%(Extension)')" />
+
+    <Message Importance="high" Text="Assembled flat layout: $(OutputPath) (managed: @(_ManagedFiles->Count()) files, dcp: @(_DcpFiles->Count()) files)" />
+  </Target>
+
+  <!--
+    _ValidateFlatLayout: Structural validation of the flat layout in $(OutputPath).
+    Catches missing components that would produce a broken archive.
+  -->
+  <Target Name="_ValidateFlatLayout" DependsOnTargets="_AssembleFlatLayout"
+          Condition="'$(BuildFlatBinary)' == 'true' and (Exists('$(BundleLayoutPath)') or '$(ExpectFlatLayout)' == 'true')">    <Error Condition="!Exists('$(_NativeBinaryPath)')"
+           Text="Flat layout validation failed: aspire binary not found at '$(_NativeBinaryPath)'" />
+
+    <PropertyGroup>
+      <_FlatManagedDir>$([MSBuild]::NormalizePath($(OutputPath), 'managed'))</_FlatManagedDir>
+      <_FlatManagedExe>$([MSBuild]::NormalizePath($(OutputPath), 'managed', '$(_ManagedBinaryName)'))</_FlatManagedExe>
+      <_FlatDcpDir>$([MSBuild]::NormalizePath($(OutputPath), 'dcp'))</_FlatDcpDir>
+    </PropertyGroup>
+
+    <Error Condition="!Exists('$(_FlatManagedDir)')"
+           Text="Flat layout validation failed: managed/ directory not found at '$(_FlatManagedDir)'" />
+    <Error Condition="!Exists('$(_FlatManagedExe)')"
+           Text="Flat layout validation failed: $(_ManagedBinaryName) not found at '$(_FlatManagedExe)'" />
+    <Error Condition="!Exists('$(_FlatDcpDir)')"
+           Text="Flat layout validation failed: dcp/ directory not found at '$(_FlatDcpDir)'" />
+
+    <Message Importance="high" Text="Flat layout validation passed" />
+  </Target>
+
+  <!--
+    _ValidateBundledBinary: Validates the bundled binary exists and is large enough to contain
+    the embedded bundle. The flat binary is ~35 MB; the bundled binary embeds a ~40 MB tar.gz,
+    so it should be ~120 MB. A 60 MB floor catches the failure mode where BundlePayloadPath
+    silently fails and the "bundled" binary has no bundle.
+  -->
+  <Target Name="_ValidateBundledBinary" DependsOnTargets="_PublishBundledBinary"
+          Condition="'$(BuildBundledBinary)' == 'true'">
+    <Error Condition="!Exists('$(_BundledBinaryPath)')"
+           Text="Bundled binary validation failed: binary not found at '$(_BundledBinaryPath)'" />
+
+    <!-- Size validation is handled by verify-cli-tool-nupkg.ps1 in CI.
+         MSBuild property functions don't allow FileInfo::new, so we only check existence here. -->
+
+    <Message Importance="high" Text="Bundled binary validation passed: $(_BundledBinaryPath)" />
+  </Target>
+
+  <!-- All RIDs the CLI tool supports. Used by the pointer package to declare available platforms. -->
+  <PropertyGroup>
+    <CliToolSupportedRids>win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</CliToolSupportedRids>
+  </PropertyGroup>
+
+  <!-- Pack the NativeAOT BUNDLED binary as a dotnet global tool nupkg.
+       Produces two packages:
+         1. Aspire.Cli.<RID>.nupkg  — contains the pre-built bundled binary (DotnetToolRidPackage)
+         2. Aspire.Cli.nupkg        — pointer/shim package with metadata only (DotnetTool)
+       Runs after _ValidateBundledBinary so the binary is verified before packing.
+       Output goes to artifacts/packages/<Config>/Shipping/ where Arcade signing can find it.
+       Opt-in only: pass /p:PackCliTool=true to enable. -->
+  <Target Name="_PackCliTool" AfterTargets="_ValidateBundledBinary" DependsOnTargets="_ValidateBuildModes" Condition="'$(PackCliTool)' == 'true'">
+    <!-- When _PackCliTool is invoked as a SEPARATE MSBuild call (AzDO pipeline: build step
+         signs binaries, then a separate pack step runs _PackCliTool), the static
+         _BundledBinaryPath may not match where the build step actually placed the binary.
+         OutputPath resolves differently at import time (when the static property is set)
+         vs at target time (after Arcade SDK .targets append TFM). Additionally, the build
+         orchestration may route output to artifacts/obj/ instead of artifacts/bin/.
+         Compute candidate paths and try each until we find the binary. -->
+    <PropertyGroup>
+      <!-- Candidate 1: IntermediateOutputPath/{project}_bundled/{binary} — matches AzDO build output -->
+      <_CandidatePath1>$([MSBuild]::NormalizePath($(IntermediateOutputPath), '$(MSBuildProjectName)_bundled', '$(_NativeBinaryName)'))</_CandidatePath1>
+      <!-- Candidate 2: IntermediateOutputPath/../{project}_bundled/{binary} — removes TFM segment -->
+      <_CandidatePath2>$([MSBuild]::NormalizePath($(IntermediateOutputPath), '..', '$(MSBuildProjectName)_bundled', '$(_NativeBinaryName)'))</_CandidatePath2>
+      <!-- Candidate 3: OutputPath/../{project}_bundled/{binary} — target-time OutputPath minus TFM -->
+      <_CandidatePath3>$([MSBuild]::NormalizePath($(OutputPath), '..', '$(MSBuildProjectName)_bundled', '$(_NativeBinaryName)'))</_CandidatePath3>
+    </PropertyGroup>
+
+    <PropertyGroup Condition="!Exists('$(_BundledBinaryPath)')">
+      <_BundledBinaryPath Condition="Exists('$(_CandidatePath1)')">$(_CandidatePath1)</_BundledBinaryPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="!Exists('$(_BundledBinaryPath)')">
+      <_BundledBinaryPath Condition="Exists('$(_CandidatePath2)')">$(_CandidatePath2)</_BundledBinaryPath>
+    </PropertyGroup>
+    <PropertyGroup Condition="!Exists('$(_BundledBinaryPath)')">
+      <_BundledBinaryPath Condition="Exists('$(_CandidatePath3)')">$(_CandidatePath3)</_BundledBinaryPath>
+    </PropertyGroup>
+
+    <Message Importance="high" Condition="Exists('$(_BundledBinaryPath)')" Text="Resolved bundled binary at: $(_BundledBinaryPath)" />
+
+    <Error Condition="!Exists('$(_BundledBinaryPath)')"
+           Text="Bundled binary not found. Checked: static=$(_BundledBinaryPath), candidate1=$(_CandidatePath1), candidate2=$(_CandidatePath2), candidate3=$(_CandidatePath3). Ensure the native build step completed successfully." />
+
+    <ItemGroup>
+      <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
+      <_PackToolProperties Include="CreateRidSpecificToolPackages=true" />
+      <_PackToolProperties Include="ToolPackageRuntimeIdentifiers=$(CliToolSupportedRids)" />
+      <_PackToolProperties Include="PreBuiltCliBinaryPath=$(_BundledBinaryPath)" />
+      <!-- Empty BundlePayloadPath prevents the managed IL compile (which runs as part of
+           Pack→Build) from embedding the bundle archive as an EmbeddedResource. The
+           pre-built NativeAOT binary already has the bundle embedded. -->
+      <_PackToolProperties Include="BundlePayloadPath=" />
+      <_PackToolProperties Include="Configuration=$(Configuration)" />
+      <_PackToolProperties Include="ContinuousIntegrationBuild=true" />
+      <_PackToolProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_PackToolProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+    </ItemGroup>
+
+    <!-- Restore with the target RID to resolve runtime-specific packages. -->
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <!-- Pack produces the RID-specific nupkg (Aspire.Cli.<RID>) containing the pre-built binary. -->
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <!-- Produce the pointer/shim package (Aspire.Cli) that references all RID-specific packages.
+         NoBuild=true because we only need DotnetToolSettings.xml metadata, no compilation. -->
+    <ItemGroup>
+      <_PackPointerProperties Include="ToolPackageRuntimeIdentifiers=$(CliToolSupportedRids)" />
+      <_PackPointerProperties Include="CreateRidSpecificToolPackages=true" />
+      <_PackPointerProperties Include="BundlePayloadPath=" />
+      <!-- PreBuiltCliBinaryPath satisfies the guard in Aspire.Cli.csproj; the pointer package
+           doesn't actually use the binary but PackTool BeforeTargets still fire. -->
+      <_PackPointerProperties Include="PreBuiltCliBinaryPath=$(_BundledBinaryPath)" />
+      <_PackPointerProperties Include="NoBuild=true" />
+      <_PackPointerProperties Include="Configuration=$(Configuration)" />
+      <_PackPointerProperties Include="ContinuousIntegrationBuild=true" />
+      <_PackPointerProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_PackPointerProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+    </ItemGroup>
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackPointerProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackPointerProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+  </Target>
+
+  <!-- Validates the flat binary file signature on Unix using `file -b`. -->
+  <Target Name="_ValidateNativeBinaryFileSignatureOnUnix" Condition="'$(BuildFlatBinary)' == 'true' and '$(_CheckFileSignature)' == 'true'">
     <Error Condition="$(FileSignatureRegex) == ''" Text="Property %24(FileSignatureRegex) is unset." />
 
     <Exec Command="file -b $(_NativeBinaryPath)" ConsoleToMSBuild="true">
@@ -116,7 +399,7 @@
       MZ @ 0x00 → e_lfanew @ 0x3C → PE\0\0 → Machine @ PE+4
     PEExpectedMachine must be set to a 4-digit hex string (e.g. 8664 for AMD64, AA64 for ARM64).
   -->
-  <Target Name="_ValidateNativeBinaryPEMachineOnWindows" Condition="'$(_CheckPEMachine)' == 'true'">
+  <Target Name="_ValidateNativeBinaryPEMachineOnWindows" Condition="'$(BuildFlatBinary)' == 'true' and '$(_CheckPEMachine)' == 'true'">
     <Error Condition="'$(PEExpectedMachine)' == ''" Text="Property %24(PEExpectedMachine) is unset for $(CliRuntime)." />
 
     <Exec Command="powershell -NoProfile -NonInteractive -Command &quot;$b=[System.IO.File]::ReadAllBytes('$(_NativeBinaryPath)'); $p=[BitConverter]::ToInt32($b,0x3C); [Console]::Write(([BitConverter]::ToUInt16($b,$p+4)).ToString('X4'))&quot;"

@@ -68,6 +68,14 @@
     <ProjectToBuild Include="$(RepoRoot)extension\Extension.proj" />
   </ItemGroup>
 
+  <!-- When SkipNativeBuild is true, exclude Aspire.Cli.Tool.csproj from the managed build.
+       The tool nupkgs are produced by the clipack projects in build_sign_native; without clipack
+       the SDK PackTool target would trigger a NativeAOT publish during Pack, producing a
+       conflicting Aspire.Cli nupkg. -->
+  <ItemGroup Condition="'$(SkipNativeBuild)' == 'true'">
+    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj" />
+  </ItemGroup>
+
   <!-- Native build only -->
   <ItemGroup Condition="'$(SkipNativeBuild)' != 'true' and '$(BuildBundleDepsOnly)' != 'true'">
     <!-- Add Aspire.Cli project here for native-only builds so it gets picked
@@ -79,6 +87,7 @@
          TODO: Map unknown rids to the available native projects -->
     <_TargetRidItem Include="$(TargetRids.Split(':'))" />
     <_NativeProjectToBuild Include="@(_TargetRidItem -> '$(RepoRoot)eng\clipack\Aspire.Cli.%(Identity).csproj')" />
+
     <ProjectToBuild Include="@(_NativeProjectToBuild->Exists())" />
   </ItemGroup>
 

@@ -64,8 +64,9 @@
     <FileSignInfo Condition="$([System.OperatingSystem]::IsMacOS())" Include="aspire-managed" CertificateName="MacDeveloperHardenWithNotarization" />
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="get-aspire-cli.ps1" CertificateName="MicrosoftDotNet500" />
 
-    <!-- Sign the manifest catalog on Windows -->
+    <!-- Sign the manifest catalog on Windows; skip on other platforms since .cat files are Windows-only -->
     <FileSignInfo Condition="$([System.OperatingSystem]::IsWindows())" Include="manifest.cat" CertificateName="MicrosoftDotNet500" />
+    <FileSignInfo Condition="!$([System.OperatingSystem]::IsWindows())" Include="manifest.cat" CertificateName="None" />
   </ItemGroup>
 
   <ItemGroup>
