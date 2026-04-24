@@ -60,23 +60,21 @@ internal static partial class ReparsePoint
 
         try
         {
+            // Guard against replacing a real directory on any platform. Callers must
+            // remove or migrate existing real directories before calling this method.
+            if (Exists(linkPath) && !IsReparsePoint(linkPath))
+            {
+                throw new InvalidOperationException(
+                    $"Cannot replace '{linkPath}': it is a real directory, not a reparse point. " +
+                    "Callers must remove or migrate existing directories before creating a reparse point.");
+            }
+
             if (OperatingSystem.IsWindows())
             {
                 // Windows has no native overwriting rename for directory reparse points,
                 // so remove the existing link then rename. The window is guarded by the
                 // caller's bundle lock.
-                if (Exists(linkPath))
-                {
-                    if (!IsReparsePoint(linkPath))
-                    {
-                        throw new InvalidOperationException(
-                            $"Cannot replace '{linkPath}': it is a real directory, not a reparse point. " +
-                            "Callers must remove or migrate existing directories before creating a reparse point.");
-                    }
-
-                    RemoveIfExists(linkPath);
-                }
-
+                RemoveIfExists(linkPath);
                 Directory.Move(tempLinkPath, linkPath);
             }
             else
