@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledMessage">
-        <source>Container runtime could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes.</source>
-        <target state="translated">Kapsayıcı çalışma zamanı bulunamadı. Desteklenen konteyner çalışma zamanları hakkında daha fazla ayrıntı için https://aka.ms/dotnet/aspire/containers adresine bakın.</target>
+        <source>Container runtime could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.</source>
+        <target state="translated">Kapsayıcı çalışma zamanı bulunamadı. Desteklenen konteyner çalışma zamanları hakkında daha fazla ayrıntı için https://aka.ms/aspire/containers adresine bakın.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledTitle">

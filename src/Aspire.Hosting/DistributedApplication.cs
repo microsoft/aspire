@@ -7,10 +7,12 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -378,7 +380,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// has been reached." error.
     /// </para>
     /// <para>
-    /// Refer to the <see href="https://aka.ms/dotnet/aspire/testing" >Aspire testing page</see> for more information
+    /// Refer to the <see href="https://aka.ms/aspire/testing" >Aspire testing page</see> for more information
     /// on how to use Aspire APIs for functional an integrating testing.
     /// </para>
     /// </remarks>
@@ -410,7 +412,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// has been reached." error.
     /// </para>
     /// <para>
-    /// Refer to the <see href="https://aka.ms/dotnet/aspire/testing" >Aspire testing page</see> for more information
+    /// Refer to the <see href="https://aka.ms/aspire/testing" >Aspire testing page</see> for more information
     /// on how to use Aspire APIs for functional an integrating testing.
     /// </para>
     /// </remarks>
@@ -556,10 +558,89 @@ public class DistributedApplication : IHost, IAsyncDisposable
             {
                 await lifecycleHook.BeforeStartAsync(appModel, cancellationToken).ConfigureAwait(false);
             }
+
+            EnsureComputeEnvironmentAnnotationsApplied(appModel);
+
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+            // Execute the before-start pipeline step
+            var pipeline = _host.Services.GetRequiredService<IDistributedApplicationPipeline>();
+            var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
+
+            // Cast to internal implementation to access ExecuteStepSequentiallyAsync
+            if (pipeline is not DistributedApplicationPipeline pipelineImpl)
+            {
+                throw new InvalidOperationException($"The registered {nameof(IDistributedApplicationPipeline)} implementation '{pipeline.GetType().FullName}' does not support executing the '{WellKnownPipelineSteps.BeforeStart}' step during startup.");
+            }
+
+            var pipelineContext = new PipelineContext(
+                appModel,
+                execContext,
+                _host.Services,
+                logger,
+                cancellationToken);
+
+            // Run before-start steps sequentially (rather than as a parallel DAG) because they
+            // mutate the shared DistributedApplicationModel — adding DeploymentTargetAnnotations
+            // and ComputeEnvironmentAnnotations onto compute resources, removing default
+            // container registries from the model, etc. The model and its resource annotation
+            // collections are not thread-safe, so concurrent step execution would race on those
+            // mutations.
+            //
+            // We also run BeforeStart against a clone of the pipeline so that step-graph
+            // mutations performed during step resolution (e.g. NormalizeRequiredByToDependsOn
+            // appending entries to built-in steps' DependsOnSteps) don't leak into the
+            // singleton pipeline. Without the clone, model changes made by BeforeStart
+            // steps (such as removing an unused default container registry) leave behind
+            // stale dependency edges on the singleton, causing a later publish-time
+            // ResolveStepsAsync to fail with "depends on unknown step" errors.
+            var beforeStartPipeline = pipelineImpl.Clone();
+            await beforeStartPipeline.ExecuteStepSequentiallyAsync(WellKnownPipelineSteps.BeforeStart, pipelineContext).ConfigureAwait(false);
+#pragma warning restore ASPIREPIPELINES001
         }
         finally
         {
             AspireEventSource.Instance.AppBeforeStartHooksStop();
+        }
+    }
+
+    /// <summary>
+    /// When the model contains exactly one compute environment, applies a
+    /// <see cref="ComputeEnvironmentAnnotation"/> pointing to that environment to every
+    /// <see cref="IComputeResource"/> that doesn't already have one.
+    /// </summary>
+    /// <remarks>
+    /// This implements the "single compute environment is the default" convention: when only one
+    /// compute environment is present (e.g., a single <c>AzureContainerAppEnvironmentResource</c>),
+    /// developers don't need to call <c>WithComputeEnvironment(...)</c> on every compute resource —
+    /// the unique environment is auto-assigned here. Resources that have been explicitly bound to a
+    /// compute environment (via <c>WithComputeEnvironment</c> or otherwise) are left untouched.
+    ///
+    /// When zero or more than one compute environment is present we deliberately do nothing.
+    /// - With zero compute environments there is no default to apply.
+    /// - With multiple compute environments there is no unambiguous default; the developer must pick one explicitly per
+    /// resource.
+    ///
+    /// Doing this once here, before the before-start pipeline runs, guarantees downstream
+    /// consumers (per-environment prepare steps, deployment-target inspection helpers, etc.) see
+    /// a consistent <see cref="ComputeEnvironmentAnnotation"/> on every compute resource that has
+    /// a target environment — without each consumer needing to re-implement the "single env wins"
+    /// fallback.
+    /// </remarks>
+    private static void EnsureComputeEnvironmentAnnotationsApplied(DistributedApplicationModel appModel)
+    {
+        var computeEnvironments = appModel.Resources.OfType<IComputeEnvironmentResource>().ToList();
+        if (computeEnvironments.Count == 1)
+        {
+            var environment = computeEnvironments[0];
+            foreach (var computeResource in appModel.Resources.OfType<IComputeResource>())
+            {
+                // Skip resources that already have an explicit compute environment binding so we
+                // never override a developer's intentional choice.
+                if (computeResource.GetComputeEnvironment() is null)
+                {
+                    computeResource.Annotations.Add(new ComputeEnvironmentAnnotation(environment));
+                }
+            }
         }
     }
 

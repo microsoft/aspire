@@ -263,11 +263,11 @@ jobs:
           Azure__Location: westus3
           GH_TOKEN: ${{ github.token }}
         run: |
-          ./dotnet.sh test tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
+          ./dotnet.sh test --project tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
             -c Release \
-            --logger "trx;LogFileName=${{ matrix.shortname }}.trx" \
             --results-directory ${{ github.workspace }}/testresults \
             -- \
+            --report-trx --report-trx-filename "${{ matrix.shortname }}.trx" \
             --filter-not-trait "quarantined=true" \
             ${{ matrix.extraTestArgs }} \
             || echo "test_failed=true" >> $GITHUB_OUTPUT

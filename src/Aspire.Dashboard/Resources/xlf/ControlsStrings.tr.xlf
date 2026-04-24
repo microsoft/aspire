@@ -357,6 +357,11 @@
         <target state="translated">Sayfa araç çubuğu</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParameterSetValueAction">
+        <source>Click to set parameter value</source>
+        <target state="new">Click to set parameter value</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterValueNotSet">
         <source>Value not set</source>
         <target state="translated">Değer ayarlanmadı</target>

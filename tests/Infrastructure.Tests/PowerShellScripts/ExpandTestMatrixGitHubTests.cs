@@ -231,8 +231,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             workitemprefix: "FullProject_Part",
             collection: "MyPartition",
             extraTestArgs: "--filter-trait \"Partition=MyPartition\"",
-            testSessionTimeout: "30m",
-            testHangTimeout: "15m",
+            mtpBaseArgs: "--hangdump-timeout 15m --timeout 30m",
             supportedOSes: ["linux"]);
 
         var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
@@ -254,8 +253,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         Assert.Equal("FullProject_Part", expandedEntry.Workitemprefix);
         Assert.Equal("MyPartition", expandedEntry.Collection);
         Assert.Equal("--filter-trait \"Partition=MyPartition\"", expandedEntry.ExtraTestArgs);
-        Assert.Equal("30m", expandedEntry.TestSessionTimeout);
-        Assert.Equal("15m", expandedEntry.TestHangTimeout);
+        Assert.Equal("--hangdump-timeout 15m --timeout 30m", expandedEntry.MtpBaseArgs);
         Assert.Equal("ubuntu-latest", expandedEntry.RunsOn);
     }
 

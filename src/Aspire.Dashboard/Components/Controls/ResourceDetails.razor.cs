@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Components.Pages;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Resources;
@@ -157,7 +158,21 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
             _resource = Resource;
             _displayedResourcePropertyViewModels.Clear();
-            _displayedResourcePropertyViewModels.AddRange(_resource.Properties.Select(p => new DisplayedResourcePropertyViewModel(p.Value, Loc, TimeProvider)));
+            foreach (var property in _resource.Properties.Values)
+            {
+                var displayedProperty = property;
+
+                // An unresolved secret parameter has no value to hide, so keep the placeholder visible
+                // in the details grid instead of routing it through masking behavior.
+                if (_resource.HasMissingParameterValueState() &&
+                    property.KnownProperty?.Key == KnownProperties.Parameter.Value &&
+                    property.IsValueSensitive)
+                {
+                    displayedProperty = new ResourcePropertyViewModel(property.Name, property.Value, isValueSensitive: false, property.KnownProperty, property.Priority);
+                }
+
+                _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
+            }
 
             // Collapse details sections when they have no data.
             _isUrlsExpanded = GetUrls().Count > 0;
@@ -197,6 +212,22 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                     Parameters = { ["Resource"] = _resource }
                 },
             };
+
+            // For parameter resources whose value is unset, render the same "Value not set" affordance
+            // as the parameters grid so the details panel stays consistent with the grid.
+            if (_resource.HasMissingParameterValueState())
+            {
+                _valueComponents[KnownProperties.Parameter.Value] = new ComponentMetadata
+                {
+                    Type = typeof(ParameterValueDisplayCell),
+                    Parameters =
+                    {
+                        ["Resource"] = _resource,
+                        ["OnExecuteCommandAsync"] = (Func<ResourceViewModel, CommandViewModel, Task>)ExecuteParameterCommandAsync,
+                        ["IsCommandExecuting"] = IsCommandExecuting,
+                    }
+                };
+            }
 
             UpdateResourceActionsMenu();
         }
@@ -275,6 +306,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             showViewDetails: false,
             showConsoleLogsItem: true,
             showUrls: true);
+    }
+
+    private async Task ExecuteParameterCommandAsync(ResourceViewModel resource, CommandViewModel command)
+    {
+        await CommandSelected.InvokeAsync(command);
     }
 
     private IEnumerable<ResourceDetailRelationshipViewModel> GetRelationships()

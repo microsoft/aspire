@@ -13,6 +13,8 @@ internal sealed class TestCliUpdateNotifier : ICliUpdateNotifier
 
     public Func<DirectoryInfo, CancellationToken, Task>? CheckForCliUpdatesAsyncCallback { get; set; }
 
+    public Action? NotifyIfUpdateAvailableCallback { get; set; }
+
     public Task CheckForCliUpdatesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         if (CheckForCliUpdatesAsyncCallback is not null)
@@ -26,6 +28,7 @@ internal sealed class TestCliUpdateNotifier : ICliUpdateNotifier
     public void NotifyIfUpdateAvailable()
     {
         NotifyWasCalled = true;
+        NotifyIfUpdateAvailableCallback?.Invoke();
     }
 
     public bool IsUpdateAvailable()
