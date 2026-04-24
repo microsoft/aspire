@@ -230,6 +230,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Commands\MarkdownShowcase.md" LogicalName="MarkdownShowcase.md" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-16.png" Link="Mcp\Resources\aspire-16.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-256.png" Link="Mcp\Resources\aspire-256.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
