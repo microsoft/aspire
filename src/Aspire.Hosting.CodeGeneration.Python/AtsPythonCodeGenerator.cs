@@ -895,7 +895,6 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return value switch
         {
             JsonValue jsonValue when jsonValue.TryGetValue<bool>(out var boolValue) => boolValue ? "True" : "False",
-            JsonValue jsonValue when jsonValue.TryGetValue<string>(out _) => jsonValue.ToRelaxedJsonString(),
             JsonValue jsonValue => jsonValue.ToRelaxedJsonString(),
             _ => value.ToRelaxedJsonString()
         };
