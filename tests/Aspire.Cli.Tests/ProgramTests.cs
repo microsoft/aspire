@@ -3,8 +3,6 @@
 
 using System.Reflection;
 using System.Text;
-using Aspire.Cli.Bundles;
-using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,30 +37,6 @@ public class ProgramTests
     }
 
     [Fact]
-    public void ShouldUseBundleNuGetCache_ReturnsTrue_WhenCliContainsEmbeddedBundle()
-    {
-        var result = Program.ShouldUseBundleNuGetCache(new TestBundleService(isBundle: true), new TestLayoutDiscovery(isBundleModeAvailable: false));
-
-        Assert.True(result);
-    }
-
-    [Fact]
-    public void ShouldUseBundleNuGetCache_ReturnsTrue_WhenBundleLayoutIsAvailableWithoutEmbeddedPayload()
-    {
-        var result = Program.ShouldUseBundleNuGetCache(new TestBundleService(isBundle: false), new TestLayoutDiscovery(isBundleModeAvailable: true));
-
-        Assert.True(result);
-    }
-
-    [Fact]
-    public void ShouldUseBundleNuGetCache_ReturnsFalse_WhenNoBundleLayoutIsAvailable()
-    {
-        var result = Program.ShouldUseBundleNuGetCache(new TestBundleService(isBundle: false), new TestLayoutDiscovery(isBundleModeAvailable: false));
-
-        Assert.False(result);
-    }
-
-    [Fact]
     public void BuildAnsiConsole_DoesNotReenablePlaygroundFormatting_WhenHostDisablesAnsi()
     {
         var services = new ServiceCollection();
@@ -85,31 +59,5 @@ public class ProgramTests
         var output = writer.ToString();
         Assert.Contains("hello", output, StringComparison.Ordinal);
         Assert.DoesNotContain("\u001b", output, StringComparison.Ordinal);
-    }
-
-    private sealed class TestLayoutDiscovery(bool isBundleModeAvailable) : ILayoutDiscovery
-    {
-        public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null)
-            => isBundleModeAvailable ? new LayoutConfiguration { LayoutPath = "/tmp/aspire-layout" } : null;
-
-        public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null)
-            => null;
-
-        public bool IsBundleModeAvailable(string? projectDirectory = null)
-            => isBundleModeAvailable;
-    }
-
-    private sealed class TestBundleService(bool isBundle) : IBundleService
-    {
-        public bool IsBundle => isBundle;
-
-        public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
-            => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
-
-        public Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
-            => Task.FromResult<LayoutConfiguration?>(null);
     }
 }

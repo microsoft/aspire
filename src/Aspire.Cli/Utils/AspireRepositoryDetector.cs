@@ -27,17 +27,12 @@ internal static class AspireRepositoryDetector
 
         return null;
 #else
-        if (!string.IsNullOrEmpty(startPath))
-        {
-            return DetectRepositoryRootCore(startPath, allowProcessPathFallback: false);
-        }
-
         if (s_cacheInitialized)
         {
             return s_cachedRepoRoot;
         }
 
-        s_cachedRepoRoot = DetectRepositoryRootCore(startPath, allowProcessPathFallback: true);
+        s_cachedRepoRoot = DetectRepositoryRootCore(startPath);
         s_cacheInitialized = true;
         return s_cachedRepoRoot;
 #endif
@@ -50,7 +45,7 @@ internal static class AspireRepositoryDetector
         s_cacheInitialized = false;
     }
 
-    private static string? DetectRepositoryRootCore(string? startPath, bool allowProcessPathFallback)
+    private static string? DetectRepositoryRootCore(string? startPath)
     {
         var repoRoot = FindRepositoryRoot(startPath);
         if (!string.IsNullOrEmpty(repoRoot))
@@ -62,11 +57,6 @@ internal static class AspireRepositoryDetector
         if (!string.IsNullOrEmpty(envRoot) && Directory.Exists(envRoot))
         {
             return Path.GetFullPath(envRoot);
-        }
-
-        if (!allowProcessPathFallback)
-        {
-            return null;
         }
 
         var processPath = Environment.ProcessPath;

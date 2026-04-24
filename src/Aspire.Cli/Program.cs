@@ -126,16 +126,6 @@ public class Program
         return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
     }
 
-    internal static bool ShouldUseBundleNuGetCache(IBundleService bundleService, ILayoutDiscovery layoutDiscovery)
-    {
-        if (bundleService.IsBundle)
-        {
-            return true;
-        }
-
-        return layoutDiscovery.IsBundleModeAvailable();
-    }
-
     /// <summary>
     /// Parses --log-file from raw args before the host is built.
     /// Used by --detach to tell the child CLI where to write its log.
@@ -358,14 +348,12 @@ public class Program
         builder.Services.AddSingleton<IDotNetSdkInstaller, DotNetSdkInstaller>();
         builder.Services.AddTransient<IAppHostCliBackchannel, AppHostCliBackchannel>();
 
-        // Register both NuGetPackageCache implementations - prefer bundle tooling whenever a bundle layout is available.
+        // Register both NuGetPackageCache implementations - factory chooses based on embedded bundle
         builder.Services.AddSingleton<NuGetPackageCache>();
         builder.Services.AddSingleton<BundleNuGetPackageCache>();
         builder.Services.AddSingleton<INuGetPackageCache>(sp =>
         {
-            if (ShouldUseBundleNuGetCache(
-                sp.GetRequiredService<IBundleService>(),
-                sp.GetRequiredService<ILayoutDiscovery>()))
+            if (sp.GetRequiredService<IBundleService>().IsBundle)
             {
                 return sp.GetRequiredService<BundleNuGetPackageCache>();
             }
