@@ -144,7 +144,7 @@ public sealed class ParameterProcessor(
     {
         // Add the "Set parameter" command if the app is running and the interaction service is available.
         // This command allows the user to set the parameter value at runtime.
-        if (executionContext.IsRunMode && interactionService.IsAvailable && !parameterResource.Annotations.OfType<ResourceCommandAnnotation>().Any(a => a.Name == KnownResourceCommands.SetParameterCommand))
+        if (executionContext.IsRunMode && interactionService.IsAvailable && !parameterResource.Annotations.OfType<ResourceCommandAnnotation>().Any(a => a.Name.Equals(KnownResourceCommands.SetParameterCommand, StringComparisons.CommandName)))
         {
             AddSetParameterCommand(parameterResource);
         }
@@ -179,7 +179,7 @@ public sealed class ParameterProcessor(
             }
 
             var stateText = ex is MissingParameterValueException ?
-                "Value missing" :
+                KnownResourceStates.ValueMissing :
                 "Error initializing parameter";
 
             // Use warning style for missing parameters to match the notification banner,
@@ -401,7 +401,7 @@ public sealed class ParameterProcessor(
                 parameterResource.WaitForValueTcs = tcs;
 
                 // Update the parameter's state to show it's missing a value
-                await UpdateParameterStateAsync(parameterResource, "Parameter value has been deleted", new("Value missing", KnownResourceStateStyles.Warn)).ConfigureAwait(false);
+                await UpdateParameterStateAsync(parameterResource, "Parameter value has been deleted", new(KnownResourceStates.ValueMissing, KnownResourceStateStyles.Warn)).ConfigureAwait(false);
 
                 // Start the resolution task if it's not running
                 _ = EnsureParameterResolutionTaskRunningAsync();
