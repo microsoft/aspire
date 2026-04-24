@@ -18,7 +18,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// <list type="number">
 ///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> + <c>ASPIRE_E2E_VERSION</c> — install from local nupkg directory</item>
 ///   <item><c>ASPIRE_E2E_DOTNET_TOOL=true</c> — install from published NuGet feed (optionally with <c>ASPIRE_E2E_VERSION</c>)</item>
-///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs (<c>DotnetTool/</c> sibling directory)</item>
+///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs directory</item>
 /// </list>
 /// </para>
 /// </summary>
@@ -32,7 +32,7 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
 
         Assert.True(strategy is not null,
             "DotnetToolSmokeTests requires one of: ASPIRE_E2E_DOTNET_TOOL_SOURCE + ASPIRE_E2E_VERSION, " +
-            "ASPIRE_E2E_DOTNET_TOOL=true, or BUILT_NUGETS_PATH with a DotnetTool/ sibling containing Aspire.Cli nupkg.");
+            "ASPIRE_E2E_DOTNET_TOOL=true, or BUILT_NUGETS_PATH containing Aspire.Cli nupkg.");
 
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var workspace = TemporaryWorkspace.Create(output);
@@ -111,7 +111,7 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
     /// <list type="number">
     ///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> + <c>ASPIRE_E2E_VERSION</c> — explicit local nupkg directory</item>
     ///   <item><c>ASPIRE_E2E_DOTNET_TOOL=true</c> — install from published NuGet feed</item>
-    ///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs (sibling <c>DotnetTool/</c> directory)</item>
+    ///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs directory</item>
     /// </list>
     /// Returns <see langword="null"/> when none of the above are configured — callers should fail with
     /// a clear message indicating the workflow is misconfigured.
@@ -144,31 +144,27 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
             return CliInstallStrategy.FromDotnetTool(version);
         }
 
-        // 3. Auto-discover from CI-built nupkgs (BUILT_NUGETS_PATH → ../DotnetTool/)
+        // 3. Auto-discover from CI-built nupkgs (BUILT_NUGETS_PATH contains the tool nupkg
+        //    directly since the dotnet tool is built as part of the normal package build)
         var builtNugetsPath = Environment.GetEnvironmentVariable("BUILT_NUGETS_PATH");
 
-        if (!string.IsNullOrEmpty(builtNugetsPath))
+        if (!string.IsNullOrEmpty(builtNugetsPath) && Directory.Exists(builtNugetsPath))
         {
-            var dotnetToolDir = Path.GetFullPath(Path.Combine(builtNugetsPath, "..", "DotnetTool"));
+            var nupkgs = Directory.GetFiles(builtNugetsPath, "Aspire.Cli.*.nupkg")
+                .Where(f => !f.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase)
+                         && !f.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
 
-            if (Directory.Exists(dotnetToolDir))
+            if (nupkgs.Length == 1)
             {
-                var nupkgs = Directory.GetFiles(dotnetToolDir, "Aspire.Cli.*.nupkg")
-                    .Where(f => !f.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase)
-                             && !f.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
-                    .ToArray();
+                var version = ExtractVersionFromNupkgFilename(nupkgs[0]);
+                return CliInstallStrategy.FromDotnetToolLocalSource(builtNugetsPath, version);
+            }
 
-                if (nupkgs.Length == 1)
-                {
-                    var version = ExtractVersionFromNupkgFilename(nupkgs[0]);
-                    return CliInstallStrategy.FromDotnetToolLocalSource(dotnetToolDir, version);
-                }
-
-                if (nupkgs.Length > 1)
-                {
-                    throw new InvalidOperationException(
-                        $"Found multiple Aspire.Cli nupkgs in '{dotnetToolDir}': {string.Join(", ", nupkgs.Select(Path.GetFileName))}. Expected exactly one.");
-                }
+            if (nupkgs.Length > 1)
+            {
+                throw new InvalidOperationException(
+                    $"Found multiple Aspire.Cli nupkgs in '{builtNugetsPath}': {string.Join(", ", nupkgs.Select(Path.GetFileName))}. Expected exactly one.");
             }
         }
 
