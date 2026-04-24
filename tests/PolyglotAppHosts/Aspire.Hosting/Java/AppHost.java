@@ -57,6 +57,7 @@ void main() throws Exception {
         pipeline.configure((configContext) -> { var _allSteps = configContext.steps(); var _builderTaggedSteps = configContext.getSteps("custom-build"); });
         container.withEnvironment("MY_ENDPOINT", endpoint);
         container.withEnvironment("MY_PARAM", configParam);
+        container.withEnvironment("MY_BUILT_CONN", builtConnectionString);
         container.withEnvironment("MY_CONN", envConnectionString);
         container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
         container.withEnvironmentCallback((environmentContext) -> { var environment = environmentContext.environment(); environment.set("MY_CALLBACK_ENDPOINT", endpoint); });

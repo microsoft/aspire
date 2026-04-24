@@ -1,4 +1,4 @@
-﻿// ===== Aspire.java =====
+// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
