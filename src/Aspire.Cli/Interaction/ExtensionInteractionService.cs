@@ -431,7 +431,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         // Convert to Spectre markup for console display
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.LogMessageAsync(LogLevel.Information, markdown, _cancellationToken));
         Debug.Assert(result);
-        _consoleInteractionService.DisplayMarkdown(markdown, consoleOverride);
+        _consoleInteractionService.DisplayMarkdown(markdown, consoleOverride, maxWidth);
     }
 
     public void DisplayMarkupLine(string markup)
