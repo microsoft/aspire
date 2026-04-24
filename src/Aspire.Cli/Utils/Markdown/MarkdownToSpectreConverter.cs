@@ -54,36 +54,6 @@ internal partial class MarkdownToSpectreConverter
         return HtmlTagRegex().Replace(text.ToString(), string.Empty);
     }
 
-    private static string CollapseWhitespace(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return string.Empty;
-        }
-
-        var builder = new StringBuilder(text.Length);
-        var pendingSpace = false;
-
-        foreach (var character in text)
-        {
-            if (char.IsWhiteSpace(character))
-            {
-                pendingSpace = builder.Length > 0;
-                continue;
-            }
-
-            if (pendingSpace)
-            {
-                builder.Append(' ');
-                pendingSpace = false;
-            }
-
-            builder.Append(character);
-        }
-
-        return builder.ToString();
-    }
-
     private static void AppendEscapedMarkup(StringBuilder builder, ReadOnlySpan<char> text)
     {
         var start = 0;
@@ -253,20 +223,6 @@ internal partial class MarkdownToSpectreConverter
             default:
                 builder.Append('-', width);
                 break;
-        }
-    }
-
-    private static void AppendTableRow(StringBuilder builder, IReadOnlyList<string> row, IReadOnlyList<int> widths)
-    {
-        builder.Append('|');
-        for (var i = 0; i < widths.Count; i++)
-        {
-            var value = i < row.Count ? row[i] : string.Empty;
-            builder.Append(' ');
-            builder.Append(value);
-            builder.Append(' ', widths[i] - value.Length);
-            builder.Append(' ');
-            builder.Append('|');
         }
     }
 

@@ -4,6 +4,7 @@
 using System.Text;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
+using Spectre.Console;
 using MarkdigTable = Markdig.Extensions.Tables.Table;
 using MarkdigTableCell = Markdig.Extensions.Tables.TableCell;
 using MarkdigTableRow = Markdig.Extensions.Tables.TableRow;
@@ -179,14 +180,13 @@ internal partial class MarkdownToSpectreConverter
             return;
         }
 
-        // Render each cell as both plain text (for width) and markup (for content)
+        // Render each cell as markup, then derive plain text widths by stripping markup tags
         var markupValues = rows
             .Select(row => row.OfType<MarkdigTableCell>()
                 .Select(cell => RenderTableCellToMarkup(cell, markdown)).ToList())
             .ToList();
-        var plainValues = rows
-            .Select(row => row.OfType<MarkdigTableCell>()
-                .Select(cell => CollapseWhitespace(RenderBlocksToPlainText(cell, markdown))).ToList())
+        var plainValues = markupValues
+            .Select(static row => row.Select(static cell => cell.RemoveMarkup()).ToList())
             .ToList();
 
         var columnCount = markupValues.Max(static row => row.Count);
@@ -261,9 +261,10 @@ internal partial class MarkdownToSpectreConverter
             case CodeBlock codeBlock:
                 AppendCodeBlockToMarkup(builder, codeBlock);
                 break;
-            case MarkdigTable table:
-                AppendEscapedMarkup(builder, RenderTableToPlainText(table, markdown).AsSpan());
-                break;
+            case MarkdigTable:
+                // Table is hard to support. For now let's preserve the original markdown for tables to ensure they remain readable.
+                // Improve in the future if it becomes important to support Spectre markup inside tables.
+                goto default;
             case LeafBlock leaf when leaf.Inline is not null:
                 AppendInlinesToMarkup(builder, leaf.Inline, markdown);
                 break;
