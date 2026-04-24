@@ -93,6 +93,12 @@ param(
     [ValidateRange(1, [long]::MaxValue)]
     [long]$WorkflowRunId,
 
+    [Parameter(HelpMessage = "Use pre-downloaded artifacts from a local directory instead of downloading from GitHub")]
+    [string]$LocalDir = "",
+
+    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or run-<GITHUB_RUN_ID>/run-local)")]
+    [string]$HiveLabel = "",
+
     [Parameter(HelpMessage = "Directory prefix to install")]
     [string]$InstallPath = "",
 
@@ -1230,6 +1236,72 @@ function Install-AspireCliFromDownload {
     Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
 }
 
+# Main function to install from a local directory of pre-built artifacts
+function Start-InstallFromLocalDir {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$LocalDirPath
+    )
+
+    if (-not (Test-Path $LocalDirPath -PathType Container)) {
+        Write-Message "Local directory does not exist: $LocalDirPath" -Level Error
+        throw "Local directory not found"
+    }
+
+    Write-Message "Installing from local directory: $LocalDirPath" -Level Info
+
+    # Set installation paths
+    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    $resolvedHiveLabel = if ($HiveLabel) {
+        $HiveLabel
+    } elseif ($env:GITHUB_RUN_ID) {
+        "run-$($env:GITHUB_RUN_ID)"
+    } else {
+        "run-local"
+    }
+    $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
+
+    Write-Message "Using hive label: $resolvedHiveLabel" -Level Info
+
+    $rid = Get-RuntimeIdentifier $OS $Architecture
+
+    # Install CLI from local directory
+    if ($HiveOnly) {
+        Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
+    } else {
+        Install-AspireCliFromDownload -DownloadDir $LocalDirPath -CliBinDir $cliBinDir
+    }
+
+    # Install NuGet packages from local directory
+    Install-BuiltNugets -DownloadDir $LocalDirPath -NugetHiveDir $nugetHiveDir
+
+    # Extract and print the version suffix from packages
+    try {
+        $versionSuffix = Get-VersionSuffixFromPackages -DownloadDir $LocalDirPath
+        Write-Message "Package version suffix: $versionSuffix" -Level Info
+    }
+    catch {
+        Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
+    }
+
+    # Save the global channel setting
+    if (-not $HiveOnly) {
+        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
+        $cliPath = Join-Path $cliBinDir $cliExe
+        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
+    }
+
+    # Update PATH environment variables
+    if (-not $HiveOnly) {
+        if ($SkipPath) {
+            Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
+        } else {
+            Update-PathEnvironment -CliBinDir $cliBinDir
+        }
+    }
+}
+
 # Main function to download and install from PR or workflow run ID
 function Start-DownloadAndInstall {
     [CmdletBinding(SupportsShouldProcess)]
@@ -1258,7 +1330,14 @@ function Start-DownloadAndInstall {
 
     # Set installation paths
     $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
-    $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" "pr-$PRNumber" "packages"
+    $resolvedHiveLabel = if ($HiveLabel) {
+        $HiveLabel
+    } elseif ($PRNumber -gt 0) {
+        "pr-$PRNumber"
+    } else {
+        "run-$runId"
+    }
+    $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
 
     $rid = Get-RuntimeIdentifier $OS $Architecture
 
@@ -1309,7 +1388,7 @@ function Start-DownloadAndInstall {
         # Determine CLI path
         $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
         $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value "pr-$PRNumber"
+        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
     }
 
     # Update PATH environment variables
@@ -1356,9 +1435,14 @@ OPTIONS:
         if ($InvokedFromFile) { exit 0 } else { return 0 }
     }
 
-    # Validate PRNumber is provided when not showing help
-    if ($PRNumber -le 0) {
-        Write-Message "Error: PRNumber parameter is required" -Level Error
+    # Validate PRNumber is provided when not showing help or using --local-dir
+    if ($LocalDir) {
+        if ($PRNumber -gt 0 -or $WorkflowRunId -gt 0) {
+            Write-Message "Error: -LocalDir is mutually exclusive with -PRNumber and -WorkflowRunId" -Level Error
+            if ($InvokedFromFile) { exit 1 } else { return 1 }
+        }
+    } elseif ($PRNumber -le 0 -and $WorkflowRunId -le 0) {
+        Write-Message "Error: PRNumber, -WorkflowRunId, or -LocalDir parameter is required" -Level Error
         Write-Message "Use -Help for usage information" -Level Info
         if ($InvokedFromFile) { exit 1 } else { return 1 }
     }
@@ -1366,8 +1450,10 @@ OPTIONS:
     # Set host OS for PATH environment updates
     $script:HostOS = Get-OperatingSystem
 
-    # Check gh dependency
-    Test-GitHubCLIDependency
+    # Check gh dependency (not needed for -LocalDir mode)
+    if (-not $LocalDir) {
+        Test-GitHubCLIDependency
+    }
 
     # Set default install prefix if not provided
     $resolvedInstallPrefix = Get-InstallPrefix -InstallPrefix $InstallPath
@@ -1376,8 +1462,12 @@ OPTIONS:
     $tempDir = New-TempDirectory -Prefix "aspire-cli-pr-download"
 
     try {
-        # Download and install from PR or workflow run ID
-        Start-DownloadAndInstall -TempDir $tempDir
+        # Download and install from PR/workflow run ID, or install from local directory
+        if ($LocalDir) {
+            Start-InstallFromLocalDir -LocalDirPath $LocalDir
+        } else {
+            Start-DownloadAndInstall -TempDir $tempDir
+        }
 
         $exitCode = 0
     }

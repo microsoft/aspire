@@ -70,13 +70,12 @@ internal static class DeploymentE2EAutomatorHelpers
                 await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
                 break;
 
-            case CliInstallMode.WorkflowRun:
-                var wrRunId = CliInstallStrategy.GetCliArchiveWorkflowRunId()
-                    ?? throw new InvalidOperationException("WorkflowRun strategy requires ASPIRE_CLI_WORKFLOW_RUN_ID to be set.");
+            case CliInstallMode.LocalArchive:
+                var archiveDir = strategy.ArchiveDir ?? throw new InvalidOperationException("LocalArchive strategy is missing the archive directory.");
                 await auto.RunCommandFailFastAsync(
-                    AspireCliShellCommandHelpers.GetWorkflowRunInstallCommandFromCurrentRef(wrRunId),
+                    AspireCliShellCommandHelpers.GetLocalArchiveInstallCommandFromCurrentRef(archiveDir),
                     counter,
-                    TimeSpan.FromSeconds(300));
+                    TimeSpan.FromSeconds(120));
                 await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
                 break;
 

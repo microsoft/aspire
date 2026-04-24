@@ -30,10 +30,10 @@ internal enum CliInstallMode
     PullRequest,
 
     /// <summary>
-    /// Install from workflow run artifacts using get-aspire-cli-pr.sh with --run-id.
-    /// Used for schedule-triggered CI runs where no PR context is available.
+    /// Install from pre-downloaded artifacts in a local directory using get-aspire-cli-pr.sh with --local-dir.
+    /// Used for same-workflow scenarios (e.g., quarantine/outerloop) where artifacts are already on disk.
     /// </summary>
-    WorkflowRun,
+    LocalArchive,
 
     /// <summary>
     /// Install via get-aspire-cli.sh with optional --quality or --version.
@@ -115,27 +115,18 @@ internal static class AspireCliShellCommandHelpers
 
     internal static string GetPullRequestInstallArgs(int prNumber)
     {
-        var workflowRunId = CliInstallStrategy.GetCliArchiveWorkflowRunId();
-
-        return workflowRunId is null
-            ? prNumber.ToString(CultureInfo.InvariantCulture)
-            : $"{prNumber.ToString(CultureInfo.InvariantCulture)} --run-id {workflowRunId}";
+        return prNumber.ToString(CultureInfo.InvariantCulture);
     }
 
-    internal static string GetWorkflowRunInstallCommand(string workflowRunId, string commandPrefix)
+    internal static string GetLocalArchiveInstallCommand(string localDir, string commandPrefix)
     {
-        return $"{commandPrefix} --run-id {workflowRunId}";
+        return $"{commandPrefix} --local-dir {QuoteBashArg(localDir)}";
     }
 
-    /// <summary>
-    /// Builds a workflow-run install command that fetches <c>get-aspire-cli-pr.sh</c>
-    /// from the current commit (<c>GITHUB_SHA</c>) instead of <c>main</c>, so the
-    /// script version matches the code under test even before the PR merges.
-    /// </summary>
-    internal static string GetWorkflowRunInstallCommandFromCurrentRef(string workflowRunId)
+    internal static string GetLocalArchiveInstallCommandFromCurrentRef(string localDir)
     {
         var sha = Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "main";
-        return $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/{sha}/eng/scripts/get-aspire-cli-pr.sh | bash -s -- --run-id {workflowRunId}";
+        return $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/{sha}/eng/scripts/get-aspire-cli-pr.sh | bash -s -- --local-dir {QuoteBashArg(localDir)}";
     }
 
     internal static string QuoteBashArg(string value)
@@ -164,7 +155,7 @@ internal enum CliInstallQuality
 /// </summary>
 internal sealed class CliInstallStrategy
 {
-    internal const string CliArchiveWorkflowRunIdEnvironmentVariableName = "ASPIRE_CLI_WORKFLOW_RUN_ID";
+    internal const string CliArchiveDirEnvironmentVariableName = "ASPIRE_E2E_CLI_ARCHIVE_DIR";
 
     private const string PreinstalledEnvironmentVariableName = "ASPIRE_E2E_PREINSTALLED";
     private static readonly Regex s_versionPattern = new(@"^[0-9A-Za-z.\-]+$", RegexOptions.Compiled);
@@ -189,12 +180,18 @@ internal sealed class CliInstallStrategy
     /// </summary>
     public string? Version { get; }
 
-    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null)
+    /// <summary>
+    /// For LocalArchive: the directory containing pre-downloaded CLI archives and NuGet packages.
+    /// </summary>
+    public string? ArchiveDir { get; }
+
+    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null, string? archiveDir = null)
     {
         Mode = mode;
         ArchivePath = archivePath;
         Quality = quality;
         Version = version;
+        ArchiveDir = archiveDir;
     }
 
     /// <summary>
@@ -256,18 +253,16 @@ internal sealed class CliInstallStrategy
     }
 
     /// <summary>
-    /// Creates a WorkflowRun strategy when the environment contains a workflow run ID but no PR metadata.
+    /// Creates a LocalArchive strategy from a directory containing pre-downloaded CLI archives and NuGet packages.
     /// </summary>
-    public static CliInstallStrategy FromWorkflowRun()
+    public static CliInstallStrategy FromLocalArchive(string archiveDir)
     {
-        var workflowRunId = GetCliArchiveWorkflowRunId();
-
-        if (string.IsNullOrEmpty(workflowRunId))
+        if (!Directory.Exists(archiveDir))
         {
-            throw new InvalidOperationException("WorkflowRun strategy requires ASPIRE_CLI_WORKFLOW_RUN_ID to be set.");
+            throw new DirectoryNotFoundException($"LocalArchive directory not found: {archiveDir}");
         }
 
-        return new CliInstallStrategy(CliInstallMode.WorkflowRun);
+        return new CliInstallStrategy(CliInstallMode.LocalArchive, archiveDir: archiveDir);
     }
 
     /// <summary>
@@ -279,26 +274,6 @@ internal sealed class CliInstallStrategy
     }
 
     /// <summary>
-    /// Gets the workflow run ID that produced the CLI archive for the current test run, if one was provided.
-    /// </summary>
-    public static string? GetCliArchiveWorkflowRunId()
-    {
-        var runId = Environment.GetEnvironmentVariable(CliArchiveWorkflowRunIdEnvironmentVariableName);
-
-        if (string.IsNullOrEmpty(runId))
-        {
-            return null;
-        }
-
-        if (!long.TryParse(runId, out _))
-        {
-            throw new ArgumentException($"{CliArchiveWorkflowRunIdEnvironmentVariableName} must be a valid integer, got: {runId}");
-        }
-
-        return runId;
-    }
-
-    /// <summary>
     /// Auto-detect the install strategy from the environment.
     /// Priority:
     ///   1. ASPIRE_E2E_ARCHIVE → LocalHive
@@ -306,7 +281,7 @@ internal sealed class CliInstallStrategy
     ///   3. ASPIRE_E2E_VERSION → InstallScript with version
     ///   4. ASPIRE_E2E_PREINSTALLED → Preinstalled
     ///   5. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
-    ///   6. ASPIRE_CLI_WORKFLOW_RUN_ID → WorkflowRun
+    ///   6. ASPIRE_E2E_CLI_ARCHIVE_DIR → LocalArchive
     ///   7. CI/GITHUB_ACTIONS → InstallScript (dev/daily)
     ///   8. Local fallback → InstallScript (latest GA)
     /// </summary>
@@ -349,10 +324,10 @@ internal sealed class CliInstallStrategy
             return FromPullRequest();
         }
 
-        var workflowRunId = GetCliArchiveWorkflowRunId();
-        if (!string.IsNullOrEmpty(workflowRunId))
+        var archiveDir = Environment.GetEnvironmentVariable(CliArchiveDirEnvironmentVariableName);
+        if (!string.IsNullOrEmpty(archiveDir))
         {
-            return FromWorkflowRun();
+            return FromLocalArchive(archiveDir);
         }
 
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) ||
@@ -389,28 +364,15 @@ internal sealed class CliInstallStrategy
 
                 config.Environment["GITHUB_PR_NUMBER"] = Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER") ?? "";
                 config.Environment["GITHUB_PR_HEAD_SHA"] = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA") ?? "";
-
-                var prWorkflowRunId = GetCliArchiveWorkflowRunId();
-                if (!string.IsNullOrEmpty(prWorkflowRunId))
-                {
-                    config.Environment[CliArchiveWorkflowRunIdEnvironmentVariableName] = prWorkflowRunId;
-                }
-
                 break;
 
-            case CliInstallMode.WorkflowRun:
-                var ghTokenWr = Environment.GetEnvironmentVariable("GH_TOKEN");
-                if (!string.IsNullOrEmpty(ghTokenWr))
+            case CliInstallMode.LocalArchive:
+                if (string.IsNullOrEmpty(ArchiveDir))
                 {
-                    config.Environment["GH_TOKEN"] = ghTokenWr;
+                    throw new InvalidOperationException("LocalArchive mode requires ArchiveDir to be set.");
                 }
 
-                var wrRunId = GetCliArchiveWorkflowRunId();
-                if (!string.IsNullOrEmpty(wrRunId))
-                {
-                    config.Environment[CliArchiveWorkflowRunIdEnvironmentVariableName] = wrRunId;
-                }
-
+                config.Volumes.Add($"{ArchiveDir}:/tmp/aspire-cli-archives:ro");
                 break;
 
             case CliInstallMode.InstallScript:
@@ -431,7 +393,7 @@ internal sealed class CliInstallStrategy
             CliInstallMode.LocalHive => $"LocalHive ({ArchivePath})",
             CliInstallMode.Preinstalled => "Preinstalled (~/.aspire)",
             CliInstallMode.PullRequest => $"PullRequest (PR #{Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")})",
-            CliInstallMode.WorkflowRun => $"WorkflowRun (run #{GetCliArchiveWorkflowRunId()})",
+            CliInstallMode.LocalArchive => $"LocalArchive ({ArchiveDir})",
             CliInstallMode.InstallScript when Quality is not null => $"InstallScript (--quality {Quality.Value.ToString().ToLowerInvariant()})",
             CliInstallMode.InstallScript when Version is not null => $"InstallScript (--version {Version})",
             CliInstallMode.InstallScript => "InstallScript (latest GA)",

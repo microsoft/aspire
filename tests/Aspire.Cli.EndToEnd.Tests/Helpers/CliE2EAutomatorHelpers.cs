@@ -106,13 +106,11 @@ internal static class CliE2EAutomatorHelpers
                 await auto.SourceAspireBundleEnvironmentAsync(counter);
                 break;
 
-            case CliInstallMode.WorkflowRun:
-                var wrRunId = CliInstallStrategy.GetCliArchiveWorkflowRunId()
-                    ?? throw new InvalidOperationException("WorkflowRun strategy requires ASPIRE_CLI_WORKFLOW_RUN_ID to be set.");
+            case CliInstallMode.LocalArchive:
                 await auto.RunCommandFailFastAsync(
-                    AspireCliShellCommandHelpers.GetWorkflowRunInstallCommand(wrRunId, AspireCliShellCommandHelpers.DockerPullRequestInstallCommandPrefix),
+                    AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand("/tmp/aspire-cli-archives", AspireCliShellCommandHelpers.DockerPullRequestInstallCommandPrefix),
                     counter,
-                    TimeSpan.FromSeconds(300));
+                    TimeSpan.FromSeconds(120));
                 await auto.SourceAspireBundleEnvironmentAsync(counter);
                 break;
 
@@ -196,14 +194,13 @@ internal static class CliE2EAutomatorHelpers
                 await auto.SourceAspireCliEnvironmentAsync(counter);
                 break;
 
-            case CliInstallMode.WorkflowRun:
-                var shellWrRunId = CliInstallStrategy.GetCliArchiveWorkflowRunId()
-                    ?? throw new InvalidOperationException("WorkflowRun strategy requires ASPIRE_CLI_WORKFLOW_RUN_ID to be set.");
-                var getAspireCliPrScript = AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "scripts", "get-aspire-cli-pr.sh"));
+            case CliInstallMode.LocalArchive:
+                var archiveDir = strategy.ArchiveDir ?? throw new InvalidOperationException("LocalArchive strategy is missing the archive directory.");
+                var localDirPrScript = AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "scripts", "get-aspire-cli-pr.sh"));
                 await auto.RunCommandFailFastAsync(
-                    AspireCliShellCommandHelpers.GetWorkflowRunInstallCommand(shellWrRunId, $"bash {getAspireCliPrScript}"),
+                    AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand(archiveDir, $"bash {localDirPrScript}"),
                     counter,
-                    TimeSpan.FromSeconds(300));
+                    TimeSpan.FromSeconds(120));
                 await auto.SourceAspireCliEnvironmentAsync(counter);
                 break;
 

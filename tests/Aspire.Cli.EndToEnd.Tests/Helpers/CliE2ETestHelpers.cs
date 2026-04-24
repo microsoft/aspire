@@ -17,7 +17,7 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class CliE2ETestHelpers
 {
-    internal const string CliArchiveWorkflowRunIdEnvironmentVariableName = CliInstallStrategy.CliArchiveWorkflowRunIdEnvironmentVariableName;
+    internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
 
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
@@ -70,15 +70,6 @@ internal static class CliE2ETestHelpers
 
         // Running locally - return dummy value
         return "local0000";
-    }
-
-    /// <summary>
-    /// Gets the workflow run ID that produced the CLI archive for the current test run, if one was provided.
-    /// </summary>
-    /// <returns>The workflow run ID, or <see langword="null"/> when the current environment should resolve the PR run dynamically.</returns>
-    internal static string? GetCliArchiveWorkflowRunId()
-    {
-        return CliInstallStrategy.GetCliArchiveWorkflowRunId();
     }
 
     /// <summary>

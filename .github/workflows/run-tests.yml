@@ -189,6 +189,13 @@ jobs:
             Write-Host "Merged $($nupkgs.Count) arch-specific nugets for RID=$env:RID into $dest"
           }
 
+      - name: Download CLI native archives
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-native-archives-${{ steps.compute_rid.outputs.rid }}
+          path: ${{ github.workspace }}/cli-archives
+
       - name: Install sdk for nuget based testing
         if: ${{ fromJson(inputs.properties).requiresTestSdk == true }}
         run: >
@@ -315,11 +322,11 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
-          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
-          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
+          ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
+          GH_TOKEN: ${{ fromJson(inputs.properties).requiresGitHubToken == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
@@ -355,11 +362,11 @@ jobs:
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Prevent VBCSCompiler from starting during tests. See #15832
           UseSharedCompilation: false
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
-          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
-          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
+          ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
+          GH_TOKEN: ${{ fromJson(inputs.properties).requiresGitHubToken == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
@@ -401,11 +408,11 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
-          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
-          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
+          ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
+          GH_TOKEN: ${{ fromJson(inputs.properties).requiresGitHubToken == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
@@ -448,11 +455,11 @@ jobs:
           # so any rebuild triggered by DCP's "dotnet run" should be minimal.
           # See https://github.com/microsoft/aspire/issues/15832
           UseSharedCompilation: false
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
-          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
-          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
+          ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
+          GH_TOKEN: ${{ fromJson(inputs.properties).requiresGitHubToken == true && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
