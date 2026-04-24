@@ -142,11 +142,15 @@ impl TestDeeplyNestedDto {
 // ============================================================================
 
 pub mod test_configs {
+    use super::*;
+
     pub fn default() -> TestConfigDto {
         serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"default","Port":6379,"Enabled":true,"OptionalField":"cache"}))
             .expect("generated exported value should deserialize")
     }
     pub mod profiles {
+        use super::*;
+
         pub fn development() -> TestConfigDto {
             serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"development","Port":5001,"Enabled":false,"OptionalField":null}))
                 .expect("generated exported value should deserialize")

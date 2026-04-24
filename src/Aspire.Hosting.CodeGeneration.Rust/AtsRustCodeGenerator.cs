@@ -275,6 +275,8 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         var indent = new string(' ', depth * 4);
 
         WriteLine($"{indent}pub mod {ToSnakeCase(name)} {{");
+        WriteLine($"{indent}    use super::*;");
+        WriteLine();
 
         foreach (var (childName, childNode) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
