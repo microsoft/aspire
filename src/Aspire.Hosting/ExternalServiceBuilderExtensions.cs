@@ -204,7 +204,7 @@ public static class ExternalServiceBuilderExtensions
     /// different one can be specified.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds an HTTP health check to an external service")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withHttpHealthCheck export.")]
     public static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null)
     {
         if (path is not null && !Uri.IsWellFormedUriString(path, UriKind.Relative))

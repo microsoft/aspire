@@ -1640,6 +1640,22 @@ public class CSharpAppResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables via callback */
+    public CSharpAppResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (EnvironmentCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
+        return this;
+    }
+
     /** Sets an environment variable from an endpoint reference */
     public CSharpAppResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -1680,6 +1696,22 @@ public class CSharpAppResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("args", AspireClient.serializeValue(args));
         getClient().invokeCapability("Aspire.Hosting/withArgs", reqArgs);
+        return this;
+    }
+
+    /** Sets command-line arguments via callback */
+    public CSharpAppResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (CommandLineArgsCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
         return this;
     }
 
@@ -2152,6 +2184,35 @@ public class CSharpAppResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         getClient().invokeCapability("Aspire.Hosting/withHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds an HTTP health check */
+    public CSharpAppResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public CSharpAppResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check */
+    private CSharpAppResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -4651,6 +4712,22 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables via callback */
+    public ContainerResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (EnvironmentCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
+        return this;
+    }
+
     /** Sets an environment variable from an endpoint reference */
     public ContainerResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4691,6 +4768,22 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("args", AspireClient.serializeValue(args));
         getClient().invokeCapability("Aspire.Hosting/withArgs", reqArgs);
+        return this;
+    }
+
+    /** Sets command-line arguments via callback */
+    public ContainerResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (CommandLineArgsCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
         return this;
     }
 
@@ -5149,6 +5242,35 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         getClient().invokeCapability("Aspire.Hosting/withHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds an HTTP health check */
+    public ContainerResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public ContainerResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check */
+    private ContainerResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -6595,6 +6717,15 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the executable command */
+    public DotnetToolResource withExecutableCommand(String command) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        getClient().invokeCapability("Aspire.Hosting/withExecutableCommand", reqArgs);
+        return this;
+    }
+
     /** Sets the executable working directory */
     public DotnetToolResource withWorkingDirectory(String workingDirectory) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -6712,6 +6843,22 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables via callback */
+    public DotnetToolResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (EnvironmentCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
+        return this;
+    }
+
     /** Sets an environment variable from an endpoint reference */
     public DotnetToolResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -6752,6 +6899,22 @@ public class DotnetToolResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("args", AspireClient.serializeValue(args));
         getClient().invokeCapability("Aspire.Hosting/withArgs", reqArgs);
+        return this;
+    }
+
+    /** Sets command-line arguments via callback */
+    public DotnetToolResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (CommandLineArgsCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
         return this;
     }
 
@@ -7210,6 +7373,35 @@ public class DotnetToolResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         getClient().invokeCapability("Aspire.Hosting/withHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds an HTTP health check */
+    public DotnetToolResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public DotnetToolResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check */
+    private DotnetToolResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -8537,6 +8729,15 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the executable command */
+    public ExecutableResource withExecutableCommand(String command) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        getClient().invokeCapability("Aspire.Hosting/withExecutableCommand", reqArgs);
+        return this;
+    }
+
     /** Sets the executable working directory */
     public ExecutableResource withWorkingDirectory(String workingDirectory) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -8654,6 +8855,22 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables via callback */
+    public ExecutableResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (EnvironmentCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
+        return this;
+    }
+
     /** Sets an environment variable from an endpoint reference */
     public ExecutableResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -8694,6 +8911,22 @@ public class ExecutableResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("args", AspireClient.serializeValue(args));
         getClient().invokeCapability("Aspire.Hosting/withArgs", reqArgs);
+        return this;
+    }
+
+    /** Sets command-line arguments via callback */
+    public ExecutableResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (CommandLineArgsCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
         return this;
     }
 
@@ -9152,6 +9385,35 @@ public class ExecutableResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         getClient().invokeCapability("Aspire.Hosting/withHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds an HTTP health check */
+    public ExecutableResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public ExecutableResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check */
+    private ExecutableResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -10037,31 +10299,6 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("runtimeImage", AspireClient.serializeValue(runtimeImage));
         }
         getClient().invokeCapability("Aspire.Hosting/withDockerfileBaseImage", reqArgs);
-        return this;
-    }
-
-    /** Adds an HTTP health check to an external service */
-    public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        return withHttpHealthCheckImpl(path, statusCode);
-    }
-
-    public ExternalServiceResource withHttpHealthCheck() {
-        return withHttpHealthCheck(null);
-    }
-
-    /** Adds an HTTP health check to an external service */
-    private ExternalServiceResource withHttpHealthCheckImpl(String path, Double statusCode) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        if (path != null) {
-            reqArgs.put("path", AspireClient.serializeValue(path));
-        }
-        if (statusCode != null) {
-            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
-        }
-        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -13980,6 +14217,22 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables via callback */
+    public ProjectResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (EnvironmentCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
+        return this;
+    }
+
     /** Sets an environment variable from an endpoint reference */
     public ProjectResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14020,6 +14273,22 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("args", AspireClient.serializeValue(args));
         getClient().invokeCapability("Aspire.Hosting/withArgs", reqArgs);
+        return this;
+    }
+
+    /** Sets command-line arguments via callback */
+    public ProjectResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (CommandLineArgsCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
         return this;
     }
 
@@ -14492,6 +14761,35 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         getClient().invokeCapability("Aspire.Hosting/withHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds an HTTP health check */
+    public ProjectResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public ProjectResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check */
+    private ProjectResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -16520,6 +16818,22 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables via callback */
+    public TestDatabaseResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (EnvironmentCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
+        return this;
+    }
+
     /** Sets an environment variable from an endpoint reference */
     public TestDatabaseResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -16560,6 +16874,22 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("args", AspireClient.serializeValue(args));
         getClient().invokeCapability("Aspire.Hosting/withArgs", reqArgs);
+        return this;
+    }
+
+    /** Sets command-line arguments via callback */
+    public TestDatabaseResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (CommandLineArgsCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
         return this;
     }
 
@@ -17018,6 +17348,35 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         getClient().invokeCapability("Aspire.Hosting/withHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds an HTTP health check */
+    public TestDatabaseResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public TestDatabaseResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check */
+    private TestDatabaseResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -18338,6 +18697,22 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables via callback */
+    public TestRedisResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (EnvironmentCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
+        return this;
+    }
+
     /** Sets an environment variable from an endpoint reference */
     public TestRedisResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -18406,6 +18781,22 @@ public class TestRedisResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("args", AspireClient.serializeValue(args));
         getClient().invokeCapability("Aspire.Hosting/withArgs", reqArgs);
+        return this;
+    }
+
+    /** Sets command-line arguments via callback */
+    public TestRedisResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (CommandLineArgsCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
         return this;
     }
 
@@ -18872,6 +19263,35 @@ public class TestRedisResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         getClient().invokeCapability("Aspire.Hosting/withHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds an HTTP health check */
+    public TestRedisResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public TestRedisResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check */
+    private TestRedisResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -20309,6 +20729,22 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables via callback */
+    public TestVaultResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (EnvironmentCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs);
+        return this;
+    }
+
     /** Sets an environment variable from an endpoint reference */
     public TestVaultResource withEnvironmentEndpoint(String name, EndpointReference endpointReference) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -20349,6 +20785,22 @@ public class TestVaultResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("args", AspireClient.serializeValue(args));
         getClient().invokeCapability("Aspire.Hosting/withArgs", reqArgs);
+        return this;
+    }
+
+    /** Sets command-line arguments via callback */
+    public TestVaultResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (CommandLineArgsCallbackContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withArgsCallback", reqArgs);
         return this;
     }
 
@@ -20807,6 +21259,35 @@ public class TestVaultResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("key", AspireClient.serializeValue(key));
         getClient().invokeCapability("Aspire.Hosting/withHealthCheck", reqArgs);
+        return this;
+    }
+
+    /** Adds an HTTP health check */
+    public TestVaultResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public TestVaultResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check */
+    private TestVaultResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs);
         return this;
     }
 
@@ -21959,6 +22440,7 @@ import java.util.function.*;
 public final class WithHttpHealthCheckOptions {
     private String path;
     private Double statusCode;
+    private String endpointName;
 
     public String getPath() { return path; }
     public WithHttpHealthCheckOptions path(String value) {
@@ -21969,6 +22451,12 @@ public final class WithHttpHealthCheckOptions {
     public Double getStatusCode() { return statusCode; }
     public WithHttpHealthCheckOptions statusCode(Double value) {
         this.statusCode = value;
+        return this;
+    }
+
+    public String getEndpointName() { return endpointName; }
+    public WithHttpHealthCheckOptions endpointName(String value) {
+        this.endpointName = value;
         return this;
     }
 

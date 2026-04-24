@@ -821,6 +821,21 @@ func (s *CSharpAppResource) WithEnvironmentExpression(name string, value *Refere
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEnvironmentCallback sets environment variables via callback
+func (s *CSharpAppResource) WithEnvironmentCallback(callback func(...any) any) (*IResourceWithEnvironment, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEnvironment), nil
+}
+
 // WithEnvironmentEndpoint sets an environment variable from an endpoint reference
 func (s *CSharpAppResource) WithEnvironmentEndpoint(name string, endpointReference *EndpointReference) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
@@ -870,6 +885,21 @@ func (s *CSharpAppResource) WithArgs(args []string) (*IResourceWithArgs, error) 
 	}
 	reqArgs["args"] = SerializeValue(args)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithArgs), nil
+}
+
+// WithArgsCallback sets command-line arguments via callback
+func (s *CSharpAppResource) WithArgsCallback(callback func(...any) any) (*IResourceWithArgs, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgsCallback", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -1243,6 +1273,27 @@ func (s *CSharpAppResource) WithHealthCheck(key string) (*IResource, error) {
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// WithHttpHealthCheck adds an HTTP health check
+func (s *CSharpAppResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithCommand adds a resource command
@@ -3378,6 +3429,21 @@ func (s *ContainerResource) WithEnvironmentExpression(name string, value *Refere
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEnvironmentCallback sets environment variables via callback
+func (s *ContainerResource) WithEnvironmentCallback(callback func(...any) any) (*IResourceWithEnvironment, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEnvironment), nil
+}
+
 // WithEnvironmentEndpoint sets an environment variable from an endpoint reference
 func (s *ContainerResource) WithEnvironmentEndpoint(name string, endpointReference *EndpointReference) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
@@ -3427,6 +3493,21 @@ func (s *ContainerResource) WithArgs(args []string) (*IResourceWithArgs, error) 
 	}
 	reqArgs["args"] = SerializeValue(args)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithArgs), nil
+}
+
+// WithArgsCallback sets command-line arguments via callback
+func (s *ContainerResource) WithArgsCallback(callback func(...any) any) (*IResourceWithArgs, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgsCallback", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -3786,6 +3867,27 @@ func (s *ContainerResource) WithHealthCheck(key string) (*IResource, error) {
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// WithHttpHealthCheck adds an HTTP health check
+func (s *ContainerResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithCommand adds a resource command
@@ -5195,6 +5297,19 @@ func (s *DotnetToolResource) PublishAsDockerFile(configure func(...any) any) (*E
 	return result.(*ExecutableResource), nil
 }
 
+// WithExecutableCommand sets the executable command
+func (s *DotnetToolResource) WithExecutableCommand(command string) (*ExecutableResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["command"] = SerializeValue(command)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withExecutableCommand", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecutableResource), nil
+}
+
 // WithWorkingDirectory sets the executable working directory
 func (s *DotnetToolResource) WithWorkingDirectory(workingDirectory string) (*ExecutableResource, error) {
 	reqArgs := map[string]any{
@@ -5285,6 +5400,21 @@ func (s *DotnetToolResource) WithEnvironmentExpression(name string, value *Refer
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEnvironmentCallback sets environment variables via callback
+func (s *DotnetToolResource) WithEnvironmentCallback(callback func(...any) any) (*IResourceWithEnvironment, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEnvironment), nil
+}
+
 // WithEnvironmentEndpoint sets an environment variable from an endpoint reference
 func (s *DotnetToolResource) WithEnvironmentEndpoint(name string, endpointReference *EndpointReference) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
@@ -5334,6 +5464,21 @@ func (s *DotnetToolResource) WithArgs(args []string) (*IResourceWithArgs, error)
 	}
 	reqArgs["args"] = SerializeValue(args)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithArgs), nil
+}
+
+// WithArgsCallback sets command-line arguments via callback
+func (s *DotnetToolResource) WithArgsCallback(callback func(...any) any) (*IResourceWithArgs, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgsCallback", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -5693,6 +5838,27 @@ func (s *DotnetToolResource) WithHealthCheck(key string) (*IResource, error) {
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// WithHttpHealthCheck adds an HTTP health check
+func (s *DotnetToolResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithCommand adds a resource command
@@ -7199,6 +7365,19 @@ func (s *ExecutableResource) PublishAsDockerFile(configure func(...any) any) (*E
 	return result.(*ExecutableResource), nil
 }
 
+// WithExecutableCommand sets the executable command
+func (s *ExecutableResource) WithExecutableCommand(command string) (*ExecutableResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	reqArgs["command"] = SerializeValue(command)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withExecutableCommand", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExecutableResource), nil
+}
+
 // WithWorkingDirectory sets the executable working directory
 func (s *ExecutableResource) WithWorkingDirectory(workingDirectory string) (*ExecutableResource, error) {
 	reqArgs := map[string]any{
@@ -7289,6 +7468,21 @@ func (s *ExecutableResource) WithEnvironmentExpression(name string, value *Refer
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEnvironmentCallback sets environment variables via callback
+func (s *ExecutableResource) WithEnvironmentCallback(callback func(...any) any) (*IResourceWithEnvironment, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEnvironment), nil
+}
+
 // WithEnvironmentEndpoint sets an environment variable from an endpoint reference
 func (s *ExecutableResource) WithEnvironmentEndpoint(name string, endpointReference *EndpointReference) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
@@ -7338,6 +7532,21 @@ func (s *ExecutableResource) WithArgs(args []string) (*IResourceWithArgs, error)
 	}
 	reqArgs["args"] = SerializeValue(args)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithArgs), nil
+}
+
+// WithArgsCallback sets command-line arguments via callback
+func (s *ExecutableResource) WithArgsCallback(callback func(...any) any) (*IResourceWithArgs, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgsCallback", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -7697,6 +7906,27 @@ func (s *ExecutableResource) WithHealthCheck(key string) (*IResource, error) {
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// WithHttpHealthCheck adds an HTTP health check
+func (s *ExecutableResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithCommand adds a resource command
@@ -8578,24 +8808,6 @@ func (s *ExternalServiceResource) WithDockerfileBaseImage(buildImage *string, ru
 		return nil, err
 	}
 	return result.(*IResource), nil
-}
-
-// WithHttpHealthCheck adds an HTTP health check to an external service
-func (s *ExternalServiceResource) WithHttpHealthCheck(path *string, statusCode *float64) (*ExternalServiceResource, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	if path != nil {
-		reqArgs["path"] = SerializeValue(path)
-	}
-	if statusCode != nil {
-		reqArgs["statusCode"] = SerializeValue(statusCode)
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*ExternalServiceResource), nil
 }
 
 // WithRequiredCommand adds a required command dependency
@@ -12179,6 +12391,21 @@ func (s *ProjectResource) WithEnvironmentExpression(name string, value *Referenc
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEnvironmentCallback sets environment variables via callback
+func (s *ProjectResource) WithEnvironmentCallback(callback func(...any) any) (*IResourceWithEnvironment, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEnvironment), nil
+}
+
 // WithEnvironmentEndpoint sets an environment variable from an endpoint reference
 func (s *ProjectResource) WithEnvironmentEndpoint(name string, endpointReference *EndpointReference) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
@@ -12228,6 +12455,21 @@ func (s *ProjectResource) WithArgs(args []string) (*IResourceWithArgs, error) {
 	}
 	reqArgs["args"] = SerializeValue(args)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithArgs), nil
+}
+
+// WithArgsCallback sets command-line arguments via callback
+func (s *ProjectResource) WithArgsCallback(callback func(...any) any) (*IResourceWithArgs, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgsCallback", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -12601,6 +12843,27 @@ func (s *ProjectResource) WithHealthCheck(key string) (*IResource, error) {
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// WithHttpHealthCheck adds an HTTP health check
+func (s *ProjectResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithCommand adds a resource command
@@ -14330,6 +14593,21 @@ func (s *TestDatabaseResource) WithEnvironmentExpression(name string, value *Ref
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEnvironmentCallback sets environment variables via callback
+func (s *TestDatabaseResource) WithEnvironmentCallback(callback func(...any) any) (*IResourceWithEnvironment, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEnvironment), nil
+}
+
 // WithEnvironmentEndpoint sets an environment variable from an endpoint reference
 func (s *TestDatabaseResource) WithEnvironmentEndpoint(name string, endpointReference *EndpointReference) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
@@ -14379,6 +14657,21 @@ func (s *TestDatabaseResource) WithArgs(args []string) (*IResourceWithArgs, erro
 	}
 	reqArgs["args"] = SerializeValue(args)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithArgs), nil
+}
+
+// WithArgsCallback sets command-line arguments via callback
+func (s *TestDatabaseResource) WithArgsCallback(callback func(...any) any) (*IResourceWithArgs, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgsCallback", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -14738,6 +15031,27 @@ func (s *TestDatabaseResource) WithHealthCheck(key string) (*IResource, error) {
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// WithHttpHealthCheck adds an HTTP health check
+func (s *TestDatabaseResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithCommand adds a resource command
@@ -15984,6 +16298,21 @@ func (s *TestRedisResource) WithEnvironmentExpression(name string, value *Refere
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEnvironmentCallback sets environment variables via callback
+func (s *TestRedisResource) WithEnvironmentCallback(callback func(...any) any) (*IResourceWithEnvironment, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEnvironment), nil
+}
+
 // WithEnvironmentEndpoint sets an environment variable from an endpoint reference
 func (s *TestRedisResource) WithEnvironmentEndpoint(name string, endpointReference *EndpointReference) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
@@ -16061,6 +16390,21 @@ func (s *TestRedisResource) WithArgs(args []string) (*IResourceWithArgs, error) 
 	}
 	reqArgs["args"] = SerializeValue(args)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithArgs), nil
+}
+
+// WithArgsCallback sets command-line arguments via callback
+func (s *TestRedisResource) WithArgsCallback(callback func(...any) any) (*IResourceWithArgs, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgsCallback", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -16433,6 +16777,27 @@ func (s *TestRedisResource) WithHealthCheck(key string) (*IResource, error) {
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// WithHttpHealthCheck adds an HTTP health check
+func (s *TestRedisResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithCommand adds a resource command
@@ -17863,6 +18228,21 @@ func (s *TestVaultResource) WithEnvironmentExpression(name string, value *Refere
 	return result.(*IResourceWithEnvironment), nil
 }
 
+// WithEnvironmentCallback sets environment variables via callback
+func (s *TestVaultResource) WithEnvironmentCallback(callback func(...any) any) (*IResourceWithEnvironment, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withEnvironmentCallback", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEnvironment), nil
+}
+
 // WithEnvironmentEndpoint sets an environment variable from an endpoint reference
 func (s *TestVaultResource) WithEnvironmentEndpoint(name string, endpointReference *EndpointReference) (*IResourceWithEnvironment, error) {
 	reqArgs := map[string]any{
@@ -17912,6 +18292,21 @@ func (s *TestVaultResource) WithArgs(args []string) (*IResourceWithArgs, error) 
 	}
 	reqArgs["args"] = SerializeValue(args)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgs", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithArgs), nil
+}
+
+// WithArgsCallback sets command-line arguments via callback
+func (s *TestVaultResource) WithArgsCallback(callback func(...any) any) (*IResourceWithArgs, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withArgsCallback", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -18271,6 +18666,27 @@ func (s *TestVaultResource) WithHealthCheck(key string) (*IResource, error) {
 		return nil, err
 	}
 	return result.(*IResource), nil
+}
+
+// WithHttpHealthCheck adds an HTTP health check
+func (s *TestVaultResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*IResourceWithEndpoints, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResourceWithEndpoints), nil
 }
 
 // WithCommand adds a resource command

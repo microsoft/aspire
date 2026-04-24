@@ -1202,6 +1202,17 @@ impl CSharpAppResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Sets environment variables via callback
+    pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Sets an environment variable from an endpoint reference
     pub fn with_environment_endpoint(&self, name: &str, endpoint_reference: &EndpointReference) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -1241,6 +1252,17 @@ impl CSharpAppResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withArgs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Sets command-line arguments via callback
+    pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
@@ -1544,6 +1566,24 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an HTTP health check
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a resource command
@@ -3358,6 +3398,17 @@ impl ContainerResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Sets environment variables via callback
+    pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Sets an environment variable from an endpoint reference
     pub fn with_environment_endpoint(&self, name: &str, endpoint_reference: &EndpointReference) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3397,6 +3448,17 @@ impl ContainerResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withArgs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Sets command-line arguments via callback
+    pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
@@ -3689,6 +3751,24 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an HTTP health check
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a resource command
@@ -4955,6 +5035,16 @@ impl DotnetToolResource {
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
+    /// Sets the executable command
+    pub fn with_executable_command(&self, command: &str) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withExecutableCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExecutableResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the executable working directory
     pub fn with_working_directory(&self, working_directory: &str) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5027,6 +5117,17 @@ impl DotnetToolResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Sets environment variables via callback
+    pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Sets an environment variable from an endpoint reference
     pub fn with_environment_endpoint(&self, name: &str, endpoint_reference: &EndpointReference) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -5066,6 +5167,17 @@ impl DotnetToolResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withArgs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Sets command-line arguments via callback
+    pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
@@ -5358,6 +5470,24 @@ impl DotnetToolResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an HTTP health check
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a resource command
@@ -6590,6 +6720,16 @@ impl ExecutableResource {
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
 
+    /// Sets the executable command
+    pub fn with_executable_command(&self, command: &str) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("command".to_string(), serde_json::to_value(&command).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withExecutableCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExecutableResource::new(handle, self.client.clone()))
+    }
+
     /// Sets the executable working directory
     pub fn with_working_directory(&self, working_directory: &str) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6662,6 +6802,17 @@ impl ExecutableResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Sets environment variables via callback
+    pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Sets an environment variable from an endpoint reference
     pub fn with_environment_endpoint(&self, name: &str, endpoint_reference: &EndpointReference) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6701,6 +6852,17 @@ impl ExecutableResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withArgs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Sets command-line arguments via callback
+    pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
@@ -6993,6 +7155,24 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an HTTP health check
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a resource command
@@ -7714,21 +7894,6 @@ impl ExternalServiceResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withDockerfileBaseImage", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds an HTTP health check to an external service
-    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>) -> Result<ExternalServiceResource, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        if let Some(ref v) = path {
-            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = status_code {
-            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(ExternalServiceResource::new(handle, self.client.clone()))
     }
 
     /// Adds a required command dependency
@@ -11171,6 +11336,17 @@ impl ProjectResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Sets environment variables via callback
+    pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Sets an environment variable from an endpoint reference
     pub fn with_environment_endpoint(&self, name: &str, endpoint_reference: &EndpointReference) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11210,6 +11386,17 @@ impl ProjectResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withArgs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Sets command-line arguments via callback
+    pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
@@ -11513,6 +11700,24 @@ impl ProjectResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an HTTP health check
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a resource command
@@ -13043,6 +13248,17 @@ impl TestDatabaseResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Sets environment variables via callback
+    pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Sets an environment variable from an endpoint reference
     pub fn with_environment_endpoint(&self, name: &str, endpoint_reference: &EndpointReference) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13082,6 +13298,17 @@ impl TestDatabaseResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withArgs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Sets command-line arguments via callback
+    pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
@@ -13374,6 +13601,24 @@ impl TestDatabaseResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an HTTP health check
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a resource command
@@ -14382,6 +14627,17 @@ impl TestRedisResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Sets environment variables via callback
+    pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Sets an environment variable from an endpoint reference
     pub fn with_environment_endpoint(&self, name: &str, endpoint_reference: &EndpointReference) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -14443,6 +14699,17 @@ impl TestRedisResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withArgs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Sets command-line arguments via callback
+    pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
@@ -14744,6 +15011,24 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an HTTP health check
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a resource command
@@ -15894,6 +16179,17 @@ impl TestVaultResource {
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
 
+    /// Sets environment variables via callback
+    pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withEnvironmentCallback", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
+    }
+
     /// Sets an environment variable from an endpoint reference
     pub fn with_environment_endpoint(&self, name: &str, endpoint_reference: &EndpointReference) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15933,6 +16229,17 @@ impl TestVaultResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("args".to_string(), serde_json::to_value(&args).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withArgs", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithArgs::new(handle, self.client.clone()))
+    }
+
+    /// Sets command-line arguments via callback
+    pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let callback_id = register_callback(callback);
+        args.insert("callback".to_string(), Value::String(callback_id));
+        let result = self.client.invoke_capability("Aspire.Hosting/withArgsCallback", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
@@ -16225,6 +16532,24 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withHealthCheck", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an HTTP health check
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a resource command

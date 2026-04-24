@@ -173,7 +173,7 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="builder">Builder for the executable resource.</param>
     /// <param name="command">Command.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withExecutableCommand", MethodName = "withCommand", Description = "Sets the executable command")]
+    [AspireExport("withExecutableCommand", Description = "Sets the executable command")]
     public static IResourceBuilder<T> WithCommand<T>(this IResourceBuilder<T> builder, string command) where T : ExecutableResource
     {
         ArgumentException.ThrowIfNullOrEmpty(command);

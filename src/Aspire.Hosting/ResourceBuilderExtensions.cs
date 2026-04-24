@@ -202,7 +202,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withEnvironmentCallback", MethodName = "withEnvironment", Description = "Sets environment variables via callback")]
+    [AspireExport("withEnvironmentCallback", Description = "Sets environment variables via callback")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, Func<EnvironmentCallbackContext, Task> callback) where T : IResourceWithEnvironment
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -589,7 +589,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder for a resource implementing <see cref="IResourceWithArgs"/>.</param>
     /// <param name="callback">A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withArgsCallback", MethodName = "withArgs", Description = "Sets command-line arguments via callback")]
+    [AspireExport("withArgsCallback", Description = "Sets command-line arguments via callback")]
     public static IResourceBuilder<T> WithArgs<T>(this IResourceBuilder<T> builder, Action<CommandLineArgsCallbackContext> callback) where T : IResourceWithArgs
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -798,6 +798,21 @@ public static class ResourceBuilderExtensions
             string => throw new InvalidOperationException("URI references require the name option and do not support connectionName or optional."),
             _ => throw new ArgumentException("Source must be a resource builder, endpoint reference, or URI string.", nameof(source))
         };
+    }
+
+    // Preserve the historical dispatcher signature for internal reflection-based tests.
+    internal static IResourceBuilder<TDestination> WithReference<TDestination>(
+        this IResourceBuilder<TDestination> builder,
+        IResourceBuilder<IResource> source,
+        string? connectionName = null,
+        bool optional = false,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(source);
+
+        return WithReferenceResource(builder, source, connectionName, optional, name);
     }
 
     private static IResourceBuilder<TDestination> WithReferenceResource<TDestination>(
