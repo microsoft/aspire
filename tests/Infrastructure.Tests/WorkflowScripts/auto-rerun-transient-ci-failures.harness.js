@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const path = require('node:path');
 const rerunWorkflow = require('../../../.github/workflows/auto-rerun-transient-ci-failures.js');
 
 class SummaryRecorder {
@@ -93,6 +94,36 @@ async function dispatch(operation, payload) {
 
         case 'computeRerunExecutionEligibility':
             return rerunWorkflow.computeRerunExecutionEligibility(payload);
+
+        case 'validateRetryPatternsConfig':
+            return rerunWorkflow.validateRetryPatternsConfig(payload.config);
+
+        case 'loadRetryPatternsConfig':
+            return rerunWorkflow.loadRetryPatternsConfig(payload.configPath);
+
+        case 'extractFailedTestsFromTrx':
+            return rerunWorkflow.extractFailedTestsFromTrx(payload.trxContent);
+
+        case 'matchesRetryPattern':
+            return rerunWorkflow.matchesRetryPattern(payload.text, payload.patternValue);
+
+        case 'matchTestFailurePatterns':
+            return rerunWorkflow.matchTestFailurePatterns(
+                payload.failedTests,
+                payload.testProject,
+                payload.patterns);
+
+        case 'matchJobLogPattern':
+            return rerunWorkflow.matchJobLogPattern(
+                payload.jobName,
+                payload.jobLogText,
+                payload.patterns);
+
+        case 'validateRetryPatternsConfigFromFile': {
+            const configPath = path.resolve(payload.configPath);
+            const result = rerunWorkflow.loadRetryPatternsConfig(configPath);
+            return result;
+        }
 
         case 'writeAnalysisSummary': {
             const summary = new SummaryRecorder();
