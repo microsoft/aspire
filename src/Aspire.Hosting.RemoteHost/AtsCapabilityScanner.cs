@@ -1254,10 +1254,59 @@ public static class AtsCapabilityScanner
                 continue;
             }
 
+            if (TryFindConflictingExportedValuePath(exportedValue.PathSegments, uniqueValues, out var conflictingPath))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Conflicting exported value path '{path}'. Exported value paths cannot be both a leaf value and a parent path. Existing path '{conflictingPath}' is kept and later entries are ignored.",
+                    path));
+                continue;
+            }
+
             uniqueValues.Add(exportedValue);
         }
 
         return uniqueValues;
+    }
+
+    private static bool TryFindConflictingExportedValuePath(
+        IReadOnlyList<string> candidatePathSegments,
+        IReadOnlyList<AtsExportedValueInfo> existingValues,
+        out string? conflictingPath)
+    {
+        foreach (var existingValue in existingValues)
+        {
+            if (PathsConflict(candidatePathSegments, existingValue.PathSegments))
+            {
+                conflictingPath = string.Join(".", existingValue.PathSegments);
+                return true;
+            }
+        }
+
+        conflictingPath = null;
+        return false;
+    }
+
+    private static bool PathsConflict(IReadOnlyList<string> leftPathSegments, IReadOnlyList<string> rightPathSegments)
+    {
+        return IsPrefixPath(leftPathSegments, rightPathSegments) || IsPrefixPath(rightPathSegments, leftPathSegments);
+    }
+
+    private static bool IsPrefixPath(IReadOnlyList<string> prefixPathSegments, IReadOnlyList<string> fullPathSegments)
+    {
+        if (prefixPathSegments.Count >= fullPathSegments.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < prefixPathSegments.Count; i++)
+        {
+            if (!string.Equals(prefixPathSegments[i], fullPathSegments[i], StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>

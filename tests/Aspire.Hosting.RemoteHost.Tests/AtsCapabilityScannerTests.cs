@@ -472,6 +472,24 @@ public class AtsCapabilityScannerTests
             && diagnostic.Location == "DuplicateValues.DuplicateExportedValues.Shared");
     }
 
+    [Fact]
+    public void ScanAssembly_PrefixConflictingExportedValuePath_EmitsWarningAndSkipsLaterValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains(
+                "Conflicting exported value path 'ConflictingValues.PrefixConflictingExportedValues.Node.Child'",
+                StringComparison.Ordinal)
+            && diagnostic.Message.Contains(
+                "Existing path 'ConflictingValues.PrefixConflictingExportedValues.Node'",
+                StringComparison.Ordinal)
+            && diagnostic.Location == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
+    }
+
     #endregion
 
     #region Test Types
@@ -535,6 +553,18 @@ public class AtsCapabilityScannerTests
 
         [AspireValue("DuplicateValues", Name = "Shared")]
         public static string SecondShared { get; } = "second";
+    }
+
+    private static class PrefixConflictingExportedValues
+    {
+        [AspireValue("ConflictingValues", Name = "Node")]
+        public static string NodeValue { get; } = "root";
+
+        public static class Node
+        {
+            [AspireValue("ConflictingValues", Name = "Child")]
+            public static string ChildValue { get; } = "child";
+        }
     }
 
     private static Assembly CreateAssemblyLevelExportCapabilityAssembly(Type parameterType)
