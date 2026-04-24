@@ -1104,7 +1104,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var capabilities = ScanCapabilitiesFromHostingAssembly();
 
         var getValueAsync = capabilities.FirstOrDefault(c =>
-            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValue" &&
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValueAsync" &&
             c.TargetTypeId == AtsConstants.ReferenceExpressionTypeId);
 
         Assert.NotNull(getValueAsync);
