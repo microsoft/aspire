@@ -904,7 +904,7 @@ function Get-InstallPath {
         throw "Unable to determine user home directory. Please specify -InstallPath parameter."
     }
 
-    $defaultPath = Join-Path (Join-Path $homeDirectory ".aspire") "bin"
+    $defaultPath = Join-Path $homeDirectory ".aspire"
     return [System.IO.Path]::GetFullPath($defaultPath)
 }
 
@@ -1237,6 +1237,13 @@ function Install-AspireCli {
         $cliPath = Join-Path $InstallPath $cliExe
 
         if ($PSCmdlet.ShouldProcess($InstallPath, "Install CLI")) {
+            # Clean old layout directories before extracting (prevents stale files from lingering).
+            # Deferred until after download + checksum so a download failure doesn't destroy an existing install.
+            $managedDir = Join-Path $InstallPath "managed"
+            $dcpDir = Join-Path $InstallPath "dcp"
+            if (Test-Path $managedDir) { Remove-Item -Recurse -Force $managedDir -ErrorAction SilentlyContinue }
+            if (Test-Path $dcpDir) { Remove-Item -Recurse -Force $dcpDir -ErrorAction SilentlyContinue }
+
             # Unpack the archive
             Expand-AspireCliArchive -ArchiveFile $archivePath -DestinationPath $InstallPath -OS $targetOS
 
@@ -1332,6 +1339,36 @@ function Start-AspireCliInstallation {
 
         # Determine the installation path
         $resolvedInstallPath = Get-InstallPath -InstallPath $InstallPath
+
+        # Migrate from old ~/.aspire/bin layout if present
+        $oldBinPath = Join-Path $resolvedInstallPath "bin"
+        if ((Test-Path $oldBinPath) -and [string]::IsNullOrWhiteSpace($InstallPath)) {
+            Write-Message "Found old .aspire/bin layout, cleaning up..." -Level Verbose
+            Remove-Item -Path (Join-Path $oldBinPath "aspire") -ErrorAction SilentlyContinue
+            Remove-Item -Path (Join-Path $oldBinPath "aspire.exe") -ErrorAction SilentlyContinue
+            # Remove bin/ if empty
+            $remaining = Get-ChildItem -Path $oldBinPath -Force -ErrorAction SilentlyContinue
+            if (-not $remaining) {
+                Remove-Item -Path $oldBinPath -ErrorAction SilentlyContinue
+            }
+            # Remove old bin/ PATH entry on Windows
+            try {
+                $userPath = [Environment]::GetEnvironmentVariable("PATH", [EnvironmentVariableTarget]::User)
+                if ($userPath) {
+                    $pathSep = [System.IO.Path]::PathSeparator
+                    $pathEntries = $userPath.Split($pathSep)
+                    if ($pathEntries -contains $oldBinPath) {
+                        $newPath = ($pathEntries | Where-Object { $_ -ne $oldBinPath }) -join $pathSep
+                        if ($newPath -ne $userPath) {
+                            [Environment]::SetEnvironmentVariable("PATH", $newPath, [EnvironmentVariableTarget]::User)
+                            Write-Message "Removed old $oldBinPath from user PATH" -Level Info
+                        }
+                    }
+                }
+            } catch {
+                Write-Message "Failed to clean old PATH entry: $($_.Exception.Message)" -Level Warning
+            }
+        }
 
         # Ensure the installation directory exists
         if (-not (Test-Path $resolvedInstallPath)) {

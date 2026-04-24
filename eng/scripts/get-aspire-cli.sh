@@ -1008,6 +1008,13 @@ download_and_install_archive() {
         say_verbose "Successfully downloaded and validated: $filename"
     fi
 
+    # Clean old layout directories before installing (prevents stale files from lingering).
+    # Deferred until after download + checksum so a download failure doesn't destroy an existing install.
+    if [[ -d "$INSTALL_PATH" ]] && [[ "$DRY_RUN" != true ]]; then
+        say_verbose "Cleaning old layout directories in $INSTALL_PATH..."
+        rm -rf "$INSTALL_PATH/managed" "$INSTALL_PATH/dcp" 2>/dev/null || true
+    fi
+
     # Install the archive
     if ! install_archive "$filename" "$INSTALL_PATH" "$os"; then
         return 1
@@ -1091,10 +1098,32 @@ main() {
 
     # Set default install path if not provided
     if [[ -z "$INSTALL_PATH" ]]; then
-        INSTALL_PATH="$HOME/.aspire/bin"
-        INSTALL_PATH_UNEXPANDED="\$HOME/.aspire/bin"
+        INSTALL_PATH="$HOME/.aspire"
+        INSTALL_PATH_UNEXPANDED="\$HOME/.aspire"
     else
         INSTALL_PATH_UNEXPANDED="$INSTALL_PATH"
+    fi
+
+    # Migrate from old ~/.aspire/bin layout if present
+    local old_bin_path="$HOME/.aspire/bin"
+    if [[ -d "$old_bin_path" ]] && [[ "$INSTALL_PATH" == "$HOME/.aspire" ]]; then
+        say_verbose "Found old ~/.aspire/bin layout, cleaning up..."
+        # Remove old aspire binary from bin/
+        rm -f "$old_bin_path/aspire" "$old_bin_path/aspire.exe" 2>/dev/null || true
+        # Remove bin/ if empty
+        rmdir "$old_bin_path" 2>/dev/null || true
+        # Remove old PATH entry from shell profiles
+        for profile in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile" "$HOME/.zshrc" "$HOME/.zshenv"; do
+            if [[ -f "$profile" ]]; then
+                # Remove lines that add ~/.aspire/bin to PATH
+                if grep -q '\.aspire/bin' "$profile" 2>/dev/null; then
+                    say_verbose "Removing old ~/.aspire/bin PATH entry from $profile"
+                    # Use { ... || true; } to handle grep -v exit code 1 when all lines are filtered
+                    { grep -v '\.aspire/bin' "$profile" || true; } > "${profile}.tmp"
+                    mv "${profile}.tmp" "$profile"
+                fi
+            fi
+        done
     fi
 
     # Create a temporary directory for downloads
