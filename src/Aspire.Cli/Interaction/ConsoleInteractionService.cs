@@ -370,7 +370,7 @@ internal class ConsoleInteractionService : IInteractionService
         target.Profile.Out.Writer.WriteLine(text);
     }
 
-    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null)
     {
         var effectiveConsole = consoleOverride ?? Console;
         if (ShouldDisplayMarkdownAsPlainText(effectiveConsole))
@@ -381,9 +381,25 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
-        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
-        target.Write(renderable);
-        target.WriteLine();
+        var originalWidth = target.Profile.Width;
+        if (maxWidth is not null)
+        {
+            target.Profile.Width = Math.Min(originalWidth, maxWidth.Value);
+        }
+
+        try
+        {
+            var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
+            target.Write(renderable);
+            target.WriteLine();
+        }
+        finally
+        {
+            if (maxWidth is not null)
+            {
+                target.Profile.Width = originalWidth;
+            }
+        }
     }
 
     private bool ShouldDisplayMarkdownAsPlainText(ConsoleOutput effectiveConsole)

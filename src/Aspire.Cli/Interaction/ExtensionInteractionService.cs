@@ -425,7 +425,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         _consoleInteractionService.DisplayRawText(text, consoleOverride);
     }
 
-    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null)
     {
         // Send raw markdown to extension (it can handle markdown natively)
         // Convert to Spectre markup for console display

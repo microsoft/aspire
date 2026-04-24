@@ -22,7 +22,7 @@ internal interface IInteractionService
     void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false);
     void DisplayPlainText(string text);
     void DisplayRawText(string text, ConsoleOutput? consoleOverride = null);
-    void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null);
+    void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null);
     void DisplayMarkupLine(string markup);
     void DisplaySuccess(string message, bool allowMarkup = false);
     void DisplaySubtleMessage(string message, bool allowMarkup = false);

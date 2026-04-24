@@ -523,7 +523,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         return score;
     }
 
-    private static string NormalizeContent(string content)
+    internal static string NormalizeContent(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
         {

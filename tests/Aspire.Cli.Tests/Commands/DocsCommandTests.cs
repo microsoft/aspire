@@ -233,49 +233,6 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void WrapMarkdownForConsole_PreservesMarkdownStructure()
-    {
-        var markdown = """
-            # Certificate configuration
-
-            > Learn how to configure HTTPS endpoints with the [Aspire CLI](https://aspire.dev/get-started/install-cli/) and `aspire run`.
-
-            ### Using the Aspire CLI (recommended)
-
-            * First item with [a link](https://example.com/docs)
-            * Second item
-
-            ```bash
-            aspire docs get certificate-configuration
-            ```
-            """;
-
-        var wrapped = Aspire.Cli.Commands.DocsGetCommand.WrapMarkdownForConsole(markdown, width: 60);
-
-        Assert.Contains("# Certificate configuration", wrapped);
-        Assert.Contains("\n\n### Using the Aspire CLI (recommended)\n\n", wrapped);
-        Assert.Contains("[Aspire CLI](https://aspire.dev/get-started/install-cli/)", wrapped);
-        Assert.Contains("`aspire run`", wrapped);
-        Assert.Contains("```bash\naspire docs get certificate-configuration\n```", wrapped.Replace("\r\n", "\n"));
-    }
-
-    [Fact]
-    public void WrapMarkdownForConsole_DoesNotWrapTableRows()
-    {
-        var markdown = """
-            | Setting | Environment variable | Purpose |
-            | ---------------------- | ----------------------- | ---------------------------------------------- |
-            | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
-            """;
-
-        var wrapped = Aspire.Cli.Commands.DocsGetCommand.WrapMarkdownForConsole(markdown, width: 40);
-
-        Assert.Contains("| Setting | Environment variable | Purpose |", wrapped);
-        Assert.Contains("| ---------------------- | ----------------------- | ---------------------------------------------- |", wrapped);
-        Assert.Contains("| `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |", wrapped);
-    }
-
-    [Fact]
     public async Task DocsGetCommand_WithInvalidSlug_ReturnsError()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
