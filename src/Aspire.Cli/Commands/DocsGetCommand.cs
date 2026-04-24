@@ -59,8 +59,6 @@ internal sealed class DocsGetCommand : BaseCommand
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        System.Diagnostics.Debugger.Launch();
-
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
         var slug = parseResult.GetValue(s_slugArgument)!;
