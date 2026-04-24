@@ -1312,7 +1312,11 @@ function Start-DownloadAndInstall {
 
     if ($WorkflowRunId) {
         # When workflow ID is provided, use it directly
-        Write-Message "Starting download and installation for PR #$PRNumber with workflow run ID: $WorkflowRunId" -Level Info
+        if ($PRNumber -gt 0) {
+            Write-Message "Starting download and installation for PR #$PRNumber with workflow run ID: $WorkflowRunId" -Level Info
+        } else {
+            Write-Message "Starting download and installation for workflow run ID: $WorkflowRunId" -Level Info
+        }
         $runId = $WorkflowRunId.ToString()
     }
     else {

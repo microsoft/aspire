@@ -196,6 +196,26 @@ jobs:
           name: cli-native-archives-${{ steps.compute_rid.outputs.rid }}
           path: ${{ github.workspace }}/cli-archives
 
+      - name: Copy NuGet packages into CLI archives directory
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && fromJson(inputs.properties).requiresNugets == true }}
+        shell: pwsh
+        run: |
+          $source = "${{ github.workspace }}/artifacts/packages/Debug/Shipping"
+          $dest = "${{ github.workspace }}/cli-archives"
+          if (Test-Path $source) {
+            $nupkgs = Get-ChildItem -Path $source -Filter *.nupkg -ErrorAction SilentlyContinue
+            if ($nupkgs -and $nupkgs.Count -gt 0) {
+              foreach ($pkg in $nupkgs) {
+                Copy-Item -Path $pkg.FullName -Destination $dest -Force
+              }
+              Write-Host "Copied $($nupkgs.Count) NuGet packages into cli-archives for LocalArchive mode"
+            } else {
+              Write-Host "No NuGet packages found in '$source' to copy"
+            }
+          } else {
+            Write-Host "NuGet package source '$source' does not exist — skipping copy"
+          }
+
       - name: Install sdk for nuget based testing
         if: ${{ fromJson(inputs.properties).requiresTestSdk == true }}
         run: >
@@ -326,7 +346,7 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
-          GH_TOKEN: ${{ fromJson(inputs.properties).requiresGitHubToken == true && github.token || '' }}
+          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
@@ -366,7 +386,7 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
-          GH_TOKEN: ${{ fromJson(inputs.properties).requiresGitHubToken == true && github.token || '' }}
+          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
@@ -412,7 +432,7 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
-          GH_TOKEN: ${{ fromJson(inputs.properties).requiresGitHubToken == true && github.token || '' }}
+          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
@@ -459,7 +479,7 @@ jobs:
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
-          GH_TOKEN: ${{ fromJson(inputs.properties).requiresGitHubToken == true && github.token || '' }}
+          GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
