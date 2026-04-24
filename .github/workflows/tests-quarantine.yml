@@ -29,6 +29,7 @@ on:
       - '.github/workflows/tests-quarantine.yml'
       - '.github/workflows/specialized-test-runner.yml'
       - '.github/workflows/run-tests.yml'
+      - '.github/actions/enumerate-tests/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,9 +39,7 @@ jobs:
   quarantine_tests:
     uses: ./.github/workflows/specialized-test-runner.yml
     with:
-      testRunnerName: "QuarantinedTestRunsheetBuilder"
       attributeName: "QuarantinedTest"
-      extraRunSheetBuilderArgs: "-p:RunQuarantinedTests=true"
       extraTestArgs: "--filter-trait quarantined=true"
       enablePlaywrightInstall: true
       ignoreTestFailures: true
