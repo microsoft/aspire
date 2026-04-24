@@ -261,6 +261,10 @@ function canUseInfrastructureNetworkLogOverride(failedSteps) {
     return failedSteps.length > 0 && !failedSteps.some(step => matchesAny(step, testExecutionFailureStepPatterns));
 }
 
+function hasTestExecutionFailureStep(failedSteps) {
+    return failedSteps.some(step => matchesAny(step, testExecutionFailureStepPatterns));
+}
+
 function formatFailedStepLabel(failedSteps, failedStepText) {
     const label = failedSteps.length === 1 ? 'Failed step' : 'Failed steps';
     return `${label} '${failedStepText}'`;
@@ -430,6 +434,7 @@ async function analyzeFailedJobs({
     getAnnotationsForJob,
     getJobLogTextForJob,
     maxRetryableJobs = defaultMaxRetryableJobs,
+    retryPatternsConfig = null,
 }) {
     const normalizedMaxRetryableJobs =
         Number.isInteger(maxRetryableJobs) && maxRetryableJobs >= 0
@@ -438,6 +443,7 @@ async function analyzeFailedJobs({
     const failedJobs = (jobs || []).filter(job => failureConclusions.has(job.conclusion) && !ignoredJobs.has(job.name));
     const retryableJobs = [];
     const skippedJobs = [];
+    const jobFailurePatterns = retryPatternsConfig?.jobFailurePatterns;
 
     for (const job of failedJobs) {
         const failedSteps = getFailedSteps(job);
@@ -466,6 +472,27 @@ async function analyzeFailedJobs({
                 jobLogText,
                 { matchedInfrastructureNetworkLogOverridePattern }
             );
+        }
+
+        // Third classification pass: configurable job log patterns for test execution failures
+        if (
+            !classification.retryable &&
+            getJobLogTextForJob &&
+            Array.isArray(jobFailurePatterns) &&
+            jobFailurePatterns.length > 0 &&
+            hasTestExecutionFailureStep(failedSteps)
+        ) {
+            const jobLogText = await getJobLogTextForJob(job);
+            const match = matchJobLogPattern(job.name, jobLogText, jobFailurePatterns);
+
+            if (match) {
+                const failedStepText = failedSteps.join(' | ');
+                classification = {
+                    retryable: true,
+                    failedSteps,
+                    reason: `${formatFailedStepLabel(failedSteps, failedStepText)} will be retried because the job log matched a configurable test-retry pattern: ${match.reason}`,
+                };
+            }
         }
 
         const jobResult = {
@@ -566,6 +593,7 @@ async function writeAnalysisSummary({
     rerunEligible,
     sourceRunUrl,
     sourceRunAttempt,
+    testPatternMatchedTests = [],
 }) {
     const analyzedRunReference = buildSummaryReference(
         buildWorkflowRunAttemptUrl(sourceRunUrl, sourceRunAttempt),
@@ -609,6 +637,19 @@ async function writeAnalysisSummary({
             [{ data: 'Job', header: true }, { data: 'Reason', header: true }],
             ...retryableJobs.map(job => [job.name, job.reason]),
         ]);
+    }
+
+    if (testPatternMatchedTests.length > 0) {
+        await summary.addHeading('Matched test failure patterns', 2);
+        const displayedTests = testPatternMatchedTests.slice(0, 25);
+        await summary.addTable([
+            [{ data: 'Test', header: true }, { data: 'Reason', header: true }],
+            ...displayedTests.map(test => [test.testName, test.reason]),
+        ]);
+
+        if (testPatternMatchedTests.length > 25) {
+            summary.addRaw(`...and ${testPatternMatchedTests.length - 25} more matched test(s).`).addBreak();
+        }
     }
 
     if (skippedJobs.length > 0) {
@@ -691,8 +732,9 @@ function buildPullRequestCommentBody({
     failedAttemptUrl,
     rerunAttemptUrl,
     retryableJobs,
+    testPatternMatchedTests = [],
 }) {
-    return [
+    const lines = [
         `Re-running the failed jobs in the CI workflow for this pull request because ${retryableJobs.length} job${retryableJobs.length === 1 ? ' was' : 's were'} identified as retry-safe transient failures in ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)}.`,
         `GitHub was asked to rerun all failed jobs for that attempt, and the rerun is being tracked in ${formatMarkdownLink('the rerun attempt', rerunAttemptUrl)}.`,
         'The job links below point to the failed attempt jobs that matched the retry-safe transient failure rules.',
@@ -704,7 +746,25 @@ function buildPullRequestCommentBody({
 
             return `- ${jobReference} - ${job.reason}`;
         }),
-    ].join('\n');
+    ];
+
+    if (testPatternMatchedTests.length > 0) {
+        const displayedTests = testPatternMatchedTests.slice(0, 10);
+        lines.push(
+            '',
+            `<details><summary>Matched test failure patterns (${testPatternMatchedTests.length} test${testPatternMatchedTests.length === 1 ? '' : 's'})</summary>`,
+            '',
+            ...displayedTests.map(test => `- \`${test.testName}\` — ${test.reason}`),
+        );
+
+        if (testPatternMatchedTests.length > 10) {
+            lines.push(`- ...and ${testPatternMatchedTests.length - 10} more`);
+        }
+
+        lines.push('', '</details>');
+    }
+
+    return lines.join('\n');
 }
 
 async function addPullRequestComments({ github, owner, repo, pullRequestNumbers, body }) {
@@ -737,6 +797,7 @@ async function rerunMatchedJobs({
     sourceRunId,
     sourceRunUrl,
     sourceRunAttempt,
+    testPatternMatchedTests = [],
 }) {
     if (retryableJobs.length === 0) {
         return;
@@ -803,6 +864,7 @@ async function rerunMatchedJobs({
                 failedAttemptUrl: failedAttemptReference.url,
                 rerunAttemptUrl: rerunAttemptReference.url,
                 retryableJobs,
+                testPatternMatchedTests,
             }),
         });
     }
@@ -1148,9 +1210,86 @@ function decodeXmlEntities(text) {
         .replace(/&apos;/g, "'");
 }
 
+function analyzeTrxFiles(trxFileContents, testFailurePatterns) {
+    if (!Array.isArray(trxFileContents) || trxFileContents.length === 0 || !Array.isArray(testFailurePatterns) || testFailurePatterns.length === 0) {
+        return { allMatchedTests: [] };
+    }
+
+    const allMatchedTests = [];
+    const seenTestNames = new Set();
+
+    for (const { fileName, content } of trxFileContents) {
+        const failedTests = extractFailedTestsFromTrx(content);
+        const testProject = String(fileName || '').replace(/\.trx$/i, '');
+        const { matchedTests } = matchTestFailurePatterns(failedTests, testProject, testFailurePatterns);
+
+        for (const match of matchedTests) {
+            if (!seenTestNames.has(match.testName)) {
+                seenTestNames.add(match.testName);
+                allMatchedTests.push({ ...match, testProject });
+            }
+        }
+    }
+
+    return { allMatchedTests };
+}
+
+function promoteTestExecutionFailureJobs(retryableJobs, skippedJobs, allMatchedTests) {
+    if (!Array.isArray(allMatchedTests) || allMatchedTests.length === 0) {
+        return { retryableJobs, skippedJobs, promotedJobs: [] };
+    }
+
+    const matchSummary = [...new Set(allMatchedTests.map(m => m.reason))].join(', ');
+    const promotedJobs = [];
+    const remainingSkippedJobs = [];
+
+    for (const job of skippedJobs) {
+        if (hasTestExecutionFailureStep(job.failedSteps)) {
+            promotedJobs.push({
+                ...job,
+                reason: `Test execution failure will be retried because ${allMatchedTests.length} failed test(s) matched transient test failure patterns (${matchSummary}).`,
+                matchedTests: allMatchedTests,
+            });
+        }
+        else {
+            remainingSkippedJobs.push(job);
+        }
+    }
+
+    return {
+        retryableJobs: [...retryableJobs, ...promotedJobs],
+        skippedJobs: remainingSkippedJobs,
+        promotedJobs,
+    };
+}
+
+function selectTestResultsArtifact(artifacts) {
+    if (!Array.isArray(artifacts) || artifacts.length === 0) {
+        return null;
+    }
+
+    const maxArtifactBytes = 100 * 1024 * 1024; // 100MB cap
+    const candidates = artifacts
+        .filter(a => a.name === 'All-TestResults' && !a.expired)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (candidates.length === 0) {
+        return null;
+    }
+
+    const selected = candidates[0];
+
+    if (selected.size_in_bytes > maxArtifactBytes) {
+        return null;
+    }
+
+    return selected;
+}
+
 module.exports = {
     addPullRequestComments,
     analyzeFailedJobs,
+    analyzeTrxFiles,
     annotationText,
     buildPullRequestCommentBody,
     classifyFailedJob,
@@ -1166,12 +1305,15 @@ module.exports = {
     getCheckRunIdForJob,
     getOpenPullRequestNumbers,
     getLatestRunAttempt,
+    hasTestExecutionFailureStep,
     listPullRequestsByHead,
     loadRetryPatternsConfig,
     matchesRetryPattern,
     matchJobLogPattern,
     matchTestFailurePatterns,
+    promoteTestExecutionFailureJobs,
     rerunMatchedJobs,
+    selectTestResultsArtifact,
     testExecutionFailureStepPatterns,
     validateRetryPatternsConfig,
     writeAnalysisSummary,

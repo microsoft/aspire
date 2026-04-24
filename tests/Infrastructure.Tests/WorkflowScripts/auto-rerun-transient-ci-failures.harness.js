@@ -62,6 +62,7 @@ async function dispatch(operation, payload) {
                         return payload.jobLogTextByJobId?.[String(job.id)] ?? '';
                     },
                     maxRetryableJobs: payload.maxRetryableJobs,
+                    retryPatternsConfig: payload.retryPatternsConfig ?? null,
                 });
 
                 return { ...result, logRequestJobIds };
@@ -118,6 +119,23 @@ async function dispatch(operation, payload) {
                 payload.jobName,
                 payload.jobLogText,
                 payload.patterns);
+
+        case 'analyzeTrxFiles':
+            return rerunWorkflow.analyzeTrxFiles(
+                payload.trxFileContents,
+                payload.testFailurePatterns);
+
+        case 'promoteTestExecutionFailureJobs':
+            return rerunWorkflow.promoteTestExecutionFailureJobs(
+                payload.retryableJobs ?? [],
+                payload.skippedJobs ?? [],
+                payload.allMatchedTests ?? []);
+
+        case 'selectTestResultsArtifact':
+            return rerunWorkflow.selectTestResultsArtifact(payload.artifacts);
+
+        case 'hasTestExecutionFailureStep':
+            return rerunWorkflow.hasTestExecutionFailureStep(payload.failedSteps ?? []);
 
         case 'validateRetryPatternsConfigFromFile': {
             const configPath = path.resolve(payload.configPath);

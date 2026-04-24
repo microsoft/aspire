@@ -1371,6 +1371,288 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Equal("DNS failure", result.Reason);
     }
 
+    // --- analyzeFailedJobs with retryPatternsConfig tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithConfigRetriesTestExecFailureViaJobLogPattern()
+    {
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "Process failed with 0xC0000142" },
+            retryPatternsConfig: new
+            {
+                version = 1,
+                testFailurePatterns = Array.Empty<object>(),
+                jobFailurePatterns = new object[]
+                {
+                    new { jobName = new { regex = ".*" }, output = "0xC0000142", reason = "Windows init failure" }
+                }
+            });
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("configurable test-retry pattern", result.RetryableJobs[0].Reason);
+        Assert.Contains("Windows init failure", result.RetryableJobs[0].Reason);
+        Assert.Empty(result.SkippedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithConfigSkipsWhenJobLogDoesNotMatchPattern()
+    {
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "Some unrelated failure" },
+            retryPatternsConfig: new
+            {
+                version = 1,
+                testFailurePatterns = Array.Empty<object>(),
+                jobFailurePatterns = new object[]
+                {
+                    new { output = "0xC0000142", reason = "Windows init failure" }
+                }
+            });
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithConfigDoesNotApplyJobLogPatternToNonTestExecFailures()
+    {
+        // A job that fails on a non-test step should NOT use jobFailurePatterns
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Compile project"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "0xC0000142" },
+            retryPatternsConfig: new
+            {
+                version = 1,
+                testFailurePatterns = Array.Empty<object>(),
+                jobFailurePatterns = new object[]
+                {
+                    new { output = "0xC0000142", reason = "Windows init failure" }
+                }
+            });
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+    }
+
+    // --- analyzeTrxFiles tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeTrxFilesFindsMatchedTests()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.FailingTest", "Failed", ErrorMessage: "ECONNRESET: connection reset"),
+            new TrxTestResult("Aspire.Tests.PassingTest", "Passed"));
+
+        var patterns = new object[]
+        {
+            new { output = "ECONNRESET", reason = "Network reset" }
+        };
+
+        AnalyzeTrxFilesResult result = await InvokeHarnessAsync<AnalyzeTrxFilesResult>(
+            "analyzeTrxFiles",
+            new
+            {
+                trxFileContents = new[] { new { fileName = "Aspire.Tests.trx", content = trxContent } },
+                testFailurePatterns = patterns
+            });
+
+        Assert.Single(result.AllMatchedTests);
+        Assert.Equal("Aspire.Tests.FailingTest", result.AllMatchedTests[0].TestName);
+        Assert.Equal("Network reset", result.AllMatchedTests[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeTrxFilesDedupesByTestName()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.Flaky", "Failed", ErrorMessage: "ECONNRESET"));
+
+        var patterns = new object[]
+        {
+            new { output = "ECONNRESET", reason = "Network reset" }
+        };
+
+        // Same test in two TRX files
+        AnalyzeTrxFilesResult result = await InvokeHarnessAsync<AnalyzeTrxFilesResult>(
+            "analyzeTrxFiles",
+            new
+            {
+                trxFileContents = new[]
+                {
+                    new { fileName = "Aspire.Tests.trx", content = trxContent },
+                    new { fileName = "Aspire.Tests.retry.trx", content = trxContent }
+                },
+                testFailurePatterns = patterns
+            });
+
+        Assert.Single(result.AllMatchedTests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeTrxFilesReturnsEmptyWhenNoMatches()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.LogicError", "Failed", ErrorMessage: "Assert.True() Failure"));
+
+        var patterns = new object[]
+        {
+            new { output = "ECONNRESET", reason = "Network reset" }
+        };
+
+        AnalyzeTrxFilesResult result = await InvokeHarnessAsync<AnalyzeTrxFilesResult>(
+            "analyzeTrxFiles",
+            new
+            {
+                trxFileContents = new[] { new { fileName = "Aspire.Tests.trx", content = trxContent } },
+                testFailurePatterns = patterns
+            });
+
+        Assert.Empty(result.AllMatchedTests);
+    }
+
+    // --- promoteTestExecutionFailureJobs tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PromoteTestExecutionFailureJobsMovesTestExecJobsToRetryable()
+    {
+        var skippedJobs = new[]
+        {
+            new { id = 1, name = "Tests / Build (ubuntu-latest)", htmlUrl = (string?)null, failedSteps = new[] { "Run tests" }, reason = "Not retryable." },
+            new { id = 2, name = "Build / Compile", htmlUrl = (string?)null, failedSteps = new[] { "Compile project" }, reason = "Not retryable." }
+        };
+        var allMatchedTests = new[]
+        {
+            new { testName = "Aspire.Tests.Flaky", reason = "Network reset", testProject = "Aspire.Tests" }
+        };
+
+        PromoteTestExecutionFailureJobsResult result = await InvokeHarnessAsync<PromoteTestExecutionFailureJobsResult>(
+            "promoteTestExecutionFailureJobs",
+            new { retryableJobs = Array.Empty<object>(), skippedJobs, allMatchedTests });
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal("Tests / Build (ubuntu-latest)", result.RetryableJobs[0].Name);
+        Assert.Contains("transient test failure patterns", result.RetryableJobs[0].Reason);
+
+        // Non-test-exec job stays skipped
+        Assert.Single(result.SkippedJobs);
+        Assert.Equal("Build / Compile", result.SkippedJobs[0].Name);
+
+        Assert.Single(result.PromotedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PromoteTestExecutionFailureJobsDoesNothingWhenNoMatchedTests()
+    {
+        var skippedJobs = new[]
+        {
+            new { id = 1, name = "Tests / Build (ubuntu-latest)", htmlUrl = (string?)null, failedSteps = new[] { "Run tests" }, reason = "Not retryable." }
+        };
+
+        PromoteTestExecutionFailureJobsResult result = await InvokeHarnessAsync<PromoteTestExecutionFailureJobsResult>(
+            "promoteTestExecutionFailureJobs",
+            new { retryableJobs = Array.Empty<object>(), skippedJobs, allMatchedTests = Array.Empty<object>() });
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+        Assert.Empty(result.PromotedJobs);
+    }
+
+    // --- selectTestResultsArtifact tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SelectTestResultsArtifactReturnsNewestNonExpired()
+    {
+        var artifacts = new object[]
+        {
+            new { name = "All-TestResults", size_in_bytes = 1000, expired = false, created_at = "2024-01-01T00:00:00Z", id = 1 },
+            new { name = "All-TestResults", size_in_bytes = 2000, expired = false, created_at = "2024-01-02T00:00:00Z", id = 2 },
+            new { name = "Other-Artifact", size_in_bytes = 500, expired = false, created_at = "2024-01-03T00:00:00Z", id = 3 }
+        };
+
+        SelectTestResultsArtifactResult? result = await InvokeHarnessAsync<SelectTestResultsArtifactResult?>(
+            "selectTestResultsArtifact",
+            new { artifacts });
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.Id);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SelectTestResultsArtifactReturnsNullForExpired()
+    {
+        var artifacts = new object[]
+        {
+            new { name = "All-TestResults", size_in_bytes = 1000, expired = true, created_at = "2024-01-01T00:00:00Z", id = 1 }
+        };
+
+        SelectTestResultsArtifactResult? result = await InvokeHarnessAsync<SelectTestResultsArtifactResult?>(
+            "selectTestResultsArtifact",
+            new { artifacts });
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SelectTestResultsArtifactReturnsNullForOversized()
+    {
+        var artifacts = new object[]
+        {
+            new { name = "All-TestResults", size_in_bytes = 200 * 1024 * 1024, expired = false, created_at = "2024-01-01T00:00:00Z", id = 1 }
+        };
+
+        SelectTestResultsArtifactResult? result = await InvokeHarnessAsync<SelectTestResultsArtifactResult?>(
+            "selectTestResultsArtifact",
+            new { artifacts });
+
+        Assert.Null(result);
+    }
+
+    // --- hasTestExecutionFailureStep tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task HasTestExecutionFailureStepReturnsTrueForRunTests()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "hasTestExecutionFailureStep",
+            new { failedSteps = new[] { "Run tests (ubuntu-latest)" } });
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task HasTestExecutionFailureStepReturnsFalseForNonTestSteps()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "hasTestExecutionFailureStep",
+            new { failedSteps = new[] { "Checkout code" } });
+
+        Assert.False(result);
+    }
+
     // --- TRX parsing tests ---
 
     [Fact]
@@ -1720,7 +2002,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         WorkflowJob[] jobs,
         Dictionary<string, string> annotationTextByJobId,
         Dictionary<string, string>? jobLogTextByJobId = null,
-        int? maxRetryableJobs = null)
+        int? maxRetryableJobs = null,
+        object? retryPatternsConfig = null)
         => InvokeHarnessAsync<AnalyzeFailedJobsResult>(
             "analyzeFailedJobs",
             new AnalyzeFailedJobsRequest
@@ -1728,7 +2011,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 Jobs = jobs,
                 AnnotationTextByJobId = annotationTextByJobId,
                 JobLogTextByJobId = jobLogTextByJobId,
-                MaxRetryableJobs = maxRetryableJobs
+                MaxRetryableJobs = maxRetryableJobs,
+                RetryPatternsConfig = retryPatternsConfig
             });
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
@@ -1804,6 +2088,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         public Dictionary<string, string> AnnotationTextByJobId { get; init; } = [];
         public Dictionary<string, string>? JobLogTextByJobId { get; init; }
         public int? MaxRetryableJobs { get; init; }
+        public object? RetryPatternsConfig { get; init; }
     }
 
     private sealed class AnalyzeFailedJobsResult
@@ -1923,5 +2208,34 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     {
         public string TestName { get; init; } = string.Empty;
         public string Output { get; init; } = string.Empty;
+    }
+
+    private sealed class AnalyzeTrxFilesResult
+    {
+        public AnalyzedTrxMatch[] AllMatchedTests { get; init; } = [];
+    }
+
+    private sealed class AnalyzedTrxMatch
+    {
+        public string TestName { get; init; } = string.Empty;
+        public string Reason { get; init; } = string.Empty;
+        public string? MatchedSnippet { get; init; }
+        public string TestProject { get; init; } = string.Empty;
+    }
+
+    private sealed class PromoteTestExecutionFailureJobsResult
+    {
+        public AnalyzedJob[] RetryableJobs { get; init; } = [];
+        public AnalyzedJob[] SkippedJobs { get; init; } = [];
+        public AnalyzedJob[] PromotedJobs { get; init; } = [];
+    }
+
+    private sealed class SelectTestResultsArtifactResult
+    {
+        public int Id { get; init; }
+        public string Name { get; init; } = string.Empty;
+
+        [JsonPropertyName("size_in_bytes")]
+        public long SizeInBytes { get; init; }
     }
 }
