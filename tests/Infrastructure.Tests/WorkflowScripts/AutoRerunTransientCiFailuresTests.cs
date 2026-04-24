@@ -1741,6 +1741,22 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Contains("&null", results[0].Output);
     }
 
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractFailedTestsFromTrxDecodesDoubleEncodedXmlEntities()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.QuoteTest", "Failed", ErrorMessage: "Expected &amp;quot;hello&amp;quot; but got &amp;apos;world&amp;apos;"));
+
+        ExtractFailedTestsFromTrxResult[] results = await InvokeHarnessAsync<ExtractFailedTestsFromTrxResult[]>(
+            "extractFailedTestsFromTrx",
+            new { trxContent });
+
+        Assert.Single(results);
+        Assert.Contains("&quot;hello&quot;", results[0].Output);
+        Assert.Contains("&apos;world&apos;", results[0].Output);
+    }
+
     // --- Config validation edge case tests ---
 
     [Fact]

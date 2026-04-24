@@ -728,6 +728,11 @@ async function getLatestRunAttempt({ github, owner, repo, runId }) {
     }
 }
 
+function sanitizeMarkdown(text) {
+    // Escape backticks and pipe characters to prevent markdown injection
+    return String(text).replace(/[`|]/g, ch => `\\${ch}`);
+}
+
 function buildPullRequestCommentBody({
     failedAttemptUrl,
     rerunAttemptUrl,
@@ -754,7 +759,7 @@ function buildPullRequestCommentBody({
             '',
             `<details><summary>Matched test failure patterns (${testPatternMatchedTests.length} test${testPatternMatchedTests.length === 1 ? '' : 's'})</summary>`,
             '',
-            ...displayedTests.map(test => `- \`${test.testName}\` — ${test.reason}`),
+            ...displayedTests.map(test => `- \`${sanitizeMarkdown(test.testName)}\` — ${test.reason}`),
         );
 
         if (testPatternMatchedTests.length > 10) {
@@ -1205,9 +1210,9 @@ function decodeXmlEntities(text) {
     return text
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"')
-        .replace(/&apos;/g, "'");
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&');
 }
 
 function analyzeTrxFiles(trxFileContents, testFailurePatterns) {
