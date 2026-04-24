@@ -230,7 +230,8 @@
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
-    <!-- File uses .txt extension instead of .md to avoid markdown linters -->
+    <!-- Markdown content is stored as a separate file to avoid the C# preprocessor
+         erroring on # characters (CS1024). Uses .txt extension to avoid markdown linters. -->
     <EmbeddedResource Include="Commands\MarkdownShowcase.txt" LogicalName="MarkdownShowcase.txt" />
   </ItemGroup>
 
