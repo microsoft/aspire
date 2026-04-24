@@ -302,7 +302,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         }
 
         WriteLine($"{indent}pub fn {ToSnakeCase(name)}() -> {returnType} {{");
-        WriteLine($"{indent}    serde_json::from_value::<{returnType}>(json!({valueInfo.Value?.ToJsonString() ?? "null"}))");
+        WriteLine($"{indent}    serde_json::from_value::<{returnType}>(serde_json::json!({valueInfo.Value?.ToJsonString() ?? "null"}))");
         WriteLine($"{indent}        .expect(\"generated exported value should deserialize\")");
         WriteLine($"{indent}}}");
     }
