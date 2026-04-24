@@ -143,6 +143,40 @@ public sealed class ResourceSourceViewModelTests
                 ValueToVisualize: "path/to/executable arg1 arg2",
                 Tooltip: "path/to/executable arg1 arg2"));
 
+        // Executable with app args containing DCP template expressions and effective args with resolved values.
+        // Effective args (post-DCP resolution) should be preferred over app args for non-project executables.
+        data.Add(new TestData(
+                ResourceType: "Executable",
+                ExecutablePath: "path/to/executable",
+                ExecutableArguments: ["-port", "64731"],
+                AppArgs: ["-port", """{{- portForServing "exe" -}}"""],
+                AppArgsSensitivity: null,
+                ProjectPath: null,
+                ContainerImage: null,
+                SourceProperty: null),
+            new ExpectedData(
+                Value: "executable",
+                ContentAfterValue: [new ExpectedLaunchArgument("-port", true), new ExpectedLaunchArgument("64731", true)],
+                ValueToVisualize: "path/to/executable -port 64731",
+                Tooltip: "path/to/executable -port 64731"));
+
+        // Executable with app args but no effective args yet (before process starts).
+        // App args should be used as fallback when effective args are not available.
+        data.Add(new TestData(
+                ResourceType: "Executable",
+                ExecutablePath: "path/to/executable",
+                ExecutableArguments: null,
+                AppArgs: ["-port", """{{- portForServing "exe" -}}"""],
+                AppArgsSensitivity: null,
+                ProjectPath: null,
+                ContainerImage: null,
+                SourceProperty: null),
+            new ExpectedData(
+                Value: "executable",
+                ContentAfterValue: [new ExpectedLaunchArgument("-port", true), new ExpectedLaunchArgument("""{{- portForServing "exe" -}}""", true)],
+                ValueToVisualize: """path/to/executable -port {{- portForServing "exe" -}}""",
+                Tooltip: """path/to/executable -port {{- portForServing "exe" -}}"""));
+
         // Container image
         data.Add(new TestData(
                 ResourceType: "Container",
