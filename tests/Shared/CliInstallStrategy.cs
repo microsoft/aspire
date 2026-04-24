@@ -127,6 +127,17 @@ internal static class AspireCliShellCommandHelpers
         return $"{commandPrefix} --run-id {workflowRunId}";
     }
 
+    /// <summary>
+    /// Builds a workflow-run install command that fetches <c>get-aspire-cli-pr.sh</c>
+    /// from the current commit (<c>GITHUB_SHA</c>) instead of <c>main</c>, so the
+    /// script version matches the code under test even before the PR merges.
+    /// </summary>
+    internal static string GetWorkflowRunInstallCommandFromCurrentRef(string workflowRunId)
+    {
+        var sha = Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "main";
+        return $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/{sha}/eng/scripts/get-aspire-cli-pr.sh | bash -s -- --run-id {workflowRunId}";
+    }
+
     internal static string QuoteBashArg(string value)
     {
         return $"'{value.Replace("'", "'\"'\"'")}'";

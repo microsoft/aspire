@@ -74,7 +74,7 @@ internal static class DeploymentE2EAutomatorHelpers
                 var wrRunId = CliInstallStrategy.GetCliArchiveWorkflowRunId()
                     ?? throw new InvalidOperationException("WorkflowRun strategy requires ASPIRE_CLI_WORKFLOW_RUN_ID to be set.");
                 await auto.RunCommandFailFastAsync(
-                    AspireCliShellCommandHelpers.GetWorkflowRunInstallCommand(wrRunId, AspireCliShellCommandHelpers.MainPullRequestInstallCommandPrefix),
+                    AspireCliShellCommandHelpers.GetWorkflowRunInstallCommandFromCurrentRef(wrRunId),
                     counter,
                     TimeSpan.FromSeconds(300));
                 await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
