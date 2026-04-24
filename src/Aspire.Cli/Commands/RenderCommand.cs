@@ -745,8 +745,9 @@ internal sealed class RenderCommand : BaseCommand
 
     private static string LoadMarkdownShowcase()
     {
-        using var stream = typeof(RenderCommand).Assembly.GetManifestResourceStream("MarkdownShowcase.md")
-            ?? throw new InvalidOperationException("MarkdownShowcase.md embedded resource not found.");
+        // File uses .txt extension instead of .md to avoid markdown linters
+        using var stream = typeof(RenderCommand).Assembly.GetManifestResourceStream("MarkdownShowcase.txt")
+            ?? throw new InvalidOperationException("MarkdownShowcase.txt embedded resource not found.");
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }
