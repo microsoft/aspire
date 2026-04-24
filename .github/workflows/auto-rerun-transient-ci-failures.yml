@@ -283,9 +283,17 @@ jobs:
                     const trxFileContents = [];
                     const maxTrxFiles = 200;
                     const maxTrxFileBytes = 50 * 1024 * 1024; // 50MB per file cap
+                    const resolvedTrxDir = fs.realpathSync(trxDir);
                     const findTrxFiles = (dir) => {
                       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                        if (entry.isSymbolicLink()) {
+                          continue;
+                        }
                         const fullPath = path.join(dir, entry.name);
+                        const resolvedPath = fs.realpathSync(fullPath);
+                        if (!resolvedPath.startsWith(resolvedTrxDir + path.sep) && resolvedPath !== resolvedTrxDir) {
+                          continue;
+                        }
                         if (entry.isDirectory()) {
                           findTrxFiles(fullPath);
                         } else if (entry.name.endsWith('.trx') && trxFileContents.length < maxTrxFiles) {
@@ -342,10 +350,9 @@ jobs:
             });
             core.setOutput('rerun_eligible', String(rerunEligible));
             core.setOutput('rerun_execution_eligible', String(rerunExecutionEligible));
-            core.setOutput('test_pattern_matched_tests', JSON.stringify(testPatternMatchedTests.map(t => ({
+            core.setOutput('test_pattern_matched_tests', JSON.stringify(testPatternMatchedTests.slice(0, 50).map(t => ({
               testName: t.testName,
               reason: t.reason,
-              testProject: t.testProject || '',
             }))));
 
             await rerunWorkflow.writeAnalysisSummary({

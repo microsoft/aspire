@@ -1059,7 +1059,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     {
         string configJson = await ReadRepoFileAsync("eng/test-retry-patterns.json");
 
-        JsonDocument doc = JsonDocument.Parse(configJson);
+        using JsonDocument doc = JsonDocument.Parse(configJson);
         JsonElement root = doc.RootElement;
 
         Assert.Equal(JsonValueKind.Object, root.ValueKind);
@@ -1083,7 +1083,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     {
         string configJson = await ReadRepoFileAsync("eng/test-retry-patterns.json");
 
-        JsonDocument doc = JsonDocument.Parse(configJson);
+        using JsonDocument doc = JsonDocument.Parse(configJson);
         JsonElement root = doc.RootElement;
 
         HashSet<string> testPatternAllowedFields = ["testName", "testProject", "output", "reason", "enabled"];
@@ -1121,7 +1121,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     public async Task TestRetryPatternsJsonRegexesCompileInJavaScript()
     {
         string configJson = await ReadRepoFileAsync("eng/test-retry-patterns.json");
-        JsonDocument doc = JsonDocument.Parse(configJson);
+        using JsonDocument doc = JsonDocument.Parse(configJson);
         JsonElement root = doc.RootElement;
 
         List<string> regexPatterns = [];

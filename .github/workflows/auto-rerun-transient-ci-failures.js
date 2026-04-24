@@ -909,11 +909,37 @@ function loadRetryPatternsConfig(configPath) {
             return { config: null, errors: validation.errors };
         }
 
-        return { config, errors: [] };
+        const warnings = compileRetryPatterns(config);
+
+        return { config, errors: [], warnings };
     }
     catch (error) {
         return { config: null, errors: [`Failed to load config: ${error.message}`] };
     }
+}
+
+function compileRetryPatterns(config) {
+    const warnings = [];
+    const allRules = [
+        ...(config.testFailurePatterns || []),
+        ...(config.jobFailurePatterns || []),
+    ];
+
+    for (const rule of allRules) {
+        for (const value of Object.values(rule)) {
+            if (value && typeof value === 'object' && typeof value.regex === 'string') {
+                try {
+                    value._compiledRegex = new RegExp(value.regex, 'i');
+                }
+                catch (error) {
+                    warnings.push(`Invalid regex '${value.regex}': ${error.message} — rule will be skipped.`);
+                    rule.enabled = false;
+                }
+            }
+        }
+    }
+
+    return warnings;
 }
 
 function validateRetryPatternsConfig(config) {
@@ -1040,12 +1066,18 @@ function matchesRetryPattern(text, patternValue) {
         return text.toLowerCase().includes(patternValue.toLowerCase());
     }
 
-    if (patternValue && typeof patternValue === 'object' && typeof patternValue.regex === 'string') {
-        try {
-            return new RegExp(patternValue.regex, 'i').test(text);
+    if (patternValue && typeof patternValue === 'object') {
+        if (patternValue._compiledRegex) {
+            return patternValue._compiledRegex.test(text);
         }
-        catch {
-            return false;
+
+        if (typeof patternValue.regex === 'string') {
+            try {
+                return new RegExp(patternValue.regex, 'i').test(text);
+            }
+            catch {
+                return false;
+            }
         }
     }
 
@@ -1298,6 +1330,7 @@ module.exports = {
     annotationText,
     buildPullRequestCommentBody,
     classifyFailedJob,
+    compileRetryPatterns,
     computeRerunEligibility,
     computeRerunExecutionEligibility,
     decodeXmlEntities,

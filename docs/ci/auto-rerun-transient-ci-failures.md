@@ -69,6 +69,8 @@ The file [`eng/test-retry-patterns.json`](../../eng/test-retry-patterns.json) de
 
 ### Adding a new pattern
 
+> **Note**: The snippets below show only the relevant pattern entry. Add the pattern to the corresponding array (`testFailurePatterns` or `jobFailurePatterns`) in the full config file shown above.
+
 **Example**: Tests in the Redis integration project occasionally fail with `ECONNRESET` due to container startup races. To automatically retry these:
 
 ```json
@@ -138,7 +140,7 @@ For job-level log matching (e.g., a Windows-specific process init failure):
 ### Matching semantics
 
 - **Plain string**: Case-insensitive substring match (e.g., `"ECONNRESET"` matches `"Error: socket hang up: ECONNRESET"`).
-- **`{"regex": "..."}`**: JavaScript (V8) regular expression, case-insensitive. Compiled once per run; compilation errors are logged as warnings and the rule is skipped.
+- **`{"regex": "..."}`**: JavaScript (V8) regular expression, case-insensitive. Regex patterns are precompiled when the config is loaded; invalid patterns log a warning and the rule is disabled.
 - **Within a rule**: All specified fields must match (**AND** logic). A rule with `testProject` + `output` requires both to match.
 - **Across rules**: Any matching rule is sufficient (**OR** logic). A test that matches rule 1 or rule 2 is considered matched.
 - **Deduplication**: If the same test (by fully qualified name) matches multiple rules, it appears once in the results with the first matching reason.
