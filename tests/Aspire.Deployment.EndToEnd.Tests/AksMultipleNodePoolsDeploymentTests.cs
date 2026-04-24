@@ -162,23 +162,30 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
-            // Step 12: Verify node pools exist (system + workers)
-            output.WriteLine("Step 12: Verifying node pools...");
+            // Step 12: Discover deployment namespace and wait for app pods
+            output.WriteLine("Step 12: Waiting for application pods...");
+            await auto.TypeAsync("NS=$(kubectl get svc --all-namespaces -o jsonpath='{range .items[?(@.metadata.name==\"apiservice-service\")]}{.metadata.namespace}{end}') && " +
+                      "echo \"Namespace: $NS\" && " +
+                      "kubectl wait --for=condition=ready pod -l app.kubernetes.io/component=apiservice -n $NS --timeout=300s");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
+
+            // Step 13: Verify node pools exist (system + workers)
+            output.WriteLine("Step 13: Verifying node pools...");
             await auto.TypeAsync($"az aks nodepool list -g {resourceGroupName} --cluster-name $AKS_NAME --query \"[].{{name:name,vmSize:vmSize,mode:mode,count:count}}\" -o table");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 13: Show pods with node info
-            output.WriteLine("Step 13: Showing pods with node info...");
+            // Step 14: Show pods with node info
+            output.WriteLine("Step 14: Showing pods with node info...");
             await auto.TypeAsync("kubectl get pods --all-namespaces -o wide");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 14: Verify API pod is on a worker pool node
-            output.WriteLine("Step 14: Verifying API pod scheduling on workers pool...");
-            await auto.TypeAsync("NS=$(kubectl get svc --all-namespaces -o jsonpath='{range .items[?(@.metadata.name==\"apiservice-service\")]}{.metadata.namespace}{end}') && " +
-                      "[ -n \"$NS\" ] || { echo 'ERROR: apiservice-service namespace not found'; exit 1; }; " +
-                      "POD_NODE=$(kubectl get pods -n \"$NS\" -l app=apiservice -o jsonpath='{.items[0].spec.nodeName}') && " +
+            // Step 15: Verify API pod is on a worker pool node
+            output.WriteLine("Step 15: Verifying API pod scheduling on workers pool...");
+            await auto.TypeAsync("[ -n \"$NS\" ] || { echo 'ERROR: namespace not set'; exit 1; }; " +
+                      "POD_NODE=$(kubectl get pods -n \"$NS\" -l app.kubernetes.io/component=apiservice -o jsonpath='{.items[0].spec.nodeName}') && " +
                       "[ -n \"$POD_NODE\" ] || { echo 'ERROR: apiservice pod node not found'; exit 1; }; " +
                       "NODE_POOL=$(kubectl get node \"$POD_NODE\" -o jsonpath='{.metadata.labels.agentpool}') && " +
                       "[ -n \"$NODE_POOL\" ] || { echo 'ERROR: node pool label not found'; exit 1; }; " +
@@ -187,8 +194,8 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 15: Verify apiservice is reachable via port-forward
-            output.WriteLine("Step 15: Verifying apiservice endpoint via port-forward...");
+            // Step 16: Verify apiservice is reachable via port-forward
+            output.WriteLine("Step 16: Verifying apiservice endpoint via port-forward...");
             await auto.TypeAsync("kubectl port-forward svc/apiservice-service 18082:8080 -n $NS > /dev/null 2>&1 &");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
