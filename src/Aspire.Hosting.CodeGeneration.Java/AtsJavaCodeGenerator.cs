@@ -1697,8 +1697,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            }");
         WriteLine("        }");
         WriteLine("        Map<String, Object> args = new HashMap<>();");
-        WriteLine("        args.put(\"options\", resolvedOptions);");
-        WriteLine($"        return ({builderClassName}) client.invokeCapability(\"Aspire.Hosting/createBuilderWithOptions\", args);");
+        WriteLine("        args.put(\"argsOrOptions\", resolvedOptions);");
+        WriteLine($"        return ({builderClassName}) client.invokeCapability(\"Aspire.Hosting/createBuilder\", args);");
         WriteLine("    }");
         WriteLine("}");
         WriteLine();

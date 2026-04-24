@@ -657,8 +657,8 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         WriteLine("        }");
         WriteLine("    }");
         WriteLine("    let mut args: HashMap<String, Value> = HashMap::new();");
-        WriteLine("    args.insert(\"options\".to_string(), serde_json::to_value(resolved_options).unwrap_or(Value::Null));");
-        WriteLine("    let result = client.invoke_capability(\"Aspire.Hosting/createBuilderWithOptions\", args)?;");
+        WriteLine("    args.insert(\"argsOrOptions\".to_string(), serde_json::to_value(resolved_options).unwrap_or(Value::Null));");
+        WriteLine("    let result = client.invoke_capability(\"Aspire.Hosting/createBuilder\", args)?;");
         WriteLine("    let handle: Handle = serde_json::from_value(result)?;");
         WriteLine($"    Ok({builderStructName}::new(handle, client))");
         WriteLine("}");

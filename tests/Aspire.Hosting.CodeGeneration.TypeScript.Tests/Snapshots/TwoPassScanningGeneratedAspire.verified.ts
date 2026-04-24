@@ -5599,8 +5599,8 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new ProjectResourceImpl(result, this._client);
     }
 
-    addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise {
-        let options = options?.options;
+    addProject(name: string, projectPath: string, optionsBag?: AddProjectOptions): ProjectResourcePromise {
+        let options = optionsBag?.options;
         return new ProjectResourcePromiseImpl(this._addProjectInternal(name, projectPath, options), this._client);
     }
 
@@ -5617,8 +5617,8 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new CSharpAppResourceImpl(result, this._client);
     }
 
-    addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise {
-        let options = options?.options;
+    addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
+        let options = optionsBag?.options;
         return new CSharpAppResourcePromiseImpl(this._addCSharpAppInternal(name, path, options), this._client);
     }
 
@@ -32172,8 +32172,8 @@ export async function createBuilder(options?: CreateBuilderOptions): Promise<Dis
     delete effectiveOptions.throwOnPendingRejections;
 
     const handle = await client.invokeCapability<IDistributedApplicationBuilderHandle>(
-        'Aspire.Hosting/createBuilderWithOptions',
-        { options: effectiveOptions }
+        'Aspire.Hosting/createBuilder',
+        { argsOrOptions: effectiveOptions }
     );
     return new DistributedApplicationBuilderImpl(handle, client);
 }

@@ -74,6 +74,22 @@ public class AspireRepositoryDetectorTests : IDisposable
         Assert.Equal(repoRoot, detectedRoot);
     }
 
+    [Fact]
+    public void DetectRepositoryRoot_DoesNotLeakRepoDetectionAcrossDifferentStartPaths()
+    {
+        var repoRoot = CreateTempDirectory();
+        File.WriteAllText(Path.Combine(repoRoot, "Aspire.slnx"), string.Empty);
+
+        var repoProjectDirectory = Directory.CreateDirectory(Path.Combine(repoRoot, "src", "Project")).FullName;
+        var nonRepoDirectory = CreateTempDirectory();
+
+        var detectedRepoRoot = AspireRepositoryDetector.DetectRepositoryRoot(repoProjectDirectory);
+        var detectedNonRepoRoot = AspireRepositoryDetector.DetectRepositoryRoot(nonRepoDirectory);
+
+        Assert.Equal(repoRoot, detectedRepoRoot);
+        Assert.Null(detectedNonRepoRoot);
+    }
+
     private string CreateTempDirectory()
     {
         var directory = Directory.CreateTempSubdirectory("aspire-repo-detector-tests-").FullName;

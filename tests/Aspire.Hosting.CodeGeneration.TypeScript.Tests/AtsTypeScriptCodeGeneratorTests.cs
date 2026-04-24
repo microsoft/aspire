@@ -1410,6 +1410,16 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void Generate_OptionalOptionsProperty_UsesDistinctOptionsBagParameter()
+    {
+        var code = GenerateTwoPassCode();
+
+        Assert.DoesNotContain("= options?.options;", code);
+        Assert.Contains("addProject(name: string, projectPath: string, optionsBag?: AddProjectOptions)", code);
+        Assert.Contains("options = optionsBag?.options;", code);
+    }
+
+    [Fact]
     public void Generate_ConcreteAndInterfaceWithSameClassName_NoDuplicateClasses()
     {
         // TestVaultResource (concrete) and ITestVaultResource (interface) both derive
