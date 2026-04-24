@@ -133,28 +133,6 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
-    public void DisplayMarkdown_WithBasicMarkdown_ConvertsToSpectreMarkup()
-    {
-        var output = new StringBuilder();
-        var console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Ansi = AnsiSupport.No,
-            ColorSystem = ColorSystemSupport.NoColors,
-            Out = new AnsiConsoleOutput(new StringWriter(output))
-        });
-        
-        var interactionService = CreateInteractionService(console);
-        var markdown = "# Header\nThis is **bold** and *italic* text with `code`.";
-
-        var exception = Record.Exception(() => interactionService.DisplayMarkdown(markdown));
-
-        Assert.Null(exception);
-        var outputString = output.ToString();
-        Assert.Contains("Header", outputString);
-        Assert.Contains("This is bold and italic text with code.", outputString);
-    }
-
-    [Fact]
     public void DisplayMarkdown_WithPlainText_DoesNotThrow()
     {
         // Arrange

@@ -35,7 +35,9 @@ internal partial class MarkdownToSpectreConverter
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
             Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
             Out = new AnsiConsoleOutput(writer),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
         });
 
         console.Profile.Width = int.MaxValue;
