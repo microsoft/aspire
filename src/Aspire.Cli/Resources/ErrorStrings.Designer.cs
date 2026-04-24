@@ -371,6 +371,7 @@ namespace Aspire.Cli.Resources {
 
         /// <summary>
         ///   Looks up a localized string similar to The '{0}' setting is project-specific and cannot be set globally.
+        ///   Use 'aspire config set {0} value' (without --global) to set it for the current project.
         /// </summary>
         public static string AppHostPathNotAllowedInGlobalSettings {
             get {
