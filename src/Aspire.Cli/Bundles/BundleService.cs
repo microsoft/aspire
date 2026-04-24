@@ -38,7 +38,7 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
 
     /// <summary>
     /// Well-known layout subdirectories that are cleaned before re-extraction.
-    /// The bin/ directory is intentionally excluded since it contains the running CLI binary.
+    /// The CLI binary itself lives alongside these directories and is not cleaned.
     /// </summary>
     internal static readonly string[] s_layoutDirectories = [
         BundleDiscovery.ManagedDirectoryName,
@@ -156,8 +156,8 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
 
     /// <summary>
     /// Determines the default extraction directory for the current CLI binary.
-    /// If CLI is at ~/.aspire/bin/aspire, returns ~/.aspire/ so layout discovery
-    /// finds components via the bin/ layout pattern.
+    /// Returns the directory containing the CLI binary so that managed/ and dcp/
+    /// are extracted as siblings of the binary (flat layout).
     /// </summary>
     internal static string? GetDefaultExtractDir(string processPath)
     {
@@ -167,7 +167,7 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
             return null;
         }
 
-        return Path.GetDirectoryName(cliDir) ?? cliDir;
+        return cliDir;
     }
 
     /// <summary>
