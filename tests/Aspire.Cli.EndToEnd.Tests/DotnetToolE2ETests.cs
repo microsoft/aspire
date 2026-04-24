@@ -167,7 +167,7 @@ public sealed class DotnetToolE2ETests(ITestOutputHelper output)
 
         // Run aspire init --non-interactive
         await auto.ClearScreenAsync(counter);
-        await auto.TypeAsync("cd /tmp/inittest && aspire init --non-interactive");
+        await auto.TypeAsync("cd /tmp/inittest && aspire init --language csharp --non-interactive");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
