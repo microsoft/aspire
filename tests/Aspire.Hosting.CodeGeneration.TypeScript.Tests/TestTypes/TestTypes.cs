@@ -31,6 +31,9 @@ public class TestConfigDto
         Enabled = true
     };
 
+    [AspireValue("TestConfigs")]
+    public static string UnicodeGreeting { get; } = "你好こんにちは";
+
     public static class Profiles
     {
         [AspireValue("TestConfigs")]

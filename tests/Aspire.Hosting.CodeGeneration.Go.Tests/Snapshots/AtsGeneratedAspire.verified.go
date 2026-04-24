@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // GENERATED CODE - DO NOT EDIT
 
 package aspire
@@ -95,6 +95,7 @@ var TestConfigs = struct {
 		Development *TestConfigDto
 	}
 	Secure *TestConfigDto
+	UnicodeGreeting string
 }{
 	Default: &TestConfigDto{Name: "default", Port: 6379, Enabled: true, OptionalField: "cache"},
 	Profiles: struct {
@@ -103,6 +104,7 @@ var TestConfigs = struct {
 		Development: &TestConfigDto{Name: "development", Port: 5001, Enabled: false, OptionalField: nil},
 	},
 	Secure: &TestConfigDto{Name: "secure", Port: 6380, Enabled: true, OptionalField: nil},
+	UnicodeGreeting: "你好こんにちは",
 }
 
 // ============================================================================

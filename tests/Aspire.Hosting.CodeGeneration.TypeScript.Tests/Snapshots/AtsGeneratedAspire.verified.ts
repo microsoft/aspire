@@ -132,6 +132,8 @@ export namespace TestConfigs {
 
     export const Secure = { name: "secure", port: 6380, enabled: true, optionalField: null } as TestConfigDto;
 
+    export const UnicodeGreeting = "你好こんにちは";
+
 }
 
 // ============================================================================

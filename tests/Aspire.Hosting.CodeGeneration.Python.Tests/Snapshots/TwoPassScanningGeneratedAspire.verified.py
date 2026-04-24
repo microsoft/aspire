@@ -1,4 +1,4 @@
-﻿#   -------------------------------------------------------------
+#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1834,6 +1834,7 @@ TestConfigs.Default = typing.cast(TestConfigDto, { "Name": "default", "Port": 63
 TestConfigs.Profiles = types.SimpleNamespace()
 TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "Name": "development", "Port": 5001, "Enabled": False, "OptionalField": None })
 TestConfigs.Secure = typing.cast(TestConfigDto, { "Name": "secure", "Port": 6380, "Enabled": True, "OptionalField": None })
+TestConfigs.UnicodeGreeting = "你好こんにちは"
 
 WellKnownPipelineSteps = types.SimpleNamespace()
 # The well-known step for building resources.

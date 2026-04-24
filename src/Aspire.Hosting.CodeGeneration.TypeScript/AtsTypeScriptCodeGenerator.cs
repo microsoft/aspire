@@ -927,7 +927,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 => $"[{string.Join(", ", arr.Select(item => RenderTypeScriptExportedValue(item, typeRef.ElementType!, dtoTypesById)))}]",
             AtsTypeCategory.Dict when value is JsonObject obj
                 => "{ " + string.Join(", ", obj.Select(pair => $"{RenderTypeScriptPropertyKey(pair.Key)}: {RenderTypeScriptExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)}")) + " }",
-            _ => value.ToJsonString()
+            _ => value.ToRelaxedJsonString()
         };
     }
 
@@ -953,7 +953,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private static string RenderTypeScriptPropertyKey(string key)
     {
-        return JsonValue.Create(key)!.ToJsonString();
+        return AtsJsonCodeWriter.ToRelaxedJsonString(key);
     }
 
     private static ExportedValueTreeNode BuildExportedValueTree(IReadOnlyList<AtsExportedValueInfo> exportedValues)

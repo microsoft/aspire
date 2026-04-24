@@ -638,8 +638,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
         return typeRef.Category switch
         {
-            AtsTypeCategory.Primitive => value.ToJsonString(),
-            AtsTypeCategory.Enum => $"{MapTypeRefToJava(typeRef, false)}.fromValue({value.ToJsonString()})",
+            AtsTypeCategory.Primitive => value.ToRelaxedJsonString(),
+            AtsTypeCategory.Enum => $"{MapTypeRefToJava(typeRef, false)}.fromValue({value.ToRelaxedJsonString()})",
             AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
                 => RenderJavaDtoValue(obj, dtoInfo, dtoTypesById),
             AtsTypeCategory.Array when value is JsonArray arr
@@ -647,8 +647,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             AtsTypeCategory.List when value is JsonArray arr
                 => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new ArrayList<>(List.of({string.Join(", ", arr.Select(item => RenderJavaExportedValue(item, typeRef.ElementType!, dtoTypesById)))}))",
             AtsTypeCategory.Dict when value is JsonObject obj
-                => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new HashMap<>(Map.ofEntries({string.Join(", ", obj.Select(pair => $"Map.entry({JsonValue.Create(pair.Key)!.ToJsonString()}, {RenderJavaExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)})"))}))",
-            _ => value.ToJsonString()
+                => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new HashMap<>(Map.ofEntries({string.Join(", ", obj.Select(pair => $"Map.entry({AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}, {RenderJavaExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)})"))}))",
+            _ => value.ToRelaxedJsonString()
         };
     }
 

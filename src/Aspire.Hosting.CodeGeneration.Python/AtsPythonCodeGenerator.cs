@@ -858,7 +858,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 AtsTypeCategory.Array or AtsTypeCategory.List when value is JsonArray arr
                     => "[" + string.Join(", ", arr.Select(item => RenderPythonExportedValue(item, typeRef.ElementType!, dtoTypesById, topLevel: false))) + "]",
                 AtsTypeCategory.Dict when value is JsonObject obj
-                    => "{" + string.Join(", ", obj.Select(pair => $"{JsonValue.Create(pair.Key)!.ToJsonString()}: {RenderPythonExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById, topLevel: false)}")) + "}",
+                    => "{" + string.Join(", ", obj.Select(pair => $"{AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}: {RenderPythonExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById, topLevel: false)}")) + "}",
                 _ => RenderPythonPrimitiveValue(value)
             };
         }
@@ -884,7 +884,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            members.Add($"{JsonValue.Create(property.Name)!.ToJsonString()}: {RenderPythonExportedValue(propertyValue, property.Type, dtoTypesById, topLevel: false)}");
+            members.Add($"{AtsJsonCodeWriter.ToRelaxedJsonString(property.Name)}: {RenderPythonExportedValue(propertyValue, property.Type, dtoTypesById, topLevel: false)}");
         }
 
         return "{ " + string.Join(", ", members) + " }";
@@ -895,9 +895,9 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return value switch
         {
             JsonValue jsonValue when jsonValue.TryGetValue<bool>(out var boolValue) => boolValue ? "True" : "False",
-            JsonValue jsonValue when jsonValue.TryGetValue<string>(out _) => jsonValue.ToJsonString(),
-            JsonValue jsonValue => jsonValue.ToJsonString(),
-            _ => value.ToJsonString()
+            JsonValue jsonValue when jsonValue.TryGetValue<string>(out _) => jsonValue.ToRelaxedJsonString(),
+            JsonValue jsonValue => jsonValue.ToRelaxedJsonString(),
+            _ => value.ToRelaxedJsonString()
         };
     }
 
