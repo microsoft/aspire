@@ -2,7 +2,7 @@
 #
 # COPILOT INSTRUCTIONS:
 # - Keep the shared 'paths:' entries (specialized-test-runner.yml,
-#   run-tests.yml) in sync across tests-outerloop.yml and
+#   run-tests-core.yml, run-tests.yml) in sync across tests-outerloop.yml and
 #   tests-quarantine.yml.  Each workflow also lists itself.
 # - Validate that each path exists in the repository before adding or
 #   updating the list
@@ -27,6 +27,7 @@ on:
     paths:
       - '.github/workflows/tests-outerloop.yml'
       - '.github/workflows/specialized-test-runner.yml'
+      - '.github/workflows/run-tests-core.yml'
       - '.github/workflows/run-tests.yml'
       - '.github/actions/enumerate-tests/**'
 

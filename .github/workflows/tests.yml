@@ -82,109 +82,30 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "macos-latest", "runner": "macos-latest", "rids": "osx-arm64"}]'
 
-  tests_no_nugets:
-    name: ${{ matrix.shortname }}
-    uses: ./.github/workflows/run-tests.yml
-    needs: setup_for_tests
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets) }}
+  # --- Test execution via shared split-tests workflow ---
+  # All 6 test buckets are handled by run-tests-core.yml.
+  # Trade-off: tests_no_nugets waits for builds to complete (~2 min regression)
+  # but we eliminate 6 duplicated job definitions.
+  run_tests:
+    needs:
+      - setup_for_tests
+      - build_packages
+      - build_cli_archive_linux
+      - build_cli_archive_linux_arm64
+      - build_cli_archive_windows
+      - build_cli_archive_windows_arm64
+      - build_cli_archive_macos
+    if: ${{ !cancelled() && !failure() }}
+    uses: ./.github/workflows/run-tests-core.yml
     with:
-      testShortName: ${{ matrix.shortname }}
-      os: ${{ matrix.runs-on }}
-      testProjectPath: ${{ matrix.testProjectPath }}
-      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
+      tests_matrix_no_nugets: ${{ needs.setup_for_tests.outputs.tests_matrix_no_nugets }}
+      tests_matrix_no_nugets_overflow: ${{ needs.setup_for_tests.outputs.tests_matrix_no_nugets_overflow }}
+      tests_matrix_requires_nugets_linux: ${{ needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux }}
+      tests_matrix_requires_nugets_windows: ${{ needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows }}
+      tests_matrix_requires_nugets_macos: ${{ needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos }}
+      tests_matrix_requires_cli_archive: ${{ needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive }}
+      extraTestArgs: '--filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      properties: ${{ toJson(matrix.properties) }}
-
-  tests_no_nugets_overflow:
-    name: ${{ matrix.shortname }}
-    uses: ./.github/workflows/run-tests.yml
-    needs: setup_for_tests
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets_overflow).include[0] != null }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets_overflow) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: ${{ matrix.runs-on }}
-      testProjectPath: ${{ matrix.testProjectPath }}
-      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      properties: ${{ toJson(matrix.properties) }}
-
-  # Split requires-nugets tests by OS so each group depends only on
-  # the CLI archive build for its platform, avoiding cross-OS blocking.
-  tests_requires_nugets_linux:
-    name: ${{ matrix.shortname }}
-    uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: ${{ matrix.runs-on }}
-      testProjectPath: ${{ matrix.testProjectPath }}
-      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      properties: ${{ toJson(matrix.properties) }}
-
-  tests_requires_nugets_windows:
-    name: ${{ matrix.shortname }}
-    uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests, build_packages, build_cli_archive_windows]
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows).include[0] != null }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: ${{ matrix.runs-on }}
-      testProjectPath: ${{ matrix.testProjectPath }}
-      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      properties: ${{ toJson(matrix.properties) }}
-
-  tests_requires_nugets_macos:
-    name: ${{ matrix.shortname }}
-    uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests, build_packages, build_cli_archive_macos]
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: ${{ matrix.runs-on }}
-      testProjectPath: ${{ matrix.testProjectPath }}
-      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      properties: ${{ toJson(matrix.properties) }}
-
-  tests_requires_cli_archive:
-    name: ${{ matrix.shortname }}
-    uses: ./.github/workflows/run-tests.yml
-    needs: [setup_for_tests, build_packages, build_cli_archive_linux]
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive) }}
-    with:
-      testShortName: ${{ matrix.shortname }}
-      os: ${{ matrix.runs-on }}
-      testProjectPath: ${{ matrix.testProjectPath }}
-      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
-      extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
-      versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      properties: ${{ toJson(matrix.properties) }}
 
   polyglot_validation:
     name: Polyglot SDK Validation
@@ -322,12 +243,7 @@ jobs:
       extension_tests_win,
       cli_starter_validation_windows,
       typescript_sdk_tests,
-      tests_no_nugets,
-      tests_no_nugets_overflow,
-      tests_requires_nugets_linux,
-      tests_requires_nugets_windows,
-      tests_requires_nugets_macos,
-      tests_requires_cli_archive,
+      run_tests,
       polyglot_validation,
     ]
     steps:
@@ -384,17 +300,9 @@ jobs:
             --min-total 8
 
       - name: Fail if any dependency failed
-        # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
-        # For example, one of setup_* jobs failing and the dependent test jobs getting 'skipped'.
-        # Some jobs are optional and can have an empty matrix. In those cases we allow a 'skipped'
-        # result. Specifically:
-        # - tests_no_nugets_overflow: this overflow bucket is expected to be empty unless the
-        #   primary no-nugets matrix exceeds the overflow threshold.
-        # - tests_requires_nugets_macos: some runs intentionally produce no macOS requires-nugets
-        #   tests, so an empty matrix and 'skipped' result are expected.
-        # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
-        #   be skipped for other workflow events.
-        # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
+        # run_tests is the shared split-tests workflow. Its internal results gate
+        # handles empty-bucket skipped detection. Here we just check its overall result.
+        # cli_starter_validation_windows only runs for pull_request events.
         if: >-
           ${{ always() &&
               (contains(needs.*.result, 'failure') ||
@@ -403,21 +311,12 @@ jobs:
                  (needs.extension_tests_win.result == 'skipped' ||
                     needs.cli_starter_validation_windows.result == 'skipped' ||
                     needs.typescript_sdk_tests.result == 'skipped' ||
-                    needs.tests_no_nugets.result == 'skipped' ||
-                    needs.tests_requires_nugets_linux.result == 'skipped' ||
-                   needs.tests_requires_nugets_windows.result == 'skipped' ||
-                   (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                    needs.tests_requires_nugets_macos.result == 'skipped') ||
-                   needs.tests_requires_cli_archive.result == 'skipped' ||
+                    needs.run_tests.result == 'skipped' ||
                   needs.polyglot_validation.result == 'skipped')) ||
                 (github.event_name != 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
                     needs.typescript_sdk_tests.result == 'skipped' ||
-                    needs.tests_no_nugets.result == 'skipped' ||
-                   needs.tests_requires_nugets_linux.result == 'skipped' ||
-                   needs.tests_requires_nugets_windows.result == 'skipped' ||
-                   (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                    needs.tests_requires_nugets_macos.result == 'skipped') ||
+                    needs.run_tests.result == 'skipped' ||
                   needs.polyglot_validation.result == 'skipped'))) }}
         run: |
           echo "One or more dependent jobs failed."
