@@ -117,11 +117,19 @@ public static class ProjectResourceBuilderExtensions
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         string projectPath,
-        ProjectResourceOptions? options = null)
+        [AspireUnion(typeof(string), typeof(ProjectResourceOptions))] object? launchProfileOrOptions = null)
     {
-        return options is null
-            ? builder.AddProject(name, projectPath)
-            : builder.AddProject(name, projectPath, configure => ApplyProjectResourceOptions(configure, options));
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(projectPath);
+
+        return launchProfileOrOptions switch
+        {
+            null => builder.AddProject(name, projectPath),
+            string launchProfileName => builder.AddProject(name, projectPath, launchProfileName),
+            ProjectResourceOptions options => builder.AddProject(name, projectPath, configure => ApplyProjectResourceOptions(configure, options)),
+            _ => throw new ArgumentException("Launch profile must be a string or ProjectResourceOptions.", nameof(launchProfileOrOptions))
+        };
     }
 
     /// <summary>

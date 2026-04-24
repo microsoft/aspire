@@ -33,7 +33,7 @@ void main() throws Exception {
         var dockerBuilderContainer = builder.addDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder, "runtime");
         dockerContainer.withDockerfileBuilder("./app", configureDockerfileBuilder, "runtime");
         var exe = builder.addExecutable("myexe", "echo", ".", new String[] { "hello" });
-        var project = builder.addProject("myproject", "./src/MyProject");
+        var project = builder.addProject("myproject", "./src/MyProject", "https");
         var csharpApp = builder.addCSharpApp("csharpapp", "./src/CSharpApp");
         var cache = builder.addRedis("cache");
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");

@@ -9659,14 +9659,14 @@ func (s *IDistributedApplicationBuilder) AddConnectionString(name string, connec
 }
 
 // AddProject adds a .NET project resource
-func (s *IDistributedApplicationBuilder) AddProject(name string, projectPath string, options *ProjectResourceOptions) (*ProjectResource, error) {
+func (s *IDistributedApplicationBuilder) AddProject(name string, projectPath string, launchProfileOrOptions any) (*ProjectResource, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["projectPath"] = SerializeValue(projectPath)
-	if options != nil {
-		reqArgs["options"] = SerializeValue(options)
+	if launchProfileOrOptions != nil {
+		reqArgs["launchProfileOrOptions"] = SerializeValue(launchProfileOrOptions)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/addProject", reqArgs)
 	if err != nil {

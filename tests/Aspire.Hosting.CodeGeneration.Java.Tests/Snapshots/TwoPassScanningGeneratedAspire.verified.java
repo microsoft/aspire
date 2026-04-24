@@ -1,4 +1,4 @@
-// ===== AddContainerOptions.java =====
+﻿// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -11428,18 +11428,26 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (IResourceWithConnectionString) getClient().invokeCapability("Aspire.Hosting/addConnectionString", reqArgs);
     }
 
+    public ProjectResource addProject(String name, String projectPath, String launchProfileOrOptions) {
+        return addProject(name, projectPath, AspireUnion.of(launchProfileOrOptions));
+    }
+
+    public ProjectResource addProject(String name, String projectPath, ProjectResourceOptions launchProfileOrOptions) {
+        return addProject(name, projectPath, AspireUnion.of(launchProfileOrOptions));
+    }
+
     public ProjectResource addProject(String name, String projectPath) {
-        return addProject(name, projectPath, null);
+        return addProject(name, projectPath, (AspireUnion) null);
     }
 
     /** Adds a .NET project resource */
-    public ProjectResource addProject(String name, String projectPath, ProjectResourceOptions options) {
+    public ProjectResource addProject(String name, String projectPath, AspireUnion launchProfileOrOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
         reqArgs.put("projectPath", AspireClient.serializeValue(projectPath));
-        if (options != null) {
-            reqArgs.put("options", AspireClient.serializeValue(options));
+        if (launchProfileOrOptions != null) {
+            reqArgs.put("launchProfileOrOptions", AspireClient.serializeValue(launchProfileOrOptions));
         }
         return (ProjectResource) getClient().invokeCapability("Aspire.Hosting/addProject", reqArgs);
     }

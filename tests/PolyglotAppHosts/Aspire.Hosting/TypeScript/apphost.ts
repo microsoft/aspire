@@ -60,7 +60,7 @@ await dockerContainer.withDockerfileBuilder("./app", configureDockerfileBuilder,
 const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
 
 // addProject (pre-existing)
-const project = await builder.addProject("myproject", "./src/MyProject");
+const project = await builder.addProject("myproject", "./src/MyProject", { launchProfileOrOptions: "https" });
 const projectWithoutLaunchProfile = await builder.addProject("myproject-noprofile", "./src/MyProject");
 // ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
 const referenceEnvironmentOptions = {

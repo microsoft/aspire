@@ -8656,13 +8656,13 @@ impl IDistributedApplicationBuilder {
     }
 
     /// Adds a .NET project resource
-    pub fn add_project(&self, name: &str, project_path: &str, options: Option<&ProjectResourceOptions>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
+    pub fn add_project(&self, name: &str, project_path: &str, launch_profile_or_options: Option<Value>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         args.insert("projectPath".to_string(), serde_json::to_value(&project_path).unwrap_or(Value::Null));
-        if let Some(ref v) = options {
-            args.insert("options".to_string(), v.handle().to_json());
+        if let Some(ref v) = launch_profile_or_options {
+            args.insert("launchProfileOrOptions".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/addProject", args)?;
         let handle: Handle = serde_json::from_value(result)?;

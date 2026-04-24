@@ -1415,8 +1415,8 @@ public class AtsTypeScriptCodeGeneratorTests
         var code = GenerateTwoPassCode();
 
         Assert.DoesNotContain("= options?.options;", code);
-        Assert.Contains("addProject(name: string, projectPath: string, optionsBag?: AddProjectOptions)", code);
-        Assert.Contains("options = optionsBag?.options;", code);
+        Assert.Contains("addProject(name: string, projectPath: string, options?: AddProjectOptions)", code);
+        Assert.Contains("let launchProfileOrOptions = options?.launchProfileOrOptions;", code);
     }
 
     [Fact]

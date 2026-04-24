@@ -617,7 +617,7 @@ export interface AddParameterWithGeneratedValueOptions {
 }
 
 export interface AddProjectOptions {
-    options?: Awaitable<ProjectResourceOptions>;
+    launchProfileOrOptions?: string | ProjectResourceOptions | Awaitable<ProjectResourceOptions>;
 }
 
 export interface AddStepOptions {
@@ -5588,10 +5588,10 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
 
     /** Adds a .NET project resource */
     /** @internal */
-    async _addProjectInternal(name: string, projectPath: string, options?: Awaitable<ProjectResourceOptions>): Promise<ProjectResource> {
-        options = isPromiseLike(options) ? await options : options;
+    async _addProjectInternal(name: string, projectPath: string, launchProfileOrOptions?: string | ProjectResourceOptions | Awaitable<ProjectResourceOptions>): Promise<ProjectResource> {
+        launchProfileOrOptions = isPromiseLike(launchProfileOrOptions) ? await launchProfileOrOptions : launchProfileOrOptions;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, projectPath };
-        if (options !== undefined) rpcArgs.options = options;
+        if (launchProfileOrOptions !== undefined) rpcArgs.launchProfileOrOptions = launchProfileOrOptions;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/addProject',
             rpcArgs
@@ -5599,9 +5599,9 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new ProjectResourceImpl(result, this._client);
     }
 
-    addProject(name: string, projectPath: string, optionsBag?: AddProjectOptions): ProjectResourcePromise {
-        let options = optionsBag?.options;
-        return new ProjectResourcePromiseImpl(this._addProjectInternal(name, projectPath, options), this._client);
+    addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise {
+        let launchProfileOrOptions = options?.launchProfileOrOptions;
+        return new ProjectResourcePromiseImpl(this._addProjectInternal(name, projectPath, launchProfileOrOptions), this._client);
     }
 
     /** Adds a C# application resource */

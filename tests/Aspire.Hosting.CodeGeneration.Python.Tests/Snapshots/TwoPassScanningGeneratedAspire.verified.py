@@ -2172,13 +2172,13 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(AbstractResourceWithConnectionString, result)
 
-    def add_project(self, name: str, project_path: str, *, options: ProjectResourceOptions | None = None, **kwargs: typing.Unpack["ProjectResourceKwargs"]) -> ProjectResource:  # type: ignore
+    def add_project(self, name: str, project_path: str, *, launch_profile_or_options: str | ProjectResourceOptions | None = None, **kwargs: typing.Unpack["ProjectResourceKwargs"]) -> ProjectResource:  # type: ignore
         """Adds a .NET project resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         rpc_args['projectPath'] = project_path
-        if options is not None:
-            rpc_args['options'] = options
+        if launch_profile_or_options is not None:
+            rpc_args['launchProfileOrOptions'] = launch_profile_or_options
         result = self._client.invoke_capability(
             'Aspire.Hosting/addProject',
             rpc_args,
