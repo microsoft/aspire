@@ -419,3 +419,4 @@ Additional instructions are automatically applied when editing files matching sp
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
 | `tests/**/*.cs` | `.github/instructions/test-review-guidelines.instructions.md` - Flaky test patterns and test review guidelines |
+| `**/*.{yml,yaml,props,targets,projitems,proj,csproj}` | `.github/instructions/msbuild-paths.instructions.md` - MSBuild argument prefix and path conventions |
