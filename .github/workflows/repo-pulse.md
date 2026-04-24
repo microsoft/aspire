@@ -48,6 +48,14 @@ pre-agent-steps:
 
       mkdir -p .repo-pulse
 
+      # Accumulates human-readable warnings about data collection issues
+      # (fetch failures, partial results from the search API, etc.). Each
+      # line becomes one entry in meta.data_quality_warnings, which the
+      # agent renders as a banner at the top of the report so readers know
+      # the dashboard may be incomplete.
+      WARNINGS_FILE="$(mktemp)"
+      : > "${WARNINGS_FILE}"
+
       # Window: last 3 days (72 hours) in UTC.
       WINDOW_DAYS=3
       NOW_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -99,27 +107,55 @@ pre-agent-steps:
 
       # Fetch all pages of a GitHub search-issues query, project each item
       # down to the fields the report uses, and write a JSON array to $2.
+      #
+      # Resilience:
+      #   - A single fetch failure must not abort the entire daily report.
+      #     On failure (non-zero gh exit), we write `[]` to the outfile,
+      #     record a warning, and return non-zero so the caller can
+      #     continue with `|| true`.
+      #   - If the search API sets `incomplete_results: true` on any page
+      #     (backend timeout), we record a warning so the report header
+      #     can tell readers this section may be partial.
       fetch_search() {
         local query="$1"
         local outfile="$2"
-        echo "--> fetch: $query"
-        # gh api --paginate emits one JSON object per page for /search/issues.
-        # Flatten .items across pages and project to the report fields.
-        gh api --paginate -X GET "search/issues" -f "q=${query}" -f "per_page=100" \
-          | jq -s --argjson cutoff_epoch "$(date -u -d "${CUTOFF_UTC}" +%s)" \
-              "map(.items) | add | map(${SAFE_FIELDS})" \
-          > "${outfile}"
+        local section="$3"
+        echo "--> fetch [$section]: $query"
+        local tmp_pages
+        tmp_pages="$(mktemp)"
+        # Run the paginated API call without -e propagation so we can
+        # observe the exit code and respond in-script.
+        set +e
+        gh api --paginate -X GET "search/issues" -f "q=${query}" -f "per_page=100" > "${tmp_pages}"
+        local api_rc=$?
+        set -e
+        if [ "${api_rc}" -ne 0 ]; then
+          echo "    WARN: gh api failed (exit=${api_rc}) — writing empty array and continuing"
+          echo "${section}: data collection failed (gh api exit=${api_rc}); this section is empty" >> "${WARNINGS_FILE}"
+          echo "[]" > "${outfile}"
+          rm -f "${tmp_pages}"
+          return 1
+        fi
+        # Check for incomplete_results across all pages. The search API
+        # sets this to true when the backend times out; items[] is then
+        # only a partial slice of the real match set.
+        local incomplete
+        incomplete="$(jq -s 'map(.incomplete_results // false) | any' "${tmp_pages}")"
+        if [ "${incomplete}" = "true" ]; then
+          echo "    WARN: search reported incomplete_results=true — section may be partial"
+          echo "${section}: GitHub search API reported incomplete_results (backend timeout); items shown may be a partial subset" >> "${WARNINGS_FILE}"
+        fi
+        jq -s "map(.items) | add | map(${SAFE_FIELDS})" "${tmp_pages}" > "${outfile}"
+        rm -f "${tmp_pages}"
         local count
         count="$(jq 'length' "${outfile}")"
         echo "    wrote ${count} items -> ${outfile}"
+        return 0
       }
 
       # --- 1. Merged PRs in window ---
       Q_MERGED="repo:${REPO} is:pr is:merged merged:>=${CUTOFF_DATE}"
-      fetch_search "$Q_MERGED" .repo-pulse/merged-prs.raw.json
-      # Enrich merged PRs with base branch by hitting /pulls/{n} lazily — but
-      # GitHub's search API already returns enough. We derive base from the
-      # html_url suffix only if present in the item; otherwise leave null.
+      fetch_search "$Q_MERGED" .repo-pulse/merged-prs.raw.json "merged_prs" || true
       jq 'sort_by(.merged_at) | reverse
           | map({number, title, author, merged_at, labels, html_url,
                  age_hours: ((now - (.merged_at | fromdateiso8601)) / 3600 | floor)})' \
@@ -127,7 +163,7 @@ pre-agent-steps:
 
       # --- 2. Opened PRs in window, still open ---
       Q_OPENED="repo:${REPO} is:pr is:open created:>=${CUTOFF_DATE}"
-      fetch_search "$Q_OPENED" .repo-pulse/opened-prs.raw.json
+      fetch_search "$Q_OPENED" .repo-pulse/opened-prs.raw.json "opened_prs" || true
       jq 'sort_by(.created_at) | reverse
           | map({number, title, author, created_at, is_draft, labels, html_url,
                  age_hours: ((now - (.created_at | fromdateiso8601)) / 3600 | floor)})' \
@@ -135,7 +171,7 @@ pre-agent-steps:
 
       # --- 3. Filed issues in window ---
       Q_ISSUES="repo:${REPO} is:issue created:>=${CUTOFF_DATE}"
-      fetch_search "$Q_ISSUES" .repo-pulse/filed-issues.raw.json
+      fetch_search "$Q_ISSUES" .repo-pulse/filed-issues.raw.json "filed_issues" || true
       jq 'sort_by(.created_at) | reverse
           | map({number, title, author, created_at, labels, html_url,
                  age_hours: ((now - (.created_at | fromdateiso8601)) / 3600 | floor)})' \
@@ -144,7 +180,7 @@ pre-agent-steps:
       # --- 4. PRs awaiting review (any age) ---
       # `review:required` = review is requested but not yet given.
       Q_AWAITING="repo:${REPO} is:pr is:open review:required draft:false"
-      fetch_search "$Q_AWAITING" .repo-pulse/awaiting-review.raw.json
+      fetch_search "$Q_AWAITING" .repo-pulse/awaiting-review.raw.json "awaiting_review" || true
       jq 'sort_by(.created_at)
           | map({number, title, author, created_at, labels, html_url,
                  age_days: ((now - (.created_at | fromdateiso8601)) / 86400 | floor)})' \
@@ -154,7 +190,7 @@ pre-agent-steps:
       # Exclude items labeled quarantined-test or failing-test, per team request:
       # label churn on those surfaces is noise, not "attention going somewhere new".
       Q_ACTIVITY="repo:${REPO} updated:>=${CUTOFF_DATE} comments:>=3 -label:quarantined-test -label:failing-test"
-      fetch_search "$Q_ACTIVITY" .repo-pulse/activity-highlights.raw.json
+      fetch_search "$Q_ACTIVITY" .repo-pulse/activity-highlights.raw.json "activity_highlights" || true
       jq 'sort_by(.updated_at) | reverse
           | map({number, title, author, is_pr, updated_at, comments, labels, html_url})' \
           .repo-pulse/activity-highlights.raw.json > .repo-pulse/activity-highlights.json
@@ -165,6 +201,14 @@ pre-agent-steps:
       ALL_ISSUES_URL="https://github.com/${REPO}/issues?q=$(urlencode "is:issue created:>=${CUTOFF_DATE}")"
       ALL_AWAITING_URL="https://github.com/${REPO}/pulls?q=$(urlencode "is:pr is:open review:required draft:false")"
       ALL_ACTIVITY_URL="https://github.com/${REPO}/issues?q=$(urlencode "updated:>=${CUTOFF_DATE} comments:>=3 -label:quarantined-test -label:failing-test sort:updated-desc")"
+
+      # Fold any accumulated warnings into a JSON array for meta.json.
+      if [ -s "${WARNINGS_FILE}" ]; then
+        WARNINGS_JSON="$(jq -R -s 'split("\n") | map(select(length > 0))' "${WARNINGS_FILE}")"
+      else
+        WARNINGS_JSON="[]"
+      fi
+      rm -f "${WARNINGS_FILE}"
 
       jq -n \
         --arg repo "$REPO" \
@@ -179,6 +223,7 @@ pre-agent-steps:
         --arg all_issues_url "$ALL_ISSUES_URL" \
         --arg all_awaiting_url "$ALL_AWAITING_URL" \
         --arg all_activity_url "$ALL_ACTIVITY_URL" \
+        --argjson warnings "$WARNINGS_JSON" \
         '{
            repo: $repo,
            generated_utc: $now_utc,
@@ -188,6 +233,7 @@ pre-agent-steps:
            window_days: ($window_days | tonumber),
            run_url: $run_url,
            display_cap: 25,
+           data_quality_warnings: $warnings,
            see_all_urls: {
              merged_prs: $all_merged_url,
              opened_prs: $all_opened_url,
@@ -237,7 +283,7 @@ are local JSON files under `.repo-pulse/` in the workspace:
 
 | File                                       | Purpose                                              |
 | ------------------------------------------ | ---------------------------------------------------- |
-| `.repo-pulse/meta.json`                    | Run metadata (repo, generated timestamp, cutoff, window size, run URL, display cap, pre-built "see all" URLs). |
+| `.repo-pulse/meta.json`                    | Run metadata (repo, generated timestamp, cutoff, window size, run URL, display cap, `data_quality_warnings`, pre-built "see all" URLs). |
 | `.repo-pulse/merged-prs.json`              | PRs merged in the last 3 days, newest first.         |
 | `.repo-pulse/opened-prs.json`              | PRs opened in the last 3 days that are still open.   |
 | `.repo-pulse/filed-issues.json`            | Issues opened in the last 3 days.                    |
@@ -276,6 +322,20 @@ the first `##` heading. Use the values from `meta.json`:
 > - **Covers:** activity from the last <meta.window_days> days (since <meta.cutoff_utc>)
 > - **Run:** [workflow run](<meta.run_url>)
 ```
+
+**Data quality warnings banner (conditional):** If
+`meta.data_quality_warnings` is a non-empty array, immediately after the
+freshness block above (and before the first `##` section header), render a
+banner listing each warning so readers know the dashboard may be incomplete:
+
+```markdown
+> ⚠️ **Data quality notice:** one or more sections may be incomplete.
+>
+> - <warning 1>
+> - <warning 2>
+```
+
+If `meta.data_quality_warnings` is an empty array, omit the banner entirely.
 
 ### Sections
 
