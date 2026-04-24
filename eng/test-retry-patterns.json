@@ -24,6 +24,22 @@
     {
       "output": "Operation timed out",
       "reason": "Transient operation timeout"
+    },
+    {
+      "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}403 Forbidden" },
+      "reason": "MCR registry rate limiting (HTTP 403)"
+    },
+    {
+      "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}The request is blocked" },
+      "reason": "MCR registry request blocked (rate limiting)"
+    },
+    {
+      "output": "CONTAINER1016",
+      "reason": "Unable to access container registry during publish"
+    },
+    {
+      "output": "pull access denied for mcr.microsoft.com",
+      "reason": "MCR container pull denied (rate limiting)"
     }
   ],
   "jobFailurePatterns": [
@@ -35,6 +51,14 @@
     {
       "output": "Could not resolve host",
       "reason": "Transient DNS resolution failure in job log"
+    },
+    {
+      "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}403 Forbidden" },
+      "reason": "MCR registry rate limiting (HTTP 403)"
+    },
+    {
+      "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}The request is blocked" },
+      "reason": "MCR registry request blocked (rate limiting)"
     }
   ]
 }
