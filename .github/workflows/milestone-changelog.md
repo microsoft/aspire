@@ -1,21 +1,24 @@
 ---
 description: |
   Generates and maintains a changelog for a configured Aspire milestone by
-  analyzing merged pull requests. Runs daily and can be triggered manually.
-  Creates or updates a single GitHub issue titled "[<milestone>] Change log"
-  with a table of new features and notable bug fixes. Comments on the
-  changelog issue serve as editorial feedback (e.g., exclude a change,
-  rename an entry, merge entries).
+  analyzing merged pull requests. Runs every hour and can be triggered manually.
+  Creates or updates a wiki page named "<milestone>-Change-log" with a list
+  of new features, improvements, and notable bug fixes. A companion GitHub issue collects
+  editorial feedback (e.g., exclude a change, rename an entry, merge entries).
 
 # ──────────────────────────────────────────────────────────
-# To change the target milestone, update every hard-coded
-# milestone reference in this file: the safe-outputs
-# title-prefix values, the issue title, cache key, and all
-# milestone references in the prompt body below, then run:
+# To change the target milestone, update the MILESTONE value
+# in the env block below, then run:
 #   gh aw compile
 # ──────────────────────────────────────────────────────────
 
+env:
+  MILESTONE: "13.3"
+  BATCH_SIZE: "20"
+
 on:
+  schedule:
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 if: github.repository_owner == 'microsoft'
@@ -28,63 +31,333 @@ permissions:
 network: defaults
 
 tools:
+  bash: [":*"]
   github:
     toolsets: [repos, issues, pull_requests, search]
-  cache-memory:
+    # Allow reading PR data from external contributors. These PRs have already
+    # been reviewed and merged by maintainers, so the default "approved" integrity
+    # gate is unnecessarily restrictive for a read-only changelog generator.
+    min-integrity: unapproved
+    # Disable the DIFC proxy for pre-agent steps so gh pr list / gh issue list
+    # work without hitting the /meta endpoint block. The agent's own tool calls
+    # are still integrity-filtered via the MCP gateway.
+    integrity-proxy: false
+  repo-memory:
+    branch-name: memory/milestone-changelog
+    description: "Changelog state and content between runs"
+    file-glob: ["**/*.md", "**/*.json"]
+    max-file-size: 1048576  # 1MB
+    max-patch-size: 102400  # 100KB
 
 safe-outputs:
-  create-issue:
-    title-prefix: "[13.3] Change log"
-    labels: [changelog]
-  update-issue:
-    title-prefix: "[13.3] Change log"
+  jobs:
+    publish-wiki-page:
+      description: "Publish the changelog markdown to a wiki page in this repository"
+      runs-on: ubuntu-latest
+      output: "Wiki page published successfully!"
+      permissions:
+        contents: write
+        issues: write
+      inputs:
+        body:
+          description: "File reference (FILE:filename) pointing to the changelog body in the agent artifact"
+          required: true
+          type: string
+      env:
+        GH_TOKEN: ${{ github.token }}
+      steps:
+        - name: Publish changelog to wiki page
+          uses: actions/github-script@v9
+          with:
+            script: |
+              const fs = require('fs');
+              const path = require('path');
+              const { execSync } = require('child_process');
 
-timeout-minutes: 15
+              const outputFile = process.env.GH_AW_AGENT_OUTPUT;
+              if (!outputFile) {
+                core.setFailed('No GH_AW_AGENT_OUTPUT environment variable found');
+                return;
+              }
+
+              const fileContent = fs.readFileSync(outputFile, 'utf8');
+              const agentOutput = JSON.parse(fileContent);
+              const items = agentOutput.items.filter(item => item.type === 'publish_wiki_page');
+
+              if (items.length === 0) {
+                core.info('No publish_wiki_page items found, skipping');
+                return;
+              }
+
+              let body = items[items.length - 1].body;
+              if (!body) {
+                core.setFailed('No body found in publish_wiki_page output');
+                return;
+              }
+
+              // Require file reference — the agent must write the body to
+              // /tmp/gh-aw/agent/<filename> and pass "FILE:<filename>" to avoid
+              // outputting 60 KB+ through model output tokens.
+              const fileRefPrefix = 'FILE:';
+              if (!body.startsWith(fileRefPrefix)) {
+                core.setFailed('publish_wiki_page body must use FILE: prefix (e.g. "FILE:new-body.md"). Inline body content is not supported.');
+                return;
+              }
+              const filename = body.slice(fileRefPrefix.length);
+              if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) {
+                core.setFailed(`Invalid filename in FILE: reference: ${filename}`);
+                return;
+              }
+              // Agent artifact is downloaded to safe-jobs/ directory
+              const artifactDir = path.dirname(outputFile);
+              const bodyFilePath = path.join(artifactDir, 'agent', filename);
+              if (!fs.existsSync(bodyFilePath)) {
+                core.setFailed(`Agent body file not found: ${bodyFilePath}`);
+                return;
+              }
+              body = fs.readFileSync(bodyFilePath, 'utf8');
+              if (!body || body.trim().length === 0) {
+                core.setFailed('Resolved body file is empty');
+                return;
+              }
+              core.info(`Resolved body from agent file (${body.length} bytes)`);
+
+              const repo = process.env.GITHUB_REPOSITORY;
+              const token = process.env.GH_TOKEN;
+              const milestone = process.env.MILESTONE;
+              const pageName = `${milestone}-Change-log`;
+              const feedbackTitle = `[${milestone}] Changelog feedback`;
+
+              // Clone wiki, write page, push
+              execSync(`git clone https://x-access-token:${token}@github.com/${repo}.wiki.git wiki-repo`, { stdio: 'inherit' });
+              fs.writeFileSync(`wiki-repo/${pageName}.md`, body);
+              execSync('git config user.name "github-actions[bot]"', { cwd: 'wiki-repo', stdio: 'inherit' });
+              execSync('git config user.email "github-actions[bot]@users.noreply.github.com"', { cwd: 'wiki-repo', stdio: 'inherit' });
+              execSync(`git add "${pageName}.md"`, { cwd: 'wiki-repo', stdio: 'inherit' });
+
+              try {
+                execSync('git diff --cached --quiet', { cwd: 'wiki-repo' });
+                core.info('No changes to wiki page');
+              } catch {
+                execSync(`git commit -m "Update ${pageName}"`, { cwd: 'wiki-repo', stdio: 'inherit' });
+                execSync('git push', { cwd: 'wiki-repo', stdio: 'inherit' });
+                core.info(`Wiki page ${pageName} updated`);
+              }
+
+              // Ensure companion feedback issue exists
+              const q = `repo:${repo} is:issue is:open in:title ${JSON.stringify(feedbackTitle)}`;
+              const { data: search } = await github.rest.search.issuesAndPullRequests({ q, per_page: 5 });
+              const existing = search.items.find(i => i.title === feedbackTitle);
+              if (!existing) {
+                const wikiUrl = `https://github.com/${repo}/wiki/${pageName}`;
+                await github.rest.issues.create({
+                  ...context.repo,
+                  title: feedbackTitle,
+                  labels: ['changelog'],
+                  body: `Post comments on this issue to provide editorial feedback for the [${pageName} wiki page](${wikiUrl}).\n\nExamples: "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678".`,
+                });
+                core.info(`Created feedback issue: ${feedbackTitle}`);
+              }
+
+timeout-minutes: 60
+
+steps:
+  - name: Fetch milestone changelog data
+    env:
+      GH_TOKEN: ${{ github.token }}
+    run: |
+      set -euo pipefail
+      REPO="${{ github.repository }}"
+      DATA_DIR="/tmp/gh-aw/pr-data"
+      mkdir -p "$DATA_DIR"
+
+      # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
+      gh pr list --repo "$REPO" --state merged --limit 5000 \
+        --search "milestone:$MILESTONE" \
+        --json number,title,author,mergedAt,labels,additions,deletions,changedFiles \
+        | jq 'sort_by(.mergedAt)' \
+        > "$DATA_DIR/all-milestone-prs.json"
+
+      TOTAL=$(jq length "$DATA_DIR/all-milestone-prs.json")
+      echo "Total merged PRs in milestone: $TOTAL"
+
+      # 2. Determine the batch of unprocessed PRs
+      # List PR numbers that already have a per-PR summary file in repo-memory
+      PRS_DIR="/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs"
+      PROCESSED_NUMBERS="[]"
+      if [ -d "$PRS_DIR" ]; then
+        PROCESSED_NUMBERS=$(ls "$PRS_DIR"/*.json 2>/dev/null \
+          | xargs -I{} basename {} .json \
+          | jq -R 'tonumber' | jq -s '.' || echo "[]")
+      fi
+
+      # Filter all-milestone-prs to only unprocessed, take oldest BATCH_SIZE
+      jq --argjson processed "$PROCESSED_NUMBERS" \
+         --argjson batch_size "$BATCH_SIZE" \
+         '[.[] | select(.number as $n | $processed | index($n) | not)] | .[0:$batch_size]' \
+         "$DATA_DIR/all-milestone-prs.json" \
+         > "$DATA_DIR/batch-prs.json"
+
+      BATCH_COUNT=$(jq length "$DATA_DIR/batch-prs.json")
+      PROCESSED_COUNT=$(echo "$PROCESSED_NUMBERS" | jq length)
+      echo "Already processed: $PROCESSED_COUNT"
+      echo "Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT"
+
+      # 3. Find the feedback issue number (check repo-memory first, fallback to search)
+      FEEDBACK_TITLE="[${MILESTONE}] Changelog feedback"
+      FEEDBACK_FILE="$PRS_DIR/../feedback-issue.txt"
+      FEEDBACK_NUM=""
+      if [ -f "$FEEDBACK_FILE" ]; then
+        FEEDBACK_NUM=$(tr -d '[:space:]' < "$FEEDBACK_FILE")
+        echo "Feedback issue from repo-memory: #$FEEDBACK_NUM"
+      fi
+
+      if [ -z "$FEEDBACK_NUM" ]; then
+        FEEDBACK_NUM=$(gh issue list --repo "$REPO" --state open --limit 5 \
+          --search "in:title \"$FEEDBACK_TITLE\"" \
+          --json number,title \
+          --jq '.[] | select(.title == "'"$FEEDBACK_TITLE"'") | .number' \
+          2>/dev/null || true)
+      fi
+
+      if [ -n "$FEEDBACK_NUM" ]; then
+        echo "$FEEDBACK_NUM" > "$DATA_DIR/feedback-issue-number.txt"
+        echo "Feedback issue: #$FEEDBACK_NUM"
+      else
+        echo "No feedback issue found"
+      fi
+
+      # 4. Fetch existing changelog body from wiki page (avoids storing it in repo-memory)
+      PAGE_NAME="${MILESTONE}-Change-log"
+      WIKI_TMP=$(mktemp -d)
+      if git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git" "$WIKI_TMP/wiki" 2>/dev/null; then
+        if [ -f "$WIKI_TMP/wiki/${PAGE_NAME}.md" ]; then
+          cp "$WIKI_TMP/wiki/${PAGE_NAME}.md" "$DATA_DIR/existing-body.md"
+          BODY_SIZE=$(wc -c < "$DATA_DIR/existing-body.md")
+          echo "Fetched existing wiki page: ${BODY_SIZE} bytes"
+        else
+          echo "No existing wiki page found"
+        fi
+      else
+        echo "Could not clone wiki repo (may not exist yet)"
+      fi
+      rm -rf "$WIKI_TMP"
+
 ---
 
 # Milestone Changelog Generator
 
-Generate and maintain a changelog for the **Aspire 13.3 milestone** as a single,
-long-lived GitHub issue. Each run appends newly merged changes to the existing table
-while preserving previous entries. Comments on the issue serve as editorial feedback.
+Generate and maintain a changelog for the **Aspire ${MILESTONE} milestone** as a wiki page.
+Each run appends newly merged changes to the existing content while preserving
+previous entries. A companion feedback issue collects editorial comments.
+
+> **Note:** `${MILESTONE}` and `${BATCH_SIZE}` refer to values set in the workflow's
+> `env` block (currently **`13.3`** and **`20`**). All file names, titles, and
+> references below derive from those values.
+
+## Important: available tools
+
+All shell commands are available via the `bash` tool. Prefer `cat` and `jq` for
+JSON processing (parsing, filtering, counting, transforming). Do **not** `cat`
+large JSON files in their entirety — use `jq` to extract only the fields you need.
 
 ## Configuration
 
 | Setting | Value |
 |---------|-------|
-| Milestone | `13.3` |
-| Issue title | `[13.3] Change log` |
-| Cache key | `changelog-13.3-last-run` |
+| Milestone | `${MILESTONE}` |
+| PR batch size | `${BATCH_SIZE}` |
+| Wiki page | `${MILESTONE}-Change-log` |
+| Feedback issue title | `[${MILESTONE}] Changelog feedback` |
+| Repo-memory branch | `memory/milestone-changelog` |
+| Repo-memory directory | `/tmp/gh-aw/repo-memory/default/${MILESTONE}/` |
+| Per-PR summary directory | `prs/` (under repo-memory directory) |
+| Feedback issue file | `feedback-issue.txt` (under repo-memory directory) |
+| Batch file | `/tmp/gh-aw/pr-data/batch-prs.json` (computed from all PRs minus processed) |
+| Existing body file | `/tmp/gh-aw/pr-data/existing-body.md` (fetched from wiki) |
+| PR tracker file | `all-prs.json` (derived from per-PR summary files) |
 
-## Step 1: Find or create the changelog issue
+## Step 1: Load existing changelog and feedback
 
-Search for an **open** issue in this repository whose title is exactly `[13.3] Change log`.
+1. Check if the file `/tmp/gh-aw/pr-data/existing-body.md` exists (fetched from the
+   wiki page during the pre-computation step). If it does, read its contents as the
+   current changelog markdown. If it does not exist, there is no existing content yet.
+2. List the files in `/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/`.
+   Each file is named `<number>.json` and contains a summary of a previously processed
+   PR (see Step 8 for the per-PR summary schema). Load these to determine which PRs
+   have already been processed. If the directory does not exist or is empty, no PRs
+   have been processed yet.
+3. Check if the file `/tmp/gh-aw/pr-data/feedback-issue-number.txt` exists. If it
+   does, read the issue number from it and then read **all** comments on that issue —
+   these contain editorial instructions (see Step 4). If the file does not exist,
+   there is no feedback to process.
 
-- **If found**: this is the existing changelog issue. Read its current body and **all** comments.
-- **If not found**: you will create it in Step 7 using the `create-issue` safe output.
+## Step 2: Review the pre-computed batch
 
-## Step 2: Determine the time window
+The pre-computation step (in the frontmatter) has already:
+- Fetched **all** merged PRs in the ${MILESTONE} milestone, sorted by merge date
+  ascending (oldest first) → `/tmp/gh-aw/pr-data/all-milestone-prs.json`
+- Compared each PR against the per-PR summary files in repo-memory (`prs/<number>.json`)
+  to identify which PRs have not yet been processed
+- Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
 
-Read the cache-memory key `changelog-13.3-last-run`.
+Each entry in `batch-prs.json` contains: `number`, `title`, `author` (object with
+`login`), `mergedAt`, `labels` (array of objects with `name`), `additions`,
+`deletions`, `changedFiles`.
 
-- If the key exists, parse it as an ISO 8601 timestamp and use it as the **start** of the window.
-- If the key does not exist (first run), look up the **creation date of the 13.3 milestone** and use that as the start. This ensures all PRs merged since the milestone was created are captured on the first run.
-- The **end** of the window is the current time.
+Read `/tmp/gh-aw/pr-data/batch-prs.json` using the `bash` tool with `jq`.
+Do **not** `cat` large JSON files — use `jq` to extract only the fields you need.
+If the batch is empty, there are no new PRs to process.
 
-## Step 3: Gather merged PRs
+## Step 3: Process the batch PRs
 
-Search for pull requests in this repository that match **all** of these criteria:
+Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
+unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
+`number`, `title`, `author` (object with `login`), `mergedAt`, `labels` (array
+of objects with `name`), `additions`, `deletions`, `changedFiles`.
 
-1. State is **merged** (not just closed).
-2. Milestone is **13.3**.
-3. Merged **after** the start timestamp from Step 2.
+1. **Exclude bot-authored PRs** — remove any PR whose `author.login` ends with
+   `[bot]` (e.g., `dependabot[bot]`, `dotnet-maestro[bot]`, `github-actions[bot]`).
+   Still write a per-PR summary file for each bot PR with `status: "excluded"`
+   and `changes: ["Bot-authored PR"]` so they are not re-processed on future runs.
+2. If the batch has fewer than ${BATCH_SIZE} PRs, all remaining PRs have been processed
+   and the backlog is fully caught up.
 
-For each PR collect: number, title, author, body/description, labels, and the list of
-changed files.
+For each remaining (non-bot) PR, use the `pull_request_read` tool to fetch its
+full body/description and changed file paths. Collect: number, title, author,
+body/description, labels, the list of changed files, and the total number of
+changed lines (additions + deletions).
+
+### 3a. Read the PR diff when needed
+
+For PRs with **5,000 or fewer** total changed lines, read the diff if **any** of these
+conditions are true:
+
+1. The PR title is vague or generic (e.g., "Fix", "Update", "Cleanup", "Address feedback",
+   "Misc changes").
+2. The PR body/description is empty or contains only a template with no filled-in details.
+3. The changed file paths don't align with what the title/body describe (e.g., title says
+   "Dashboard fix" but files are in `src/Aspire.Cli/`).
+
+When reading the diff, **ignore generated files and playground app changes** — files matching these patterns:
+- `*/api/*.cs` (public API surface files)
+- `*.Designer.cs`
+- `*.xlf`
+- `package-lock.json`
+- `*.g.cs`
+- `*.Generated.cs`
+- `playground/*`
+
+For PRs with **more than 5,000** changed lines, skip the diff and rely on the title,
+body, labels, and file paths only.
+
+Use the diff to write a more accurate changelog name and description. If the diff
+reveals the change is not notable (e.g., pure refactoring despite a misleading title),
+apply the filtering rules from Step 5e.
 
 ## Step 4: Process editorial feedback from comments
 
-If the changelog issue already exists, read **every** comment on it. Comments may contain
+If a feedback issue was found in Step 1, read **every** comment on it. Comments may contain
 instructions such as:
 
 | Instruction | Example |
@@ -104,33 +377,75 @@ unchanged.
 
 ## Step 5: Analyze PRs and generate changelog entries
 
-For each merged PR that has not been excluded by feedback:
+For each merged PR that has not been excluded by feedback, produce **one or more**
+changelog entries. Most PRs map to a single entry, but a PR that contains multiple
+distinct, independently notable changes (e.g., a new feature in the CLI **and** a
+bug fix in the Dashboard) should produce a separate entry for each. Every entry
+references the same PR number in its Changes line. Because the changelog is
+published to a **wiki page** (not an issue or PR), GitHub does not auto-link
+`#1234`-style shorthand references. Always use full markdown links:
+`[#1234](https://github.com/microsoft/aspire/pull/1234)`.
 
-### 5a. Determine product area(s)
+### 5a. Determine product area
 
-Classify each PR into **one or more** of these areas based on its labels, title, and
-changed file paths:
+Classify each change into exactly **one** area based on its labels, title, and
+changed file paths. When a PR contains changes in multiple areas that are each
+independently notable, create a separate entry per area. When one area is clearly
+the focus and other file changes are incidental, use a single entry for the primary
+area. If a change does not clearly fit any specific area, classify it as **Other**.
 
-| Area | Signals |
-|------|---------|
-| **CLI** | `src/Aspire.Cli/`, label contains "cli" |
-| **Dashboard** | `src/Aspire.Dashboard/`, label contains "dashboard" |
-| **AppHost** | `src/Aspire.Hosting*/` (except Testing), label contains "hosting" |
-| **Service Discovery** | `src/Aspire.ServiceDiscovery/` or related packages |
-| **Integrations** | `src/Components/`, label contains "integration" |
-| **Templates** | project template files, label contains "template" |
-| **Testing** | `src/Aspire.Hosting.Testing/`, label contains "testing" |
-| **Extensions** | `extension/`, label contains "extension" |
-| **Engineering** | `eng/`, CI workflows, build infrastructure |
+| Area | Emoji | Signals |
+|------|-------|---------|
+| **AppHost** | 🏠 | `src/Aspire.Hosting*/` (except Testing), label contains "hosting" |
+| **CLI** | 💻 | `src/Aspire.Cli/`, label contains "cli" |
+| **Dashboard** | 📊 | `src/Aspire.Dashboard/`, label contains "dashboard" |
+| **Engineering** | 🔧 | `eng/`, CI workflows, build infrastructure |
+| **Extensions** | 🧩 | `extension/`, label contains "extension" |
+| **Integrations** | 🔌 | `src/Components/`, label contains "integration" |
+| **Service Discovery** | 🔍 | `src/Aspire.ServiceDiscovery/` or related packages |
+| **Templates** | 📄 | project template files, label contains "template" |
+| **Testing** | 🧪 | `src/Aspire.Hosting.Testing/`, label contains "testing" |
+| **Other** | 📦 | Changes that don't fit any of the above areas |
 
-### 5b. Write name and description
+### 5b. Determine change type and flags
 
+Classify each change into exactly **one** change type:
+
+| Change type | Signals |
+|-------------|----------|
+| **New features** | New capability, new resource type, new integration, new command |
+| **Improvements** | Enhancement to existing functionality, performance improvement, UX improvement |
+| **Bug fixes** | Fix for incorrect behavior, crash fix, regression fix |
+
+Then determine whether either of these optional flags applies:
+
+| Flag | Emoji | When to set |
+|------|-------|-------------|
+| **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
+| **Docs required** | 📝 | Change needs documentation on aspire.dev (new feature, changed behavior, new config options) |
+
+A change can have zero, one, or both flags. When present, show each flag on its own
+indented line below the Changes line:
+
+```
+  Changes: [#1234](https://github.com/microsoft/aspire/pull/1234)  
+  ⚠️ **Breaking change**  
+  📝 **Documentation required**
+```
+
+Omit flag lines entirely when neither flag applies.
+
+### 5c. Write name and description
+
+- **Emoji**: Choose a single emoji that represents the change. Pick something specific
+  and evocative — avoid reusing the area emoji. Examples: 🧭 for navigation, 🚀 for
+  performance, 🔒 for security, 🌐 for networking, 📂 for configuration.
 - **Name**: A short, user-friendly name for the change. Rewrite the PR title if needed
   for clarity — do not use it verbatim unless it is already clear.
 - **Description**: One to two sentences describing the change from an end-user
   perspective. Focus on *what* changed and *why* it matters.
 
-### 5c. Group related PRs
+### 5d. Group related PRs
 
 If multiple PRs represent the same logical change (e.g., a feature spread across
 several PRs), combine them into **one** changelog entry listing all related PR numbers.
@@ -143,69 +458,335 @@ new one:
   (e.g., new capabilities, platform support, configuration options).
 - Keep the description concise — add detail, don't repeat what's already there.
 
-### 5d. Filtering rules
+### 5e. Filtering rules
 
 - **Include**: new features, notable bug fixes, breaking changes, performance
   improvements, new integrations, new resource types, and notable engineering or
   workflow changes that have clear developer or release impact.
-- **Exclude**: internal refactoring, test-only changes, routine CI/build maintenance
-  with no meaningful user or developer impact, dependency version bumps,
-  documentation-only changes, trivial fixes.
+- **Exclude**:
+  - Internal refactoring, test-only changes, trivial fixes.
+  - Dependency version bumps, documentation-only changes.
+  - Routine CI/build maintenance with no meaningful user or developer impact.
 - When in doubt about whether a change is notable, include it — it can always be
   removed via a comment later.
 
-## Step 6: Build the issue body
+## Step 6: Build the wiki page body
 
-Merge **existing entries** from the current issue body (if any) with the **new entries**
+Merge **existing entries** from the current changelog (if any) with the **new entries**
 from Step 5. When a new PR relates to an existing entry, update that entry in-place
 (append the PR number and refine the description) instead of creating a duplicate row.
 Apply all editorial feedback from Step 4.
 
-Sort entries by product area (alphabetical), then by name.
+Sort entries by merge date of their most recent PR, **newest first**, within each
+change type sub-section. Group areas alphabetically. Within each area, order change types as:
+**New features** → **Improvements** → **Bug fixes**.
+Only include change type sub-headings that have at least one entry.
+Only include area sections that have at least one entry.
+
+Change type sub-headings (`####`) use only the change type name (e.g.,
+`#### New features`, `#### Bug fixes`, `#### Improvements`). Because the same
+heading text repeats under each area, GitHub appends a numeric suffix to
+disambiguate: the first `#### New features` gets the slug `new-features`, the
+second gets `new-features-1`, the third `new-features-2`, and so on. The suffix
+corresponds to the **zero-based index** of each area section that contains that
+change type, ordered alphabetically by area name.
+
+After the header, add a **Table of Contents** section with a link to each area.
+Use Unicode emoji in both the TOC link text and the area heading. GitHub's slug
+generator strips emoji from headings, leaving the text preceded by a dash. For
+example, `## 🏠 AppHost` produces the anchor `#-apphost`, so the TOC link is
+`- [🏠 AppHost](#-apphost)`.
+
+Under the `## Table of Contents` heading, add a one-line summary that counts
+entries per change type across **all** areas, e.g.
+`3 new features, 4 improvements, 2 bug fixes`.
+Use singular form for counts of 1 (`1 new feature`, `1 improvement`,
+`1 bug fix`).
+
+After the Table of Contents, add a **What's New** section that lists entries
+whose most recent associated PR was merged within the **last 5 days**
+(relative to the current run time). Sort entries **newest to oldest** by merge date.
+Each item is a link to the area heading, using the format:
+`- [<date> — <area-emoji> <Area> - <change-emoji> <Name>](#<area-slug>)`
+where `<date>` is the merge date of the last PR in `YYYY-M-D` format (no leading
+zeroes on month/day), `<area-emoji>` is the area's Unicode emoji,
+`<Area>` is the area name, `<change-emoji>` is the
+entry's individual emoji, `<Name>` is the changelog entry name, and
+`<area-slug>` is the GitHub-generated slug for that area's `##` heading
+(e.g., `-apphost`, `-cli`, `-dashboard`).
+If there are no entries in the last 5 days, still include the section with
+the text `No notable changes in the last 5 days.` beneath the heading.
+
+Under each area heading, add a one-line **summary** counting the entries per change
+type, e.g. `2 new features, 1 improvement` or `3 bug fixes`. Use singular form
+for counts of 1 (`1 new feature`, `1 bug fix`, `1 improvement`). Include the same
+summary in the Table of Contents after the area name, separated by ` — `.
 
 Use this exact format:
 
 ```markdown
-# [13.3] Change log
+> Last updated: <current date and time in UTC>  
+> PRs analyzed through: [#<number>](https://github.com/microsoft/aspire/pull/<number>) merged <merge date of the newest PR processed in this run, in UTC>
 
-> Last updated: <current date and time in UTC>
-> PRs analyzed through: <end of time window in UTC>
+## Table of Contents
 
-## Changes
+3 new features, 2 improvements, 1 bug fix
 
-| Product Area | Name | Description | Related PRs |
-|---|---|---|---|
-| AppHost | Feature name | Brief user-facing description | #1234, #1235 |
-| CLI, Dashboard | Another change | What this means for users | #1236 |
+- [🏠 AppHost — 2 new features, 1 improvement](#-apphost)
+- [💻 CLI — 1 new feature, 1 bug fix](#-cli)
+- [📊 Dashboard — 1 improvement](#-dashboard)
+
+## What's New
+
+- [2026-4-22 — 🏠 App Host - 🧭 Feature name](#-apphost)
+- [2026-4-21 — 💻 CLI - 🆕 New CLI command](#-cli)
+- [2026-4-20 — 🏠 App Host - 🚀 Another feature](#-apphost)
+
+## 🏠 AppHost
+
+2 new features, 1 improvement
+
+#### New features
+
+- **🧭 Feature name**  
+  Brief user-facing description  
+  Changes: [#1234](https://github.com/microsoft/aspire/pull/1234), [#1235](https://github.com/microsoft/aspire/pull/1235)  
+  ⚠️ **Breaking change**  
+  📝 **Documentation required**
+
+- **🚀 Another feature**  
+  What this means for users  
+  Changes: [#1236](https://github.com/microsoft/aspire/pull/1236)  
+  📝 **Documentation required**
+
+#### Improvements
+
+- **⚡ Performance boost**  
+  Faster startup for container resources  
+  Changes: [#1238](https://github.com/microsoft/aspire/pull/1238)
+
+## 💻 CLI
+
+1 new feature, 1 bug fix
+
+#### New features
+
+- **🆕 New CLI command**  
+  Added a new command for scaffolding resources  
+  Changes: [#1240](https://github.com/microsoft/aspire/pull/1240)
+
+#### Bug fixes
+
+- **🐛 Fix crash on init**  
+  Resolved a crash when running aspire init in an empty directory  
+  Changes: [#1239](https://github.com/microsoft/aspire/pull/1239)  
+  ⚠️ **Breaking change**
+
+## 📊 Dashboard
+
+1 improvement
+
+#### Improvements
+
+- **🎨 Dashboard improvement**  
+  Description of the change  
+  Changes: [#1237](https://github.com/microsoft/aspire/pull/1237)
 
 ---
 
-*This changelog is automatically generated. Add a comment to this issue to provide
-feedback (e.g., "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678").*
+*This changelog is automatically generated. To provide feedback, comment on the
+[Changelog feedback](<link to the "[${MILESTONE}] Changelog feedback" issue in this repo>) issue
+(e.g., "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678").*
+
+**PRs processed:** 6 ✅ included · 1 ❌ excluded · 93 unprocessed · 100 total merged in milestone
+([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/memory/milestone-changelog/all-prs.json))
 ```
 
-If no changes exist yet, keep the table header with a single row: `| — | No changes recorded yet | — | — |`.
+At the bottom of the page (after the footer), include a **PRs processed** summary
+line and a link to the full PR tracker JSON file in repo-memory:
 
-## Step 7: Create or update the changelog issue
+```
+**PRs processed:** <N> ✅ included · <N> ❌ excluded · <N> unprocessed · <N> total merged in milestone
+([View full PR tracker](https://github.com/microsoft/aspire/blob/memory/milestone-changelog/memory/milestone-changelog/all-prs.json))
+```
 
-- **If no existing issue was found in Step 1**: create a new issue using the
-  `create-issue` safe output with title `[13.3] Change log` and the body from Step 6.
-- **If an existing issue was found**: update its body using the `update-issue` safe
-  output with the content from Step 6. Do **not** close and recreate the issue —
-  comments must be preserved.
+Compute the counts from the per-PR summary files and the all-milestone-prs list:
+- **included** = per-PR summary files with `status: "included"`
+- **excluded** = per-PR summary files with `status: "excluded"`
+- **unprocessed** = PRs in `/tmp/gh-aw/pr-data/all-milestone-prs.json` that do not
+  have a corresponding per-PR summary file in the `prs/` directory
+- **total** = total number of merged PRs in the milestone
 
-## Step 8: Store the last-run timestamp
+## Step 7: Validate and publish the changelog to the wiki
 
-Write the current UTC timestamp (ISO 8601) to cache-memory with the key
-`changelog-13.3-last-run` so the next run knows where to pick up.
+### 7a. Validate the new body
+
+Before publishing, verify that the new changelog body (`/tmp/gh-aw/agent/new-body.md`)
+has only made **additions or modifications justified by PRs in the current batch**.
+Compare the new body against the existing body (`/tmp/gh-aw/pr-data/existing-body.md`,
+if it exists) and check that:
+
+1. **No existing entries were removed** — every changelog entry present in the existing
+   body must still be present in the new body (unless editorial feedback explicitly
+   requested removal).
+2. **No existing entries were modified** unless the modification adds a PR number from
+   the current batch to that entry's Changes line (per Step 5d grouping rules).
+3. **All new entries reference only PR numbers from the current batch** — any PR number
+   appearing in a new `Changes:` line that was not in the existing body must be present
+   in `/tmp/gh-aw/pr-data/batch-prs.json`.
+4. **Header metadata updates are expected** — changes to "Last updated", "PRs analyzed
+   through", "PRs processed" counts, "What's New" section, and Table of Contents
+   summaries are normal and should not be flagged.
+
+If any violation is found:
+- Log the specific violation (which entry was removed/modified, which PR number is
+  unexpected).
+- **Do not publish.** Fail the workflow by running `exit 1` via the `bash` tool
+  after logging the violation details. This ensures the workflow run shows a red
+  failure status, making it obvious something went wrong.
+
+### 7b. Publish
+
+1. Make sure the final changelog markdown from Step 6 is written to
+   `/tmp/gh-aw/agent/new-body.md`.
+2. Call `publish_wiki_page` with `body` set to the **short string**
+   `FILE:new-body.md` — do **not** pass the full markdown content.
+   The publish job already downloads the agent artifact and will read
+   the body from the file automatically.
+
+**If the publish fails, stop here.** Do **not** proceed to Step 8. Repo-memory
+must only be updated after the wiki page has been successfully published.
+Otherwise per-PR summary files are written for PRs whose changelog entries were
+never published to the wiki, and those PRs will be skipped on the next run.
+
+## Step 8: Store state in repo-memory
+
+**Only perform this step after Step 7 succeeds.**
+
+Write per-PR summary files and the derived tracker to the repo-memory directory.
+The gh-aw framework automatically commits and pushes changes after the workflow
+completes. The changelog body is **not** stored here — it is read from the wiki
+page (see Step 1) and published back via Step 7.
+
+### 8a. Write per-PR summary files
+
+For each PR processed in this run (both included and excluded), write a JSON file to:
+`/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/<number>.json`
+
+Create the `prs/` directory if it does not exist. Each file contains:
+
+```json
+{
+  "number": 1240,
+  "author": "username",
+  "runAt": "2026-04-27T03:49:58Z",
+  "title": "Original PR title from GitHub API",
+  "status": "included",
+  "changes": [
+    "Added new aspire destroy command for tearing down deployments",
+    "Updated CLI help text and argument parsing"
+  ]
+}
+```
+
+Field definitions:
+- **number**: PR number
+- **author**: GitHub login of the PR author (extract `.login` from the `author`
+  object returned by `gh pr list`; the pre-computed JSON stores `author` as
+  `{"login": "username"}`, but the summary stores it as a plain string)
+- **runAt**: ISO 8601 UTC timestamp of when this PR was processed
+- **title**: Original PR title exactly as returned by the GitHub API (do **not**
+  substitute the rewritten changelog entry name from Step 5c)
+- **status**: `"included"` or `"excluded"`
+- **changes**: Array of short summary strings describing the changes in the PR.
+  For included PRs, these are user-facing descriptions (e.g., "New resource type
+  for Redis clustering", "Fixed crash when container port is null"). For excluded
+  PRs, include a single string with the reason (e.g., "Bot-authored PR",
+  "Test-only changes", "Internal refactoring with no user-facing impact").
+
+After writing each file, **normalize formatting** by running:
+```bash
+jq --sort-keys '.' "/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/<number>.json" > /tmp/pr-fmt.json \
+  && mv /tmp/pr-fmt.json "/tmp/gh-aw/repo-memory/default/${MILESTONE}/prs/<number>.json"
+```
+
+### 8b. Rebuild the PR tracker
+
+Rebuild the consolidated tracker JSON from per-PR summary files and the
+all-milestone-prs list. Write it to:
+`/tmp/gh-aw/repo-memory/default/${MILESTONE}/all-prs.json`
+
+The tracker is a JSON array of objects, one per merged PR in the milestone.
+Sort entries by `mergedAt` **descending** (newest first). Schema:
+
+```json
+[
+  {
+    "comment": "New CLI command for scaffolding resources",
+    "mergedAt": "2026-04-22T18:30:00Z",
+    "number": 1240,
+    "runDate": "2026-04-27T03:49:58Z",
+    "status": "included"
+  },
+  {
+    "comment": "Internal refactoring with no user-facing changes",
+    "mergedAt": "2026-04-17T16:50:00Z",
+    "number": 1235,
+    "runDate": "2026-04-27T03:49:58Z",
+    "status": "excluded"
+  },
+  {
+    "comment": null,
+    "mergedAt": "2026-04-10T08:00:00Z",
+    "number": 1230,
+    "runDate": null,
+    "status": "unprocessed"
+  }
+]
+```
+
+Field names use camelCase to match the `gh pr list --json` output format.
+
+Field definitions:
+- **number**: PR number
+- **mergedAt**: ISO 8601 UTC merge timestamp
+- **status**: One of `"included"`, `"excluded"`, or `"unprocessed"`
+- **runDate**: ISO 8601 UTC timestamp of the workflow run that processed this PR,
+  or `null` if unprocessed
+- **comment**: Brief explanation of why the PR was included or excluded
+  (e.g., "New resource type for Redis clustering", "Bot dependency bump",
+  "Test-only changes to playground apps"). `null` for unprocessed PRs.
+
+To build this:
+1. Start with all PRs from `/tmp/gh-aw/pr-data/all-milestone-prs.json`.
+2. For each PR, check if a per-PR summary file exists in the `prs/` directory.
+   If it does, use `status` from the summary file, set `comment` to the first
+   entry in the summary's `changes` array, and set `runDate` to the `runAt`
+   value from the summary file.
+   If no summary file exists, set `status: "unprocessed"`, `comment: null`,
+   and `runDate: null`.
+3. Sort by `mergedAt` descending.
+
+After writing, normalize formatting:
+```bash
+jq --sort-keys '.' "/tmp/gh-aw/repo-memory/default/${MILESTONE}/all-prs.json" > /tmp/prs-fmt.json \
+  && mv /tmp/prs-fmt.json "/tmp/gh-aw/repo-memory/default/${MILESTONE}/all-prs.json"
+```
+
+### 8c. Save feedback issue number
+
+If `/tmp/gh-aw/pr-data/feedback-issue-number.txt` exists (found during pre-computation
+or created by the `publish_wiki_page` job), write its contents to:
+`/tmp/gh-aw/repo-memory/default/${MILESTONE}/feedback-issue.txt`
+
+This avoids a GitHub search API call on subsequent runs.
 
 ## Important rules
 
-- **Never remove existing entries** unless editorial feedback explicitly requests it.
-- **Always preserve comments** — they are the feedback channel. Never close and recreate
-  the issue.
-- If no new PRs were found since the last run, update only the "Last updated" timestamp
-  in the issue body. Do not modify the table.
+- **Never remove existing per-PR summary files** unless editorial feedback explicitly
+  requests it.
+- If no new PRs were found since the last run, do not modify the existing entries.
 - Keep descriptions concise — this is a changelog, not release notes prose.
-- If the milestone has no merged PRs at all yet, still create the issue with an empty
-  table so the team can start adding manual entries via comments.
+- If the milestone has no merged PRs at all yet, still create the wiki page
+  with the header, an empty Table of Contents, a `## What's New` section that
+  says `No notable changes in the last 5 days.`, and the PRs processed footer.
