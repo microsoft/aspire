@@ -1,4 +1,4 @@
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"1d9c9f2c1f98a21c88d13a5abffd7231d0ae301fbc7a8511d97f39994b9a395e","compiler_version":"v0.69.0","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"a42277895ef1d5ca13fcfc1750c1e3599318d1e7fd943585adf5535d62378c8b","compiler_version":"v0.69.0","strict":true,"agent_id":"copilot"}
 # gh-aw-manifest: {"version":1,"secrets":["COPILOT_GITHUB_TOKEN","GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"de0fac2e4500dabe0009e67214ff5f5447ce83dd","version":"v6.0.2"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"github/gh-aw-actions/setup","sha":"81b86c58b134601fc10d4745e276d7861cd12911","version":"v0.69.0"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.25.25"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.25.25"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.25.25"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.2.26"},{"image":"ghcr.io/github/github-mcp-server:v1.0.0"},{"image":"node:lts-alpine","digest":"sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f","pinned_image":"node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f"}]}
 #    ___                   _   _      
 #   / _ \                 | | (_)     
@@ -28,6 +28,9 @@
 # recently filed issues, PRs awaiting review, and activity highlights.
 # The goal is to give the team a live pulse of what's happening in the
 # repo without creating a new issue every day.
+# 
+# Data is collected in `pre-agent-steps` using `gh api`. The agent reads
+# the resulting JSON files and renders the issue body.
 #
 # Secrets used:
 #   - COPILOT_GITHUB_TOKEN
@@ -178,14 +181,14 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_6f07baf4e288918a_EOF'
+          cat << 'GH_AW_PROMPT_d5b738629547ea1c_EOF'
           <system>
-          GH_AW_PROMPT_6f07baf4e288918a_EOF
+          GH_AW_PROMPT_d5b738629547ea1c_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_6f07baf4e288918a_EOF'
+          cat << 'GH_AW_PROMPT_d5b738629547ea1c_EOF'
           <safe-output-tools>
           Tools: update_issue, missing_tool, missing_data, noop
           </safe-output-tools>
@@ -217,19 +220,17 @@ jobs:
           {{/if}}
           </github-context>
           
-          GH_AW_PROMPT_6f07baf4e288918a_EOF
+          GH_AW_PROMPT_d5b738629547ea1c_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_6f07baf4e288918a_EOF'
+          cat << 'GH_AW_PROMPT_d5b738629547ea1c_EOF'
           </system>
           {{#runtime-import .github/workflows/repo-pulse.md}}
-          GH_AW_PROMPT_6f07baf4e288918a_EOF
+          GH_AW_PROMPT_d5b738629547ea1c_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
-          GH_AW_GITHUB_REPOSITORY: ${{ github.repository }}
-          GH_AW_GITHUB_RUN_ID: ${{ github.run_id }}
         with:
           script: |
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
@@ -379,16 +380,13 @@ jobs:
           GH_HOST: github.com
       - name: Install AWF binary
         run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.25.25
-      - name: Determine automatic lockdown mode for GitHub MCP Server
-        id: determine-automatic-lockdown
-        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+      - name: Parse integrity filter lists
+        id: parse-guard-vars
         env:
-          GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
-          GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
-        with:
-          script: |
-            const determineAutomaticLockdown = require('${{ runner.temp }}/gh-aw/actions/determine_automatic_lockdown.cjs');
-            await determineAutomaticLockdown(github, context, core);
+          GH_AW_BLOCKED_USERS_VAR: ${{ vars.GH_AW_GITHUB_BLOCKED_USERS || '' }}
+          GH_AW_TRUSTED_USERS_VAR: ${{ vars.GH_AW_GITHUB_TRUSTED_USERS || '' }}
+          GH_AW_APPROVAL_LABELS_VAR: ${{ vars.GH_AW_GITHUB_APPROVAL_LABELS || '' }}
+        run: bash "${RUNNER_TEMP}/gh-aw/actions/parse_guard_list.sh"
       - name: Download container images
         run: bash "${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh" ghcr.io/github/gh-aw-firewall/agent:0.25.25 ghcr.io/github/gh-aw-firewall/api-proxy:0.25.25 ghcr.io/github/gh-aw-firewall/squid:0.25.25 ghcr.io/github/gh-aw-mcpg:v0.2.26 ghcr.io/github/github-mcp-server:v1.0.0 node:lts-alpine@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f
       - name: Write Safe Outputs Config
@@ -396,9 +394,9 @@ jobs:
           mkdir -p "${RUNNER_TEMP}/gh-aw/safeoutputs"
           mkdir -p /tmp/gh-aw/safeoutputs
           mkdir -p /tmp/gh-aw/mcp-logs/safeoutputs
-          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_3e484fcd94a188d8_EOF'
+          cat > "${RUNNER_TEMP}/gh-aw/safeoutputs/config.json" << 'GH_AW_SAFE_OUTPUTS_CONFIG_f7552c4249ac8cca_EOF'
           {"create_report_incomplete_issue":{},"missing_data":{},"missing_tool":{},"noop":{"max":1,"report-as-issue":"true"},"report_incomplete":{},"update_issue":{"allow_body":true,"max":1,"target":"16404","title_prefix":"[repo-pulse]"}}
-          GH_AW_SAFE_OUTPUTS_CONFIG_3e484fcd94a188d8_EOF
+          GH_AW_SAFE_OUTPUTS_CONFIG_f7552c4249ac8cca_EOF
       - name: Write Safe Outputs Tools
         env:
           GH_AW_TOOLS_META_JSON: |
@@ -592,8 +590,6 @@ jobs:
           GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
           GH_AW_SAFE_OUTPUTS_API_KEY: ${{ steps.safe-outputs-start.outputs.api_key }}
           GH_AW_SAFE_OUTPUTS_PORT: ${{ steps.safe-outputs-start.outputs.port }}
-          GITHUB_MCP_GUARD_MIN_INTEGRITY: ${{ steps.determine-automatic-lockdown.outputs.min_integrity }}
-          GITHUB_MCP_GUARD_REPOS: ${{ steps.determine-automatic-lockdown.outputs.repos }}
           GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
@@ -618,7 +614,7 @@ jobs:
           
           mkdir -p /home/runner/.copilot
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_2fec1396ccc3202c_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_f91cbb0175daf172_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
               "github": {
@@ -628,12 +624,15 @@ jobs:
                   "GITHUB_HOST": "\${GITHUB_SERVER_URL}",
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
-                  "GITHUB_TOOLSETS": "repos,issues,pull_requests,search"
+                  "GITHUB_TOOLSETS": "repos"
                 },
                 "guard-policies": {
                   "allow-only": {
-                    "min-integrity": "$GITHUB_MCP_GUARD_MIN_INTEGRITY",
-                    "repos": "$GITHUB_MCP_GUARD_REPOS"
+                    "approval-labels": ${{ steps.parse-guard-vars.outputs.approval_labels }},
+                    "blocked-users": ${{ steps.parse-guard-vars.outputs.blocked_users }},
+                    "min-integrity": "none",
+                    "repos": "all",
+                    "trusted-users": ${{ steps.parse-guard-vars.outputs.trusted_users }}
                   }
                 }
               },
@@ -659,7 +658,7 @@ jobs:
               "payloadDir": "${MCP_GATEWAY_PAYLOAD_DIR}"
             }
           }
-          GH_AW_MCP_CONFIG_2fec1396ccc3202c_EOF
+          GH_AW_MCP_CONFIG_f91cbb0175daf172_EOF
       - name: Download activation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -674,6 +673,13 @@ jobs:
       - name: Clean git credentials
         continue-on-error: true
         run: bash "${RUNNER_TEMP}/gh-aw/actions/clean_git_credentials.sh"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        name: Fetch Repo Pulse data
+        run: "set -euo pipefail\n\nmkdir -p .repo-pulse\n\n# Window: last 3 days (72 hours) in UTC.\nWINDOW_DAYS=3\nNOW_UTC=\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"\nCUTOFF_UTC=\"$(date -u -d \"${WINDOW_DAYS} days ago\" +%Y-%m-%dT%H:%M:%SZ)\"\nCUTOFF_DATE=\"$(date -u -d \"${WINDOW_DAYS} days ago\" +%Y-%m-%d)\"\nGENERATED_DISPLAY=\"$(date -u +'%Y-%m-%d %H:%M UTC')\"\n\necho \"Repo: $REPO\"\necho \"Now (UTC):    $NOW_UTC\"\necho \"Cutoff (UTC): $CUTOFF_UTC ($WINDOW_DAYS days)\"\n\n# Shared jq helper: project each search-issues item down to just the\n# fields the report uses.\n#\n# Title normalization:\n#   - Escape backticks (\\u0060 in jq string) — also avoids any chance\n#     of bash interpreting a literal backtick during variable\n#     expansion into the jq expression below.\n#   - Strip HTML comments <!-- ... -->.\n#   - Trim whitespace.\n# Labels are extracted as plain strings.\nread -r -d '' SAFE_FIELDS <<'JQ' || true\n{\n  number: .number,\n  title: (\n    (.title // \"\")\n    | gsub(\"<!--[\\\\s\\\\S]*?-->\"; \"\")\n    | gsub(\"\\u0060\"; \"'\")\n    | sub(\"^\\\\s+\"; \"\") | sub(\"\\\\s+$\"; \"\")\n  ),\n  author: (.user.login // \"unknown\"),\n  created_at: .created_at,\n  updated_at: .updated_at,\n  closed_at: .closed_at,\n  merged_at: (.pull_request.merged_at // null),\n  is_pr: (.pull_request != null),\n  is_draft: (.draft // false),\n  state: .state,\n  comments: (.comments // 0),\n  labels: [ .labels[]?.name // empty ],\n  html_url: .html_url\n}\nJQ\n\n# URL-encode a raw search query for use in an https://github.com/.../issues?q=... link.\nurlencode() {\n  jq -Rr @uri <<< \"$1\"\n}\n\n# Fetch all pages of a GitHub search-issues query, project each item\n# down to the fields the report uses, and write a JSON array to $2.\nfetch_search() {\n  local query=\"$1\"\n  local outfile=\"$2\"\n  echo \"--> fetch: $query\"\n  # gh api --paginate emits one JSON object per page for /search/issues.\n  # Flatten .items across pages and project to the report fields.\n  gh api --paginate -X GET \"search/issues\" -f \"q=${query}\" -f \"per_page=100\" \\\n    | jq -s --argjson cutoff_epoch \"$(date -u -d \"${CUTOFF_UTC}\" +%s)\" \\\n        \"map(.items) | add | map(${SAFE_FIELDS})\" \\\n    > \"${outfile}\"\n  local count\n  count=\"$(jq 'length' \"${outfile}\")\"\n  echo \"    wrote ${count} items -> ${outfile}\"\n}\n\n# --- 1. Merged PRs in window ---\nQ_MERGED=\"repo:${REPO} is:pr is:merged merged:>=${CUTOFF_DATE}\"\nfetch_search \"$Q_MERGED\" .repo-pulse/merged-prs.raw.json\n# Enrich merged PRs with base branch by hitting /pulls/{n} lazily — but\n# GitHub's search API already returns enough. We derive base from the\n# html_url suffix only if present in the item; otherwise leave null.\njq 'sort_by(.merged_at) | reverse\n    | map({number, title, author, merged_at, labels, html_url,\n           age_hours: ((now - (.merged_at | fromdateiso8601)) / 3600 | floor)})' \\\n    .repo-pulse/merged-prs.raw.json > .repo-pulse/merged-prs.json\n\n# --- 2. Opened PRs in window, still open ---\nQ_OPENED=\"repo:${REPO} is:pr is:open created:>=${CUTOFF_DATE}\"\nfetch_search \"$Q_OPENED\" .repo-pulse/opened-prs.raw.json\njq 'sort_by(.created_at) | reverse\n    | map({number, title, author, created_at, is_draft, labels, html_url,\n           age_hours: ((now - (.created_at | fromdateiso8601)) / 3600 | floor)})' \\\n    .repo-pulse/opened-prs.raw.json > .repo-pulse/opened-prs.json\n\n# --- 3. Filed issues in window ---\nQ_ISSUES=\"repo:${REPO} is:issue created:>=${CUTOFF_DATE}\"\nfetch_search \"$Q_ISSUES\" .repo-pulse/filed-issues.raw.json\njq 'sort_by(.created_at) | reverse\n    | map({number, title, author, created_at, labels, html_url,\n           age_hours: ((now - (.created_at | fromdateiso8601)) / 3600 | floor)})' \\\n    .repo-pulse/filed-issues.raw.json > .repo-pulse/filed-issues.json\n\n# --- 4. PRs awaiting review (any age) ---\n# `review:required` = review is requested but not yet given.\nQ_AWAITING=\"repo:${REPO} is:pr is:open review:required draft:false\"\nfetch_search \"$Q_AWAITING\" .repo-pulse/awaiting-review.raw.json\njq 'sort_by(.created_at)\n    | map({number, title, author, created_at, labels, html_url,\n           age_days: ((now - (.created_at | fromdateiso8601)) / 86400 | floor)})' \\\n    .repo-pulse/awaiting-review.raw.json > .repo-pulse/awaiting-review.json\n\n# --- 5. Activity highlights (items updated in window with many comments) ---\n# Exclude items labeled quarantined-test or failing-test, per team request:\n# label churn on those surfaces is noise, not \"attention going somewhere new\".\nQ_ACTIVITY=\"repo:${REPO} updated:>=${CUTOFF_DATE} comments:>=3 -label:quarantined-test -label:failing-test\"\nfetch_search \"$Q_ACTIVITY\" .repo-pulse/activity-highlights.raw.json\njq 'sort_by(.updated_at) | reverse\n    | map({number, title, author, is_pr, updated_at, comments, labels, html_url})' \\\n    .repo-pulse/activity-highlights.raw.json > .repo-pulse/activity-highlights.json\n\n# --- Precompute \"See all\" search URLs (agent should not build these) ---\nALL_MERGED_URL=\"https://github.com/${REPO}/pulls?q=$(urlencode \"is:pr is:merged merged:>=${CUTOFF_DATE}\")\"\nALL_OPENED_URL=\"https://github.com/${REPO}/pulls?q=$(urlencode \"is:pr is:open created:>=${CUTOFF_DATE}\")\"\nALL_ISSUES_URL=\"https://github.com/${REPO}/issues?q=$(urlencode \"is:issue created:>=${CUTOFF_DATE}\")\"\nALL_AWAITING_URL=\"https://github.com/${REPO}/pulls?q=$(urlencode \"is:pr is:open review:required draft:false\")\"\nALL_ACTIVITY_URL=\"https://github.com/${REPO}/issues?q=$(urlencode \"updated:>=${CUTOFF_DATE} comments:>=3 -label:quarantined-test -label:failing-test sort:updated-desc\")\"\n\njq -n \\\n  --arg repo \"$REPO\" \\\n  --arg now_utc \"$NOW_UTC\" \\\n  --arg generated_display \"$GENERATED_DISPLAY\" \\\n  --arg cutoff_utc \"$CUTOFF_UTC\" \\\n  --arg cutoff_date \"$CUTOFF_DATE\" \\\n  --arg window_days \"$WINDOW_DAYS\" \\\n  --arg run_url \"$RUN_URL\" \\\n  --arg all_merged_url \"$ALL_MERGED_URL\" \\\n  --arg all_opened_url \"$ALL_OPENED_URL\" \\\n  --arg all_issues_url \"$ALL_ISSUES_URL\" \\\n  --arg all_awaiting_url \"$ALL_AWAITING_URL\" \\\n  --arg all_activity_url \"$ALL_ACTIVITY_URL\" \\\n  '{\n     repo: $repo,\n     generated_utc: $now_utc,\n     generated_display: $generated_display,\n     cutoff_utc: $cutoff_utc,\n     cutoff_date: $cutoff_date,\n     window_days: ($window_days | tonumber),\n     run_url: $run_url,\n     display_cap: 25,\n     see_all_urls: {\n       merged_prs: $all_merged_url,\n       opened_prs: $all_opened_url,\n       filed_issues: $all_issues_url,\n       awaiting_review: $all_awaiting_url,\n       activity_highlights: $all_activity_url\n     }\n   }' > .repo-pulse/meta.json\n\n# Remove intermediate raw bundles — only the cleaned ones are input to the agent.\nrm -f .repo-pulse/*.raw.json\n\necho \"--- Repo Pulse data bundle ---\"\nls -la .repo-pulse/\necho \"--- meta.json ---\"\ncat .repo-pulse/meta.json\necho \"--- counts ---\"\nfor f in merged-prs opened-prs filed-issues awaiting-review activity-highlights; do\n  printf \"%-22s %s\\n\" \"$f.json\" \"$(jq 'length' \".repo-pulse/${f}.json\")\"\ndone\n"
+
       - name: Execute GitHub Copilot CLI
         id: agentic_execution
         # Copilot CLI tool arguments (sorted):
@@ -844,6 +850,8 @@ jobs:
             /tmp/gh-aw/sandbox/agent/logs/
             /tmp/gh-aw/redacted-urls.log
             /tmp/gh-aw/mcp-logs/
+            /tmp/gh-aw/proxy-logs/
+            !/tmp/gh-aw/proxy-logs/proxy-tls/
             /tmp/gh-aw/agent_usage.json
             /tmp/gh-aw/agent-stdio.log
             /tmp/gh-aw/agent/
@@ -1077,7 +1085,7 @@ jobs:
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
           WORKFLOW_NAME: "Repo Pulse — Daily Report"
-          WORKFLOW_DESCRIPTION: "Daily \"Repo Pulse\" report for the Aspire repository. Updates a single\npinned GitHub issue in place with a rolling 3-day view of recent repo\nactivity: notable changes, recently merged PRs, recently opened PRs,\nrecently filed issues, PRs awaiting review, and activity highlights.\nThe goal is to give the team a live pulse of what's happening in the\nrepo without creating a new issue every day."
+          WORKFLOW_DESCRIPTION: "Daily \"Repo Pulse\" report for the Aspire repository. Updates a single\npinned GitHub issue in place with a rolling 3-day view of recent repo\nactivity: notable changes, recently merged PRs, recently opened PRs,\nrecently filed issues, PRs awaiting review, and activity highlights.\nThe goal is to give the team a live pulse of what's happening in the\nrepo without creating a new issue every day.\n\nData is collected in `pre-agent-steps` using `gh api`. The agent reads\nthe resulting JSON files and renders the issue body."
           HAS_PATCH: ${{ needs.agent.outputs.has_patch }}
         with:
           script: |
