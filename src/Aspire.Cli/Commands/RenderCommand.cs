@@ -47,7 +47,7 @@ internal sealed class RenderCommand : BaseCommand
         ["markdown"] = "Render markdown feature showcase",
         ["debug-activities"] = "Debug pipeline activities (calls ProcessPublishingActivitiesDebugAsync)",
         ["pipeline-activities"] = "Pipeline activities with spinner (calls ProcessAndDisplayPublishingActivitiesAsync)",
-        ["publish-summary-all"] = "Publish summary timeline (stress scenarios),",
+        ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
         ["exit"] = "Exit",
     };
 
