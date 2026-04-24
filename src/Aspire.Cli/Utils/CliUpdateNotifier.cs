@@ -51,7 +51,7 @@ internal class CliUpdateNotifier(
         if (newerVersion is not null)
         {
             var updateCommand = IsRunningAsDotNetTool()
-                ? "dotnet tool update -g Aspire.Cli"
+                ? "dotnet tool update Aspire.Cli"
                 : "aspire update";
 
             interactionService.DisplayVersionUpdateNotification(newerVersion.ToString(), updateCommand);
@@ -79,32 +79,24 @@ internal class CliUpdateNotifier(
     /// Determines whether the Aspire CLI is running as a .NET tool or as a native binary.
     /// </summary>
     /// <returns>
-    /// <c>true</c> if running as a .NET tool (process name is "dotnet" or "dotnet.exe"); 
-    /// <c>false</c> if running as a native binary (process name is "aspire" or "aspire.exe") or if the process path cannot be determined.
+    /// <c>true</c> if running as a .NET tool (process hosted by "dotnet" or inside a .store directory);
+    /// <c>false</c> if running as a standalone native binary or if the process path cannot be determined.
     /// </returns>
     /// <remarks>
     /// This detection is used to determine which update command to display to users:
     /// <list type="bullet">
-    /// <item>.NET tool installation: "dotnet tool update -g Aspire.Cli"</item>
+    /// <item>.NET tool installation: "dotnet tool update Aspire.Cli"</item>
     /// <item>Native binary installation: "aspire update --self"</item>
     /// </list>
-    /// The detection works by examining <see cref="Environment.ProcessPath"/>, which returns the full path to the current executable.
-    /// When running as a .NET tool, this path points to the dotnet host executable. When running as a native binary, 
-    /// it points to the aspire executable itself.
+    /// The detection works by examining <see cref="Environment.ProcessPath"/>:
+    /// <list type="bullet">
+    /// <item>Managed tools: the dotnet host executable runs the tool DLL, so ProcessPath is "dotnet".</item>
+    /// <item>NativeAOT tools: the binary executes directly from the .store directory, so ProcessPath
+    ///       is inside <c>.store/aspire.cli/...</c>.</item>
+    /// </list>
     /// </remarks>
     private static bool IsRunningAsDotNetTool()
-    {
-        // When running as a dotnet tool, the process path points to "dotnet" or "dotnet.exe"
-        // When running as a native binary, it points to "aspire" or "aspire.exe"
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return false;
-        }
-
-        var fileName = Path.GetFileNameWithoutExtension(processPath);
-        return string.Equals(fileName, "dotnet", StringComparison.OrdinalIgnoreCase);
-    }
+        => DotNetToolDetection.IsRunningAsDotNetTool(Environment.ProcessPath);
 
     protected virtual SemVersion? GetCurrentVersion()
     {
