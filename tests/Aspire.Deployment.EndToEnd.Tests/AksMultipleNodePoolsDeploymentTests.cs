@@ -214,11 +214,10 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            // Step 16: Clean up using aspire destroy
-            output.WriteLine("Step 16: Destroying deployment...");
-            await auto.AspireDestroyAsync(counter);
+            // Step 17: Clean up using aspire destroy
+            output.WriteLine("Step 17: Destroying deployment...");            await auto.AspireDestroyAsync(counter);
 
-            // Step 17: Exit terminal
+            // Step 18: Exit terminal
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 
