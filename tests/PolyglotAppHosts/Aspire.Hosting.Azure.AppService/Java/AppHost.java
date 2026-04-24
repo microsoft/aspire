@@ -9,8 +9,7 @@ void main() throws Exception {
             .withDashboard()
             .withDashboard(false)
             .withAzureApplicationInsights()
-            .withAzureApplicationInsightsLocation("westus")
-            .withAzureApplicationInsightsLocationParameter(applicationInsightsLocation)
+            .withParameter("applicationInsightsLocation", applicationInsightsLocation)
             .withAzureApplicationInsights(existingApplicationInsights)
             .withDeploymentSlot(deploymentSlot)
             .withDeploymentSlot("staging");
@@ -22,7 +21,7 @@ void main() throws Exception {
         worker.skipEnvironmentVariableNameChecks();
         worker.publishAsAzureAppServiceWebsite(new PublishAsAzureAppServiceWebsiteOptions().configure((_infrastructure, _appService) -> {}));
 
-        var api = builder.addProject("api", "../Fake.Api/Fake.Api.csproj", "https");
+        var api = builder.addProject("api", "../Fake.Api/Fake.Api.csproj");
         api.skipEnvironmentVariableNameChecks();
         api.publishAsAzureAppServiceWebsite(new PublishAsAzureAppServiceWebsiteOptions().configureSlot((_infrastructure, _appServiceSlot) -> {}));
         var _environmentName = environment.getResourceName();

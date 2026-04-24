@@ -6,7 +6,7 @@ const buildVersion = await builder.addParameterFromConfiguration("buildVersion",
 const buildSecret = await builder.addParameterFromConfiguration("buildSecret", "MyConfig:Secret", { secret: true });
 const backend = await builder.addContainer("backend", "nginx")
     .withHttpEndpoint({ name: "http", targetPort: 80 });
-const backendService = await builder.addProject("backend-service", "./src/BackendService", "http");
+const backendService = await builder.addProject("backend-service", "./src/BackendService");
 const externalBackend = await builder.addExternalService("external-backend", "https://example.com");
 
 const proxy = await builder.addYarp("proxy")

@@ -12,11 +12,11 @@ void main() throws Exception {
         hub.addEventHandler(ReferenceExpression.refExpr("https://example.com/handler2"), new AddEventHandlerOptions().userEventPattern("event1").systemEvents(new String[] { "connect", "connected" }));
         // withRoleAssignments - assigns roles on a container resource
         var container = builder.addContainer("mycontainer", "mcr.microsoft.com/dotnet/samples:aspnetapp");
-        container.withWebPubSubRoleAssignments(webpubsub, new AzureWebPubSubRole[] { AzureWebPubSubRole.WEB_PUB_SUB_SERVICE_OWNER, AzureWebPubSubRole.WEB_PUB_SUB_SERVICE_READER, AzureWebPubSubRole.WEB_PUB_SUB_CONTRIBUTOR });
+        container.withRoleAssignments(webpubsub, new AzureWebPubSubRole[] { AzureWebPubSubRole.WEB_PUB_SUB_SERVICE_OWNER, AzureWebPubSubRole.WEB_PUB_SUB_SERVICE_READER, AzureWebPubSubRole.WEB_PUB_SUB_CONTRIBUTOR });
         // withRoleAssignments - also available directly on AzureWebPubSubResource builder
-        webpubsub.withWebPubSubRoleAssignments(webpubsub, new AzureWebPubSubRole[] { AzureWebPubSubRole.WEB_PUB_SUB_SERVICE_READER });
+        webpubsub.withRoleAssignments(webpubsub, new AzureWebPubSubRole[] { AzureWebPubSubRole.WEB_PUB_SUB_SERVICE_READER });
         // withReference - generic, works via IResourceWithConnectionString
-        container.withReference(webpubsub);
-        container.withReference(hub);
+        container.withReference(webpubsub, new WithReferenceOptions());
+        container.withReference(hub, new WithReferenceOptions());
         builder.build().run();
     }

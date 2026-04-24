@@ -1,4 +1,4 @@
-﻿// ===== AddContainerOptions.java =====
+// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -11166,7 +11166,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     public ContainerRegistryResource addContainerRegistry(String name, AspireUnion endpoint) {
-        return addContainerRegistry(name, endpoint, null);
+        return addContainerRegistry(name, endpoint, (AspireUnion) null);
     }
 
     /** Adds a container registry resource */
@@ -11414,7 +11414,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     public IResourceWithConnectionString addConnectionString(String name) {
-        return addConnectionString(name, null);
+        return addConnectionString(name, (AspireUnion) null);
     }
 
     /** Adds a connection string resource */

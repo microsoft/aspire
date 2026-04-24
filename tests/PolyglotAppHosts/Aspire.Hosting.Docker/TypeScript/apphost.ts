@@ -10,7 +10,7 @@ await api.withHttpEndpoint({ name: "http", targetPort: 80 });
 
 const apiEndpoint = await api.getEndpoint("http");
 const hostAddressExpression = await compose.getHostAddressExpression(apiEndpoint);
-const _hostAddressValueExpression: string | null = await hostAddressExpression.getValueAsync();
+const _hostAddressValueExpression: string | null = await hostAddressExpression.getValue();
 
 await compose.withProperties(async (environment) => {
     await environment.defaultNetworkName.set("validation-network");

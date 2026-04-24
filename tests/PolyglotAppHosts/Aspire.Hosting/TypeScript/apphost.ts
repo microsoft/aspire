@@ -60,7 +60,7 @@ await dockerContainer.withDockerfileBuilder("./app", configureDockerfileBuilder,
 const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
 
 // addProject (pre-existing)
-const project = await builder.addProject("myproject", "./src/MyProject", "https");
+const project = await builder.addProject("myproject", "./src/MyProject");
 const projectWithoutLaunchProfile = await builder.addProject("myproject-noprofile", "./src/MyProject");
 // ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
 const referenceEnvironmentOptions = {
@@ -123,7 +123,7 @@ await dockerContainer.withHttpEndpointCallback(async (updateContext) => {
 const endpoint = await dockerContainer.getEndpoint("http");
 const expr = refExpr`Host=${endpoint}`;
 
-const builtConnectionString = await builder.addConnectionString("customcs", expr);
+const builtConnectionString = await builder.addConnectionString("customcs", { connectionString: expr });
 
 await builtConnectionString.withConnectionProperty("Host", expr);
 await builtConnectionString.withConnectionProperty("Mode", "Development");
@@ -250,7 +250,8 @@ await tool.withToolSource("https://api.nuget.org/v3/index.json");
 await tool.withToolVersion("8.0.0");
 
 // publishAsDockerFile
-await tool.publishAsDockerFile();
+await tool.publishAsDockerFile(async (_container) => {
+});
 
 // PipelineStepFactoryExtensions.cs — NEW exports
 // ===================================================================
@@ -296,7 +297,7 @@ await container.withPipelineStepFactory("custom-build-step", async (stepContext)
     await stepFactoryLogger.logDebug("Pipeline step factory logger");
     const cancellationToken = await stepContext.cancellationToken.get();
     const cacheUriExpression = await cache.uriExpression.get();
-    const _cacheUri = await cacheUriExpression.getValueAsync(cancellationToken);
+    const _cacheUri = await cacheUriExpression.getValue(cancellationToken);
 }, {
     dependsOn: ["build"],
     requiredBy: ["deploy"],
@@ -573,11 +574,11 @@ await container.withExplicitStart();
 // withUrl
 await container.withUrl("http://localhost:8080");
 
-// withUrlExpression
-await container.withUrlExpression(refExpr`http://${endpoint}`);
+// withUrl - ReferenceExpression
+await container.withUrl(refExpr`http://${endpoint}`);
 
-// withHttpHealthCheck
-await container.withHttpHealthCheck();
+// withHealthCheck
+await container.withHealthCheck("http");
 
 // withCommand
 await container.withCommand("restart", "Restart", async (_ctx) => {

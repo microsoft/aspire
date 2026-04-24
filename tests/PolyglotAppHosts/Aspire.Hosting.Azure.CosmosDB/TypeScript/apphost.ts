@@ -24,7 +24,7 @@ await cosmos.withAccessKeyAuthentication();
 
 // 7) withAccessKeyAuthentication(keyVault)
 const keyVault = await builder.addAzureKeyVault("kv");
-await cosmos.withAccessKeyAuthentication(keyVault);
+await cosmos.withAccessKeyAuthentication({ keyVaultBuilder: keyVault });
 
 // 8) runAsEmulator + emulator container configuration methods
 const cosmosEmulator = await builder.addAzureCosmosDB("cosmos-emulator");

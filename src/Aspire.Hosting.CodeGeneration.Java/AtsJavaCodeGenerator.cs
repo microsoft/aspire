@@ -1122,7 +1122,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 }
                 else
                 {
-                    callArguments.Add("null");
+                    callArguments.Add(GetOmittedOptionalArgument(parameter));
                 }
             }
 
@@ -1143,6 +1143,11 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 CreateMethodParameters(visibleParameters),
                 returnInfo.HasReturn);
         }
+    }
+
+    private static string GetOmittedOptionalArgument(AtsParameterInfo parameter)
+    {
+        return IsUnionType(parameter.Type) ? "(AspireUnion) null" : "null";
     }
 
     private void GenerateUnionOverloadsWithOptions(

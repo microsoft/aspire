@@ -16,7 +16,7 @@ const exprSecretValue = refExpr`secret-value-${secretParam}`;
 const namedExprSecretValue = refExpr`named-secret-value-${namedSecretParam}`;
 
 // ── 2. withRoleAssignments ───────────────────────────────────────────────────
-await vault.withKeyVaultRoleAssignments(vault, [
+await vault.withRoleAssignments(vault, [
     AzureKeyVaultRole.KeyVaultReader,
     AzureKeyVaultRole.KeyVaultSecretsUser,
 ]);
@@ -25,21 +25,21 @@ await vault.withKeyVaultRoleAssignments(vault, [
 const secretFromParameter = await vault.addSecret("param-secret", secretParam);
 
 // ── 4. addSecretFromExpression ───────────────────────────────────────────────
-const secretFromExpression = await vault.addSecretFromExpression("expr-secret", exprSecretValue);
+const secretFromExpression = await vault.addSecret("expr-secret", exprSecretValue);
 
 // ── 5. addSecretWithName ─────────────────────────────────────────────────────
-const namedSecretFromParameter = await vault.addSecretWithName("secret-resource-param", "named-param-secret", namedSecretParam);
+const namedSecretFromParameter = await vault.addSecret("secret-resource-param", namedSecretParam, { secretName: "named-param-secret" });
 
 // ── 6. addSecretWithNameFromExpression ───────────────────────────────────────
-const namedSecretFromExpression = await vault.addSecretWithNameFromExpression("secret-resource-expr", "named-expr-secret", namedExprSecretValue);
+const namedSecretFromExpression = await vault.addSecret("secret-resource-expr", namedExprSecretValue, { secretName: "named-expr-secret" });
 
 // ── 7. getSecret ─────────────────────────────────────────────────────────────
 const _existingSecretRef = await vault.getSecret("param-secret");
 
 // Apply role assignments to created secret resources to validate generic coverage.
-await secretFromParameter.withKeyVaultRoleAssignments(vault, [AzureKeyVaultRole.KeyVaultSecretsUser]);
-await secretFromExpression.withKeyVaultRoleAssignments(vault, [AzureKeyVaultRole.KeyVaultReader]);
-await namedSecretFromParameter.withKeyVaultRoleAssignments(vault, [AzureKeyVaultRole.KeyVaultSecretsOfficer]);
-await namedSecretFromExpression.withKeyVaultRoleAssignments(vault, [AzureKeyVaultRole.KeyVaultReader]);
+await secretFromParameter.withRoleAssignments(vault, [AzureKeyVaultRole.KeyVaultSecretsUser]);
+await secretFromExpression.withRoleAssignments(vault, [AzureKeyVaultRole.KeyVaultReader]);
+await namedSecretFromParameter.withRoleAssignments(vault, [AzureKeyVaultRole.KeyVaultSecretsOfficer]);
+await namedSecretFromExpression.withRoleAssignments(vault, [AzureKeyVaultRole.KeyVaultReader]);
 
 await builder.build().run();

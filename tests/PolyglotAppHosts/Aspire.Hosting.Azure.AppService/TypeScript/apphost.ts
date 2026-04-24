@@ -2,7 +2,6 @@ import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
-const applicationInsightsLocation = await builder.addParameter('applicationInsightsLocation');
 const deploymentSlot = await builder.addParameter('deploymentSlot');
 const existingApplicationInsights = await builder.addAzureApplicationInsights('existingApplicationInsights');
 
@@ -10,9 +9,7 @@ const environment = await builder.addAzureAppServiceEnvironment('appservice-envi
     .withDashboard()
     .withDashboard({ enable: false })
     .withAzureApplicationInsights()
-    .withAzureApplicationInsightsLocation('westus')
-    .withAzureApplicationInsightsLocationParameter(applicationInsightsLocation)
-    .withAzureApplicationInsights(existingApplicationInsights)
+    .withAzureApplicationInsights({ applicationInsights: existingApplicationInsights })
     .withDeploymentSlot(deploymentSlot)
     .withDeploymentSlot('staging');
 
@@ -29,7 +26,7 @@ await builder.addExecutable('worker', 'dotnet', '.', ['run'])
     })
     .skipEnvironmentVariableNameChecks();
 
-await builder.addProject('api', '../Fake.Api/Fake.Api.csproj', 'https')
+await builder.addProject('api', '../Fake.Api/Fake.Api.csproj')
     .publishAsAzureAppServiceWebsite({
         configureSlot: async (_infrastructure, _appServiceSlot) => {}
     })

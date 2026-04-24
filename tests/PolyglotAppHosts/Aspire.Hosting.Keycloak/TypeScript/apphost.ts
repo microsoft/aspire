@@ -23,7 +23,7 @@ const keycloak2 = await builder.addKeycloak("keycloak2")
     .withRealmImport(".")
     .withEnabledFeatures(["rolling-updates"])
     .withDisabledFeatures(["scripts"])
-    .withOtlpExporter(OtlpProtocol.HttpProtobuf);
+    .withOtlpExporter({ protocol: OtlpProtocol.HttpProtobuf });
 
 await builder.addContainer("consumer", "nginx")
     .withReference(keycloak)
