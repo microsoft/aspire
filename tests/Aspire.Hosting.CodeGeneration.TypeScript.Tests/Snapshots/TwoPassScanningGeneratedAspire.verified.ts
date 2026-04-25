@@ -275,6 +275,12 @@ type IServiceProviderHandle = Handle<'System.ComponentModel/System.IServiceProvi
 // Enum Types
 // ============================================================================
 
+/** Enum type for BrowserUserDataMode */
+export enum BrowserUserDataMode {
+    Shared = "Shared",
+    Isolated = "Isolated",
+}
+
 /** Enum type for CertificateTrustScope */
 export enum CertificateTrustScope {
     None = "None",
@@ -745,6 +751,7 @@ export interface WithBindMountOptions {
 export interface WithBrowserLogsOptions {
     browser?: string;
     profile?: string;
+    userDataMode?: BrowserUserDataMode;
 }
 
 export interface WithCommandOptions {
@@ -10240,10 +10247,11 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<ContainerResource> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -10255,7 +10263,8 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     withBrowserLogs(options?: WithBrowserLogsOptions): ContainerResourcePromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new ContainerResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new ContainerResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
@@ -12968,10 +12977,11 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<CSharpAppResource> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -12983,7 +12993,8 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     withBrowserLogs(options?: WithBrowserLogsOptions): CSharpAppResourcePromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new CSharpAppResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new CSharpAppResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
@@ -15369,10 +15380,11 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<DotnetToolResource> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -15384,7 +15396,8 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     withBrowserLogs(options?: WithBrowserLogsOptions): DotnetToolResourcePromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new DotnetToolResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new DotnetToolResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
@@ -17875,10 +17888,11 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<ExecutableResource> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -17890,7 +17904,8 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     withBrowserLogs(options?: WithBrowserLogsOptions): ExecutableResourcePromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new ExecutableResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new ExecutableResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
@@ -22595,10 +22610,11 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<ProjectResource> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -22610,7 +22626,8 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     withBrowserLogs(options?: WithBrowserLogsOptions): ProjectResourcePromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new ProjectResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new ProjectResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
@@ -25016,10 +25033,11 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<TestDatabaseResource> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -25031,7 +25049,8 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     withBrowserLogs(options?: WithBrowserLogsOptions): TestDatabaseResourcePromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new TestDatabaseResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new TestDatabaseResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
@@ -27808,10 +27827,11 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<TestRedisResource> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -27823,7 +27843,8 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     withBrowserLogs(options?: WithBrowserLogsOptions): TestRedisResourcePromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new TestRedisResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new TestRedisResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
@@ -30878,10 +30899,11 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<TestVaultResource> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -30893,7 +30915,8 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     withBrowserLogs(options?: WithBrowserLogsOptions): TestVaultResourcePromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new TestVaultResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new TestVaultResourcePromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
@@ -35133,10 +35156,11 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withBrowserLogsInternal(browser?: string, profile?: string): Promise<ResourceWithEndpoints> {
+    private async _withBrowserLogsInternal(browser?: string, profile?: string, userDataMode?: BrowserUserDataMode): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (browser !== undefined) rpcArgs.browser = browser;
         if (profile !== undefined) rpcArgs.profile = profile;
+        if (userDataMode !== undefined) rpcArgs.userDataMode = userDataMode;
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
             'Aspire.Hosting/withBrowserLogs',
             rpcArgs
@@ -35148,7 +35172,8 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     withBrowserLogs(options?: WithBrowserLogsOptions): ResourceWithEndpointsPromise {
         const browser = options?.browser;
         const profile = options?.profile;
-        return new ResourceWithEndpointsPromiseImpl(this._withBrowserLogsInternal(browser, profile), this._client);
+        const userDataMode = options?.userDataMode;
+        return new ResourceWithEndpointsPromiseImpl(this._withBrowserLogsInternal(browser, profile, userDataMode), this._client);
     }
 
     /** @internal */
