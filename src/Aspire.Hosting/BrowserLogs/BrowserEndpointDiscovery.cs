@@ -9,8 +9,15 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Hosting;
 
 // Bridges owned and adopted hosts by persisting and validating the browser-level CDP endpoint for a shared
-// user-data directory. The registry treats this metadata as a hint only; this type proves the endpoint is live before
-// an existing browser can be adopted.
+// user-data directory.
+//
+// Why this exists:
+// - Chromium's singleton is keyed by the user data root, not by Aspire. If Aspire already launched a debug-enabled
+//   browser for that root, a later browser-log session should attach to it instead of starting another process.
+// - Chromium's DevToolsActivePort file is only a launch-time hand-off file and isn't enough for cross-session adoption.
+//   We write our own sidecar with the exact browser identity and endpoint we proved during startup.
+// - The sidecar is intentionally treated as a hint. Users can close the browser, edit/delete files, or reuse ports, so
+//   every read revalidates schema, identity, PID liveness, endpoint reachability, and profile compatibility.
 internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager> logger)
 {
     private static readonly TimeSpan s_probeHttpClientTimeout = Timeout.InfiniteTimeSpan;
@@ -24,6 +31,9 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
 
     private readonly ILogger<BrowserLogsSessionManager> _logger = logger;
 
+    // Aspire sidecar file stored at the Chromium user data root next to browser singleton files such as
+    // SingletonLock and DevToolsActivePort. Keeping it under the user data root makes the adoption state specific to
+    // the same browser singleton boundary that Chromium itself uses.
     public static string GetEndpointMetadataFilePath(string userDataDirectory) =>
         Path.Combine(userDataDirectory, "aspire-debug-endpoint.json");
 
@@ -55,6 +65,9 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         var metadataExecutablePath = TryNormalizePath(metadata?.ExecutablePath);
         var metadataUserDataRootPath = TryNormalizePath(metadata?.UserDataRootPath);
 
+        // Cheap structural checks come first so clearly stale files are removed before any process or network probe.
+        // Executable and user-data paths are normalized before comparison because the sidecar may have been written by a
+        // previous AppHost process with different slash/casing/trailing-separator spelling.
         if (metadata is null ||
             metadata.SchemaVersion != BrowserDebugEndpointMetadata.CurrentSchemaVersion ||
             metadata.ProcessId <= 0 ||
@@ -113,6 +126,19 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
     {
         var metadataPath = GetEndpointMetadataFilePath(identity.UserDataRootPath);
         var tempPath = $"{metadataPath}.{Guid.NewGuid():N}.tmp";
+        // The sidecar captures the identity that was used to launch the owned browser, not just the endpoint URL. That
+        // lets a future AppHost reject metadata from a different browser executable or user-data root before connecting.
+        //
+        // Example:
+        // {
+        //   "schemaVersion": 1,
+        //   "endpoint": "ws://127.0.0.1:50981/devtools/browser/<id>",
+        //   "processId": 12345,
+        //   "executablePath": "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+        //   "userDataRootPath": "/Users/me/Library/Application Support/Microsoft Edge",
+        //   "profileDirectoryName": "Profile 1",
+        //   "createdAt": "2026-04-25T19:37:25Z"
+        // }
         var metadata = new BrowserDebugEndpointMetadata
         {
             SchemaVersion = BrowserDebugEndpointMetadata.CurrentSchemaVersion,
@@ -126,6 +152,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
 
         try
         {
+            // Write through a temp file and then replace so readers never see a partially-written JSON document. A
+            // malformed document is handled as stale, but atomic replacement avoids unnecessary delete/restart cycles.
             using (var stream = File.Create(tempPath))
             {
                 await JsonSerializer.SerializeAsync(stream, metadata, BrowserEndpointJsonContext.Default.BrowserDebugEndpointMetadata, cancellationToken).ConfigureAwait(false);
@@ -179,6 +207,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
 
     private static async Task<bool> ProbeBrowserEndpointAsync(Uri browserEndpoint, CancellationToken cancellationToken)
     {
+        // BrowserHost.DebugEndpoint is a websocket URL. Chromium exposes the matching HTTP endpoint by swapping
+        // ws/wss -> http/https and reading /json/version from the same authority.
         var versionEndpoint = new UriBuilder(browserEndpoint)
         {
             Scheme = browserEndpoint.Scheme == Uri.UriSchemeWss ? Uri.UriSchemeHttps : Uri.UriSchemeHttp,
@@ -216,6 +246,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
                 return null;
             }
 
+            // Unix Chromium SingletonLock symlinks are usually shaped like "<hostname>-<pid>". The host segment can
+            // contain dashes, so parse from the final dash instead of splitting on every dash.
             return int.TryParse(linkTarget.AsSpan(separatorIndex + 1), out var pid) ? pid : null;
         }
         catch (IOException)
