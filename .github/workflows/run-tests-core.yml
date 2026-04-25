@@ -14,7 +14,7 @@
 # NOTE: This workflow is at nesting level 3 (caller → this → run-tests.yml).
 # GitHub Actions allows max 4 levels. Do NOT add reusable workflow calls inside
 # run-tests.yml or this chain will break.
-name: Run Split Tests
+name: Run Tests
 
 on:
   workflow_call:
@@ -171,7 +171,7 @@ jobs:
   results:
     if: ${{ always() }}
     runs-on: ubuntu-latest
-    name: Split Tests Results
+    name: Test Results
     needs:
       - tests_no_nugets
       - tests_no_nugets_overflow
