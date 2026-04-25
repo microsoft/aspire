@@ -337,6 +337,15 @@ internal sealed record BrowserLogsRequestWillBeSentEvent(string? SessionId, Brow
 internal sealed record BrowserLogsResponseReceivedEvent(string? SessionId, BrowserLogsResponseReceivedParameters Parameters)
     : BrowserLogsProtocolEvent(BrowserLogsProtocol.NetworkResponseReceivedMethod, SessionId);
 
+// Target lifecycle events differ from page-domain events in routing semantics:
+// - For Page/Runtime/Network/Log events, BrowserLogsProtocolEvent.SessionId is the attached page session and
+//   the dispatcher routes by matching it against the tracked target's session id.
+// - For Target.targetDestroyed/targetCrashed and Inspector.detached, the envelope-level sessionId is typically
+//   absent (these are fired on the browser CDP channel, not on a target session). The SUBJECT of the event is
+//   carried in the parameters: targetId for target events, the parent attached sessionId for the implicit
+//   detach. Routing logic must not rely on BrowserLogsProtocolEvent.SessionId for these.
+// - For Target.detachedFromTarget specifically, params.sessionId identifies the session that detached, which is
+//   the value that should be matched against the tracked target's session id.
 internal sealed record BrowserLogsTargetDestroyedEvent(string? SessionId, BrowserLogsTargetDestroyedParameters Parameters)
     : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetDestroyedMethod, SessionId);
 

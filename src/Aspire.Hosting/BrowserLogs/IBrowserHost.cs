@@ -37,12 +37,60 @@ internal interface IBrowserHost : IAsyncDisposable
 }
 
 // Stable identity used by the host registry to decide whether two requests can share a host. Two settings that
-// produce the same identity must be safe to back with the same host. Profile directory is part of the identity
-// because the same user data root with two different profiles requires two browser processes.
-internal readonly record struct BrowserHostIdentity(
-    string ExecutablePath,
-    string UserDataRootPath,
-    string? ProfileDirectory);
+// produce the same identity must be safe to back with the same browser process.
+//
+// Keyed by (executable, user-data-root) only. Profile directory is intentionally NOT part of the identity:
+// Chromium's singleton is keyed by user-data-dir, so launches for different profiles under the same user data
+// root are forwarded into the same browser process. Profile selection is therefore a per-target concern, not a
+// per-host concern.
+//
+// Both paths are normalized in the constructor: rooted via Path.GetFullPath, trailing separators trimmed, and
+// (on Windows only) compared case-insensitively. This ensures paths that differ only in casing, slashes, or a
+// trailing separator collapse to the same identity, so the registry actually shares hosts in practice.
+internal readonly struct BrowserHostIdentity : IEquatable<BrowserHostIdentity>
+{
+    private static readonly StringComparer s_pathComparer =
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    public BrowserHostIdentity(string executablePath, string userDataRootPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(userDataRootPath);
+
+        ExecutablePath = NormalizePath(executablePath);
+        UserDataRootPath = NormalizePath(userDataRootPath);
+    }
+
+    public string ExecutablePath { get; }
+
+    public string UserDataRootPath { get; }
+
+    public bool Equals(BrowserHostIdentity other) =>
+        s_pathComparer.Equals(ExecutablePath, other.ExecutablePath) &&
+        s_pathComparer.Equals(UserDataRootPath, other.UserDataRootPath);
+
+    public override bool Equals(object? obj) => obj is BrowserHostIdentity other && Equals(other);
+
+    // Defensive against default(BrowserHostIdentity) which leaves the path strings null. StringComparer
+    // throws on null, so coalesce to empty before hashing. A default-constructed identity is never a valid
+    // registry key but should not crash if one accidentally ends up in a hash set.
+    public override int GetHashCode() =>
+        HashCode.Combine(
+            s_pathComparer.GetHashCode(ExecutablePath ?? string.Empty),
+            s_pathComparer.GetHashCode(UserDataRootPath ?? string.Empty));
+
+    public override string ToString() => $"{ExecutablePath} ({UserDataRootPath})";
+
+    public static bool operator ==(BrowserHostIdentity left, BrowserHostIdentity right) => left.Equals(right);
+
+    public static bool operator !=(BrowserHostIdentity left, BrowserHostIdentity right) => !left.Equals(right);
+
+    private static string NormalizePath(string path)
+    {
+        var rooted = Path.IsPathRooted(path) ? path : Path.GetFullPath(path);
+        return Path.TrimEndingDirectorySeparator(rooted);
+    }
+}
 
 internal enum BrowserHostOwnership
 {
