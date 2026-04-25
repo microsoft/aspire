@@ -5,6 +5,8 @@
 
 namespace Aspire.Hosting;
 
+// Represents the user-data root and optional profile directory chosen for a host acquisition. Persistent instances
+// point at a real browser profile root and are never deleted; temporary instances own the isolated directory lifetime.
 internal sealed class BrowserLogsUserDataDirectory : IDisposable
 {
     private readonly TempDirectory? _temporaryDirectory;

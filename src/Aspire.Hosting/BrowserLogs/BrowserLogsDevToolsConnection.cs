@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-// Owns the browser-level websocket only. Protocol parsing stays in BrowserLogsProtocol and
-// higher-level recovery stays in BrowserLogsRunningSession.
+// Owns the browser-level websocket only. Protocol parsing stays in BrowserLogsProtocol, while target lifecycle and
+// reconnection policy stay in BrowserTargetSession.
 internal sealed class ChromeDevToolsConnection : IAsyncDisposable
 {
     private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(3);
@@ -107,6 +107,10 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
 
     public Task<BrowserLogsCommandAck> EnableTargetDiscoveryAsync(CancellationToken cancellationToken)
     {
+        // Target discovery is a browser-level CDP subscription. Enabling it tells Chromium to publish lifecycle
+        // events for page targets (created, destroyed, crashed, detached) on this browser websocket. We need those
+        // events to decide whether a tracked tab ended normally, crashed, or only lost its CDP socket and can be
+        // reattached. Target.getTargets is just a point-in-time snapshot; setDiscoverTargets is the ongoing signal.
         return SendCommandAsync(
             BrowserLogsProtocol.TargetSetDiscoverTargetsMethod,
             sessionId: null,
@@ -357,6 +361,8 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
     }
 }
 
+// Test seam for websocket creation. Production code uses ClientWebSocketConnector; protocol/recovery tests can inject
+// a connector that fails or returns a controlled socket without depending on a real browser.
 internal interface IClientWebSocketConnector : IDisposable
 {
     void SetKeepAliveInterval(TimeSpan interval);
@@ -366,6 +372,8 @@ internal interface IClientWebSocketConnector : IDisposable
     ClientWebSocket DetachConnectedWebSocket();
 }
 
+// Thin ownership wrapper around ClientWebSocket. It lets ChromeDevToolsConnection transfer the connected socket into
+// the receive/send pipeline while still disposing the socket on connection failures.
 internal sealed class ClientWebSocketConnector : IClientWebSocketConnector
 {
     private ClientWebSocket? _webSocket = new();

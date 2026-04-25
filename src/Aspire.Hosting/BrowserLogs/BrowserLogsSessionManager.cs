@@ -12,6 +12,8 @@ using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting;
 
+// Coordinates browser-log commands with dashboard resource state. The running session owns CDP capture; this manager
+// owns session ids, resource logs, health reports, and snapshot properties that make failures diagnosable in the dashboard.
 internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IAsyncDisposable
 {
     private static readonly JsonSerializerOptions s_browserSessionPropertyJsonOptions = new(JsonSerializerDefaults.Web);
@@ -74,6 +76,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceState.LastTargetUrl = url.ToString();
             resourceState.LastBrowser = settings.Browser;
             resourceState.LastBrowserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(settings.Browser);
+            if (resourceState.ActiveSessions.Count == 0)
+            {
+                resourceState.LastBrowserHostOwnership = null;
+            }
+            resourceState.LastError = null;
             resourceState.LastProfile = settings.Profile;
 
             var resourceLogger = _resourceLoggerService.GetLogger(resourceName);
@@ -105,6 +112,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
             catch (Exception ex)
             {
+                resourceState.LastError = BrowserConnectionDiagnosticsLogger.DescribeConnectionProblem(ex);
                 resourceLogger.LogError(ex, "[{SessionId}] Failed to open tracked browser for '{Url}'.", sessionId, url);
 
                 await PublishResourceSnapshotAsync(
@@ -122,6 +130,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
 
             resourceState.LastBrowserExecutable = session.BrowserExecutable;
+            resourceState.LastBrowserHostOwnership = session.BrowserHostOwnership.ToString();
+            resourceState.LastError = null;
             var completionObserver = session.StartCompletionObserver(async (exitCode, error) =>
             {
                 await HandleSessionCompletedAsync(resource, resourceName, resourceState, session.SessionId, exitCode, error).ConfigureAwait(false);
@@ -133,6 +143,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 session.BrowserExecutable,
                 settings.Profile,
                 session.BrowserDebugEndpoint,
+                session.BrowserHostOwnership.ToString(),
                 session.ProcessId,
                 session.StartedAt,
                 session.TargetId,
@@ -223,11 +234,16 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 return;
             }
 
+            if (error is not null)
+            {
+                resourceState.LastError = BrowserConnectionDiagnosticsLogger.DescribeConnectionProblem(error);
+            }
+
             var completedAt = _timeProvider.GetUtcNow().UtcDateTime;
             var hasActiveSessions = resourceState.ActiveSessions.Count > 0;
             var (stateText, stateStyle) = hasActiveSessions
                 ? (KnownResourceStates.Running, KnownResourceStateStyles.Success)
-                : error switch
+                : resourceState.LastError switch
                 {
                     not null => (KnownResourceStates.Exited, KnownResourceStateStyles.Error),
                     null when exitCode is null or 0 => (KnownResourceStates.Finished, KnownResourceStateStyles.Success),
@@ -304,6 +320,17 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 LastRunAt = runAt
             });
         }
+        else if (resourceState.LastError is not null)
+        {
+            reports.Add(new HealthReportSnapshot(
+                BrowserLogsBuilderExtensions.LastErrorPropertyName,
+                HealthStatus.Unhealthy,
+                resourceState.LastError,
+                null)
+            {
+                LastRunAt = runAt
+            });
+        }
 
         return [.. reports];
     }
@@ -329,6 +356,16 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         {
             yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable);
         }
+
+        if (resourceState.LastBrowserHostOwnership is not null)
+        {
+            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership);
+        }
+
+        if (resourceState.LastError is not null)
+        {
+            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.LastErrorPropertyName, resourceState.LastError);
+        }
     }
 
     private static ImmutableArray<ResourcePropertySnapshot> UpdateProperties(
@@ -343,6 +380,14 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         properties = resourceState.LastBrowserExecutable is not null
             ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable)
             : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName);
+
+        properties = resourceState.LastBrowserHostOwnership is not null
+            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership)
+            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName);
+
+        properties = resourceState.LastError is not null
+            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.LastErrorPropertyName, resourceState.LastError)
+            : RemoveProperty(properties, BrowserLogsBuilderExtensions.LastErrorPropertyName);
 
         properties = resourceState.LastProfile is not null
             ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
@@ -398,6 +443,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 session.Profile,
                 session.StartedAt,
                 session.TargetUrl.ToString(),
+                session.BrowserHostOwnership,
                 session.BrowserDebugEndpoint.ToString(),
                 GetPageDebugEndpoint(session.BrowserDebugEndpoint, session.TargetId),
                 session.TargetId))
@@ -430,6 +476,10 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
         public string? LastBrowserExecutable { get; set; }
 
+        public string? LastBrowserHostOwnership { get; set; }
+
+        public string? LastError { get; set; }
+
         public string? LastBrowser { get; set; }
 
         public string? LastProfile { get; set; }
@@ -444,6 +494,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string BrowserExecutable,
         string? Profile,
         Uri BrowserDebugEndpoint,
+        string BrowserHostOwnership,
         int? ProcessId,
         DateTime StartedAt,
         string TargetId,
@@ -459,6 +510,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string? Profile,
         DateTime StartedAt,
         string TargetUrl,
+        string BrowserHostOwnership,
         string CdpEndpoint,
         string PageCdpEndpoint,
         string TargetId);

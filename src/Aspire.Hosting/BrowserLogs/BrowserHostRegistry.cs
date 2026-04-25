@@ -7,6 +7,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+// Coordinates host sharing for all tracked browser sessions in an AppHost. The registry is the only component that
+// decides whether a request reuses an in-process host, adopts a previously launched debug-enabled browser, or starts a
+// new owned browser, and it centralizes reference counting for those choices.
 internal sealed class BrowserHostRegistry : IAsyncDisposable
 {
     private readonly BrowserEndpointDiscovery _endpointDiscovery;
@@ -44,6 +47,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             {
                 ValidateProfileCompatibility(identity, entry.ProfileDirectoryName, userDataDirectory.ProfileDirectoryName);
                 entry.ReferenceCount++;
+                _logger.LogInformation("Reusing tracked browser host '{BrowserExecutable}' at '{Endpoint}'. Active leases: {ReferenceCount}.", identity.ExecutablePath, entry.Host.DebugEndpoint, entry.ReferenceCount);
                 userDataDirectory.Dispose();
                 return new BrowserHostLease(entry.Host, releaseAsync: token => ReleaseAsync(identity, token));
             }

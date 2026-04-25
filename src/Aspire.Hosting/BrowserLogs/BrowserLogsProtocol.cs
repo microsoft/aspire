@@ -49,6 +49,9 @@ internal static class BrowserLogsProtocol
     internal const string TargetCreateTargetMethod = "Target.createTarget";
     internal const string TargetDetachedFromTargetMethod = "Target.detachedFromTarget";
     internal const string TargetGetTargetsMethod = "Target.getTargets";
+    // Turns on browser-level target discovery. In CDP a "target" is a debuggable entity such as a page/tab, worker,
+    // or iframe. We use this subscription for page target lifecycle events; without it, closing or crashing the
+    // tracked tab can look like an unexplained connection loss.
     internal const string TargetSetDiscoverTargetsMethod = "Target.setDiscoverTargets";
     internal const string TargetTargetCrashedMethod = "Target.targetCrashed";
     internal const string TargetTargetDestroyedMethod = "Target.targetDestroyed";

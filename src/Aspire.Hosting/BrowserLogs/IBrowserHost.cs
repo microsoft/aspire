@@ -33,6 +33,7 @@ internal interface IBrowserHost : IAsyncDisposable
     Task<IBrowserTargetSession> CreateTargetSessionAsync(
         string sessionId,
         Uri url,
+        BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken);
 }
@@ -48,8 +49,12 @@ internal interface IBrowserTargetSession : IAsyncDisposable
     Task<BrowserTargetSessionResult> Completion { get; }
 }
 
+// Normalized target-session completion signal consumed by BrowserLogsRunningSession so manager state is independent of
+// the exact CDP event or transport failure that ended the target.
 internal readonly record struct BrowserTargetSessionResult(BrowserTargetSessionCompletionKind CompletionKind, Exception? Error);
 
+// Small vocabulary for target lifecycle outcomes. The manager uses this to distinguish normal tab closes from crashes
+// or unrecoverable browser connection loss.
 internal enum BrowserTargetSessionCompletionKind
 {
     Stopped,
@@ -59,6 +64,8 @@ internal enum BrowserTargetSessionCompletionKind
     ConnectionLost
 }
 
+// Reference-counted registry handle returned to each running session. Disposing the lease is the only way a session
+// releases a shared host, which keeps owned/adopted browser lifetime centralized in BrowserHostRegistry.
 internal sealed class BrowserHostLease : IAsyncDisposable
 {
     private readonly Func<CancellationToken, ValueTask> _releaseAsync;
@@ -140,6 +147,8 @@ internal readonly struct BrowserHostIdentity : IEquatable<BrowserHostIdentity>
     }
 }
 
+// Describes who owns the browser process behind a host. Session disposal uses this to avoid closing a real user browser
+// when Aspire merely adopted an existing debug endpoint.
 internal enum BrowserHostOwnership
 {
     // We launched the browser process. Disposing the host kills the process and deletes our endpoint metadata.

@@ -21,6 +21,7 @@ public static class BrowserLogsBuilderExtensions
     internal const string BrowserConfigurationKey = "Browser";
     internal const string BrowserPropertyName = "Browser";
     internal const string BrowserExecutablePropertyName = "Browser executable";
+    internal const string BrowserHostOwnershipPropertyName = "Browser host ownership";
     internal const string ProfileConfigurationKey = "Profile";
     internal const string ProfilePropertyName = "Profile";
     internal const string UserDataModeConfigurationKey = "UserDataMode";
@@ -31,6 +32,7 @@ public static class BrowserLogsBuilderExtensions
     internal const string BrowserSessionsPropertyName = "Browser sessions";
     internal const string ActiveSessionCountPropertyName = "Active session count";
     internal const string TotalSessionsLaunchedPropertyName = "Total sessions launched";
+    internal const string LastErrorPropertyName = "Last error";
     internal const string LastSessionPropertyName = "Last session";
     internal const string OpenTrackedBrowserCommandName = "open-tracked-browser";
 

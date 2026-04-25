@@ -5,12 +5,16 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+// Owns one browser target (tab) for one browser-log session. The host may be shared by many sessions, but each
+// BrowserTargetSession has its own browser CDP connection, attached target session id, instrumentation setup,
+// lifecycle monitoring, and reconnection loop.
 internal sealed class BrowserTargetSession : IBrowserTargetSession
 {
     private static readonly TimeSpan s_connectionRecoveryDelay = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan s_connectionRecoveryTimeout = TimeSpan.FromSeconds(5);
 
     private readonly TaskCompletionSource<BrowserTargetSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
     private readonly Func<BrowserLogsProtocolEvent, ValueTask> _eventHandler;
     private readonly IBrowserHost _host;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
@@ -30,11 +34,13 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         IBrowserHost host,
         string sessionId,
         Uri url,
+        BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget)
     {
+        _connectionDiagnostics = connectionDiagnostics;
         _eventHandler = eventHandler;
         _host = host;
         _logger = logger;
@@ -54,13 +60,14 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         IBrowserHost host,
         string sessionId,
         Uri url,
+        BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget,
         CancellationToken cancellationToken)
     {
-        var targetSession = new BrowserTargetSession(host, sessionId, url, eventHandler, logger, timeProvider, reuseInitialBlankTarget);
+        var targetSession = new BrowserTargetSession(host, sessionId, url, connectionDiagnostics, eventHandler, logger, timeProvider, reuseInitialBlankTarget);
         try
         {
             await targetSession.ConnectAsync(createTarget: true, cancellationToken).ConfigureAwait(false);
@@ -120,6 +127,9 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         await DisposeConnectionAsync().ConfigureAwait(false);
 
         _connection = await ChromeDevToolsConnection.ConnectAsync(_host.DebugEndpoint, HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
+        // Target discovery must be re-enabled for every browser-level connection, including reconnects. The
+        // subscription is attached to this websocket, not to the browser process, and it is what makes Chromium emit
+        // targetDestroyed/targetCrashed/detachedFromTarget events that tell us whether the tracked tab is gone.
         await _connection.EnableTargetDiscoveryAsync(cancellationToken).ConfigureAwait(false);
 
         if (createTarget)
@@ -176,7 +186,9 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
                 if (completedTask == _host.Termination)
                 {
-                    return new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.BrowserExited, Error: null);
+                    var error = new InvalidOperationException($"Tracked browser host '{_host.Identity}' ended before the target session completed.");
+                    _connectionDiagnostics.LogHostTerminated(error);
+                    return new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.BrowserExited, error);
                 }
 
                 Exception? connectionError = null;
@@ -195,6 +207,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
                 }
 
                 connectionError ??= new InvalidOperationException("The tracked browser debug connection closed without reporting a reason.");
+                _connectionDiagnostics.LogConnectionLost(connectionError);
                 if (await TryReconnectAsync(connectionError).ConfigureAwait(false))
                 {
                     continue;
@@ -214,6 +227,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         await DisposeConnectionAsync().ConfigureAwait(false);
 
         var reconnectDeadline = _timeProvider.GetUtcNow() + s_connectionRecoveryTimeout;
+        var reconnectAttempt = 0;
         Exception? lastError = connectionError;
 
         while (!_stopCts.IsCancellationRequested && _timeProvider.GetUtcNow() < reconnectDeadline)
@@ -235,6 +249,8 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
             catch (Exception ex)
             {
                 lastError = ex;
+                reconnectAttempt++;
+                _connectionDiagnostics.LogReconnectAttemptFailed(reconnectAttempt, ex);
                 await DisposeConnectionAsync().ConfigureAwait(false);
             }
 
@@ -250,6 +266,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
         if (lastError is not null)
         {
+            _connectionDiagnostics.LogReconnectFailed(lastError);
             _logger.LogDebug(lastError, "Timed out reconnecting tracked browser target session '{SessionId}'.", _sessionId);
         }
 

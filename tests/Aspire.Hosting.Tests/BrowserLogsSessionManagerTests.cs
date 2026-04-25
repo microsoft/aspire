@@ -106,6 +106,39 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public async Task BrowserEndpointDiscovery_DeletesMalformedEndpointMetadata()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var identity = new BrowserHostIdentity(
+                Path.Combine(userDataDirectory.FullName, "browser"),
+                userDataDirectory.FullName);
+            var metadataPath = BrowserEndpointDiscovery.GetEndpointMetadataFilePath(userDataDirectory.FullName);
+            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserLogsSessionManager>.Instance);
+            await File.WriteAllTextAsync(
+                metadataPath,
+                $$"""
+                {
+                  "schemaVersion": 1,
+                  "endpoint": "ws://127.0.0.1:9/devtools/browser/stale",
+                  "processId": {{Environment.ProcessId}},
+                  "userDataRootPath": {{System.Text.Json.JsonSerializer.Serialize(userDataDirectory.FullName)}}
+                }
+                """);
+
+            var metadata = await discovery.TryReadAndValidateAsync(identity, profileDirectoryName: null, CancellationToken.None);
+
+            Assert.Null(metadata);
+            Assert.False(File.Exists(metadataPath));
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task BrowserEndpointDiscovery_ThrowsForLiveEndpointWithDifferentProfile()
     {
         var userDataDirectory = Directory.CreateTempSubdirectory();
@@ -459,6 +492,7 @@ public class BrowserLogsSessionManagerTests
         public Task<IBrowserTargetSession> CreateTargetSessionAsync(
             string sessionId,
             Uri url,
+            BrowserConnectionDiagnosticsLogger connectionDiagnostics,
             Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();

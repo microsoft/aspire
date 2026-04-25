@@ -8,6 +8,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+// Bridges owned and adopted hosts by persisting and validating the browser-level CDP endpoint for a shared
+// user-data directory. The registry treats this metadata as a hint only; this type proves the endpoint is live before
+// an existing browser can be adopted.
 internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager> logger)
 {
     private static readonly TimeSpan s_probeTimeout = TimeSpan.FromSeconds(2);
@@ -38,11 +41,18 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             return null;
         }
 
+        var metadataExecutablePath = TryNormalizePath(metadata?.ExecutablePath);
+        var metadataUserDataRootPath = TryNormalizePath(metadata?.UserDataRootPath);
+
         if (metadata is null ||
             metadata.SchemaVersion != BrowserDebugEndpointMetadata.CurrentSchemaVersion ||
+            metadata.ProcessId <= 0 ||
+            string.IsNullOrWhiteSpace(metadata.Endpoint) ||
             !Uri.TryCreate(metadata.Endpoint, UriKind.Absolute, out var endpoint) ||
-            !string.Equals(NormalizePath(metadata.ExecutablePath), identity.ExecutablePath, GetPathComparison()) ||
-            !string.Equals(NormalizePath(metadata.UserDataRootPath), identity.UserDataRootPath, GetPathComparison()))
+            metadataExecutablePath is null ||
+            metadataUserDataRootPath is null ||
+            !string.Equals(metadataExecutablePath, identity.ExecutablePath, GetPathComparison()) ||
+            !string.Equals(metadataUserDataRootPath, identity.UserDataRootPath, GetPathComparison()))
         {
             TryDelete(metadataPath);
             return null;
@@ -126,6 +136,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         try
         {
             singletonLock = new FileInfo(singletonLockPath);
+            // Broken Unix symlinks can report Exists=false while still exposing the host-pid LinkTarget we need.
             if (!singletonLock.Exists && string.IsNullOrWhiteSpace(singletonLock.LinkTarget))
             {
                 return false;
@@ -218,6 +229,31 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
 
     private static string NormalizePath(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 
+    private static string? TryNormalizePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return NormalizePath(path);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
+    }
+
     private static StringComparison GetPathComparison() =>
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
@@ -236,6 +272,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
     }
 }
 
+// On-disk adoption hint written by an owned host. A matching file never proves adoption is safe by itself; it must be
+// validated against the requested identity, profile, process, and /json/version endpoint first.
 internal sealed record BrowserDebugEndpointMetadata
 {
     public const int CurrentSchemaVersion = 1;
@@ -255,6 +293,7 @@ internal sealed record BrowserDebugEndpointMetadata
     public DateTimeOffset CreatedAt { get; init; }
 }
 
+// Source-generated JSON context for the small metadata file exchanged between owned and adopted host paths.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(BrowserDebugEndpointMetadata))]
 internal sealed partial class BrowserEndpointJsonContext : JsonSerializerContext;

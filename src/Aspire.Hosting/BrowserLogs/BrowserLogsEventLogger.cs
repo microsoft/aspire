@@ -427,6 +427,11 @@ internal sealed class BrowserConnectionDiagnosticsLogger(string sessionId, ILogg
         _resourceLogger.LogError("[{SessionId}] Unable to reconnect tracked browser debug connection. Closing the tracked browser session. Last error: {Reason}", _sessionId, DescribeConnectionProblem(exception));
     }
 
+    public void LogHostTerminated(Exception exception)
+    {
+        _resourceLogger.LogError("[{SessionId}] Tracked browser host ended before the tracked target session completed: {Reason}", _sessionId, DescribeConnectionProblem(exception));
+    }
+
     internal static string DescribeConnectionProblem(Exception exception)
     {
         var messages = new List<string>();

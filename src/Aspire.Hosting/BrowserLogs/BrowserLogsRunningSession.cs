@@ -18,6 +18,8 @@ internal interface IBrowserLogsRunningSession
 
     Uri BrowserDebugEndpoint { get; }
 
+    BrowserHostOwnership BrowserHostOwnership { get; }
+
     int? ProcessId { get; }
 
     DateTime StartedAt { get; }
@@ -95,6 +97,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private string? _browserExecutable;
     private Uri? _browserEndpoint;
     private BrowserHostLease? _browserHostLease;
+    private BrowserHostOwnership? _browserHostOwnership;
     private Task<BrowserSessionResult>? _completion;
     private int _cleanupState;
     private int? _processId;
@@ -129,6 +132,8 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     public string BrowserExecutable => _browserExecutable ?? throw new InvalidOperationException("Browser executable is not available before the session starts.");
 
     public Uri BrowserDebugEndpoint => _browserEndpoint ?? throw new InvalidOperationException("Browser debugging endpoint is not available before the session starts.");
+
+    public BrowserHostOwnership BrowserHostOwnership => _browserHostOwnership ?? throw new InvalidOperationException("Browser host ownership is not available before the session starts.");
 
     public int? ProcessId => _processId;
 
@@ -187,6 +192,13 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
+        _resourceLogger.LogInformation(
+            "[{SessionId}] Resolving tracked browser host. User data mode: {UserDataMode}; browser: '{Browser}'; profile: '{Profile}'.",
+            _sessionId,
+            _settings.UserDataMode,
+            _settings.Browser,
+            _settings.Profile ?? "(default)");
+
         try
         {
             _browserHostLease = await _browserHostRegistry.AcquireAsync(_settings, cancellationToken).ConfigureAwait(false);
@@ -200,6 +212,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         var browserHost = _browserHostLease.Host;
         _browserExecutable = browserHost.Identity.ExecutablePath;
         _browserEndpoint = browserHost.DebugEndpoint;
+        _browserHostOwnership = browserHost.Ownership;
         _processId = browserHost.ProcessId;
         StartedAt = _timeProvider.GetUtcNow().UtcDateTime;
         _resourceLogger.LogInformation(
@@ -214,6 +227,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             _targetSession = await browserHost.CreateTargetSessionAsync(
                 _sessionId,
                 _url,
+                _connectionDiagnostics,
                 protocolEvent =>
                 {
                     _eventLogger.HandleEvent(protocolEvent);
@@ -222,6 +236,11 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
                 cancellationToken).ConfigureAwait(false);
             _targetId = _targetSession.TargetId;
             _targetSessionId = _targetSession.TargetSessionId;
+            _resourceLogger.LogInformation(
+                "[{SessionId}] Attached to tracked browser target '{TargetId}' with target session '{TargetSessionId}'.",
+                _sessionId,
+                _targetId,
+                _targetSessionId);
         }
         catch (Exception ex)
         {

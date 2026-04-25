@@ -8,6 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+// Base implementation for browser hosts. It centralizes the shared mechanics for creating per-tab target sessions
+// while concrete hosts decide who owns the browser process lifetime.
 internal abstract class BrowserHost(
     BrowserHostIdentity identity,
     BrowserHostOwnership ownership,
@@ -36,10 +38,11 @@ internal abstract class BrowserHost(
     public Task<IBrowserTargetSession> CreateTargetSessionAsync(
         string sessionId,
         Uri url,
+        BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken)
     {
-        return CreateTargetSessionCoreAsync(sessionId, url, eventHandler, cancellationToken);
+        return CreateTargetSessionCoreAsync(sessionId, url, connectionDiagnostics, eventHandler, cancellationToken);
     }
 
     public abstract ValueTask DisposeAsync();
@@ -70,6 +73,7 @@ internal abstract class BrowserHost(
     private async Task<IBrowserTargetSession> CreateTargetSessionCoreAsync(
         string sessionId,
         Uri url,
+        BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken)
     {
@@ -77,6 +81,7 @@ internal abstract class BrowserHost(
             this,
             sessionId,
             url,
+            connectionDiagnostics,
             eventHandler,
             _logger,
             _timeProvider,
@@ -85,6 +90,8 @@ internal abstract class BrowserHost(
     }
 }
 
+// Host implementation for browsers Aspire starts itself. Owned hosts are responsible for spawning Chromium with a
+// browser-level CDP endpoint, writing adoption metadata, and terminating the browser when the final lease is released.
 internal sealed class OwnedBrowserHost : BrowserHost
 {
     private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
@@ -283,6 +290,8 @@ internal sealed class OwnedBrowserHost : BrowserHost
     }
 }
 
+// Host implementation for browsers Aspire discovers from validated endpoint metadata. Adopted hosts create and close
+// tracked targets, but never terminate the browser process because it may be the user's normal browser.
 internal sealed class AdoptedBrowserHost : BrowserHost
 {
     private readonly TaskCompletionSource _terminationSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
