@@ -9,32 +9,69 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	_ = builder.AddAzureKeyVault("resource")
+	keyVault := builder.AddAzureKeyVault("vault")
+	if keyVault.Err() != nil {
+		log.Fatalf(aspire.FormatError(keyVault.Err()))
+	}
 
-	cache := builder.AddAzureManagedRedis("resource")
+	cache := builder.AddAzureManagedRedis("cache")
+	if cache.Err() != nil {
+		log.Fatalf(aspire.FormatError(cache.Err()))
+	}
 
-	accessKeyCache := builder.AddAzureManagedRedis("resource")
+	accessKeyCache := builder.AddAzureManagedRedis("cache-access-key")
+	if accessKeyCache.Err() != nil {
+		log.Fatalf(aspire.FormatError(accessKeyCache.Err()))
+	}
 
-	containerCache := builder.AddAzureManagedRedis("resource")
+	containerCache := builder.AddAzureManagedRedis("cache-container")
+	if containerCache.Err() != nil {
+		log.Fatalf(aspire.FormatError(containerCache.Err()))
+	}
 
 	accessKeyCache.WithAccessKeyAuthentication()
-	accessKeyCache.WithAccessKeyAuthenticationWithKeyVault(nil)
-	containerCache.RunAsContainer(nil)
+	accessKeyCache.WithAccessKeyAuthenticationWithKeyVault(keyVault)
+	if accessKeyCache.Err() != nil {
+		log.Fatalf(aspire.FormatError(accessKeyCache.Err()))
+	}
 
-	_, _ = cache.ConnectionStringExpression()
-	_, _ = cache.HostName()
-	_, _ = cache.Port()
-	_, _ = cache.UriExpression()
+	containerCache.RunAsContainer(&aspire.RunAsContainerOptions{
+		ConfigureContainer: func(container aspire.RedisResource) {
+			container.WithVolume("/data")
+		},
+	})
+	if containerCache.Err() != nil {
+		log.Fatalf(aspire.FormatError(containerCache.Err()))
+	}
+
+	_ = cache.ConnectionStringExpression()
+	_ = cache.HostName()
+	_ = cache.Id()
+	_ = cache.NameOutputReference()
+	_ = cache.Port()
+	_ = cache.UriExpression()
 	_, _ = cache.UseAccessKeyAuthentication()
+
+	_ = accessKeyCache.ConnectionStringExpression()
+	_ = accessKeyCache.HostName()
+	_ = accessKeyCache.Password()
+	_ = accessKeyCache.UriExpression()
+	_, _ = accessKeyCache.UseAccessKeyAuthentication()
+
+	_ = containerCache.ConnectionStringExpression()
+	_ = containerCache.HostName()
+	_ = containerCache.Password()
+	_ = containerCache.Port()
+	_ = containerCache.UriExpression()
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

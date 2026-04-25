@@ -9,24 +9,23 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 1. addAzureWebPubSub ──────────────────────────────────────────────────
 	webpubsub := builder.AddAzureWebPubSub("webpubsub")
+	if webpubsub.Err() != nil {
+		log.Fatalf(aspire.FormatError(webpubsub.Err()))
+	}
 
-	// ── 2. addHub — simple (no options) ──────────────────────────────────────
 	hub := webpubsub.AddHub("myhub")
+	if hub.Err() != nil {
+		log.Fatalf(aspire.FormatError(hub.Err()))
+	}
 
-	// ── 3. addHub — with hubName option ──────────────────────────────────────
-	_ = webpubsub.AddHubWithOpts("hub2",
-		&aspire.AddHubOptions{HubName: aspire.StringPtr("customhub")})
+	_ = webpubsub.AddHub("hub2", &aspire.AddHubOptions{HubName: aspire.StringPtr("customhub")})
 
-	// ── 4. addEventHandler — simple (no options) ──────────────────────────────
 	hub.AddEventHandler(aspire.RefExpr("https://example.com/handler"))
-
-	// ── 5. addEventHandler — with userEventPattern and systemEvents ───────────
-	hub.AddEventHandlerWithOpts(
+	hub.AddEventHandler(
 		aspire.RefExpr("https://example.com/handler2"),
 		&aspire.AddEventHandlerOptions{
 			UserEventPattern: aspire.StringPtr("event1"),
@@ -34,38 +33,39 @@ func main() {
 		},
 	)
 
-	// ── 6. container with role assignments and references ─────────────────────
 	container := builder.AddContainer("mycontainer", "mcr.microsoft.com/dotnet/samples:aspnetapp")
+	if container.Err() != nil {
+		log.Fatalf(aspire.FormatError(container.Err()))
+	}
+
 	container.WithWebPubSubRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
 		aspire.AzureWebPubSubRoleWebPubSubServiceOwner,
 		aspire.AzureWebPubSubRoleWebPubSubServiceReader,
 		aspire.AzureWebPubSubRoleWebPubSubContributor,
 	})
 
-	// ── 7. withWebPubSubRoleAssignments on the WebPubSub resource itself ──────
 	webpubsub.WithWebPubSubRoleAssignments(webpubsub, []aspire.AzureWebPubSubRole{
 		aspire.AzureWebPubSubRoleWebPubSubServiceReader,
 	})
 
-	// ── 8. withReference — pass as IResource via handle conversion ────────────
-	container.WithReference(aspire.NewIResource(webpubsub.Handle(), webpubsub.Client()))
-	container.WithReference(aspire.NewIResource(hub.Handle(), hub.Client()))
+	container.WithReference(webpubsub)
+	container.WithReference(hub)
 
-	if err = hub.Err(); err != nil {
-		log.Fatalf("hub: %v", err)
+	if hub.Err() != nil {
+		log.Fatalf(aspire.FormatError(hub.Err()))
 	}
-	if err = container.Err(); err != nil {
-		log.Fatalf("container: %v", err)
+	if container.Err() != nil {
+		log.Fatalf(aspire.FormatError(container.Err()))
 	}
-	if err = webpubsub.Err(); err != nil {
-		log.Fatalf("webpubsub: %v", err)
+	if webpubsub.Err() != nil {
+		log.Fatalf(aspire.FormatError(webpubsub.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

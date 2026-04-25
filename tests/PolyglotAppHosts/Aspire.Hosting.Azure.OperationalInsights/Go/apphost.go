@@ -7,22 +7,22 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	logAnalytics := builder.AddAzureLogAnalyticsWorkspace("logs")
 	logAnalytics.WithUrl("https://example.local/logs")
-	if err = logAnalytics.Err(); err != nil {
-		log.Fatalf("logAnalytics: %v", err)
+	if logAnalytics.Err() != nil {
+		log.Fatalf(aspire.FormatError(logAnalytics.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+	if err := app.Run(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

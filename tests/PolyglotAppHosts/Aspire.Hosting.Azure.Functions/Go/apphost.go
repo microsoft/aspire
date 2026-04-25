@@ -9,27 +9,38 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
+	// ── 1. AddAzureFunctionsProject (path-based overload) ───────────────────────
 	funcApp := builder.AddAzureFunctionsProject("myfunc", "../MyFunctions/MyFunctions.csproj")
+	if funcApp.Err() != nil {
+		log.Fatalf(aspire.FormatError(funcApp.Err()))
+	}
 
+	// ── 2. WithHostStorage — specify custom Azure Storage for Functions host ────
 	storage := builder.AddAzureStorage("funcstorage")
 	funcApp.WithHostStorage(storage)
 
-	chainedFunc := builder.AddAzureFunctionsProject("chained-func", "../OtherFunc/OtherFunc.csproj")
-	chainedFunc.WithHostStorage(storage)
-	chainedFunc.WithEnvironment("MY_KEY", "my-value")
-	chainedFunc.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(7071)})
+	// ── 3. Fluent chaining — verify return types enable chaining ────────────────
+	chainedFunc := builder.
+		AddAzureFunctionsProject("chained-func", "../OtherFunc/OtherFunc.csproj").
+		WithHostStorage(storage).
+		WithEnvironment("MY_KEY", "my-value").
+		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(7071)})
+	if chainedFunc.Err() != nil {
+		log.Fatalf(aspire.FormatError(chainedFunc.Err()))
+	}
 
+	// ── 4. WithReference from base builder — standard resource references ───────
 	anotherStorage := builder.AddAzureStorage("appstorage")
-	funcApp.WithReference(aspire.NewIResource(anotherStorage.Handle(), anotherStorage.Client()))
+	funcApp.WithReference(anotherStorage)
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

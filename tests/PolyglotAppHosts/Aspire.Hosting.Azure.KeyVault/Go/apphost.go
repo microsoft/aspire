@@ -9,44 +9,46 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 1. addAzureKeyVault ──────────────────────────────────────────────────
+	// ── 1. AddAzureKeyVault ──────────────────────────────────────────────────
 	vault := builder.AddAzureKeyVault("vault")
 
-	// ── 2. addParameter (secret params) ──────────────────────────────────────
-	secretParam := builder.AddParameterWithOpts("secret-param",
+	// Parameters for secret-based APIs
+	secretParam := builder.AddParameter("secret-param",
 		&aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
-	namedSecretParam := builder.AddParameterWithOpts("named-secret-param",
+	namedSecretParam := builder.AddParameter("named-secret-param",
 		&aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 
-	// ── 3. withKeyVaultRoleAssignments ────────────────────────────────────────
+	// Reference expressions for expression-based APIs
+	exprSecretValue := aspire.RefExpr("secret-value-%v", secretParam)
+	namedExprSecretValue := aspire.RefExpr("named-secret-value-%v", namedSecretParam)
+
+	// ── 2. WithKeyVaultRoleAssignments ────────────────────────────────────────
 	vault.WithKeyVaultRoleAssignments(vault, []aspire.AzureKeyVaultRole{
 		aspire.AzureKeyVaultRoleKeyVaultReader,
 		aspire.AzureKeyVaultRoleKeyVaultSecretsUser,
 	})
 
-	// ── 4. addSecret ─────────────────────────────────────────────────────────
+	// ── 3. AddSecret ──────────────────────────────────────────────────────────
 	secretFromParameter := vault.AddSecret("param-secret", secretParam)
 
-	// ── 5. addSecretFromExpression ────────────────────────────────────────────
-	secretFromExpression := vault.AddSecretFromExpression("expr-secret",
-		aspire.RefExpr("secret-value-%s", secretParam))
+	// ── 4. AddSecretFromExpression ────────────────────────────────────────────
+	secretFromExpression := vault.AddSecretFromExpression("expr-secret", exprSecretValue)
 
-	// ── 6. addSecretWithName ──────────────────────────────────────────────────
+	// ── 5. AddSecretWithName ──────────────────────────────────────────────────
 	namedSecretFromParameter := vault.AddSecretWithName(
 		"secret-resource-param", "named-param-secret", namedSecretParam)
 
-	// ── 7. addSecretWithNameFromExpression ────────────────────────────────────
+	// ── 6. AddSecretWithNameFromExpression ────────────────────────────────────
 	namedSecretFromExpression := vault.AddSecretWithNameFromExpression(
-		"secret-resource-expr", "named-expr-secret",
-		aspire.RefExpr("named-secret-value"))
+		"secret-resource-expr", "named-expr-secret", namedExprSecretValue)
 
-	// ── 8. getSecret ──────────────────────────────────────────────────────────
-	_, _ = vault.GetSecret("param-secret")
+	// ── 7. GetSecret ──────────────────────────────────────────────────────────
+	_ = vault.GetSecret("param-secret")
 
-	// ── 9. role assignments on each secret resource ───────────────────────────
+	// Apply role assignments to created secret resources to validate generic coverage.
 	secretFromParameter.WithKeyVaultRoleAssignments(vault,
 		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultSecretsUser})
 	secretFromExpression.WithKeyVaultRoleAssignments(vault,
@@ -58,9 +60,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

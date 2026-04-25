@@ -9,29 +9,52 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	kubernetes := builder.AddKubernetesEnvironment("resource")
-	kubernetes.WithProperties(nil)
+	kubernetes := builder.AddKubernetesEnvironment("kube")
+	kubernetes.WithProperties(func(environment aspire.KubernetesEnvironmentResource) {
+		environment.SetHelmChartName("validation-kubernetes")
+		_, _ = environment.HelmChartName()
+		environment.SetHelmChartVersion("1.2.3")
+		_, _ = environment.HelmChartVersion()
+		environment.SetHelmChartDescription("Validation Helm Chart")
+		_, _ = environment.HelmChartDescription()
+		environment.SetDefaultStorageType("pvc")
+		_, _ = environment.DefaultStorageType()
+		environment.SetDefaultStorageClassName("fast-storage")
+		_, _ = environment.DefaultStorageClassName()
+		environment.SetDefaultStorageSize("5Gi")
+		_, _ = environment.DefaultStorageSize()
+		environment.SetDefaultStorageReadWritePolicy("ReadWriteMany")
+		_, _ = environment.DefaultStorageReadWritePolicy()
+		environment.SetDefaultImagePullPolicy("Always")
+		_, _ = environment.DefaultImagePullPolicy()
+		environment.SetDefaultServiceType("LoadBalancer")
+		_, _ = environment.DefaultServiceType()
+	})
 	_, _ = kubernetes.HelmChartName()
 	_, _ = kubernetes.DefaultStorageClassName()
 	_, _ = kubernetes.DefaultServiceType()
 	if err = kubernetes.Err(); err != nil {
-		log.Fatalf("kubernetes: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	serviceContainer := builder.AddContainer("resource", "image")
-	_, _ = serviceContainer.PublishAsKubernetesService(nil)
+	serviceContainer := builder.AddContainer("kube-service", "redis:alpine")
+	_ = serviceContainer.PublishAsKubernetesService(func(service aspire.KubernetesResource) {
+		_, _ = service.Name()
+		serviceParent := service.Parent()
+		_, _ = serviceParent.HelmChartName()
+	})
 	if err = serviceContainer.Err(); err != nil {
-		log.Fatalf("serviceContainer: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

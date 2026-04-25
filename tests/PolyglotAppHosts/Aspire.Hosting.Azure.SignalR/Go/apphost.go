@@ -9,20 +9,23 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	signalr := builder.AddAzureSignalR("resource")
-	signalr.RunAsEmulator(nil)
-	if err = signalr.Err(); err != nil {
-		log.Fatalf("signalr: %v", err)
+	signalr := builder.AddAzureSignalR("signalr")
+	if signalr.Err() != nil {
+		log.Fatalf(aspire.FormatError(signalr.Err()))
+	}
+	signalr.RunAsEmulator()
+	if signalr.Err() != nil {
+		log.Fatalf(aspire.FormatError(signalr.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

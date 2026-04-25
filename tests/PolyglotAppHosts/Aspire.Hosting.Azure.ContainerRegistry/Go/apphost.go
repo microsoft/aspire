@@ -9,36 +9,39 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 1. addAzureContainerRegistry + withPurgeTask ─────────────────────────
 	registry := builder.AddAzureContainerRegistry("containerregistry").
-		WithPurgeTaskWithOpts("0 1 * * *", &aspire.WithPurgeTaskOptions{
+		WithPurgeTask("0 1 * * *", &aspire.WithPurgeTaskOptions{
 			Filter:   aspire.StringPtr("samples:*"),
 			Ago:      aspire.Float64Ptr(7),
 			Keep:     aspire.Float64Ptr(5),
 			TaskName: aspire.StringPtr("purge-samples"),
 		})
 	if err = registry.Err(); err != nil {
-		log.Fatalf("registry: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 2. addAzureContainerAppEnvironment + role assignments ─────────────────
 	environment := builder.AddAzureContainerAppEnvironment("environment")
 	environment.WithAzureContainerRegistry(registry)
 	environment.WithContainerRegistryRoleAssignments(registry, []aspire.AzureContainerRegistryRole{
 		aspire.AzureContainerRegistryRoleAcrPull,
 		aspire.AzureContainerRegistryRoleAcrPush,
 	})
+	if err = environment.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// ── 3. getAzureContainerRegistry + withPurgeTask on retrieved registry ────
 	registryFromEnvironment := environment.GetAzureContainerRegistry()
-	registryFromEnvironment.WithPurgeTaskWithOpts("0 2 * * *", &aspire.WithPurgeTaskOptions{
+	registryFromEnvironment.WithPurgeTask("0 2 * * *", &aspire.WithPurgeTaskOptions{
 		Filter: aspire.StringPtr("environment:*"),
 		Ago:    aspire.Float64Ptr(14),
 		Keep:   aspire.Float64Ptr(2),
 	})
+	if err = registryFromEnvironment.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
 	app, err := builder.Build()
 	if err != nil {

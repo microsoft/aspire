@@ -9,14 +9,15 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	foundry := builder.AddFoundry("foundry")
 	chat := foundry.AddDeployment("chat", "Phi-4", "1", "Microsoft")
-	chat.WithProperties(func(deployment *aspire.FoundryDeploymentResource) {
+	chat.WithProperties(func(deployment aspire.FoundryDeploymentResource) {
 		deployment.SetDeploymentName("chat-deployment")
 		deployment.SetSkuCapacity(10)
+		_, _ = deployment.SkuCapacity()
 	})
 
 	model := &aspire.FoundryModel{
@@ -84,16 +85,15 @@ server.listen(port, '127.0.0.1');
 `,
 		})
 
-	hostedAgent.PublishAsHostedAgent(func(cfg *aspire.HostedAgentConfiguration) {
-		_, _ = cfg.SetDescription("Validation hosted agent")
-		_, _ = cfg.SetCpu(1)
-		_, _ = cfg.SetMemory(2)
-		meta := aspire.NewAspireDict[string, string](cfg.Handle(), cfg.Client())
-		// TODO: add meta "scenario": "validation"
-		_, _ = cfg.SetMetadata(meta)
-		env := aspire.NewAspireDict[string, string](cfg.Handle(), cfg.Client())
-		// TODO: add env "VALIDATION_MODE": "true"
-		_, _ = cfg.SetEnvironmentVariables(env)
+	hostedAgent.PublishAsHostedAgent(&aspire.PublishAsHostedAgentOptions{
+		Project: &project,
+		Configure: func(cfg aspire.HostedAgentConfiguration) {
+			cfg.SetDescription("Validation hosted agent")
+			cfg.SetCpu(1)
+			cfg.SetMemory(2)
+			_ = cfg.Metadata().Set("scenario", "validation")
+			_ = cfg.EnvironmentVariables().Set("VALIDATION_MODE", "true")
+		},
 	})
 
 	api := builder.AddContainer("api", "nginx")
@@ -102,11 +102,18 @@ server.listen(port, '127.0.0.1');
 		aspire.FoundryRoleCognitiveServicesUser,
 	})
 
+	_, _ = chat.DeploymentName()
+	_, _ = chat.ModelName()
+	_, _ = chat.Format()
+	_, _ = chat.ModelVersion()
+	_ = chat.ConnectionStringExpression()
+	_ = chat.Parent()
+
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

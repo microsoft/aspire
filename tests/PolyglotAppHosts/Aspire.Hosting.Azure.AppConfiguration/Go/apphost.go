@@ -9,37 +9,39 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 1. addAzureAppConfiguration ──────────────────────────────────────────
 	appConfig := builder.AddAzureAppConfiguration("appconfig")
+	if err = appConfig.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// ── 2. withAppConfigurationRoleAssignments ────────────────────────────────
 	appConfig.WithAppConfigurationRoleAssignments(appConfig, []aspire.AzureAppConfigurationRole{
 		aspire.AzureAppConfigurationRoleAppConfigurationDataOwner,
 		aspire.AzureAppConfigurationRoleAppConfigurationDataReader,
 	})
 
-	// ── 3. runAsEmulator (typed callback) ─────────────────────────────────────
-	appConfig.RunAsEmulator(func(emulator *aspire.AzureAppConfigurationEmulatorResource) {
-		emulator.WithDataBindMountWithOpts(&aspire.WithDataBindMountOptions{
-			Path: aspire.StringPtr(".aace/appconfig"),
-		})
-		emulator.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{
-			Name: aspire.StringPtr("appconfig-data"),
-		})
-		emulator.WithHostPort(8483)
+	appConfig.RunAsEmulator(&aspire.RunAsEmulatorOptions{
+		ConfigureEmulator: func(emulator aspire.AzureAppConfigurationEmulatorResource) {
+			emulator.WithDataBindMount(&aspire.WithDataBindMountOptions{
+				Path: aspire.StringPtr(".aace/appconfig"),
+			})
+			emulator.WithDataVolume(&aspire.WithDataVolumeOptions{
+				Name: aspire.StringPtr("appconfig-data"),
+			})
+			emulator.WithHostPort(8483)
+		},
 	})
 	if err = appConfig.Err(); err != nil {
-		log.Fatalf("appConfig: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

@@ -9,65 +9,80 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 1. addAzureCosmosDB ──────────────────────────────────────────────────
+	// 1) AddAzureCosmosDB
 	cosmos := builder.AddAzureCosmosDB("cosmos")
 
-	// ── 2. withDefaultAzureSku ───────────────────────────────────────────────
+	// 2) WithDefaultAzureSku
 	cosmos.WithDefaultAzureSku()
+	if cosmos.Err() != nil {
+		log.Fatalf(aspire.FormatError(cosmos.Err()))
+	}
 
-	// ── 3. addCosmosDatabase (simple) + addCosmosDatabaseWithOpts ────────────
-	db := cosmos.AddCosmosDatabase("app-db")
-	_ = cosmos.AddCosmosDatabaseWithOpts("app-db-named", &aspire.AddCosmosDatabaseOptions{
+	// 3) AddCosmosDatabase
+	db := cosmos.AddCosmosDatabase("app-db", &aspire.AddCosmosDatabaseOptions{
 		DatabaseName: aspire.StringPtr("appdb"),
 	})
+	if db.Err() != nil {
+		log.Fatalf(aspire.FormatError(db.Err()))
+	}
 
-	// ── 4. addContainer (simple) + addContainerWithOpts ───────────────────────
-	_ = db.AddContainer("orders", "/orderId")
-	_ = db.AddContainerWithOpts("orders-named", "/orderId", &aspire.AzureCosmosDBDatabaseResourceAddContainerOptions{
+	// 4) AddContainer (single partition key path)
+	container := db.AddContainer("orders", "/orderId", &aspire.AzureCosmosDBDatabaseResourceAddContainerOptions{
 		ContainerName: aspire.StringPtr("orders-container"),
 	})
+	if container.Err() != nil {
+		log.Fatalf(aspire.FormatError(container.Err()))
+	}
 
-	// ── 5. addContainerWithPartitionKeyPaths (simple) + WithOpts ─────────────
-	_ = db.AddContainerWithPartitionKeyPaths("events", []string{"/tenantId", "/eventId"})
-	_ = db.AddContainerWithPartitionKeyPathsWithOpts("events-named", []string{"/tenantId", "/eventId"},
+	// 5) AddContainerWithPartitionKeyPaths (IEnumerable<string> export)
+	_ = db.AddContainerWithPartitionKeyPaths("events", []string{"/tenantId", "/eventId"},
 		&aspire.AddContainerWithPartitionKeyPathsOptions{
 			ContainerName: aspire.StringPtr("events-container"),
 		})
 
-	// ── 6. withAccessKeyAuthentication ───────────────────────────────────────
+	// 6) WithAccessKeyAuthentication
 	cosmos.WithAccessKeyAuthentication()
 
-	// ── 7. withAccessKeyAuthenticationWithKeyVault ───────────────────────────
+	// 7) WithAccessKeyAuthenticationWithKeyVault
 	keyVault := builder.AddAzureKeyVault("kv")
-	cosmos.WithAccessKeyAuthenticationWithKeyVault(
-		aspire.NewIAzureKeyVaultResource(keyVault.Handle(), keyVault.Client()))
+	cosmos.WithAccessKeyAuthenticationWithKeyVault(keyVault)
 
-	// ── 8. runAsEmulator (typed callback) ─────────────────────────────────────
+	// 8) RunAsEmulator + emulator container configuration methods
 	cosmosEmulator := builder.AddAzureCosmosDB("cosmos-emulator")
-	cosmosEmulator.RunAsEmulator(func(emulator *aspire.AzureCosmosDBEmulatorResource) {
-		emulator.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{
-			Name: aspire.StringPtr("cosmos-emulator-data"),
-		})
-		emulator.WithGatewayPort(18081)
-		emulator.WithPartitionCount(25)
+	cosmosEmulator.RunAsEmulator(&aspire.RunAsEmulatorOptions{
+		ConfigureContainer: func(emulator aspire.AzureCosmosDBEmulatorResource) {
+			emulator.WithDataVolume(&aspire.WithDataVolumeOptions{
+				Name: aspire.StringPtr("cosmos-emulator-data"),
+			}) // 9) WithDataVolume
+			emulator.WithGatewayPort(18081) // 10) WithGatewayPort
+			emulator.WithPartitionCount(25) // 11) WithPartitionCount
+		},
 	})
+	if cosmosEmulator.Err() != nil {
+		log.Fatalf(aspire.FormatError(cosmosEmulator.Err()))
+	}
 
-	// ── 9. runAsPreviewEmulator (typed callback) ───────────────────────────────
+	// 12) RunAsPreviewEmulator + 13) WithDataExplorer
 	cosmosPreview := builder.AddAzureCosmosDB("cosmos-preview-emulator")
-	cosmosPreview.RunAsPreviewEmulator(func(emulator *aspire.AzureCosmosDBEmulatorResource) {
-		emulator.WithDataExplorerWithOpts(&aspire.WithDataExplorerOptions{
-			Port: aspire.Float64Ptr(11234),
-		})
+	cosmosPreview.RunAsPreviewEmulator(&aspire.RunAsPreviewEmulatorOptions{
+		ConfigureContainer: func(emulator aspire.AzureCosmosDBEmulatorResource) {
+			emulator.WithDataExplorer(&aspire.WithDataExplorerOptions{
+				Port: aspire.Float64Ptr(11234),
+			})
+		},
 	})
+	if cosmosPreview.Err() != nil {
+		log.Fatalf(aspire.FormatError(cosmosPreview.Err()))
+	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

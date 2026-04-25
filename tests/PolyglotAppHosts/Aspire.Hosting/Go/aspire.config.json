@@ -6,5 +6,8 @@
   "features": {
     "experimentalPolyglot:go": true
   },
-  "packages": {}
+  "packages": {
+    "Aspire.Hosting": "",
+    "Aspire.Hosting.Redis": ""
+  }
 }

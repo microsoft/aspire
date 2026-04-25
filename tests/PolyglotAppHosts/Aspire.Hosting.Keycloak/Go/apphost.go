@@ -9,48 +9,48 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-    adminUsername := builder.AddParameter("keycloak-admin-user")
-    adminPassword := builder.AddParameterWithOpts("keycloak-admin-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
+	adminUsername := builder.AddParameter("keycloak-admin-user")
+	adminPassword := builder.AddParameter("keycloak-admin-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 
-	keycloak := builder.AddKeycloakWithOpts("resource", &aspire.AddKeycloakOptions{
-        Port: aspire.Float64Ptr(8080),
-        AdminUsername: adminUsername,
-        AdminPassword: adminPassword,
-    })
+	keycloak := builder.AddKeycloak("keycloak", &aspire.AddKeycloakOptions{
+		Port:          aspire.Float64Ptr(8080),
+		AdminUsername: &adminUsername,
+		AdminPassword: &adminPassword,
+	})
 
-    keycloak.
-        WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("keycloak-data")}).
-        WithRealmImport(".").
-        WithEnabledFeatures([]string{"token-exchange", "opentelemetry"}).
-        WithDisabledFeatures([]string{"admin-fine-grained-authz"}).
-        WithOtlpExporter()
+	keycloak.
+		WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("keycloak-data")}).
+		WithRealmImport(".").
+		WithEnabledFeatures([]string{"token-exchange", "opentelemetry"}).
+		WithDisabledFeatures([]string{"admin-fine-grained-authz"}).
+		WithOtlpExporter()
 
-    keycloak2 := builder.AddKeycloak("resource2").
-        WithDataBindMount(".").
-        WithRealmImport(".").
-        WithEnabledFeatures([]string{"rolling-updates"}).
-        WithDisabledFeatures([]string{"scripts"}).
-        WithOtlpExporterWithProtocol(aspire.OtlpProtocolHttpProtobuf)
+	keycloak2 := builder.AddKeycloak("keycloak2").
+		WithDataBindMount(".").
+		WithRealmImport(".").
+		WithEnabledFeatures([]string{"rolling-updates"}).
+		WithDisabledFeatures([]string{"scripts"}).
+		WithOtlpExporterWithProtocol(aspire.OtlpProtocolHttpProtobuf)
 
-    builder.AddContainer("consumer", "nginx").
-        WithReference(keycloak).
-        WithReference(keycloak2)
+	builder.AddContainer("consumer", "nginx").
+		WithReference(keycloak).
+		WithReference(keycloak2)
 
 	_, _ = keycloak.Name()
 	_, _ = keycloak.Entrypoint()
 	_, _ = keycloak.ShellExecution()
 	if err = keycloak.Err(); err != nil {
-		log.Fatalf("keycloak: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

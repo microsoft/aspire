@@ -9,75 +9,63 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ---- AddPostgres: factory method ----
 	postgres := builder.AddPostgres("pg")
 
-	// ---- WithPgAdmin: management UI ----
-	postgres.WithPgAdmin(nil)
-	postgres.WithPgAdminWithOpts(&aspire.WithPgAdminOptions{ContainerName: func() *string { s := "mypgadmin"; return &s }()}, nil)
+	db := postgres.AddDatabase("mydb", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("testdb")})
 
-	// ---- WithPgWeb: management UI ----
-	postgres.WithPgWeb(nil)
-	postgres.WithPgWebWithOpts(&aspire.WithPgWebOptions{ContainerName: func() *string { s := "mypgweb"; return &s }()}, nil)
+	postgres.WithPgAdmin()
+	postgres.WithPgAdmin(&aspire.WithPgAdminOptions{ContainerName: aspire.StringPtr("mypgadmin")})
 
-	// ---- WithDataVolume: data persistence ----
+	postgres.WithPgWeb()
+	postgres.WithPgWeb(&aspire.WithPgWebOptions{ContainerName: aspire.StringPtr("mypgweb")})
+
 	postgres.WithDataVolume()
-	postgres.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: func() *string { s := "pg-data"; return &s }(), IsReadOnly: func() *bool { b := false; return &b }()})
+	postgres.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("pg-data"), IsReadOnly: aspire.BoolPtr(false)})
 
-	// ---- WithDataBindMount: bind mount ----
 	postgres.WithDataBindMount("./data")
-	postgres.WithDataBindMountWithOpts("./data2", &aspire.WithDataBindMountOptions{IsReadOnly: func() *bool { b := true; return &b }()})
+	postgres.WithDataBindMount("./data2", &aspire.WithDataBindMountOptions{IsReadOnly: aspire.BoolPtr(true)})
 
-	// ---- WithInitFiles: initialization scripts ----
 	postgres.WithInitFiles("./init")
 
-	// ---- WithHostPort: explicit port ----
 	postgres.WithHostPort(5432)
 
 	if err = postgres.Err(); err != nil {
-		log.Fatalf("postgres: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ---- AddDatabase: child resource ----
-	db := postgres.AddDatabaseWithOpts("mydb", &aspire.AddDatabaseOptions{DatabaseName: func() *string { s := "testdb"; return &s }()})
-
-	// ---- WithCreationScript: custom database creation SQL ----
 	db.WithCreationScript(`CREATE DATABASE "testdb"`)
 	if err = db.Err(); err != nil {
-		log.Fatalf("db: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ---- WithPassword / WithUserName: credential configuration ----
-	customPassword := builder.AddParameterWithOpts("pg-password", &aspire.AddParameterOptions{Secret: func() *bool { b := true; return &b }()})
+	customPassword := builder.AddParameter("pg-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 	customUser := builder.AddParameter("pg-user")
 	pg2 := builder.AddPostgres("pg2")
 	pg2.WithPassword(customPassword)
 	pg2.WithUserName(customUser)
 	if err = pg2.Err(); err != nil {
-		log.Fatalf("pg2: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ---- Property access on PostgresServerResource ----
-	_, _ = postgres.PrimaryEndpoint()
-	_, _ = postgres.UserNameReference()
-	_, _ = postgres.UriExpression()
-	_, _ = postgres.JdbcConnectionString()
-	_, _ = postgres.ConnectionStringExpression()
+	_ = postgres.PrimaryEndpoint()
+	_ = postgres.UserNameReference()
+	_ = postgres.UriExpression()
+	_ = postgres.JdbcConnectionString()
+	_ = postgres.ConnectionStringExpression()
 
-	// ---- Property access on PostgresDatabaseResource ----
 	_, _ = db.DatabaseName()
-	_, _ = db.UriExpression()
-	_, _ = db.JdbcConnectionString()
-	_, _ = db.ConnectionStringExpression()
+	_ = db.UriExpression()
+	_ = db.JdbcConnectionString()
+	_ = db.ConnectionStringExpression()
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

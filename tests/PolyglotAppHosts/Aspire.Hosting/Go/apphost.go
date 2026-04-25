@@ -9,59 +9,84 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	// ===================================================================
 	// Factory methods on builder
 	// ===================================================================
 
-	// addContainer (pre-existing)
+	// AddContainer (pre-existing)
 	container := builder.AddContainer("mycontainer", "nginx")
 	if err = container.Err(); err != nil {
-		log.Fatalf("container: %v", err)
+		log.Fatalf(aspire.FormatError(err))
+	}
+	taggedContainer := builder.AddContainer("mytaggedcontainer", &aspire.AddContainerOptions{
+		Image: "nginx",
+		Tag:   "stable-alpine",
+	})
+	if err = taggedContainer.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// addContainer with tag options
-	taggedContainer := builder.AddContainer("mytaggedcontainer", "nginx")
-	taggedContainer.WithImageWithOpts("nginx", &aspire.WithImageOptions{Tag: aspire.StringPtr("stable-alpine")})
-
-	// addDockerfile
+	// AddDockerfile
 	dockerContainer := builder.AddDockerfile("dockerapp", "./app")
 	if err = dockerContainer.Err(); err != nil {
-		log.Fatalf("dockerContainer: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// addExecutable (pre-existing)
+	// AddExecutable (pre-existing)
 	exe := builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
+	if err = exe.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// addProject (pre-existing)
+	// AddProject (pre-existing)
 	project := builder.AddProject("myproject", "./src/MyProject", "https")
-	_ = builder.AddProjectWithoutLaunchProfile("myproject-noprofile", "./src/MyProject")
+	if err = project.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	projectWithoutLunchProfile := builder.AddProjectWithoutLaunchProfile("myproject-noprofile", "./src/MyProject")
+	if err = projectWithoutLunchProfile.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	// ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
+	referenceEnvironmentOptions := &aspire.ReferenceEnvironmentInjectionOptions{
+		ConnectionString: true,
+		ServiceDiscovery: true,
+	}
+	project.WithReferenceEnvironment(referenceEnvironmentOptions)
 
-	// addCSharpApp
-	_ = builder.AddCSharpApp("csharpapp", "./src/CSharpApp")
+	// AddCSharpApp
+	csharpApp := builder.AddCSharpApp("csharpapp", "./src/CSharpApp")
+	if err = csharpApp.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// addContainer as cache reference (base SDK doesn't have addRedis)
-	cache := builder.AddContainer("cache", "redis")
+	// AddContainer
+	cache := builder.AddRedis("cache")
+	if err = cache.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// addDotnetTool
+	// AddDotnetTool
 	tool := builder.AddDotnetTool("mytool", "dotnet-ef")
+	if err = tool.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// addParameterFromConfiguration
+	// AddParameterFromConfiguration
 	configParam := builder.AddParameterFromConfiguration("myconfig", "MyConfig:Key")
-	secretParam := builder.AddParameterFromConfigurationWithOpts("mysecret", "MyConfig:Secret",
+	secretParam := builder.AddParameterFromConfiguration("mysecret", "MyConfig:Secret",
 		&aspire.AddParameterFromConfigurationOptions{Secret: aspire.BoolPtr(true)})
-
-	// addParameterWithGeneratedValue with opts (secret + persist)
-	generatedParam := builder.AddParameterWithGeneratedValueWithOpts("generated-secret",
+	generatedParam := builder.AddParameterWithGeneratedValue("generated-secret",
 		&aspire.GenerateParameterDefault{
-			MinLength: 24,
-			Lower:     true,
-			Upper:     true,
-			Numeric:   true,
-			Special:   false,
-			MinUpper:  2,
+			MinLength:  24,
+			Lower:      true,
+			Upper:      true,
+			Numeric:    true,
+			Special:    false,
+			MinUpper:   2,
 			MinNumeric: 2,
 		},
 		&aspire.AddParameterWithGeneratedValueOptions{
@@ -73,50 +98,48 @@ func main() {
 	// Container-specific methods on ContainerResource
 	// ===================================================================
 
-	// withDockerfileBaseImage (WithOpts variant for build image option)
-	container.WithDockerfileBaseImageWithOpts(&aspire.WithDockerfileBaseImageOptions{
+	// WithDockerfileBaseImage
+	container.WithDockerfileBaseImage(&aspire.WithDockerfileBaseImageOptions{
 		BuildImage: aspire.StringPtr("mcr.microsoft.com/dotnet/sdk:8.0"),
 	})
 
-	// withBuildArg
+	// WithBuildArg
 	dockerContainer.WithBuildArg("STATIC_BRANDING", "/app/static/branding/custom")
 	dockerContainer.WithBuildArg("CONFIG_BRANDING", configParam)
 
-	// withContainerCertificatePaths (WithOpts variant)
-	container.WithContainerCertificatePathsWithOpts(&aspire.WithContainerCertificatePathsOptions{
-		CustomCertificatesDestination:   aspire.StringPtr("/usr/lib/ssl/aspire/custom"),
-		DefaultCertificateBundlePaths:   []string{"/etc/ssl/certs/ca-certificates.crt"},
+	// WithContainerCertificatePaths
+	container.WithContainerCertificatePaths(&aspire.WithContainerCertificatePathsOptions{
+		CustomCertificatesDestination:    aspire.StringPtr("/usr/lib/ssl/aspire/custom"),
+		DefaultCertificateBundlePaths:    []string{"/etc/ssl/certs/ca-certificates.crt"},
 		DefaultCertificateDirectoryPaths: []string{"/etc/ssl/certs", "/usr/local/share/ca-certificates"},
 	})
 
-	// withImageRegistry
+	// WithImageRegistry
 	container.WithImageRegistry("docker.io")
 
 	// ===================================================================
 	// Endpoints and connection strings
 	// ===================================================================
 
-	dockerContainer.WithHttpEndpointWithOpts(&aspire.WithHttpEndpointOptions{
+	dockerContainer.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{
 		Name:       aspire.StringPtr("http"),
 		TargetPort: aspire.Float64Ptr(80),
 	})
 
-	endpoint, err := dockerContainer.GetEndpoint("http")
-	if err != nil {
-		log.Fatalf("GetEndpoint: %v", err)
+	endpoint := dockerContainer.GetEndpoint("http")
+	if endpoint.Err() != nil {
+		log.Fatalf(aspire.FormatError(endpoint.Err()))
 	}
+	expr := aspire.RefExpr("Host=%v", endpoint)
 
-	expr := aspire.RefExpr("Host=%s", endpoint)
-
-	// addConnectionStringBuilder (typed callback)
 	builtConnectionString := builder.AddConnectionStringBuilder("customcs",
-		func(csBuilder *aspire.ReferenceExpressionBuilder) {
+		func(csBuilder aspire.ReferenceExpressionBuilder) {
 			_, _ = csBuilder.IsEmpty()
 			_ = csBuilder.AppendLiteral("Host=")
 			_ = csBuilder.AppendValueProvider(endpoint)
 			_ = csBuilder.AppendLiteral(";Key=")
 			_ = csBuilder.AppendValueProvider(secretParam)
-			_, _ = csBuilder.Build()
+			_ = csBuilder.Build()
 		})
 
 	builtConnectionString.WithConnectionProperty("Host", expr)
@@ -128,81 +151,77 @@ func main() {
 	// ResourceBuilderExtensions on ContainerResource
 	// ===================================================================
 
-	// withEnvironment - EndpointReference
+	// WithEnvironment - EndpointReference
 	container.WithEnvironmentEndpoint("MY_ENDPOINT", endpoint)
 
-	// withEnvironment — with ReferenceExpression (via WithEnvironment any overload)
+	// WithEnvironment — with ReferenceExpression (via WithEnvironment any overload)
 	container.WithEnvironment("MY_EXPR", expr)
 
-	// withEnvironment — with ParameterResource
+	// WithEnvironment — with ParameterResource
 	container.WithEnvironmentParameter("MY_PARAM", configParam)
 	container.WithEnvironmentParameter("MY_GENERATED_PARAM", generatedParam)
 
-	// withEnvironment — with connection string resource
+	// WithEnvironment — with connection string resource
 	container.WithEnvironmentConnectionString("MY_CONN", envConnectionString)
 
-	// withConnectionProperty
+	// WithConnectionProperty
 	builtConnectionString.WithConnectionProperty("Endpoint", expr)
 	builtConnectionString.WithConnectionPropertyValue("Protocol", "https")
 
-	// excludeFromManifest
-	_ = container.ExcludeFromManifest()
+	// ExcludeFromManifest
+	container.ExcludeFromManifest()
 
-	// excludeFromMcp
-	_ = container.ExcludeFromMcp()
+	// ExcludeFromMcp
+	container.ExcludeFromMcp()
 
-	// waitForCompletion
-	_ = container.WaitForCompletion(aspire.NewIResource(exe.Handle(), exe.Client()))
+	// WaitForCompletion
+	container.WaitForCompletion(exe)
 
-	// withDeveloperCertificateTrust
+	// WithDeveloperCertificateTrust
 	container.WithDeveloperCertificateTrust(true)
 
-	// withCertificateTrustScope
+	// WithCertificateTrustScope
 	container.WithCertificateTrustScope(aspire.CertificateTrustScopeSystem)
 
-	// withHttpsDeveloperCertificate
+	// WithHttpsDeveloperCertificate
 	container.WithHttpsDeveloperCertificate()
 
-	// withoutHttpsCertificate
+	// WithoutHttpsCertificate
 	container.WithoutHttpsCertificate()
 
-	// withChildRelationship
-	_ = container.WithChildRelationship(aspire.NewIResource(exe.Handle(), exe.Client()))
+	// WithChildRelationship
+	container.WithChildRelationship(exe)
 
-	// withRelationship
-	_ = container.WithRelationship(aspire.NewIResource(taggedContainer.Handle(), taggedContainer.Client()), "peer")
+	// WithRelationship
+	container.WithRelationship(taggedContainer, "peer")
 
-	// project.withReference(cache)
-	_ = project.WithReference(aspire.NewIResource(cache.Handle(), cache.Client()))
+	// WithRelationship
+	project.WithReference(cache)
 
-	// withIconName (WithOpts variant for iconVariant)
+	// WithIconName
 	iconVariant := aspire.IconVariantFilled
-	container.WithIconNameWithOpts("Database", &aspire.WithIconNameOptions{
+	container.WithIconName("Database", &aspire.WithIconNameOptions{
 		IconVariant: &iconVariant,
 	})
 
-	// withHttpProbe (WithOpts variant for path)
-	container.WithHttpProbeWithOpts(aspire.ProbeTypeLiveness, &aspire.WithHttpProbeOptions{
+	// WithHttpProbe
+	container.WithHttpProbe(aspire.ProbeTypeLiveness, &aspire.WithHttpProbeOptions{
 		Path: aspire.StringPtr("/health"),
 	})
 
-	// withRemoteImageName
-	if _, err = container.WithRemoteImageName("myregistry.azurecr.io/myapp"); err != nil {
-		log.Fatalf("WithRemoteImageName: %v", err)
-	}
+	// WithRemoteImageName
+	container.WithRemoteImageName("myregistry.azurecr.io/myapp")
 
-	// withRemoteImageTag
-	if _, err = container.WithRemoteImageTag("latest"); err != nil {
-		log.Fatalf("WithRemoteImageTag: %v", err)
-	}
+	// WithRemoteImageTag
+	container.WithRemoteImageTag("latest")
 
-	// withMcpServer (WithOpts variant for path)
-	_ = container.WithMcpServerWithOpts(&aspire.WithMcpServerOptions{
+	// WithMcpServer ( variant for path)
+	container.WithMcpServer(&aspire.WithMcpServerOptions{
 		Path: aspire.StringPtr("/mcp"),
 	})
 
-	// withRequiredCommand
-	_ = container.WithRequiredCommand("docker")
+	// WithRequiredCommand
+	container.WithRequiredCommand("docker")
 
 	// ===================================================================
 	// DotnetToolResourceExtensions — all With-tool methods are fluent
@@ -216,40 +235,96 @@ func main() {
 		WithToolSource("https://api.nuget.org/v3/index.json").
 		WithToolVersion("8.0.0")
 	if err = tool.Err(); err != nil {
-		log.Fatalf("tool: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	// publishAsDockerFile
-	_ = tool.PublishAsDockerFile()
-
-	// withReferenceEnvironment (project)
-	_ = project.WithReferenceEnvironment(&aspire.ReferenceEnvironmentInjectionOptions{
-		ConnectionString: true,
-		ServiceDiscovery: true,
-	})
+	tool.PublishAsDockerFile()
 
 	// ===================================================================
 	// Pipeline step factory
 	// ===================================================================
 
-	_ = container.WithPipelineStepFactoryWithOpts("custom-build-step",
-		&aspire.WithPipelineStepFactoryOptions{
+	_ = container.WithPipelineStepFactory("custom-build-step",
+		func(stepContext aspire.PipelineStepContext) {
+			pipelineContext := stepContext.PipelineContext()
+			pipelineModel := pipelineContext.Model()
+			_, _ = pipelineModel.GetResources()
+			_ = pipelineModel.FindResourceByName("mycontainer")
+			pipelineServices := pipelineContext.Services()
+			pipelineLoggerFactory := pipelineServices.GetLoggerFactory()
+			pipelineFactoryLogger := pipelineLoggerFactory.CreateLogger("ValidationAppHost.PipelineContext")
+			_ = pipelineFactoryLogger.LogInformation("Pipeline factory context logger")
+			pipelineLogger := pipelineContext.Logger()
+			_ = pipelineLogger.LogDebug("Pipeline context logger")
+			pipelineSummary := pipelineContext.Summary()
+			_ = pipelineSummary.Add("PipelineContext", "Validated")
+			_ = pipelineSummary.AddMarkdown("PipelineMarkdown", "**Validated**")
+
+			executionContext := stepContext.ExecutionContext()
+			_, _ = executionContext.IsPublishMode()
+			stepServices := stepContext.Services()
+			stepLogger := stepContext.Logger()
+			_ = stepLogger.LogInformation("Pipeline step context logger")
+			stepSummary := stepContext.Summary()
+			_ = stepSummary.Add("PipelineStepContext", "Validated")
+			reportingStep := stepContext.ReportingStep()
+			_ = reportingStep.LogStep("information", "Reporting step log")
+			_ = reportingStep.LogStepMarkdown("information", "**Reporting step markdown log**")
+			reportingTask := reportingStep.CreateTask("Task created")
+			_ = reportingTask.UpdateTask("Task updated")
+			_ = reportingTask.UpdateTaskMarkdown("**Task markdown updated**")
+			_ = reportingTask.CompleteTask(&aspire.CompleteTaskOptions{CompletionMessage: aspire.StringPtr("Task complete")})
+			markdownTask := reportingStep.CreateMarkdownTask("**Markdown task created**")
+			_ = markdownTask.CompleteTaskMarkdown("**Markdown task complete**",
+				&aspire.CompleteTaskMarkdownOptions{CompletionState: aspire.StringPtr("completed-with-warning")})
+			_ = reportingStep.CompleteStep("Reporting step complete")
+			_ = reportingStep.CompleteStepMarkdown("**Reporting step markdown complete**",
+				&aspire.CompleteStepMarkdownOptions{CompletionState: aspire.StringPtr("completed-with-warning")})
+			stepModel := stepContext.Model()
+			_, _ = stepModel.GetResources()
+			_ = stepModel.FindResourceByName("mycontainer")
+			stepLoggerFactory := stepServices.GetLoggerFactory()
+			stepFactoryLogger := stepLoggerFactory.CreateLogger("ValidationAppHost.PipelineStepContext")
+			_ = stepFactoryLogger.LogDebug("Pipeline step factory logger")
+			cancellationToken, _ := stepContext.CancellationToken()
+			cacheUriExpression := cache.UriExpression()
+			_, _ = cacheUriExpression.GetValue(cancellationToken)
+		}, &aspire.WithPipelineStepFactoryOptions{
 			DependsOn:   []string{"build"},
 			RequiredBy:  []string{"deploy"},
 			Tags:        []string{"custom-build"},
 			Description: aspire.StringPtr("Custom pipeline step"),
-		},
-		func(stepCtx *aspire.PipelineStepContext) {
-			// stepCtx holds the pipeline step execution context
-			_ = stepCtx
 		})
 
-	_ = container.WithPipelineConfiguration(func(configCtx *aspire.PipelineConfigurationContext) {
-		_ = configCtx
+	_ = container.WithPipelineConfiguration(func(configContext aspire.PipelineConfigurationContext) {
+		configServices := configContext.Services()
+		configModel := configContext.Model()
+		_, _ = configModel.GetResources()
+		_ = configModel.FindResourceByName("mycontainer")
+		configLoggerFactory := configServices.GetLoggerFactory()
+		configLogger := configLoggerFactory.CreateLogger("ValidationAppHost.PipelineConfigurationContext")
+		_ = configLogger.LogInformation("Pipeline configuration logger")
+		allSteps, _ := configContext.Steps()
+		taggedSteps, _ := configContext.GetStepsByTag("custom-build")
+		if len(allSteps) > 0 {
+			_, _ = allSteps[0].Name()
+			_, _ = allSteps[0].Description()
+			_ = allSteps[0].Tags().Add("validated")
+			_ = allSteps[0].DependsOnSteps().Add("restore")
+			_ = allSteps[0].DependsOn("build")
+		}
+		if len(taggedSteps) > 0 {
+			_ = taggedSteps[0].RequiredBySteps().Add("publish")
+			_ = taggedSteps[0].RequiredBy("publish")
+		}
 	})
 
-	_ = container.WithPipelineConfiguration(func(configCtx *aspire.PipelineConfigurationContext) {
-		_ = configCtx
+	_ = container.WithPipelineConfiguration(func(configContext aspire.PipelineConfigurationContext) {
+		_ = configContext.Services()
+		_ = configContext.Model()
+		_, _ = configContext.Steps()
+		_, _ = configContext.GetStepsByTag("custom-build")
 	})
 
 	// ===================================================================
@@ -257,59 +332,127 @@ func main() {
 	// ===================================================================
 
 	_, _ = builder.AppHostDirectory()
-	hostEnvironment, err := builder.Environment()
-	if err == nil && hostEnvironment != nil {
-		_, _ = hostEnvironment.IsDevelopment()
-		_, _ = hostEnvironment.IsProduction()
-		_, _ = hostEnvironment.IsStaging()
-		_, _ = hostEnvironment.IsEnvironment("Development")
-	}
+	hostEnvironment := builder.Environment()
+	_, _ = hostEnvironment.IsDevelopment()
+	_, _ = hostEnvironment.IsProduction()
+	_, _ = hostEnvironment.IsStaging()
+	_, _ = hostEnvironment.IsEnvironment("Development")
 
-	builderConfiguration, err := builder.GetConfiguration()
-	if err == nil && builderConfiguration != nil {
-		_, _ = builderConfiguration.GetConfigValue("MyConfig:Key")
-		_, _ = builderConfiguration.GetConnectionString("customcs")
-		_, _ = builderConfiguration.GetSection("MyConfig")
-		_, _ = builderConfiguration.GetChildren()
-		_, _ = builderConfiguration.Exists("MyConfig:Key")
-	}
+	builderConfiguration := builder.GetConfiguration()
+	_, _ = builderConfiguration.GetConfigValue("MyConfig:Key")
+	_, _ = builderConfiguration.GetConnectionString("customcs")
+	_ = builderConfiguration.GetSection("MyConfig")
+	_, _ = builderConfiguration.GetChildren()
+	_, _ = builderConfiguration.Exists("MyConfig:Key")
 
-	builderExecutionContext, err := builder.ExecutionContext()
-	if err == nil && builderExecutionContext != nil {
-		serviceProvider, _ := builderExecutionContext.ServiceProvider()
-		if serviceProvider != nil {
-			_, _ = serviceProvider.GetDistributedApplicationModel()
-		}
-	}
+	builderExecutionContext := builder.ExecutionContext()
+	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
+	_ = executionContextServiceProvider.GetDistributedApplicationModel()
 
 	// Subscriptions (typed callbacks)
-	beforeStartSub, err := builder.SubscribeBeforeStart(func(e *aspire.BeforeStartEvent) {
-		_ = e
+	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
+		beforeStartModel := e.Model()
+		_, _ = beforeStartModel.GetResources()
+		_ = beforeStartModel.FindResourceByName("mycontainer")
+		beforeStartServices := e.Services()
+		_ = beforeStartServices.GetEventing()
+		beforeStartLoggerFactory := beforeStartServices.GetLoggerFactory()
+		beforeStartLogger := beforeStartLoggerFactory.CreateLogger("ValidationAppHost.BeforeStart")
+		_ = beforeStartLogger.LogInformation("BeforeStart information")
+		_ = beforeStartLogger.LogWarning("BeforeStart warning")
+		_ = beforeStartLogger.LogError("BeforeStart error")
+		_ = beforeStartLogger.LogDebug("BeforeStart debug")
+		_ = beforeStartLogger.Log("critical", "BeforeStart critical")
+		beforeStartResourceLoggerService := beforeStartServices.GetResourceLoggerService()
+		_ = beforeStartResourceLoggerService.CompleteLog(container)
+		_ = beforeStartResourceLoggerService.CompleteLogByName("mycontainer")
+		beforeStartNotifications := beforeStartServices.GetResourceNotificationService()
+		_ = beforeStartNotifications.WaitForResourceState("mycontainer", &aspire.WaitForResourceStateOptions{
+			TargetState: aspire.StringPtr("Running"),
+		})
+		_, _ = beforeStartNotifications.WaitForResourceStates("mycontainer", []string{"Running", "FailedToStart"})
+		_, _ = beforeStartNotifications.WaitForResourceHealthy("mycontainer")
+		_ = beforeStartNotifications.WaitForDependencies(container)
+		_, _ = beforeStartNotifications.TryGetResourceState("mycontainer")
+		_ = beforeStartNotifications.PublishResourceUpdate(container, &aspire.PublishResourceUpdateOptions{
+			State:      aspire.StringPtr("Validated"),
+			StateStyle: aspire.StringPtr("info"),
+		})
+		beforeStartUserSecrets := beforeStartServices.GetUserSecretsManager()
+		_, _ = beforeStartUserSecrets.IsAvailable()
+		_, _ = beforeStartUserSecrets.FilePath()
+		_, _ = beforeStartUserSecrets.TrySetSecret("Validation:Key", "value")
+		_ = beforeStartUserSecrets.GetOrSetSecret(container, "Validation:GeneratedKey", "generated-value")
+		_, _ = builderConfiguration.GetConfigValue("Validation:GeneratedKey")
+		_ = beforeStartUserSecrets.SaveStateJson("{\"Validation\":\"Value\"}")
+		_ = beforeStartServices.GetDistributedApplicationModel()
 	})
-	if err != nil {
-		log.Fatalf("SubscribeBeforeStart: %v", err)
-	}
 
-	afterResourcesSub, err := builder.SubscribeAfterResourcesCreated(func(e *aspire.AfterResourcesCreatedEvent) {
-		_ = e
+	afterResourcesSub := builder.SubscribeAfterResourcesCreated(func(e aspire.AfterResourcesCreatedEvent) {
+		afterResourcesModel := e.Model()
+		_, _ = afterResourcesModel.GetResources()
+		_ = afterResourcesModel.FindResourceByName("mycontainer")
+		afterResourcesServices := e.Services()
+		afterResourcesLoggerFactory := afterResourcesServices.GetLoggerFactory()
+		afterResourcesLogger := afterResourcesLoggerFactory.CreateLogger("ValidationAppHost.AfterResourcesCreated")
+		_ = afterResourcesLogger.LogInformation("AfterResourcesCreated")
 	})
-	if err != nil {
-		log.Fatalf("SubscribeAfterResourcesCreated: %v", err)
-	}
 
-	builderEventing, err := builder.Eventing()
-	if err == nil && builderEventing != nil {
-		builderEventing.Unsubscribe(beforeStartSub)
-		builderEventing.Unsubscribe(afterResourcesSub)
-	}
+	builderEventing := builder.Eventing()
+	_ = builderEventing.Unsubscribe(beforeStartSub)
+	_ = builderEventing.Unsubscribe(afterResourcesSub)
 
 	// Resource events — typed callbacks
-	_ = container.OnBeforeResourceStarted(func(e *aspire.BeforeResourceStartedEvent) { _ = e })
-	_ = container.OnResourceStopped(func(e *aspire.ResourceStoppedEvent) { _ = e })
-	_ = builtConnectionString.OnConnectionStringAvailable(func(e *aspire.ConnectionStringAvailableEvent) { _ = e })
-	_ = container.OnInitializeResource(func(e *aspire.InitializeResourceEvent) { _ = e })
-	_ = container.OnResourceEndpointsAllocated(func(e *aspire.ResourceEndpointsAllocatedEvent) { _ = e })
-	_ = container.OnResourceReady(func(e *aspire.ResourceReadyEvent) { _ = e })
+	_ = container.OnBeforeResourceStarted(func(e aspire.BeforeResourceStartedEvent) {
+		_ = e.Resource()
+		services := e.Services()
+		loggerFactory := services.GetLoggerFactory()
+		logger := loggerFactory.CreateLogger("ValidationAppHost.BeforeResourceStarted")
+		_ = logger.LogInformation("BeforeResourceStarted")
+	})
+
+	_ = container.OnResourceStopped(func(e aspire.ResourceStoppedEvent) {
+		_ = e.Resource()
+		services := e.Services()
+		loggerFactory := services.GetLoggerFactory()
+		logger := loggerFactory.CreateLogger("ValidationAppHost.ResourceStopped")
+		_ = logger.LogWarning("ResourceStopped")
+	})
+
+	_ = builtConnectionString.OnConnectionStringAvailable(func(e aspire.ConnectionStringAvailableEvent) {
+		_ = e.Resource()
+		services := e.Services()
+		notifications := services.GetResourceNotificationService()
+		_, _ = notifications.TryGetResourceState("customcs")
+	})
+
+	_ = container.OnInitializeResource(func(e aspire.InitializeResourceEvent) {
+		_ = e.Resource()
+		_ = e.Eventing()
+		initializeLogger := e.Logger()
+		initializeNotifications := e.Notifications()
+		initializeServices := e.Services()
+		_ = initializeLogger.LogDebug("InitializeResource")
+		_ = initializeNotifications.WaitForDependencies(container)
+		_ = initializeServices.GetDistributedApplicationModel()
+		_ = initializeServices.GetEventing()
+	})
+
+	_ = container.OnResourceEndpointsAllocated(func(e aspire.ResourceEndpointsAllocatedEvent) {
+		_ = e.Resource()
+		services := e.Services()
+		loggerFactory := services.GetLoggerFactory()
+		logger := loggerFactory.CreateLogger("ValidationAppHost.ResourceEndpointsAllocated")
+		_ = logger.LogInformation("ResourceEndpointsAllocated")
+	})
+
+	_ = container.OnResourceReady(func(e aspire.ResourceReadyEvent) {
+		_ = e.Resource()
+		services := e.Services()
+		loggerFactory := services.GetLoggerFactory()
+		logger := loggerFactory.CreateLogger("ValidationAppHost.ResourceReady")
+		_ = logger.LogInformation("ResourceReady")
+	})
 
 	// ===================================================================
 	// Pre-existing exports — all return resource builder types
@@ -322,20 +465,23 @@ func main() {
 	_ = container.WithExternalHttpEndpoints()
 	_ = container.AsHttp2Service()
 	_ = container.WithArgs([]string{"--verbose"})
-	_ = container.WithParentRelationship(aspire.NewIResource(exe.Handle(), exe.Client()))
+	_ = container.WithParentRelationship(exe)
+	_ = projectWithoutLunchProfile.WithParentRelationship(project)
 	_ = container.WithExplicitStart()
 	_ = container.WithUrl("http://localhost:8080")
 	_ = container.WithUrlExpression(expr)
 	_ = container.WithHttpHealthCheck()
-	_ = container.WithCommand("restart", "Restart", func(ctx *aspire.ExecuteCommandContext) {
+	_ = container.WithHttpHealthCheck()
+	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
 		_ = ctx
+		return &aspire.ExecuteCommandResult{}
 	})
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

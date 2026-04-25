@@ -7,22 +7,24 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	search := builder.AddAzureSearch("resource")
-	search.WithSearchRoleAssignments(search, nil)
-	if err = search.Err(); err != nil {
-		log.Fatalf("search: %v", err)
+	search.WithSearchRoleAssignments(search, []aspire.AzureSearchRole{
+		aspire.AzureSearchRoleSearchServiceContributor,
+		aspire.AzureSearchRoleSearchIndexDataReader})
+	if search.Err() != nil {
+		log.Fatalf(aspire.FormatError(search.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+	if err := app.Run(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

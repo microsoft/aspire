@@ -9,59 +9,58 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 1. addAzureEventHubs ─────────────────────────────────────────────────
 	eventHubs := builder.AddAzureEventHubs("eventhubs")
+	if eventHubs.Err() != nil {
+		log.Fatalf(aspire.FormatError(eventHubs.Err()))
+	}
 
-	// ── 2. withEventHubsRoleAssignments ──────────────────────────────────────
-	_ = eventHubs.WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+	eventHubs.WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
 		aspire.AzureEventHubsRoleAzureEventHubsDataOwner,
 	})
 
-	// ── 3. addHub (simple) + addHubWithOpts ───────────────────────────────────
-	_ = eventHubs.AddHub("orders-simple")
-	hub := eventHubs.AddHubWithOpts("orders", &aspire.AddHubOptions{
+	hub := eventHubs.AddHub("orders", &aspire.AddHubOptions{
 		HubName: aspire.StringPtr("orders-hub"),
-	})
-
-	// ── 4. withProperties (typed callback) ────────────────────────────────────
-	hub.WithProperties(func(configuredHub *aspire.AzureEventHubResource) {
+	}).WithProperties(func(configuredHub aspire.AzureEventHubResource) {
 		configuredHub.SetHubName("orders-hub")
 		_, _ = configuredHub.HubName()
 		configuredHub.SetPartitionCount(2)
 		_, _ = configuredHub.PartitionCount()
 	})
+	if hub.Err() != nil {
+		log.Fatalf(aspire.FormatError(hub.Err()))
+	}
 
-	// ── 5. property getters ───────────────────────────────────────────────────
-	_, _ = hub.Parent()
-	_, _ = hub.ConnectionStringExpression()
+	_ = hub.Parent()
+	_ = hub.ConnectionStringExpression()
 
-	// ── 6. addConsumerGroup (simple) + addConsumerGroupWithOpts ───────────────
-	_ = hub.AddConsumerGroup("processors-simple")
-	consumerGroup := hub.AddConsumerGroupWithOpts("processors", &aspire.AddConsumerGroupOptions{
+	consumerGroup := hub.AddConsumerGroup("processors", &aspire.AddConsumerGroupOptions{
 		GroupName: aspire.StringPtr("processor-group"),
-	})
-	_ = consumerGroup.WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+	}).WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
 		aspire.AzureEventHubsRoleAzureEventHubsDataReceiver,
 	})
+	if consumerGroup.Err() != nil {
+		log.Fatalf(aspire.FormatError(consumerGroup.Err()))
+	}
 
-	// ── 7. runAsEmulator (typed callback) ─────────────────────────────────────
-	eventHubs.RunAsEmulator(func(emulator *aspire.AzureEventHubsEmulatorResource) {
-		emulator.
-			WithHostPort(5673).
-			WithConfigurationFile("./eventhubs.config.json").
-			WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
-				aspire.AzureEventHubsRoleAzureEventHubsDataSender,
-			})
+	eventHubs.RunAsEmulator(&aspire.RunAsEmulatorOptions{
+		ConfigureContainer: func(emulator aspire.AzureEventHubsEmulatorResource) {
+			emulator.
+				WithHostPort(5673).
+				WithConfigurationFile("./eventhubs.config.json").
+				WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+					aspire.AzureEventHubsRoleAzureEventHubsDataSender,
+				})
+		},
 	})
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

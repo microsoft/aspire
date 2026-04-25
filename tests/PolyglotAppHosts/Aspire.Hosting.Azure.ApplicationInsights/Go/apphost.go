@@ -12,21 +12,29 @@ func main() {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
-	_ = builder.AddAzureApplicationInsights("insights")
+	// AddAzureApplicationInsights — factory method with just a name
+	appInsights := builder.AddAzureApplicationInsights("insights")
+	if err := appInsights.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
+	// AddAzureLogAnalyticsWorkspace — from the OperationalInsights dependency
 	logAnalytics := builder.AddAzureLogAnalyticsWorkspace("logs")
+	if err := logAnalytics.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	appInsightsWithWorkspace := builder.AddAzureApplicationInsights("insights-with-workspace")
-	appInsightsWithWorkspace.WithLogAnalyticsWorkspace(logAnalytics)
+	appInsightsWithWorkspace := builder.AddAzureApplicationInsights("insights-with-workspace").
+		WithLogAnalyticsWorkspace(logAnalytics)
 	if err = appInsightsWithWorkspace.Err(); err != nil {
-		log.Fatalf("appInsightsWithWorkspace: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

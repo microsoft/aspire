@@ -9,69 +9,108 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder(nil)
 	if err != nil {
-		log.Fatalf("CreateBuilder: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 1. addAzureContainerAppEnvironment + fluent chain ────────────────────
+	// === Azure Container App Environment ===
+	// Test AddAzureContainerAppEnvironment factory method
 	env := builder.AddAzureContainerAppEnvironment("myenv")
-	env.
-		WithAzdResourceNaming().
-		WithCompactResourceNaming().
-		WithDashboardWithOpts(&aspire.WithDashboardOptions{Enable: aspire.BoolPtr(true)}).
-		WithHttpsUpgradeWithOpts(&aspire.WithHttpsUpgradeOptions{Upgrade: aspire.BoolPtr(false)})
-	if err = env.Err(); err != nil {
-		log.Fatalf("env: %v", err)
+	if err := env.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// ── 2. simple withDashboard / withHttpsUpgrade (no args) ─────────────────
+	// Test fluent chaining on AzureContainerAppEnvironmentResource
+	env.WithAzdResourceNaming().
+		WithCompactResourceNaming().
+		WithDashboard(&aspire.WithDashboardOptions{Enable: aspire.BoolPtr(true)}).
+		WithHttpsUpgrade(&aspire.WithHttpsUpgradeOptions{Upgrade: aspire.BoolPtr(false)})
+	if err := env.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	// Test WithDashboard with no args (uses default)
 	env2 := builder.AddAzureContainerAppEnvironment("myenv2")
 	env2.WithDashboard()
+	if err := env2.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+
+	// Test WithHttpsUpgrade with no args (uses default)
 	env2.WithHttpsUpgrade()
+	if err := env2.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// ── 3. withAzureLogAnalyticsWorkspace ────────────────────────────────────
+	// === WithAzureLogAnalyticsWorkspace ===
+	// Test WithAzureLogAnalyticsWorkspace with a Log Analytics Workspace resource
 	laws := builder.AddAzureLogAnalyticsWorkspace("laws")
-	env3 := builder.AddAzureContainerAppEnvironment("myenv3")
-	env3.WithAzureLogAnalyticsWorkspace(laws)
-
-	// ── 4. parameters ────────────────────────────────────────────────────────
+	env3 := builder.AddAzureContainerAppEnvironment("myenv3").
+		WithAzureLogAnalyticsWorkspace(laws)
+	if err := env3.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 	customDomain := builder.AddParameter("customDomain")
 	certificateName := builder.AddParameter("certificateName")
 
-	// ── 5. publishAsAzureContainerApp (with callback) ────────────────────────
+	// === PublishAsAzureContainerApp ===
+	// Test PublishAsAzureContainerApp on a container resource with callback
 	web := builder.AddContainer("web", "myregistry/web:latest")
-	web.PublishAsAzureContainerApp(func(_ *aspire.AzureResourceInfrastructure, _ *aspire.ContainerApp) {
-		// ContainerApp configuration — sdk exposes handle wrapper only
-		_ = customDomain
-		_ = certificateName
+	web.PublishAsAzureContainerApp(func(infra aspire.AzureResourceInfrastructure, app aspire.ContainerApp) {
+		err := app.ConfigureCustomDomain(customDomain, certificateName)
+		if err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
 	})
 
-	// ── 6. publishAsAzureContainerAppJob (parameterless) ─────────────────────
-	api := builder.AddExecutable("api", "dotnet", ".", []string{"run"})
-	_, _ = api.PublishAsAzureContainerAppJob()
+	// Test PublishAsAzureContainerAppJob on an executable resource
+	api := builder.AddExecutable("api", "dotnet", ".", []string{"run"}).
+		PublishAsAzureContainerAppJob()
+	if err := api.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	worker := builder.AddContainer("worker", "myregistry/worker:latest")
-	_, _ = worker.PublishAsAzureContainerAppJob()
+	// === PublishAsAzureContainerAppJob ===
+	// Test PublishAsAzureContainerAppJob (parameterless - manual trigger)
+	worker := builder.AddContainer("worker", "myregistry/worker:latest").
+		PublishAsAzureContainerAppJob()
+	if err := worker.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// ── 7. publishAsConfiguredAzureContainerAppJob (with callback) ───────────
-	processor := builder.AddContainer("processor", "myregistry/processor:latest")
-	_, _ = processor.PublishAsConfiguredAzureContainerAppJob(
-		func(_ *aspire.AzureResourceInfrastructure, _ *aspire.ContainerAppJob) {})
+	// Test PublishAsConfiguredAzureContainerAppJob (with callback)
+	processor := builder.AddContainer("processor", "myregistry/processor:latest").
+		PublishAsConfiguredAzureContainerAppJob(
+			func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
+				// Configure the container app job here
+			})
+	if err := processor.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// ── 8. publishAsScheduledAzureContainerAppJob (cron, no callback) ────────
-	scheduler := builder.AddContainer("scheduler", "myregistry/scheduler:latest")
-	_, _ = scheduler.PublishAsScheduledAzureContainerAppJob("0 0 * * *")
+	// Test publishAsScheduledAzureContainerAppJob (simple - no callback)
+	scheduler := builder.AddContainer("scheduler", "myregistry/scheduler:latest").
+		PublishAsScheduledAzureContainerAppJob("0 0 * * *")
+	if err := scheduler.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
-	// ── 9. publishAsConfiguredScheduledAzureContainerAppJob (cron + callback) ─
-	reporter := builder.AddContainer("reporter", "myregistry/reporter:latest")
-	_, _ = reporter.PublishAsConfiguredScheduledAzureContainerAppJob(
-		"0 */6 * * *",
-		func(_ *aspire.AzureResourceInfrastructure, _ *aspire.ContainerAppJob) {})
+	// Test PublishAsConfiguredScheduledAzureContainerAppJob (with callback)
+	reporter := builder.AddContainer("reporter", "myregistry/reporter:latest").
+		PublishAsConfiguredScheduledAzureContainerAppJob("0 */6 * * *",
+			&aspire.PublishAsConfiguredScheduledAzureContainerAppJobOptions{
+				Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
+					// Configure the scheduled job here
+				},
+			})
+	if err := reporter.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf("Build: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 	if err := app.Run(nil); err != nil {
-		log.Fatalf("Run: %v", err)
+		log.Fatalf(aspire.FormatError(err))
 	}
 }

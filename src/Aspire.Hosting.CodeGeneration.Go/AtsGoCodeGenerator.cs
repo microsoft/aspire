@@ -49,6 +49,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     private readonly Dictionary<string, string> _dtoNames = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _enumNames = new(StringComparer.Ordinal);
 
+    // capabilityId → resolved Options type name (qualified when simple name collides with a DTO or another capability's Options)
+    private readonly Dictionary<string, string> _optionsTypeNames = new(StringComparer.Ordinal);
+
     /// <inheritdoc />
     public string Language => "Go";
 
@@ -217,6 +220,69 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 _implNames[typeId] = ToCamelCase(interfaceName);
             }
+        }
+
+        // Resolve Options struct names for all capabilities that have optional params.
+        // Must run after DTOs, enums, and handle types are all reserved so collision
+        // detection via IsNameTaken() is accurate.
+        _optionsTypeNames.Clear();
+        var optionsNamesInUse = new HashSet<string>(StringComparer.Ordinal);
+        // Tracks the first capability assigned to each Options name so subsequent
+        // capabilities can compare field signatures before sharing.
+        var optionsNameFirstCapability = new Dictionary<string, AtsCapabilityInfo>(StringComparer.Ordinal);
+        foreach (var capability in context.Capabilities)
+        {
+            var targetParamName = capability.TargetParameterName ?? "builder";
+            var hasOptionalParams = capability.Parameters.Any(p =>
+                !string.Equals(p.Name, targetParamName, StringComparison.Ordinal) &&
+                (IsCancellationToken(p) || p.IsOptional));
+            if (!hasOptionalParams)
+            {
+                continue;
+            }
+
+            var simpleName = $"{ToPascalCase(capability.MethodName)}Options";
+            string resolvedName;
+
+            if (!IsNameTaken(simpleName) && !optionsNamesInUse.Contains(simpleName))
+            {
+                // Name is free everywhere — use simple name and mark it used.
+                resolvedName = simpleName;
+                optionsNamesInUse.Add(simpleName);
+                optionsNameFirstCapability[simpleName] = capability;
+            }
+            else if (optionsNamesInUse.Contains(simpleName) && !IsNameTaken(simpleName))
+            {
+                // Already claimed by a previous Options struct (same method name on a different
+                // type). Reuse ONLY if the optional-param field signatures are compatible.
+                // Incompatible signatures (e.g. RunAsEmulator on Storage vs EventHubs both have
+                // configureContainer but with different emulator callback types) must get
+                // separate qualified structs — sharing would produce a type mismatch in the
+                // generated callback shim.
+                if (optionsNameFirstCapability.TryGetValue(simpleName, out var firstCap)
+                    && AreOptionsCompatible(capability, firstCap))
+                {
+                    resolvedName = simpleName; // same field shapes — safe to share
+                }
+                else
+                {
+                    // Incompatible callback types — qualify with target interface name.
+                    var qualifiedName = GetOptionsQualifiedName(capability, simpleName);
+                    resolvedName = qualifiedName;
+                    optionsNamesInUse.Add(resolvedName);
+                    optionsNameFirstCapability[resolvedName] = capability;
+                }
+            }
+            else
+            {
+                // Collision with a DTO, enum, or handle type. Qualify with the target interface name.
+                var qualifiedName = GetOptionsQualifiedName(capability, simpleName);
+                resolvedName = qualifiedName;
+                optionsNamesInUse.Add(resolvedName);
+                optionsNameFirstCapability[resolvedName] = capability;
+            }
+
+            _optionsTypeNames[capability.CapabilityId] = resolvedName;
         }
     }
 
@@ -563,7 +629,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             var interfaceName = _interfaceNames[typeId];
             var implName = _implNames[typeId];
             var capabilities = capabilitiesByConcreteImpl.TryGetValue(typeId, out var caps)
-                ? caps.Where(c => !IsSpecialCasedCapability(c.CapabilityId)).ToList()
+                ? caps.Where(c => !IsSpecialCasedCapability(c.CapabilityId))
+                      .OrderBy(c => c.MethodName, StringComparer.Ordinal)
+                      .ToList()
                 : new List<AtsCapabilityInfo>();
 
             var listDictGetters = CollectListDictGetters(capabilities);
@@ -574,7 +642,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
             foreach (var capability in capabilities)
             {
-                EmitCapabilityMethod(interfaceName, implName, capability, listDictGetters);
+                EmitCapabilityMethod(typeId, interfaceName, implName, capability, listDictGetters);
             }
         }
     }
@@ -632,7 +700,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 continue;
             }
-            WriteLine($"\t{RenderMethodSignature(interfaceName, capability)}");
+            WriteLine($"\t{RenderMethodSignature(typeId, interfaceName, capability)}");
         }
 
         // List/Dict accessor methods.
@@ -687,7 +755,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
     // ── Capability method emission ────────────────────────────────────────────
 
-    private string RenderMethodSignature(string interfaceName, AtsCapabilityInfo capability)
+    private string RenderMethodSignature(string currentTypeId, string interfaceName, AtsCapabilityInfo capability)
     {
         var methodName = ToPascalCase(capability.MethodName);
         var targetParamName = capability.TargetParameterName ?? "builder";
@@ -697,7 +765,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         var (requiredParams, optionalParams) = SplitParameters(parameters);
         var paramSig = RenderParameterList(requiredParams, optionalParams, capability);
-        var returnSig = RenderReturnSignature(interfaceName, capability);
+        var returnSig = RenderReturnSignature(currentTypeId, interfaceName, capability);
         return $"{methodName}({paramSig}){returnSig}";
     }
 
@@ -802,7 +870,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         return sb.ToString();
     }
 
-    private string RenderReturnSignature(string interfaceName, AtsCapabilityInfo capability)
+    private string RenderReturnSignature(string currentTypeId, string interfaceName, AtsCapabilityInfo capability)
     {
         var hasReturn = capability.ReturnType is not null && capability.ReturnType.TypeId != AtsConstants.Void;
         if (!hasReturn)
@@ -821,34 +889,38 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         {
             return $" ({MapTypeRefToGo(returnType, false)}, error)";
         }
-        if (IsSameType(returnType.TypeId, capability))
+        if (IsSameType(returnType.TypeId, capability, currentTypeId))
         {
             return $" {interfaceName}";
         }
         return $" {MapTypeRefToGo(returnType, false)}";
     }
 
-    private static bool IsSameType(string? typeId, AtsCapabilityInfo capability)
+    private static bool IsSameType(string? typeId, AtsCapabilityInfo capability, string? currentTypeId = null)
     {
         if (typeId is null)
         {
             return false;
         }
+        // Fluent: return type matches the constraint type (e.g. generic `T` resolves to the constraint).
         if (string.Equals(typeId, capability.TargetTypeId, StringComparison.Ordinal))
         {
             return true;
         }
-        foreach (var expanded in capability.ExpandedTargetTypes)
+        // Fluent: return type matches the specific concrete type being emitted right now.
+        // Do NOT check all ExpandedTargetTypes — that incorrectly flags a method as fluent
+        // when its return type happens to be one of the other expanded types (e.g.
+        // GetAzureContainerRegistry() returns AzureContainerRegistryResource which is itself
+        // an expanded target; testing all expanded types would mark every emit as fluent).
+        if (currentTypeId is not null && string.Equals(typeId, currentTypeId, StringComparison.Ordinal))
         {
-            if (string.Equals(typeId, expanded.TypeId, StringComparison.Ordinal))
-            {
-                return true;
-            }
+            return true;
         }
         return false;
     }
 
     private void EmitCapabilityMethod(
+        string typeId,
         string interfaceName,
         string implName,
         AtsCapabilityInfo capability,
@@ -877,7 +949,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         var (requiredParams, optionalParams) = SplitParameters(parameters);
 
         var paramSig = RenderParameterList(requiredParams, optionalParams, capability);
-        var returnSig = RenderReturnSignature(interfaceName, capability);
+        var returnSig = RenderReturnSignature(typeId, interfaceName, capability);
 
         if (!string.IsNullOrEmpty(capability.Description))
         {
@@ -886,7 +958,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         EmitUnionAllowedTypesDoc(capability);
 
         WriteLine($"func (s *{implName}) {methodName}({paramSig}){returnSig} {{");
-        EmitCapabilityBody(capability, requiredParams, optionalParams, targetParamName);
+        EmitCapabilityBody(capability, requiredParams, optionalParams, targetParamName, typeId);
 
         WriteLine("}");
         WriteLine();
@@ -909,10 +981,11 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         AtsCapabilityInfo capability,
         List<AtsParameterInfo> requiredParams,
         List<AtsParameterInfo> optionalParams,
-        string targetParamName)
+        string targetParamName,
+        string currentTypeId)
     {
         var returnType = capability.ReturnType!;
-        var isFluent = IsSameType(returnType.TypeId, capability);
+        var isFluent = IsSameType(returnType.TypeId, capability, currentTypeId);
         var methodName = ToPascalCase(capability.MethodName);
 
         if (isFluent)
@@ -1302,9 +1375,62 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         return MapTypeRefToGo(p.Type, isOptional: true);
     }
 
-    private static string GetOptionsTypeName(AtsCapabilityInfo capability)
+    private string GetOptionsTypeName(AtsCapabilityInfo capability)
     {
-        return $"{ToPascalCase(capability.MethodName)}Options";
+        return _optionsTypeNames.TryGetValue(capability.CapabilityId, out var name)
+            ? name
+            : $"{ToPascalCase(capability.MethodName)}Options";
+    }
+
+    private string GetOptionsQualifiedName(AtsCapabilityInfo capability, string simpleName)
+    {
+        var targetInterfaceName = capability.TargetTypeId is not null
+            && _interfaceNames.TryGetValue(capability.TargetTypeId, out var ifName)
+            ? ifName
+            : capability.TargetTypeId ?? "Unknown";
+        return $"{targetInterfaceName}{simpleName}";
+    }
+
+    /// <summary>
+    /// Returns true when two capabilities have the same optional-param field
+    /// signatures and can share a single Options struct. Compares params by
+    /// name and rendered Go type so callbacks with different argument types
+    /// (e.g. AzureStorageEmulatorResource vs AzureEventHubsEmulatorResource)
+    /// are correctly detected as incompatible.
+    /// </summary>
+    private bool AreOptionsCompatible(AtsCapabilityInfo a, AtsCapabilityInfo b)
+    {
+        var aTarget = a.TargetParameterName ?? "builder";
+        var bTarget = b.TargetParameterName ?? "builder";
+
+        var aOpts = a.Parameters
+            .Where(p => !string.Equals(p.Name, aTarget, StringComparison.Ordinal)
+                        && (IsCancellationToken(p) || p.IsOptional))
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .ToList();
+        var bOpts = b.Parameters
+            .Where(p => !string.Equals(p.Name, bTarget, StringComparison.Ordinal)
+                        && (IsCancellationToken(p) || p.IsOptional))
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .ToList();
+
+        if (aOpts.Count != bOpts.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < aOpts.Count; i++)
+        {
+            if (!string.Equals(aOpts[i].Name, bOpts[i].Name, StringComparison.Ordinal))
+            {
+                return false;
+            }
+            if (!string.Equals(RenderOptionsFieldType(aOpts[i]), RenderOptionsFieldType(bOpts[i]), StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ── Union parameter handling ─────────────────────────────────────────────
@@ -1390,12 +1516,13 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         AtsCapabilityInfo capability,
         List<AtsParameterInfo> requiredParams,
         List<AtsParameterInfo> optionalParams,
-        string targetParamName)
+        string targetParamName,
+        string currentTypeId)
     {
         var hasReturn = capability.ReturnType is not null && capability.ReturnType.TypeId != AtsConstants.Void;
         if (hasReturn && capability.ReturnType!.Category == AtsTypeCategory.Handle)
         {
-            EmitHandleReturningBody(capability, requiredParams, optionalParams, targetParamName);
+            EmitHandleReturningBody(capability, requiredParams, optionalParams, targetParamName, currentTypeId);
         }
         else if (hasReturn)
         {
