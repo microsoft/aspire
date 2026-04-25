@@ -185,10 +185,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         }
 
         using var stream = await response.Content.ReadAsStreamAsync(probeCts.Token).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: probeCts.Token).ConfigureAwait(false);
-        return document.RootElement.TryGetProperty("webSocketDebuggerUrl", out var endpointElement) &&
-            endpointElement.ValueKind == JsonValueKind.String &&
-            Uri.TryCreate(endpointElement.GetString(), UriKind.Absolute, out _);
+        var version = await JsonSerializer.DeserializeAsync(stream, BrowserEndpointJsonContext.Default.BrowserJsonVersionResponse, probeCts.Token).ConfigureAwait(false);
+        return Uri.TryCreate(version?.WebSocketDebuggerUrl, UriKind.Absolute, out _);
     }
 
     private static int? TryGetSingletonLockProcessId(FileInfo singletonLock)
@@ -302,7 +300,19 @@ internal sealed record BrowserDebugEndpointMetadata
     public DateTimeOffset CreatedAt { get; init; }
 }
 
-// Source-generated JSON context for the small metadata file exchanged between owned and adopted host paths.
+// Minimal shape of Chromium's /json/version response. The documented browser-target discovery format includes fields
+// such as "Browser", "Protocol-Version", and "webSocketDebuggerUrl"; only the browser WebSocket endpoint is required
+// here to prove the probed HTTP endpoint is a DevTools endpoint.
+// See https://chromedevtools.github.io/devtools-protocol/#how-do-i-access-the-browser-target
+// Example: { "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/browser/<id>" }
+internal sealed record BrowserJsonVersionResponse
+{
+    public string? WebSocketDebuggerUrl { get; init; }
+}
+
+// Source-generated JSON context for the small metadata file exchanged between owned and adopted host paths and the
+// Chromium /json/version probe response.
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, WriteIndented = true, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(BrowserDebugEndpointMetadata))]
+[JsonSerializable(typeof(BrowserJsonVersionResponse))]
 internal sealed partial class BrowserEndpointJsonContext : JsonSerializerContext;
