@@ -14,6 +14,13 @@ namespace Aspire.Hosting;
 internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager> logger)
 {
     private static readonly TimeSpan s_probeTimeout = TimeSpan.FromSeconds(2);
+    private static readonly HttpClient s_probeHttpClient = new()
+    {
+        // Keep the singleton client free of a global timeout. Each probe applies a linked CTS below so
+        // endpoint-probe timeouts remain local while caller cancellation still propagates.
+        Timeout = Timeout.InfiniteTimeSpan
+    };
+
     private readonly ILogger<BrowserLogsSessionManager> _logger = logger;
 
     public static string GetEndpointMetadataFilePath(string userDataDirectory) =>
@@ -168,15 +175,17 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             Query = null
         }.Uri;
 
-        using var httpClient = new HttpClient { Timeout = s_probeTimeout };
-        using var response = await httpClient.GetAsync(versionEndpoint, cancellationToken).ConfigureAwait(false);
+        using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        probeCts.CancelAfter(s_probeTimeout);
+
+        using var response = await s_probeHttpClient.GetAsync(versionEndpoint, probeCts.Token).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             return false;
         }
 
-        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        using var stream = await response.Content.ReadAsStreamAsync(probeCts.Token).ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: probeCts.Token).ConfigureAwait(false);
         return document.RootElement.TryGetProperty("webSocketDebuggerUrl", out var endpointElement) &&
             endpointElement.ValueKind == JsonValueKind.String &&
             Uri.TryCreate(endpointElement.GetString(), UriKind.Absolute, out _);
