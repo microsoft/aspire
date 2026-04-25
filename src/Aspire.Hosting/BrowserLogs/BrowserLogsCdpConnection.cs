@@ -8,16 +8,16 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-// Owns the browser-level websocket only. Protocol parsing stays in BrowserLogsProtocol, while target lifecycle and
+// Owns the browser-level websocket only. Protocol parsing stays in BrowserLogsCdpProtocol, while target lifecycle and
 // reconnection policy stay in BrowserTargetSession.
-internal sealed class ChromeDevToolsConnection : IAsyncDisposable
+internal sealed class BrowserLogsCdpConnection : IAsyncDisposable
 {
     private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_commandTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_keepAliveInterval = TimeSpan.FromSeconds(15);
 
     private readonly CancellationTokenSource _disposeCts = new();
-    private readonly Func<BrowserLogsProtocolEvent, ValueTask> _eventHandler;
+    private readonly Func<BrowserLogsCdpProtocolEvent, ValueTask> _eventHandler;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly ConcurrentDictionary<long, IPendingCommand> _pendingCommands = new();
     private readonly Task _receiveLoop;
@@ -25,7 +25,7 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
     private readonly ClientWebSocket _webSocket;
     private long _nextCommandId;
 
-    private ChromeDevToolsConnection(ClientWebSocket webSocket, Func<BrowserLogsProtocolEvent, ValueTask> eventHandler, ILogger<BrowserLogsSessionManager> logger)
+    private BrowserLogsCdpConnection(ClientWebSocket webSocket, Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler, ILogger<BrowserLogsSessionManager> logger)
     {
         _eventHandler = eventHandler;
         _logger = logger;
@@ -35,9 +35,9 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
 
     public Task Completion => _receiveLoop;
 
-    public static async Task<ChromeDevToolsConnection> ConnectAsync(
+    public static async Task<BrowserLogsCdpConnection> ConnectAsync(
         Uri webSocketUri,
-        Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         CancellationToken cancellationToken)
     {
@@ -49,9 +49,9 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
             static () => new ClientWebSocketConnector()).ConfigureAwait(false);
     }
 
-    internal static async Task<ChromeDevToolsConnection> ConnectAsync(
+    internal static async Task<BrowserLogsCdpConnection> ConnectAsync(
         Uri webSocketUri,
-        Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         CancellationToken cancellationToken,
         Func<IClientWebSocketConnector> connectorFactory)
@@ -61,50 +61,50 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
         // Keep-alives make transport failures show up in the receive loop instead of only on the next CDP command.
         connector.SetKeepAliveInterval(s_keepAliveInterval);
         await connector.ConnectAsync(webSocketUri, cancellationToken).ConfigureAwait(false);
-        return new ChromeDevToolsConnection(connector.DetachConnectedWebSocket(), eventHandler, logger);
+        return new BrowserLogsCdpConnection(connector.DetachConnectedWebSocket(), eventHandler, logger);
     }
 
     public Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)
     {
         return SendCommandAsync(
-            BrowserLogsProtocol.TargetCreateTargetMethod,
+            BrowserLogsCdpProtocol.TargetCreateTargetMethod,
             sessionId: null,
             static writer => writer.WriteString("url", "about:blank"),
-            BrowserLogsProtocol.ParseCreateTargetResponse,
+            BrowserLogsCdpProtocol.ParseCreateTargetResponse,
             cancellationToken);
     }
 
     public Task<BrowserLogsGetTargetsResult> GetTargetsAsync(CancellationToken cancellationToken)
     {
         return SendCommandAsync(
-            BrowserLogsProtocol.TargetGetTargetsMethod,
+            BrowserLogsCdpProtocol.TargetGetTargetsMethod,
             sessionId: null,
             writeParameters: null,
-            BrowserLogsProtocol.ParseGetTargetsResponse,
+            BrowserLogsCdpProtocol.ParseGetTargetsResponse,
             cancellationToken);
     }
 
     public Task<BrowserLogsAttachToTargetResult> AttachToTargetAsync(string targetId, CancellationToken cancellationToken)
     {
         return SendCommandAsync(
-            BrowserLogsProtocol.TargetAttachToTargetMethod,
+            BrowserLogsCdpProtocol.TargetAttachToTargetMethod,
             sessionId: null,
             writer =>
             {
                 writer.WriteString("targetId", targetId);
                 writer.WriteBoolean("flatten", true);
             },
-            BrowserLogsProtocol.ParseAttachToTargetResponse,
+            BrowserLogsCdpProtocol.ParseAttachToTargetResponse,
             cancellationToken);
     }
 
     public Task<BrowserLogsCommandAck> CloseTargetAsync(string targetId, CancellationToken cancellationToken)
     {
         return SendCommandAsync(
-            BrowserLogsProtocol.TargetCloseTargetMethod,
+            BrowserLogsCdpProtocol.TargetCloseTargetMethod,
             sessionId: null,
             writer => writer.WriteString("targetId", targetId),
-            BrowserLogsProtocol.ParseCommandAckResponse,
+            BrowserLogsCdpProtocol.ParseCommandAckResponse,
             cancellationToken);
     }
 
@@ -115,10 +115,10 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
         // events to decide whether a tracked tab ended normally, crashed, or only lost its CDP socket and can be
         // reattached. Target.getTargets is just a point-in-time snapshot; setDiscoverTargets is the ongoing signal.
         return SendCommandAsync(
-            BrowserLogsProtocol.TargetSetDiscoverTargetsMethod,
+            BrowserLogsCdpProtocol.TargetSetDiscoverTargetsMethod,
             sessionId: null,
             static writer => writer.WriteBoolean("discover", true),
-            BrowserLogsProtocol.ParseCommandAckResponse,
+            BrowserLogsCdpProtocol.ParseCommandAckResponse,
             cancellationToken);
     }
 
@@ -127,19 +127,19 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
         // These domains are per attached page session. In real browsers a successful browser-level websocket connection
         // is not enough; without these enables the page keeps running but console, exception, and network events stay
         // silent for this target.
-        await SendCommandAsync(BrowserLogsProtocol.RuntimeEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
-        await SendCommandAsync(BrowserLogsProtocol.LogEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
-        await SendCommandAsync(BrowserLogsProtocol.PageEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
-        await SendCommandAsync(BrowserLogsProtocol.NetworkEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
+        await SendCommandAsync(BrowserLogsCdpProtocol.RuntimeEnableMethod, sessionId, writeParameters: null, BrowserLogsCdpProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
+        await SendCommandAsync(BrowserLogsCdpProtocol.LogEnableMethod, sessionId, writeParameters: null, BrowserLogsCdpProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
+        await SendCommandAsync(BrowserLogsCdpProtocol.PageEnableMethod, sessionId, writeParameters: null, BrowserLogsCdpProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
+        await SendCommandAsync(BrowserLogsCdpProtocol.NetworkEnableMethod, sessionId, writeParameters: null, BrowserLogsCdpProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken)
     {
         return SendCommandAsync(
-            BrowserLogsProtocol.PageNavigateMethod,
+            BrowserLogsCdpProtocol.PageNavigateMethod,
             sessionId,
             writer => writer.WriteString("url", url.ToString()),
-            BrowserLogsProtocol.ParseCommandAckResponse,
+            BrowserLogsCdpProtocol.ParseCommandAckResponse,
             cancellationToken);
     }
 
@@ -197,8 +197,8 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
                 ((IPendingCommand)state!).SetCanceled();
             }, pendingCommand);
 
-            var payload = BrowserLogsProtocol.CreateCommandFrame(commandId, method, sessionId, writeParameters);
-            _logger.LogTrace("Tracked browser protocol -> {Frame}", BrowserLogsProtocol.DescribeFrame(payload));
+            var payload = BrowserLogsCdpProtocol.CreateCommandFrame(commandId, method, sessionId, writeParameters);
+            _logger.LogTrace("Tracked browser protocol -> {Frame}", BrowserLogsCdpProtocol.DescribeFrame(payload));
 
             await _sendLock.WaitAsync(sendCts.Token).ConfigureAwait(false);
             try
@@ -252,7 +252,7 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
                 var frame = messageBuffer.ToArray();
                 messageBuffer.SetLength(0);
 
-                _logger.LogTrace("Tracked browser protocol <- {Frame}", BrowserLogsProtocol.DescribeFrame(frame));
+                _logger.LogTrace("Tracked browser protocol <- {Frame}", BrowserLogsCdpProtocol.DescribeFrame(frame));
 
                 try
                 {
@@ -261,7 +261,7 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
                 catch (Exception ex)
                 {
                     terminalException = new InvalidOperationException(
-                        $"Tracked browser protocol receive loop failed while processing frame {BrowserLogsProtocol.DescribeFrame(frame)}.",
+                        $"Tracked browser protocol receive loop failed while processing frame {BrowserLogsCdpProtocol.DescribeFrame(frame)}.",
                         ex);
                     break;
                 }
@@ -294,7 +294,7 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
 
     private async Task HandleFrameAsync(byte[] frame)
     {
-        var header = BrowserLogsProtocol.ParseMessageHeader(frame);
+        var header = BrowserLogsCdpProtocol.ParseMessageHeader(frame);
         // CDP responses are matched by id, while events are identified by method and may arrive between responses for
         // unrelated commands. Handle responses first so callers waiting on commands are unblocked even when the browser
         // is also streaming network or console events.
@@ -308,7 +308,7 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
             return;
         }
 
-        if (header.Method is not null && BrowserLogsProtocol.ParseEvent(header, frame) is { } protocolEvent)
+        if (header.Method is not null && BrowserLogsCdpProtocol.ParseEvent(header, frame) is { } protocolEvent)
         {
             await _eventHandler(protocolEvent).ConfigureAwait(false);
         }
@@ -383,7 +383,7 @@ internal interface IClientWebSocketConnector : IDisposable
     ClientWebSocket DetachConnectedWebSocket();
 }
 
-// Thin ownership wrapper around ClientWebSocket. It lets ChromeDevToolsConnection transfer the connected socket into
+// Thin ownership wrapper around ClientWebSocket. It lets BrowserLogsCdpConnection transfer the connected socket into
 // the receive/send pipeline while still disposing the socket on connection failures.
 internal sealed class ClientWebSocketConnector : IClientWebSocketConnector
 {

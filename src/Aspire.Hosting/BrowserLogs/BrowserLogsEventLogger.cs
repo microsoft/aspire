@@ -26,7 +26,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
     // resource-log line when the request is complete.
     private readonly Dictionary<string, BrowserNetworkRequestState> _networkRequests = new(StringComparer.Ordinal);
 
-    public void HandleEvent(BrowserLogsProtocolEvent protocolEvent)
+    public void HandleEvent(BrowserLogsCdpProtocolEvent protocolEvent)
     {
         switch (protocolEvent)
         {
@@ -296,18 +296,18 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         _ => LogLevel.Information
     };
 
-    private static string FormatRemoteObject(BrowserLogsProtocolRemoteObject remoteObject)
+    private static string FormatRemoteObject(BrowserLogsCdpProtocolRemoteObject remoteObject)
     {
         // Console arguments can arrive either as pre-rendered descriptions or as structured values that need stable
         // formatting for logs and tests.
-        if (remoteObject.Value is BrowserLogsProtocolValue value)
+        if (remoteObject.Value is BrowserLogsCdpProtocolValue value)
         {
             return value switch
             {
-                BrowserLogsProtocolStringValue stringValue => stringValue.Value,
-                BrowserLogsProtocolNullValue => "null",
-                BrowserLogsProtocolBooleanValue booleanValue => booleanValue.Value ? bool.TrueString : bool.FalseString,
-                BrowserLogsProtocolNumberValue numberValue => numberValue.RawValue,
+                BrowserLogsCdpProtocolStringValue stringValue => stringValue.Value,
+                BrowserLogsCdpProtocolNullValue => "null",
+                BrowserLogsCdpProtocolBooleanValue booleanValue => booleanValue.Value ? bool.TrueString : bool.FalseString,
+                BrowserLogsCdpProtocolNumberValue numberValue => numberValue.RawValue,
                 _ => FormatStructuredValue(value)
             };
         }
@@ -320,7 +320,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         return remoteObject.Description ?? string.Empty;
     }
 
-    private static string FormatStructuredValue(BrowserLogsProtocolValue value)
+    private static string FormatStructuredValue(BrowserLogsCdpProtocolValue value)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, s_structuredValueWriterOptions);
@@ -329,11 +329,11 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    private static void WriteStructuredValue(Utf8JsonWriter writer, BrowserLogsProtocolValue value)
+    private static void WriteStructuredValue(Utf8JsonWriter writer, BrowserLogsCdpProtocolValue value)
     {
         switch (value)
         {
-            case BrowserLogsProtocolArrayValue arrayValue:
+            case BrowserLogsCdpProtocolArrayValue arrayValue:
                 writer.WriteStartArray();
                 foreach (var item in arrayValue.Items)
                 {
@@ -342,16 +342,16 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
                 writer.WriteEndArray();
                 break;
-            case BrowserLogsProtocolBooleanValue booleanValue:
+            case BrowserLogsCdpProtocolBooleanValue booleanValue:
                 writer.WriteBooleanValue(booleanValue.Value);
                 break;
-            case BrowserLogsProtocolNullValue:
+            case BrowserLogsCdpProtocolNullValue:
                 writer.WriteNullValue();
                 break;
-            case BrowserLogsProtocolNumberValue numberValue:
+            case BrowserLogsCdpProtocolNumberValue numberValue:
                 writer.WriteRawValue(numberValue.RawValue, skipInputValidation: false);
                 break;
-            case BrowserLogsProtocolObjectValue objectValue:
+            case BrowserLogsCdpProtocolObjectValue objectValue:
                 writer.WriteStartObject();
                 foreach (var (propertyName, propertyValue) in objectValue.Properties)
                 {
@@ -361,7 +361,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
                 writer.WriteEndObject();
                 break;
-            case BrowserLogsProtocolStringValue stringValue:
+            case BrowserLogsCdpProtocolStringValue stringValue:
                 writer.WriteStringValue(stringValue.Value);
                 break;
         }

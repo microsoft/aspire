@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
-public class BrowserLogsDevToolsConnectionTests
+public class BrowserLogsCdpConnectionTests
 {
     [Fact]
     public async Task ConnectAsync_DisposesConnectorWhenConnectFails()
@@ -15,7 +15,7 @@ public class BrowserLogsDevToolsConnectionTests
         var connectException = new WebSocketException("Connection refused");
         var connector = new ThrowingClientWebSocketConnector(connectException);
 
-        var exception = await Assert.ThrowsAsync<WebSocketException>(() => ChromeDevToolsConnection.ConnectAsync(
+        var exception = await Assert.ThrowsAsync<WebSocketException>(() => BrowserLogsCdpConnection.ConnectAsync(
             new Uri("ws://127.0.0.1:12345/devtools/browser/test"),
             static _ => ValueTask.CompletedTask,
             NullLogger<BrowserLogsSessionManager>.Instance,

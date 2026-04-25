@@ -34,7 +34,7 @@ internal interface IBrowserHost : IAsyncDisposable
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken);
 }
 

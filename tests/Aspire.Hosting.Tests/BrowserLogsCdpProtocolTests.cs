@@ -6,7 +6,7 @@ using System.Text;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
-public class BrowserLogsProtocolTests
+public class BrowserLogsCdpProtocolTests
 {
     [Fact]
     public void ParseEvent_ConsoleApiCalled_ReturnsStronglyTypedParameters()
@@ -28,17 +28,17 @@ public class BrowserLogsProtocolTests
             }
             """);
 
-        var header = BrowserLogsProtocol.ParseMessageHeader(payload);
-        var @event = Assert.IsType<BrowserLogsConsoleApiCalledEvent>(BrowserLogsProtocol.ParseEvent(header, payload));
+        var header = BrowserLogsCdpProtocol.ParseMessageHeader(payload);
+        var @event = Assert.IsType<BrowserLogsConsoleApiCalledEvent>(BrowserLogsCdpProtocol.ParseEvent(header, payload));
 
         Assert.Equal("target-session-1", @event.SessionId);
         Assert.Equal("error", @event.Parameters.Type);
 
-        var args = Assert.IsType<BrowserLogsProtocolRemoteObject[]>(@event.Parameters.Args);
-        Assert.IsType<BrowserLogsProtocolStringValue>(args[0].Value);
-        Assert.IsType<BrowserLogsProtocolBooleanValue>(args[1].Value);
-        Assert.IsType<BrowserLogsProtocolNumberValue>(args[2].Value);
-        Assert.IsType<BrowserLogsProtocolObjectValue>(args[3].Value);
+        var args = Assert.IsType<BrowserLogsCdpProtocolRemoteObject[]>(@event.Parameters.Args);
+        Assert.IsType<BrowserLogsCdpProtocolStringValue>(args[0].Value);
+        Assert.IsType<BrowserLogsCdpProtocolBooleanValue>(args[1].Value);
+        Assert.IsType<BrowserLogsCdpProtocolNumberValue>(args[2].Value);
+        Assert.IsType<BrowserLogsCdpProtocolObjectValue>(args[3].Value);
         Assert.Equal("Infinity", args[4].UnserializableValue);
     }
 
@@ -54,7 +54,7 @@ public class BrowserLogsProtocolTests
             }
             """);
 
-        var result = BrowserLogsProtocol.ParseCreateTargetResponse(payload);
+        var result = BrowserLogsCdpProtocol.ParseCreateTargetResponse(payload);
 
         Assert.Equal("target-123", result.TargetId);
     }
@@ -72,7 +72,7 @@ public class BrowserLogsProtocolTests
             }
             """);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => BrowserLogsProtocol.ParseCommandAckResponse(payload));
+        var exception = Assert.Throws<InvalidOperationException>(() => BrowserLogsCdpProtocol.ParseCommandAckResponse(payload));
 
         Assert.Contains("Method not found", exception.Message);
         Assert.Contains("-32601", exception.Message);
@@ -92,8 +92,8 @@ public class BrowserLogsProtocolTests
             }
             """);
 
-        var header = BrowserLogsProtocol.ParseMessageHeader(payload);
-        var @event = Assert.IsType<BrowserLogsDetachedFromTargetEvent>(BrowserLogsProtocol.ParseEvent(header, payload));
+        var header = BrowserLogsCdpProtocol.ParseMessageHeader(payload);
+        var @event = Assert.IsType<BrowserLogsDetachedFromTargetEvent>(BrowserLogsCdpProtocol.ParseEvent(header, payload));
 
         Assert.Equal("browser-session", @event.SessionId);
         Assert.Equal("target-session-1", @event.DetachedSessionId);
@@ -114,8 +114,8 @@ public class BrowserLogsProtocolTests
             }
             """);
 
-        var header = BrowserLogsProtocol.ParseMessageHeader(payload);
-        var @event = Assert.IsType<BrowserLogsTargetCrashedEvent>(BrowserLogsProtocol.ParseEvent(header, payload));
+        var header = BrowserLogsCdpProtocol.ParseMessageHeader(payload);
+        var @event = Assert.IsType<BrowserLogsTargetCrashedEvent>(BrowserLogsCdpProtocol.ParseEvent(header, payload));
 
         Assert.Equal("target-1", @event.TargetId);
         Assert.Equal("crashed", @event.Parameters.Status);
@@ -125,9 +125,9 @@ public class BrowserLogsProtocolTests
     [Fact]
     public void CreateCommandFrame_DoesNotEscapeNonAsciiCharacters()
     {
-        var payload = BrowserLogsProtocol.CreateCommandFrame(
+        var payload = BrowserLogsCdpProtocol.CreateCommandFrame(
             7,
-            BrowserLogsProtocol.PageNavigateMethod,
+            BrowserLogsCdpProtocol.PageNavigateMethod,
             "session-1",
             writer => writer.WriteString("url", "https://example.test/über"));
 

@@ -1148,10 +1148,10 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             ?? throw new InvalidOperationException("Expected browser session property JSON.");
     }
 
-    private static BrowserLogsProtocolEvent ParseProtocolEvent(string json)
+    private static BrowserLogsCdpProtocolEvent ParseProtocolEvent(string json)
     {
         var payload = Encoding.UTF8.GetBytes(json);
-        return BrowserLogsProtocol.ParseEvent(BrowserLogsProtocol.ParseMessageHeader(payload), payload)
+        return BrowserLogsCdpProtocol.ParseEvent(BrowserLogsCdpProtocol.ParseMessageHeader(payload), payload)
             ?? throw new InvalidOperationException("Expected a browser protocol event frame.");
     }
 

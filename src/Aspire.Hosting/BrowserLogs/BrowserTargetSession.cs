@@ -16,7 +16,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
     private readonly TaskCompletionSource<BrowserTargetSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
-    private readonly Func<BrowserLogsProtocolEvent, ValueTask> _eventHandler;
+    private readonly Func<BrowserLogsCdpProtocolEvent, ValueTask> _eventHandler;
     private readonly IBrowserHost _host;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly bool _reuseInitialBlankTarget;
@@ -25,7 +25,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
     private readonly TimeProvider _timeProvider;
     private readonly Uri _url;
 
-    private ChromeDevToolsConnection? _connection;
+    private BrowserLogsCdpConnection? _connection;
     private Task<BrowserTargetSessionResult>? _monitorTask;
     private int _disposed;
     private string? _targetId;
@@ -36,7 +36,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget)
@@ -57,7 +57,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
     public Task<BrowserTargetSessionResult> Completion => _monitorTask ?? throw new InvalidOperationException("Browser target session has not started.");
 
-    internal static BrowserTargetSessionResult? TryGetTargetCompletion(BrowserLogsProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
+    internal static BrowserTargetSessionResult? TryGetTargetCompletion(BrowserLogsCdpProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
     {
         return protocolEvent switch
         {
@@ -90,7 +90,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget,
@@ -155,7 +155,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
     {
         await DisposeConnectionAsync().ConfigureAwait(false);
 
-        _connection = await ChromeDevToolsConnection.ConnectAsync(_host.DebugEndpoint, HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
+        _connection = await BrowserLogsCdpConnection.ConnectAsync(_host.DebugEndpoint, HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
         // Target discovery must be re-enabled for every browser-level connection, including reconnects. The
         // subscription is attached to this websocket, not to the browser process, and it is what makes Chromium emit
         // targetDestroyed/targetCrashed/detachedFromTarget events that tell us whether the tracked tab is gone.
@@ -311,7 +311,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         return false;
     }
 
-    private async ValueTask HandleEventAsync(BrowserLogsProtocolEvent protocolEvent)
+    private async ValueTask HandleEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
     {
         // Browser-level lifecycle events often are not stamped with the attached page session id, so check completion
         // first. Only after that should ordinary Runtime/Log/Network/Page events be filtered to this target session.

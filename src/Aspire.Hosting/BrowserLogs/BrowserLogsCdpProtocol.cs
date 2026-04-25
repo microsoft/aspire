@@ -25,7 +25,7 @@ namespace Aspire.Hosting;
 //
 // Keep this file focused on protocol serialization and parsing so browser networking and session orchestration can be
 // tested independently from CDP frame handling.
-internal static class BrowserLogsProtocol
+internal static class BrowserLogsCdpProtocol
 {
     private static readonly JsonWriterOptions s_commandFrameWriterOptions = new()
     {
@@ -57,7 +57,7 @@ internal static class BrowserLogsProtocol
     internal const string TargetTargetDestroyedMethod = "Target.targetDestroyed";
     internal const string InspectorDetachedMethod = "Inspector.detached";
 
-    internal static BrowserLogsProtocolMessageHeader ParseMessageHeader(ReadOnlySpan<byte> framePayload)
+    internal static BrowserLogsCdpProtocolMessageHeader ParseMessageHeader(ReadOnlySpan<byte> framePayload)
     {
         var reader = new Utf8JsonReader(framePayload, isFinalBlock: true, state: default);
 
@@ -114,7 +114,7 @@ internal static class BrowserLogsProtocol
             }
         }
 
-        return new BrowserLogsProtocolMessageHeader(id, method, sessionId);
+        return new BrowserLogsCdpProtocolMessageHeader(id, method, sessionId);
     }
 
     internal static byte[] CreateCommandFrame(long id, string method, string? sessionId, Action<Utf8JsonWriter>? writeParameters)
@@ -145,7 +145,7 @@ internal static class BrowserLogsProtocol
         return buffer.WrittenSpan.ToArray();
     }
 
-    internal static BrowserLogsProtocolEvent? ParseEvent(BrowserLogsProtocolMessageHeader header, ReadOnlySpan<byte> framePayload) => header.Method switch
+    internal static BrowserLogsCdpProtocolEvent? ParseEvent(BrowserLogsCdpProtocolMessageHeader header, ReadOnlySpan<byte> framePayload) => header.Method switch
     {
         RuntimeConsoleApiCalledMethod => CreateConsoleApiCalledEvent(framePayload),
         RuntimeExceptionThrownMethod => CreateExceptionThrownEvent(framePayload),
@@ -163,7 +163,7 @@ internal static class BrowserLogsProtocol
 
     internal static BrowserLogsCreateTargetResult ParseCreateTargetResponse(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsCreateTargetResponseEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsCreateTargetResponseEnvelope);
         ThrowIfProtocolError(envelope.Error);
 
         return envelope.Result ?? throw new InvalidOperationException("Tracked browser target creation did not return a result payload.");
@@ -171,7 +171,7 @@ internal static class BrowserLogsProtocol
 
     internal static BrowserLogsAttachToTargetResult ParseAttachToTargetResponse(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsAttachToTargetResponseEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsAttachToTargetResponseEnvelope);
         ThrowIfProtocolError(envelope.Error);
 
         return envelope.Result ?? throw new InvalidOperationException("Tracked browser target attachment did not return a result payload.");
@@ -179,7 +179,7 @@ internal static class BrowserLogsProtocol
 
     internal static BrowserLogsGetTargetsResult ParseGetTargetsResponse(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsGetTargetsResponseEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsGetTargetsResponseEnvelope);
         ThrowIfProtocolError(envelope.Error);
 
         return envelope.Result ?? throw new InvalidOperationException("Tracked browser target discovery did not return a result payload.");
@@ -187,7 +187,7 @@ internal static class BrowserLogsProtocol
 
     internal static BrowserLogsCommandAck ParseCommandAckResponse(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsCommandAckResponseEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsCommandAckResponseEnvelope);
         ThrowIfProtocolError(envelope.Error);
 
         return BrowserLogsCommandAck.Instance;
@@ -203,7 +203,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsConsoleApiCalledEvent? CreateConsoleApiCalledEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsConsoleApiCalledEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsConsoleApiCalledEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsConsoleApiCalledEvent(envelope.SessionId, envelope.Params);
@@ -211,7 +211,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsExceptionThrownEvent? CreateExceptionThrownEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsExceptionThrownEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsExceptionThrownEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsExceptionThrownEvent(envelope.SessionId, envelope.Params);
@@ -219,7 +219,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsLogEntryAddedEvent? CreateLogEntryAddedEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsLogEntryAddedEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLogEntryAddedEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsLogEntryAddedEvent(envelope.SessionId, envelope.Params);
@@ -227,7 +227,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsRequestWillBeSentEvent? CreateRequestWillBeSentEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsRequestWillBeSentEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsRequestWillBeSentEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsRequestWillBeSentEvent(envelope.SessionId, envelope.Params);
@@ -235,7 +235,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsResponseReceivedEvent? CreateResponseReceivedEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsResponseReceivedEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsResponseReceivedEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsResponseReceivedEvent(envelope.SessionId, envelope.Params);
@@ -243,7 +243,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsLoadingFinishedEvent? CreateLoadingFinishedEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsLoadingFinishedEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLoadingFinishedEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsLoadingFinishedEvent(envelope.SessionId, envelope.Params);
@@ -251,7 +251,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsLoadingFailedEvent? CreateLoadingFailedEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsLoadingFailedEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLoadingFailedEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsLoadingFailedEvent(envelope.SessionId, envelope.Params);
@@ -259,7 +259,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsTargetDestroyedEvent? CreateTargetDestroyedEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsTargetDestroyedEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsTargetDestroyedEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsTargetDestroyedEvent(envelope.SessionId, envelope.Params);
@@ -267,7 +267,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsTargetCrashedEvent? CreateTargetCrashedEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsTargetCrashedEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsTargetCrashedEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsTargetCrashedEvent(envelope.SessionId, envelope.Params);
@@ -275,7 +275,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsDetachedFromTargetEvent? CreateDetachedFromTargetEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsDetachedFromTargetEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsDetachedFromTargetEnvelope);
         return envelope.Params is null
             ? null
             : new BrowserLogsDetachedFromTargetEvent(envelope.SessionId, envelope.Params);
@@ -283,7 +283,7 @@ internal static class BrowserLogsProtocol
 
     private static BrowserLogsInspectorDetachedEvent? CreateInspectorDetachedEvent(ReadOnlySpan<byte> framePayload)
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsInspectorDetachedEnvelope);
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsInspectorDetachedEnvelope);
         return new BrowserLogsInspectorDetachedEvent(envelope.SessionId, envelope.Params);
     }
 
@@ -294,7 +294,7 @@ internal static class BrowserLogsProtocol
             ?? throw new InvalidOperationException("Tracked browser protocol frame was empty.");
     }
 
-    private static void ThrowIfProtocolError(BrowserLogsProtocolError? error)
+    private static void ThrowIfProtocolError(BrowserLogsCdpProtocolError? error)
     {
         if (error is null)
         {
@@ -314,54 +314,54 @@ internal static class BrowserLogsProtocol
     }
 }
 
-internal readonly record struct BrowserLogsProtocolMessageHeader(long? Id, string? Method, string? SessionId);
+internal readonly record struct BrowserLogsCdpProtocolMessageHeader(long? Id, string? Method, string? SessionId);
 
-internal abstract record BrowserLogsProtocolEvent(string Method, string? SessionId);
+internal abstract record BrowserLogsCdpProtocolEvent(string Method, string? SessionId);
 
 internal sealed record BrowserLogsConsoleApiCalledEvent(string? SessionId, BrowserLogsRuntimeConsoleApiCalledParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.RuntimeConsoleApiCalledMethod, SessionId);
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.RuntimeConsoleApiCalledMethod, SessionId);
 
 internal sealed record BrowserLogsExceptionThrownEvent(string? SessionId, BrowserLogsExceptionThrownParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.RuntimeExceptionThrownMethod, SessionId);
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.RuntimeExceptionThrownMethod, SessionId);
 
 internal sealed record BrowserLogsLoadingFailedEvent(string? SessionId, BrowserLogsLoadingFailedParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.NetworkLoadingFailedMethod, SessionId);
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.NetworkLoadingFailedMethod, SessionId);
 
 internal sealed record BrowserLogsLoadingFinishedEvent(string? SessionId, BrowserLogsLoadingFinishedParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.NetworkLoadingFinishedMethod, SessionId);
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.NetworkLoadingFinishedMethod, SessionId);
 
 internal sealed record BrowserLogsLogEntryAddedEvent(string? SessionId, BrowserLogsLogEntryAddedParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.LogEntryAddedMethod, SessionId);
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.LogEntryAddedMethod, SessionId);
 
 internal sealed record BrowserLogsRequestWillBeSentEvent(string? SessionId, BrowserLogsRequestWillBeSentParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.NetworkRequestWillBeSentMethod, SessionId);
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.NetworkRequestWillBeSentMethod, SessionId);
 
 internal sealed record BrowserLogsResponseReceivedEvent(string? SessionId, BrowserLogsResponseReceivedParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.NetworkResponseReceivedMethod, SessionId);
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.NetworkResponseReceivedMethod, SessionId);
 
 // Target lifecycle events differ from page-domain events in routing semantics:
-// - For Page/Runtime/Network/Log events, BrowserLogsProtocolEvent.SessionId is the attached page session and
+// - For Page/Runtime/Network/Log events, BrowserLogsCdpProtocolEvent.SessionId is the attached page session and
 //   the dispatcher routes by matching it against the tracked target's session id.
 // - For Target.targetDestroyed/targetCrashed and Inspector.detached, the envelope-level sessionId is typically
 //   absent (these are fired on the browser CDP channel, not on a target session). The SUBJECT of the event is
 //   carried in the parameters: targetId for target events, the parent attached sessionId for the implicit
-//   detach. Routing logic must not rely on BrowserLogsProtocolEvent.SessionId for these.
+//   detach. Routing logic must not rely on BrowserLogsCdpProtocolEvent.SessionId for these.
 // - For Target.detachedFromTarget specifically, params.sessionId identifies the session that detached, which is
 //   the value that should be matched against the tracked target's session id.
 internal sealed record BrowserLogsTargetDestroyedEvent(string? SessionId, BrowserLogsTargetDestroyedParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetDestroyedMethod, SessionId)
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.TargetTargetDestroyedMethod, SessionId)
 {
     public string? TargetId => Parameters.TargetId;
 }
 
 internal sealed record BrowserLogsTargetCrashedEvent(string? SessionId, BrowserLogsTargetCrashedParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetCrashedMethod, SessionId)
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.TargetTargetCrashedMethod, SessionId)
 {
     public string? TargetId => Parameters.TargetId;
 }
 
 internal sealed record BrowserLogsDetachedFromTargetEvent(string? SessionId, BrowserLogsDetachedFromTargetParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetDetachedFromTargetMethod, SessionId)
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.TargetDetachedFromTargetMethod, SessionId)
 {
     public string? DetachedSessionId => Parameters.SessionId;
 
@@ -369,7 +369,7 @@ internal sealed record BrowserLogsDetachedFromTargetEvent(string? SessionId, Bro
 }
 
 internal sealed record BrowserLogsInspectorDetachedEvent(string? SessionId, BrowserLogsInspectorDetachedParameters? Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.InspectorDetachedMethod, SessionId)
+    : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.InspectorDetachedMethod, SessionId)
 {
     public string? Reason => Parameters?.Reason;
 }
@@ -377,7 +377,7 @@ internal sealed record BrowserLogsInspectorDetachedEvent(string? SessionId, Brow
 internal sealed class BrowserLogsAttachToTargetResponseEnvelope
 {
     [JsonPropertyName("error")]
-    public BrowserLogsProtocolError? Error { get; init; }
+    public BrowserLogsCdpProtocolError? Error { get; init; }
 
     [JsonPropertyName("id")]
     public long Id { get; init; }
@@ -404,7 +404,7 @@ internal sealed class BrowserLogsCommandAck
 internal sealed class BrowserLogsCommandAckResponseEnvelope
 {
     [JsonPropertyName("error")]
-    public BrowserLogsProtocolError? Error { get; init; }
+    public BrowserLogsCdpProtocolError? Error { get; init; }
 
     [JsonPropertyName("id")]
     public long Id { get; init; }
@@ -422,7 +422,7 @@ internal sealed class BrowserLogsConsoleApiCalledEnvelope
 internal sealed class BrowserLogsCreateTargetResponseEnvelope
 {
     [JsonPropertyName("error")]
-    public BrowserLogsProtocolError? Error { get; init; }
+    public BrowserLogsCdpProtocolError? Error { get; init; }
 
     [JsonPropertyName("id")]
     public long Id { get; init; }
@@ -440,7 +440,7 @@ internal sealed class BrowserLogsCreateTargetResult
 internal sealed class BrowserLogsGetTargetsResponseEnvelope
 {
     [JsonPropertyName("error")]
-    public BrowserLogsProtocolError? Error { get; init; }
+    public BrowserLogsCdpProtocolError? Error { get; init; }
 
     [JsonPropertyName("id")]
     public long Id { get; init; }
@@ -572,7 +572,7 @@ internal sealed class BrowserLogsLogEntryAddedParameters
     public BrowserLogsLogEntry? Entry { get; init; }
 }
 
-internal sealed class BrowserLogsProtocolError
+internal sealed class BrowserLogsCdpProtocolError
 {
     [JsonPropertyName("code")]
     public int? Code { get; init; }
@@ -581,7 +581,7 @@ internal sealed class BrowserLogsProtocolError
     public string? Message { get; init; }
 }
 
-internal sealed class BrowserLogsProtocolRemoteObject
+internal sealed class BrowserLogsCdpProtocolRemoteObject
 {
     [JsonPropertyName("description")]
     public string? Description { get; init; }
@@ -590,7 +590,7 @@ internal sealed class BrowserLogsProtocolRemoteObject
     public string? UnserializableValue { get; init; }
 
     [JsonPropertyName("value")]
-    public BrowserLogsProtocolValue? Value { get; init; }
+    public BrowserLogsCdpProtocolValue? Value { get; init; }
 }
 
 internal sealed class BrowserLogsRequest
@@ -671,7 +671,7 @@ internal sealed class BrowserLogsResponseReceivedParameters
 internal sealed class BrowserLogsRuntimeConsoleApiCalledParameters
 {
     [JsonPropertyName("args")]
-    public BrowserLogsProtocolRemoteObject[]? Args { get; init; }
+    public BrowserLogsCdpProtocolRemoteObject[]? Args { get; init; }
 
     [JsonPropertyName("type")]
     public string? Type { get; init; }
@@ -758,47 +758,47 @@ internal sealed class BrowserLogsInspectorDetachedParameters
     public string? Reason { get; init; }
 }
 
-[JsonConverter(typeof(BrowserLogsProtocolValueJsonConverter))]
-internal abstract record BrowserLogsProtocolValue;
+[JsonConverter(typeof(BrowserLogsCdpProtocolValueJsonConverter))]
+internal abstract record BrowserLogsCdpProtocolValue;
 
-internal sealed record BrowserLogsProtocolArrayValue(IReadOnlyList<BrowserLogsProtocolValue> Items) : BrowserLogsProtocolValue;
+internal sealed record BrowserLogsCdpProtocolArrayValue(IReadOnlyList<BrowserLogsCdpProtocolValue> Items) : BrowserLogsCdpProtocolValue;
 
-internal sealed record BrowserLogsProtocolBooleanValue(bool Value) : BrowserLogsProtocolValue;
+internal sealed record BrowserLogsCdpProtocolBooleanValue(bool Value) : BrowserLogsCdpProtocolValue;
 
-internal sealed record BrowserLogsProtocolNullValue : BrowserLogsProtocolValue
+internal sealed record BrowserLogsCdpProtocolNullValue : BrowserLogsCdpProtocolValue
 {
-    public static BrowserLogsProtocolNullValue Instance { get; } = new();
+    public static BrowserLogsCdpProtocolNullValue Instance { get; } = new();
 
-    private BrowserLogsProtocolNullValue()
+    private BrowserLogsCdpProtocolNullValue()
     {
     }
 }
 
-internal sealed record BrowserLogsProtocolNumberValue(string RawValue) : BrowserLogsProtocolValue;
+internal sealed record BrowserLogsCdpProtocolNumberValue(string RawValue) : BrowserLogsCdpProtocolValue;
 
-internal sealed record BrowserLogsProtocolObjectValue(IReadOnlyDictionary<string, BrowserLogsProtocolValue> Properties) : BrowserLogsProtocolValue;
+internal sealed record BrowserLogsCdpProtocolObjectValue(IReadOnlyDictionary<string, BrowserLogsCdpProtocolValue> Properties) : BrowserLogsCdpProtocolValue;
 
-internal sealed record BrowserLogsProtocolStringValue(string Value) : BrowserLogsProtocolValue;
+internal sealed record BrowserLogsCdpProtocolStringValue(string Value) : BrowserLogsCdpProtocolValue;
 
-internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<BrowserLogsProtocolValue>
+internal sealed class BrowserLogsCdpProtocolValueJsonConverter : JsonConverter<BrowserLogsCdpProtocolValue>
 {
-    public override BrowserLogsProtocolValue Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => reader.TokenType switch
+    public override BrowserLogsCdpProtocolValue Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => reader.TokenType switch
     {
         JsonTokenType.StartArray => ReadArray(ref reader, options),
         JsonTokenType.StartObject => ReadObject(ref reader, options),
-        JsonTokenType.String => new BrowserLogsProtocolStringValue(reader.GetString() ?? string.Empty),
-        JsonTokenType.True => new BrowserLogsProtocolBooleanValue(true),
-        JsonTokenType.False => new BrowserLogsProtocolBooleanValue(false),
-        JsonTokenType.Null => BrowserLogsProtocolNullValue.Instance,
-        JsonTokenType.Number => new BrowserLogsProtocolNumberValue(GetRawNumber(ref reader)),
+        JsonTokenType.String => new BrowserLogsCdpProtocolStringValue(reader.GetString() ?? string.Empty),
+        JsonTokenType.True => new BrowserLogsCdpProtocolBooleanValue(true),
+        JsonTokenType.False => new BrowserLogsCdpProtocolBooleanValue(false),
+        JsonTokenType.Null => BrowserLogsCdpProtocolNullValue.Instance,
+        JsonTokenType.Number => new BrowserLogsCdpProtocolNumberValue(GetRawNumber(ref reader)),
         _ => throw new JsonException($"Unsupported JSON token '{reader.TokenType}' for tracked browser protocol value.")
     };
 
-    public override void Write(Utf8JsonWriter writer, BrowserLogsProtocolValue value, JsonSerializerOptions options)
+    public override void Write(Utf8JsonWriter writer, BrowserLogsCdpProtocolValue value, JsonSerializerOptions options)
     {
         switch (value)
         {
-            case BrowserLogsProtocolArrayValue arrayValue:
+            case BrowserLogsCdpProtocolArrayValue arrayValue:
                 writer.WriteStartArray();
                 foreach (var item in arrayValue.Items)
                 {
@@ -807,16 +807,16 @@ internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<Brow
 
                 writer.WriteEndArray();
                 break;
-            case BrowserLogsProtocolBooleanValue booleanValue:
+            case BrowserLogsCdpProtocolBooleanValue booleanValue:
                 writer.WriteBooleanValue(booleanValue.Value);
                 break;
-            case BrowserLogsProtocolNullValue:
+            case BrowserLogsCdpProtocolNullValue:
                 writer.WriteNullValue();
                 break;
-            case BrowserLogsProtocolNumberValue numberValue:
+            case BrowserLogsCdpProtocolNumberValue numberValue:
                 writer.WriteRawValue(numberValue.RawValue, skipInputValidation: true);
                 break;
-            case BrowserLogsProtocolObjectValue objectValue:
+            case BrowserLogsCdpProtocolObjectValue objectValue:
                 writer.WriteStartObject();
                 foreach (var (propertyName, propertyValue) in objectValue.Properties)
                 {
@@ -826,7 +826,7 @@ internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<Brow
 
                 writer.WriteEndObject();
                 break;
-            case BrowserLogsProtocolStringValue stringValue:
+            case BrowserLogsCdpProtocolStringValue stringValue:
                 writer.WriteStringValue(stringValue.Value);
                 break;
             default:
@@ -841,9 +841,9 @@ internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<Brow
             : Encoding.UTF8.GetString(reader.ValueSpan);
     }
 
-    private static BrowserLogsProtocolArrayValue ReadArray(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    private static BrowserLogsCdpProtocolArrayValue ReadArray(ref Utf8JsonReader reader, JsonSerializerOptions options)
     {
-        var items = new List<BrowserLogsProtocolValue>();
+        var items = new List<BrowserLogsCdpProtocolValue>();
 
         while (reader.Read())
         {
@@ -855,12 +855,12 @@ internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<Brow
             items.Add(ReadValue(ref reader, options));
         }
 
-        return new BrowserLogsProtocolArrayValue(items);
+        return new BrowserLogsCdpProtocolArrayValue(items);
     }
 
-    private static BrowserLogsProtocolObjectValue ReadObject(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    private static BrowserLogsCdpProtocolObjectValue ReadObject(ref Utf8JsonReader reader, JsonSerializerOptions options)
     {
-        var properties = new Dictionary<string, BrowserLogsProtocolValue>(StringComparer.Ordinal);
+        var properties = new Dictionary<string, BrowserLogsCdpProtocolValue>(StringComparer.Ordinal);
 
         while (reader.Read())
         {
@@ -885,13 +885,13 @@ internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<Brow
             properties[propertyName] = ReadValue(ref reader, options);
         }
 
-        return new BrowserLogsProtocolObjectValue(properties);
+        return new BrowserLogsCdpProtocolObjectValue(properties);
     }
 
-    private static BrowserLogsProtocolValue ReadValue(ref Utf8JsonReader reader, JsonSerializerOptions options)
+    private static BrowserLogsCdpProtocolValue ReadValue(ref Utf8JsonReader reader, JsonSerializerOptions options)
     {
-        var converter = (BrowserLogsProtocolValueJsonConverter)options.GetConverter(typeof(BrowserLogsProtocolValue));
-        return converter.Read(ref reader, typeof(BrowserLogsProtocolValue), options);
+        var converter = (BrowserLogsCdpProtocolValueJsonConverter)options.GetConverter(typeof(BrowserLogsCdpProtocolValue));
+        return converter.Read(ref reader, typeof(BrowserLogsCdpProtocolValue), options);
     }
 }
 
@@ -911,4 +911,4 @@ internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<Brow
 [JsonSerializable(typeof(BrowserLogsResponseReceivedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsTargetCrashedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsTargetDestroyedEnvelope))]
-internal sealed partial class BrowserLogsProtocolJsonContext : JsonSerializerContext;
+internal sealed partial class BrowserLogsCdpProtocolJsonContext : JsonSerializerContext;
