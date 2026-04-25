@@ -268,11 +268,6 @@ app.Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            // Wait for port-forward to establish
-            await auto.TypeAsync("sleep 3");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
-
             // Verify Key Vault connectivity
             await auto.TypeAsync("OK=0; for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18082/test-keyvault -o /dev/null -w '%{http_code}' && echo ' OK' && OK=1 && break; done; [ \"$OK\" = \"1\" ] || { echo 'FAIL: /test-keyvault unreachable after 10 retries'; exit 1; }");
             await auto.EnterAsync();

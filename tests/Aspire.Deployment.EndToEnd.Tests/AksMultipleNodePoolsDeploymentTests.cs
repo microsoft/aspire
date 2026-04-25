@@ -200,10 +200,6 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            await auto.TypeAsync("sleep 3");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
-
             // Verify /weatherforecast endpoint (default starter API)
             await auto.TypeAsync("OK=0; for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18082/weatherforecast -o /dev/null -w '%{http_code}' && echo ' OK' && OK=1 && break; done; [ \"$OK\" = \"1\" ] || { echo 'FAIL: apiservice unreachable after 10 retries'; exit 1; }");
             await auto.EnterAsync();
