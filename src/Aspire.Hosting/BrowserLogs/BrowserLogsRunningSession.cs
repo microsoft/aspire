@@ -178,6 +178,8 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     {
         _stopCts.Cancel();
 
+        // Stopping a dashboard browser-log session should close only the page target it created. The shared browser
+        // process/window is released through the lease and may stay alive while other resource sessions are still active.
         await DisposeTargetSessionAsync().ConfigureAwait(false);
         await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);
 
@@ -224,6 +226,9 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
         try
         {
+            // A running session represents one resource URL, not one browser process. In the playground multiple
+            // resources can share a host, while each resource still gets its own CDP target so console and network
+            // events stay scoped to the right resource logs.
             _targetSession = await browserHost.CreateTargetSessionAsync(
                 _sessionId,
                 _url,
@@ -257,6 +262,8 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         {
             var targetSession = _targetSession ?? throw new InvalidOperationException("Browser target session is not available.");
             var result = await targetSession.Completion.ConfigureAwait(false);
+            // Closing the tracked tab by hand is a normal completion. Browser process exit, target crash, or an
+            // unrecoverable CDP connection loss is surfaced as an error so the dashboard resource shows what happened.
             return result.CompletionKind switch
             {
                 BrowserTargetSessionCompletionKind.Stopped => new BrowserSessionResult(ExitCode: null, Error: null),
@@ -575,6 +582,9 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             return null;
         }
 
+        // Owned Chromium launches start with the about:blank target from BuildBrowserArguments. Reusing it means the
+        // first tracked session navigates the visible empty tab instead of creating a second tab and leaving a blank one
+        // behind. If the browser reported a different unattached page first, fall back to that.
         var preferredTarget = targetInfos.FirstOrDefault(static targetInfo =>
             string.Equals(targetInfo.Type, "page", StringComparison.Ordinal) &&
             targetInfo.Attached != true &&

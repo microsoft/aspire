@@ -170,10 +170,14 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
             throw new InvalidOperationException("Tracked browser target id is not available.");
         }
 
+        // Reconnects reuse the existing target id. A transient websocket drop does not necessarily close the browser
+        // tab, so recovering should reattach to the same page instead of opening a duplicate tab in the user's browser.
         var attachToTargetResult = await _connection.AttachToTargetAsync(_targetId, cancellationToken).ConfigureAwait(false);
         _targetSessionId = attachToTargetResult.SessionId
             ?? throw new InvalidOperationException("Browser target attachment did not return a session id.");
 
+        // Runtime/Log/Page/Network subscriptions are scoped to the attached target session. They have to be re-enabled
+        // after every attach, including reconnects, or the page keeps running with no events flowing back to resource logs.
         await _connection.EnablePageInstrumentationAsync(_targetSessionId, cancellationToken).ConfigureAwait(false);
 
         if (createTarget)
@@ -193,6 +197,8 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
             }
         }
 
+        // If no safe startup page target is available, create a fresh page target so we do not navigate an unrelated
+        // page in a real browser window.
         var createTargetResult = await _connection!.CreateTargetAsync(cancellationToken).ConfigureAwait(false);
         return createTargetResult.TargetId
             ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
@@ -254,6 +260,9 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
     {
         await DisposeConnectionAsync().ConfigureAwait(false);
 
+        // In a real browser the CDP websocket can disappear briefly while the tab keeps running (for example during
+        // browser hiccups or network stack resets). Give it a short recovery window so logs continue without opening
+        // another tab, but fail fast enough that the dashboard does not look healthy after the target is truly gone.
         var reconnectDeadline = _timeProvider.GetUtcNow() + s_connectionRecoveryTimeout;
         var reconnectAttempt = 0;
         Exception? lastError = connectionError;
@@ -303,6 +312,8 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
     private async ValueTask HandleEventAsync(BrowserLogsProtocolEvent protocolEvent)
     {
+        // Browser-level lifecycle events often are not stamped with the attached page session id, so check completion
+        // first. Only after that should ordinary Runtime/Log/Network/Page events be filtered to this target session.
         if (TryGetTargetCompletion(protocolEvent, _targetId, _targetSessionId) is { } targetCompletion)
         {
             _completionSource.TrySetResult(targetCompletion);

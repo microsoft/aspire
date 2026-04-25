@@ -56,6 +56,8 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
         Func<IClientWebSocketConnector> connectorFactory)
     {
         using var connector = connectorFactory();
+        // Browser-log sessions can sit idle while the page is loading or the developer is reading the dashboard.
+        // Keep-alives make transport failures show up in the receive loop instead of only on the next CDP command.
         connector.SetKeepAliveInterval(TimeSpan.FromSeconds(15));
         await connector.ConnectAsync(webSocketUri, cancellationToken).ConfigureAwait(false);
         return new ChromeDevToolsConnection(connector.DetachConnectedWebSocket(), eventHandler, logger);
@@ -121,6 +123,9 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
 
     public async Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken)
     {
+        // These domains are per attached page session. In real browsers a successful browser-level websocket connection
+        // is not enough; without these enables the page keeps running but console, exception, and network events stay
+        // silent for this target.
         await SendCommandAsync(BrowserLogsProtocol.RuntimeEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
         await SendCommandAsync(BrowserLogsProtocol.LogEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
         await SendCommandAsync(BrowserLogsProtocol.PageEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
@@ -235,6 +240,8 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
                     break;
                 }
 
+                // Large CDP events can span multiple websocket frames. Buffer until EndOfMessage so protocol parsing
+                // always sees one complete JSON message, matching the frames observed from a real browser.
                 messageBuffer.Write(buffer, 0, result.Count);
                 if (!result.EndOfMessage)
                 {
@@ -287,6 +294,9 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
     private async Task HandleFrameAsync(byte[] frame)
     {
         var header = BrowserLogsProtocol.ParseMessageHeader(frame);
+        // CDP responses are matched by id, while events are identified by method and may arrive between responses for
+        // unrelated commands. Handle responses first so callers waiting on commands are unblocked even when the browser
+        // is also streaming network or console events.
         if (header.Id is long commandId)
         {
             if (_pendingCommands.TryGetValue(commandId, out var pendingCommand))

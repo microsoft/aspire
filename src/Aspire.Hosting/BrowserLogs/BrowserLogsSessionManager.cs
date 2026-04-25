@@ -64,6 +64,9 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         ThrowIfDisposing();
 
         var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
+        // Dashboard commands can start/stop browser-log sessions for the same resource while previous targets are still
+        // completing. Serialize per resource so session ids, health reports, and properties describe the same observed
+        // set of browser targets.
         await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -137,6 +140,9 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 await HandleSessionCompletedAsync(resource, resourceName, resourceState, session.SessionId, exitCode, error).ConfigureAwait(false);
             });
 
+            // The session snapshot intentionally stores both browser-level and page-level endpoints. In the dashboard,
+            // the browser endpoint explains what process was adopted/owned, while the page endpoint lets a developer
+            // inspect the exact target that is producing resource logs.
             resourceState.ActiveSessions[session.SessionId] = new ActiveBrowserSession(
                 session.SessionId,
                 settings.Browser,
@@ -234,6 +240,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 return;
             }
 
+            // Multiple active sessions can share one visible browser. If one tab is closed or crashes, keep the resource
+            // running while other tabs are still producing logs; only the last completion controls stop time and exit code.
             if (error is not null)
             {
                 resourceState.LastError = BrowserConnectionDiagnosticsLogger.DescribeConnectionProblem(error);

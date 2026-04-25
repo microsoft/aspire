@@ -38,6 +38,9 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
                 return null;
             }
 
+            // This file is intentionally durable so adoption can survive an AppHost restart, but real browsers can leave
+            // it behind when the process is closed externally. Treat unreadable or invalid metadata as stale and delete it
+            // so future starts take the normal owned-browser path.
             using var stream = File.OpenRead(metadataPath);
             metadata = await JsonSerializer.DeserializeAsync(stream, BrowserEndpointJsonContext.Default.BrowserDebugEndpointMetadata, cancellationToken).ConfigureAwait(false);
         }
@@ -72,6 +75,9 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             return null;
         }
 
+        // Even a live process id is not enough: the browser may be shutting down, the port may now belong to another
+        // process, or the endpoint may no longer be accepting CDP traffic. The /json/version probe is the observable
+        // proof that the browser-level websocket is usable.
         bool endpointResponded;
         try
         {
@@ -90,6 +96,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             return null;
         }
 
+        // At this point the sidecar points at a live Aspire-launched browser for the same user-data root. A profile
+        // mismatch is therefore a real conflict, not stale metadata, and should be reported to the caller.
         if (!string.Equals(metadata.ProfileDirectoryName, profileDirectoryName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
@@ -163,6 +171,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             return IsProcessAlive(pid);
         }
 
+        // On Windows the singleton is a locked file rather than a host-pid symlink, so the best available signal is the
+        // presence of the lock path. On Unix we avoid treating old broken symlinks as an active browser.
         return OperatingSystem.IsWindows();
     }
 

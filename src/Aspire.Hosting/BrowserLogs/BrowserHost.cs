@@ -49,6 +49,9 @@ internal abstract class BrowserHost(
 
     protected static string BuildBrowserArguments(BrowserLogsUserDataDirectory userDataDirectory)
     {
+        // Chromium writes DevToolsActivePort only when remote debugging is enabled. Let it choose the port so
+        // playground runs do not collide with a user's existing browser or another AppHost. The initial about:blank
+        // page gives owned hosts a predictable first target that can be navigated instead of leaving an extra blank tab.
         List<string> arguments =
         [
             $"--user-data-dir={userDataDirectory.Path}",
@@ -136,7 +139,12 @@ internal sealed class OwnedBrowserHost : BrowserHost
     {
         var processStarted = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
         var devToolsActivePortFilePath = Path.Combine(userDataDirectory.Path, "DevToolsActivePort");
+        // DevToolsActivePort is Chromium's hand-off file for the browser-level websocket. Real profile directories can
+        // contain a stale file from a previous run, and a live browser can keep it locked, so remember the previous
+        // timestamp and only accept a fresh write from the process we just launched.
         var previousWriteTimeUtc = PrepareBrowserEndpointFile(devToolsActivePortFilePath, logger);
+        // Clear Aspire's adoption sidecar before launch so a later AcquireAsync cannot adopt stale metadata while this
+        // owned process is still proving which endpoint Chromium actually opened.
         BrowserEndpointDiscovery.DeleteEndpointMetadata(userDataDirectory.Path);
 
         var processSpec = new ProcessSpec(identity.ExecutablePath)
@@ -156,6 +164,8 @@ internal sealed class OwnedBrowserHost : BrowserHost
         {
             processId = await WaitForProcessStartAsync(processStarted.Task, processTask, cancellationToken).ConfigureAwait(false);
             browserEndpoint = await WaitForBrowserEndpointAsync(processTask, devToolsActivePortFilePath, previousWriteTimeUtc, timeProvider, cancellationToken).ConfigureAwait(false);
+            // Once Chromium has written DevToolsActivePort and responded with a browser endpoint, write our sidecar so a
+            // later AppHost run can adopt the same debug-enabled browser instead of opening a second window.
             await BrowserEndpointDiscovery.WriteAsync(identity, userDataDirectory.ProfileDirectoryName, browserEndpoint, processId, cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -184,6 +194,8 @@ internal sealed class OwnedBrowserHost : BrowserHost
             return;
         }
 
+        // Remove the adoption sidecar before tearing down the process so a subsequent AppHost does not adopt a browser
+        // that is already exiting.
         BrowserEndpointDiscovery.DeleteEndpointMetadata(_userDataDirectory.Path);
 
         await _processLifetime.DisposeAsync().ConfigureAwait(false);
@@ -296,6 +308,8 @@ internal sealed class AdoptedBrowserHost : BrowserHost
 {
     private readonly TaskCompletionSource _terminationSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    // An adopted browser may already contain user-owned tabs. Always create a new target for Aspire rather than reusing
+    // an arbitrary about:blank page that happened to exist in the user's real browser.
     public AdoptedBrowserHost(
         BrowserHostIdentity identity,
         Uri debugEndpoint,

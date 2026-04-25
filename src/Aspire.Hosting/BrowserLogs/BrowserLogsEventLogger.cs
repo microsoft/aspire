@@ -21,6 +21,9 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
     private readonly string _sessionId = sessionId;
     private readonly ILogger _resourceLogger = resourceLogger;
+    // Network request information arrives as several independent CDP events. A live page can redirect, fail, or serve
+    // from cache/service worker before the terminal event arrives, so keep just enough per-request state to emit one
+    // resource-log line when the request is complete.
     private readonly Dictionary<string, BrowserNetworkRequestState> _networkRequests = new(StringComparer.Ordinal);
 
     public void HandleEvent(BrowserLogsProtocolEvent protocolEvent)
@@ -134,6 +137,8 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
         if (parameters.Response is not null)
         {
+            // Cache and service-worker flags are only available on the response event, while the duration and encoded
+            // byte count arrive later on loadingFinished.
             UpdateResponse(request, parameters.Response);
         }
 
