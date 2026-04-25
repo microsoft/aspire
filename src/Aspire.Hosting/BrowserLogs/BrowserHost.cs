@@ -295,7 +295,6 @@ internal sealed class OwnedBrowserHost : BrowserHost
 internal sealed class AdoptedBrowserHost : BrowserHost
 {
     private readonly TaskCompletionSource _terminationSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private int _disposed;
 
     public AdoptedBrowserHost(
         BrowserHostIdentity identity,
@@ -313,10 +312,7 @@ internal sealed class AdoptedBrowserHost : BrowserHost
 
     public override ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0)
-        {
-            _terminationSource.TrySetResult();
-        }
+        _terminationSource.TrySetResult();
 
         return ValueTask.CompletedTask;
     }
