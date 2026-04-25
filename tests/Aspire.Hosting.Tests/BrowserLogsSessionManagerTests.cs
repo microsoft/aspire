@@ -575,9 +575,7 @@ public class BrowserLogsSessionManagerTests
             "web-browser-logs",
             new TestResourceWithEndpoints("web"),
             new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated),
-            browserOverride: null,
-            profileOverride: null,
-            userDataModeOverride: null);
+            new BrowserConfigurationOverrides());
 
         await manager.DisposeAsync();
 

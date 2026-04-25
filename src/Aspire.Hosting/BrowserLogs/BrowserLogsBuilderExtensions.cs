@@ -113,14 +113,13 @@ public static class BrowserLogsBuilderExtensions
         builder.ApplicationBuilder.Services.TryAddSingleton<IBrowserLogsSessionManager, BrowserLogsSessionManager>();
 
         var parentResource = builder.Resource;
-        var initialConfiguration = BrowserConfiguration.Resolve(builder.ApplicationBuilder.Configuration, parentResource.Name, browser, profile, userDataMode);
+        var configurationOverrides = new BrowserConfigurationOverrides(browser, profile, userDataMode);
+        var initialConfiguration = BrowserConfiguration.Resolve(builder.ApplicationBuilder.Configuration, parentResource.Name, configurationOverrides);
         var browserLogsResource = new BrowserLogsResource(
             $"{parentResource.Name}-browser-logs",
             parentResource,
             initialConfiguration,
-            browser,
-            profile,
-            userDataMode);
+            configurationOverrides);
         browserLogsResource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         builder.ApplicationBuilder.AddResource(browserLogsResource)

@@ -43,17 +43,15 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
     /// <summary>
     /// The default mode matches a normal browser launch by using the browser's real user data directory.
     /// </summary>
-    public const BrowserUserDataMode DefaultUserDataMode = BrowserUserDataMode.Shared;
+    internal const BrowserUserDataMode DefaultUserDataMode = BrowserUserDataMode.Shared;
 
     /// <summary>
     /// Resolves explicit method arguments, resource-scoped configuration, global configuration, and defaults.
     /// </summary>
-    public static BrowserConfiguration Resolve(
+    internal static BrowserConfiguration Resolve(
         IConfiguration configuration,
         string resourceName,
-        string? browserOverride,
-        string? profileOverride,
-        BrowserUserDataMode? userDataModeOverride)
+        BrowserConfigurationOverrides overrides)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
@@ -64,14 +62,14 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
         // Resolution order is explicit argument -> resource-specific config -> global browser-log config -> default.
         // Resolve user-data mode before browser so the browser default can prefer Edge for shared state and Chrome for
         // disposable isolated state.
-        var resolvedProfile = profileOverride
+        var resolvedProfile = overrides.Profile
             ?? resourceSection[BrowserLogsBuilderExtensions.ProfileConfigurationKey]
             ?? browserLogsSection[BrowserLogsBuilderExtensions.ProfileConfigurationKey];
-        var resolvedUserDataMode = userDataModeOverride
+        var resolvedUserDataMode = overrides.UserDataMode
             ?? ParseUserDataMode(resourceSection[BrowserLogsBuilderExtensions.UserDataModeConfigurationKey])
             ?? ParseUserDataMode(browserLogsSection[BrowserLogsBuilderExtensions.UserDataModeConfigurationKey])
             ?? DefaultUserDataMode;
-        var resolvedBrowser = browserOverride
+        var resolvedBrowser = overrides.Browser
             ?? resourceSection[BrowserLogsBuilderExtensions.BrowserConfigurationKey]
             ?? browserLogsSection[BrowserLogsBuilderExtensions.BrowserConfigurationKey]
             ?? GetDefaultBrowser(resolvedUserDataMode);
@@ -145,3 +143,8 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
     private static string GetDefaultBrowser(BrowserUserDataMode userDataMode) =>
         GetDefaultBrowser(userDataMode, BrowserLogsRunningSession.TryResolveBrowserExecutable);
 }
+
+/// <summary>
+/// Explicit browser configuration values supplied by the resource builder.
+/// </summary>
+internal readonly record struct BrowserConfigurationOverrides(string? Browser, string? Profile, BrowserUserDataMode? UserDataMode);

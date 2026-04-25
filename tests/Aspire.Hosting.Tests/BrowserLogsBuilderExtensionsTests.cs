@@ -42,8 +42,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var browserLogsResource = Assert.Single(appModel.Resources.OfType<BrowserLogsResource>());
         Assert.Equal("web-browser-logs", browserLogsResource.Name);
         Assert.Equal(web.Resource.Name, browserLogsResource.ParentResource.Name);
-        Assert.Equal("chrome", browserLogsResource.Browser);
-        Assert.Null(browserLogsResource.Profile);
+        Assert.Equal("chrome", browserLogsResource.InitialConfiguration.Browser);
+        Assert.Null(browserLogsResource.InitialConfiguration.Profile);
         Assert.Contains(browserLogsResource.Annotations.OfType<NameValidationPolicyAnnotation>(), static annotation => annotation == NameValidationPolicyAnnotation.None);
 
         Assert.True(browserLogsResource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
@@ -92,8 +92,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal("chrome", browserLogsResource.Browser);
-        Assert.Equal("Profile 1", browserLogsResource.Profile);
+        Assert.Equal("chrome", browserLogsResource.InitialConfiguration.Browser);
+        Assert.Equal("Profile 1", browserLogsResource.InitialConfiguration.Profile);
 
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
@@ -169,8 +169,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal(BrowserConfiguration.GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable), browserLogsResource.Browser);
-        Assert.Null(browserLogsResource.Profile);
+        Assert.Equal(BrowserConfiguration.GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable), browserLogsResource.InitialConfiguration.Browser);
+        Assert.Null(browserLogsResource.InitialConfiguration.Profile);
     }
 
     [Fact]
@@ -196,9 +196,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal("msedge", browserLogsResource.Browser);
-        Assert.Equal("Default", browserLogsResource.Profile);
-        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.UserDataMode);
+        Assert.Equal("msedge", browserLogsResource.InitialConfiguration.Browser);
+        Assert.Equal("Default", browserLogsResource.InitialConfiguration.Profile);
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
     }
 
     [Fact]
@@ -220,7 +220,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.UserDataMode);
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.UserDataModePropertyName && Equals(property.Value, nameof(BrowserUserDataMode.Shared)));
     }
@@ -246,7 +246,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.UserDataMode);
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
     }
 
     [Fact]
@@ -288,7 +288,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
-        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.UserDataMode);
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
     }
 
     [Fact]

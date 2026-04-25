@@ -10,25 +10,15 @@ internal sealed class BrowserLogsResource(
     string name,
     IResourceWithEndpoints parentResource,
     BrowserConfiguration initialConfiguration,
-    string? browserOverride,
-    string? profileOverride,
-    BrowserUserDataMode? userDataModeOverride)
+    BrowserConfigurationOverrides configurationOverrides)
     : Resource(name)
 {
     public IResourceWithEndpoints ParentResource { get; } = parentResource;
 
-    public string Browser { get; } = initialConfiguration.Browser;
+    public BrowserConfiguration InitialConfiguration { get; } = initialConfiguration;
 
-    public string? Profile { get; } = initialConfiguration.Profile;
-
-    public BrowserUserDataMode UserDataMode { get; } = initialConfiguration.UserDataMode;
-
-    public string? BrowserOverride { get; } = browserOverride;
-
-    public string? ProfileOverride { get; } = profileOverride;
-
-    public BrowserUserDataMode? UserDataModeOverride { get; } = userDataModeOverride;
+    public BrowserConfigurationOverrides ConfigurationOverrides { get; } = configurationOverrides;
 
     public BrowserConfiguration ResolveCurrentConfiguration(IConfiguration configuration) =>
-        BrowserConfiguration.Resolve(configuration, ParentResource.Name, BrowserOverride, ProfileOverride, UserDataModeOverride);
+        BrowserConfiguration.Resolve(configuration, ParentResource.Name, ConfigurationOverrides);
 }
