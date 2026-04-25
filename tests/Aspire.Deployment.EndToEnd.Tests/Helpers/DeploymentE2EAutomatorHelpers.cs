@@ -70,6 +70,15 @@ internal static class DeploymentE2EAutomatorHelpers
                 await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
                 break;
 
+            case CliInstallMode.LocalArchive:
+                var archiveDir = strategy.ArchiveDir ?? throw new InvalidOperationException("LocalArchive strategy is missing the archive directory.");
+                await auto.RunCommandFailFastAsync(
+                    AspireCliShellCommandHelpers.GetLocalArchiveInstallCommandFromCurrentRef(archiveDir),
+                    counter,
+                    TimeSpan.FromSeconds(120));
+                await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
+                break;
+
             case CliInstallMode.InstallScript:
                 await auto.RunCommandFailFastAsync(
                     AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, AspireCliShellCommandHelpers.AkaMsInstallScriptCommandPrefix),
@@ -77,6 +86,11 @@ internal static class DeploymentE2EAutomatorHelpers
                     TimeSpan.FromSeconds(300));
                 await auto.SourceAspireEnvironmentAsync(counter, includeBundlePath);
                 break;
+
+            case CliInstallMode.DotnetTool:
+                throw new InvalidOperationException(
+                    "DotnetTool install mode is not supported for deployment E2E tests. " +
+                    "Deployment tests require the native CLI. Clear ASPIRE_E2E_DOTNET_TOOL* environment variables and retry.");
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(strategy), strategy.Mode, "Unknown install mode");
