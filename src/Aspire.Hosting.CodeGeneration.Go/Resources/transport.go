@@ -85,6 +85,52 @@ func (e *CapabilityError) Message() string    { return e.err.Message }
 func (e *CapabilityError) Capability() string { return e.err.Capability }
 func (e *CapabilityError) Error() string      { return e.err.Error() }
 
+// FormatError returns a human-readable rendering of an SDK error. Capability
+// errors are expanded with their structured fields (code, capability) so the
+// caller can log them directly without unpacking. Useful pattern:
+//
+//	if err := app.Run(); err != nil {
+//	    log.Fatal(aspire.FormatError(err))
+//	}
+//
+// Non-SDK errors are returned via err.Error() unchanged.
+func FormatError(err error) string {
+	if err == nil {
+		return ""
+	}
+	var capErr *CapabilityError
+	if errors.As(err, &capErr) {
+		var b strings.Builder
+		b.WriteString("Capability Error: ")
+		b.WriteString(capErr.Message())
+		if code := capErr.Code(); code != "" {
+			b.WriteString("\n  Code: ")
+			b.WriteString(code)
+		}
+		if cap := capErr.Capability(); cap != "" {
+			b.WriteString("\n  Capability: ")
+			b.WriteString(cap)
+		}
+		if capErr.err.Details != nil {
+			d := capErr.err.Details
+			if d.Parameter != nil {
+				b.WriteString("\n  Parameter: ")
+				b.WriteString(*d.Parameter)
+			}
+			if d.Expected != nil {
+				b.WriteString("\n  Expected: ")
+				b.WriteString(*d.Expected)
+			}
+			if d.Actual != nil {
+				b.WriteString("\n  Actual: ")
+				b.WriteString(*d.Actual)
+			}
+		}
+		return b.String()
+	}
+	return err.Error()
+}
+
 // CancellationToken wraps a context.Context to provide cooperative cancellation.
 // Use NewCancellationToken to create one; call Cancel() to cancel it.
 // Pass token.Context() to any standard Go library that accepts a context.

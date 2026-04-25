@@ -7,24 +7,24 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf("CreateBuilder: %v", err)
 	}
 
 	// ---- AddValkey with password and port ----
-	password := builder.AddParameterWithOpts("valkey-password", &aspire.AddParameterOptions{Secret: func() *bool { b := true; return &b }()})
-	valkey := builder.AddValkeyWithOpts("cache", &aspire.AddValkeyOptions{
-		Port:     func() *float64 { p := float64(6380); return &p }(),
+	password := builder.AddParameter("valkey-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
+	valkey := builder.AddValkey("cache", &aspire.AddValkeyOptions{
+		Port:     aspire.Float64Ptr(6380),
 		Password: password,
 	})
 
 	// ---- Fluent chaining ----
-	valkey.WithDataVolumeWithOpts(&aspire.WithDataVolumeOptions{Name: func() *string { s := "valkey-data"; return &s }()})
-	valkey.WithDataBindMountWithOpts(".", &aspire.WithDataBindMountOptions{IsReadOnly: func() *bool { b := true; return &b }()})
-	valkey.WithPersistenceWithOpts(&aspire.WithPersistenceOptions{
-		Interval:            func() *float64 { v := float64(100000000); return &v }(),
-		KeysChangedThreshold: func() *float64 { v := float64(1); return &v }(),
+	valkey.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("valkey-data")})
+	valkey.WithDataBindMount(".", &aspire.WithDataBindMountOptions{IsReadOnly: aspire.BoolPtr(true)})
+	valkey.WithPersistence(&aspire.WithPersistenceOptions{
+		Interval:             aspire.Float64Ptr(100000000),
+		KeysChangedThreshold: aspire.Float64Ptr(1),
 	})
 	if err = valkey.Err(); err != nil {
 		log.Fatalf("valkey: %v", err)
@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Build: %v", err)
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf("Run: %v", err)
 	}
 }

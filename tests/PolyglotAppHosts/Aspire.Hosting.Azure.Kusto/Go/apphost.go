@@ -16,8 +16,8 @@ func main() {
 
 	defaultDatabase := kusto.AddReadWriteDatabase("samples")
 
-	customDatabase := kusto.AddReadWriteDatabaseWithOpts("analytics", &aspire.DatabaseOptions{
-		DatabaseName: aspire.StringPtr("AnalyticsDb")
+	customDatabase := kusto.AddReadWriteDatabaseWithOpts("analytics", &aspire.AddReadWriteDatabaseOptions{
+		DatabaseName: aspire.StringPtr("AnalyticsDb"),
 	})
 
 	defaultDatabase.WithCreationScript("./script.kql")

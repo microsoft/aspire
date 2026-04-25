@@ -21,6 +21,17 @@ cd "$WORK_DIR"
 
 # Initialize Go AppHost
 echo "Creating Go apphost project..."
+# TODO: once go is not an experiment feature, remove 
+cat << 'EOF' > aspire.config.json
+{
+  "appHost": {},
+  "features": {
+    "experimentalPolyglot:go": true
+  },
+  "packages": {}
+}
+EOF
+
 aspire init --language go --non-interactive -d
 
 # Add Redis integration
@@ -44,7 +55,7 @@ if grep -q "builder.Build()" apphost.go; then
     awk '/builder\.Build\(\)/{
         print "\t// Add Redis cache resource"
         print "\tredisPort := 0.0"
-        print "\tredis := builder.AddRedis(\"cache\", &redisPort, nil).WithImageRegistry(\"netaspireci.azurecr.io\")"
+        print "\tredis := builder.AddRedisWithPort(\"cache\", &redisPort).WithImageRegistry(\"netaspireci.azurecr.io\")"
         print "\tif err := redis.Err(); err != nil {"
         print "\t\tlog.Fatalf(\"Failed to set up Redis: %v\", err)"
         print "\t}"

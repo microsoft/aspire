@@ -220,6 +220,9 @@
     <EmbeddedResource Include="Templating\Templates\py-starter\**\*" LogicalName="py-starter.%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+    <EmbeddedResource Include="Templating\Templates\go-starter\**\*" LogicalName="go-starter.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
     <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>

@@ -37,4 +37,14 @@ internal static class KnownTemplateId
     /// The template ID for the Python starter template.
     /// </summary>
     public const string PythonStarter = "aspire-py-starter";
+
+    /// <summary>
+    /// The template ID for the CLI Go empty AppHost template.
+    /// </summary>
+    public const string GoEmptyAppHost = "aspire-go-empty";
+
+    /// <summary>
+    /// The template ID for the Go starter template (Redis + Go HTTP API).
+    /// </summary>
+    public const string GoStarter = "aspire-go-starter";
 }

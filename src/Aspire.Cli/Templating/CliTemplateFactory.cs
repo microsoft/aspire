@@ -138,6 +138,16 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 isEmpty: true),
 
             new CallbackTemplate(
+                KnownTemplateId.GoEmptyAppHost,
+                "Empty (Go AppHost)",
+                projectName => $"./{projectName}",
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Go,
+                isEmpty: true),
+
+            new CallbackTemplate(
                 KnownTemplateId.PythonStarter,
                 "Starter App (FastAPI/React)",
                 projectName => $"./{projectName}",
@@ -148,7 +158,16 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 },
                 ApplyPythonStarterTemplateAsync,
                 runtime: TemplateRuntime.Cli,
-                languageId: KnownLanguageId.TypeScript)
+                languageId: KnownLanguageId.TypeScript),
+
+            new CallbackTemplate(
+                KnownTemplateId.GoStarter,
+                "Starter App (Go API + Redis)",
+                projectName => $"./{projectName}",
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyGoStarterTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.Go)
         ];
 
         return templates.Where(IsTemplateAvailable);
