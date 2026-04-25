@@ -13,6 +13,8 @@ namespace Aspire.Hosting;
 internal sealed class BrowserHostRegistry : IAsyncDisposable
 {
     private readonly BrowserEndpointDiscovery _endpointDiscovery;
+    private readonly Func<BrowserLogsSettings, string, BrowserLogsUserDataDirectory> _createUserDataDirectory;
+    private readonly Func<BrowserLogsSettings, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>> _createHostAsync;
     private readonly IFileSystemService _fileSystemService;
     private readonly Dictionary<BrowserHostIdentity, BrowserHostEntry> _hosts = new();
     // Keep the semaphore available for late no-op releases from outstanding leases during registry disposal.
@@ -22,8 +24,20 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     private int _disposed;
 
     public BrowserHostRegistry(IFileSystemService fileSystemService, ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
+        : this(fileSystemService, logger, timeProvider, createUserDataDirectory: null, createHostAsync: null)
+    {
+    }
+
+    internal BrowserHostRegistry(
+        IFileSystemService fileSystemService,
+        ILogger<BrowserLogsSessionManager> logger,
+        TimeProvider timeProvider,
+        Func<BrowserLogsSettings, string, BrowserLogsUserDataDirectory>? createUserDataDirectory,
+        Func<BrowserLogsSettings, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>>? createHostAsync)
     {
         _endpointDiscovery = new BrowserEndpointDiscovery(logger);
+        _createUserDataDirectory = createUserDataDirectory ?? CreateUserDataDirectory;
+        _createHostAsync = createHostAsync ?? CreateHostCoreAsync;
         _fileSystemService = fileSystemService;
         _logger = logger;
         _timeProvider = timeProvider;
@@ -35,7 +49,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
 
         var browserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(settings.Browser)
             ?? throw new InvalidOperationException($"Unable to locate browser '{settings.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
-        var userDataDirectory = CreateUserDataDirectory(settings, browserExecutable);
+        var userDataDirectory = _createUserDataDirectory(settings, browserExecutable);
         var identity = new BrowserHostIdentity(browserExecutable, userDataDirectory.Path);
 
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -52,7 +66,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
                 return new BrowserHostLease(entry.Host, releaseAsync: token => ReleaseAsync(identity, token));
             }
 
-            var host = await CreateHostAsync(settings, identity, userDataDirectory, cancellationToken).ConfigureAwait(false);
+            var host = await _createHostAsync(settings, identity, userDataDirectory, cancellationToken).ConfigureAwait(false);
             _hosts[identity] = new BrowserHostEntry(host, userDataDirectory.ProfileDirectoryName, ReferenceCount: 1);
             return new BrowserHostLease(host, releaseAsync: token => ReleaseAsync(identity, token));
         }
@@ -130,7 +144,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
 
     }
 
-    private async Task<IBrowserHost> CreateHostAsync(
+    private async Task<IBrowserHost> CreateHostCoreAsync(
         BrowserLogsSettings settings,
         BrowserHostIdentity identity,
         BrowserLogsUserDataDirectory userDataDirectory,

@@ -79,6 +79,50 @@ public class BrowserLogsProtocolTests
     }
 
     [Fact]
+    public void ParseEvent_TargetDetachedFromTarget_UsesParameterSessionId()
+    {
+        var payload = Encoding.UTF8.GetBytes("""
+            {
+              "method": "Target.detachedFromTarget",
+              "sessionId": "browser-session",
+              "params": {
+                "sessionId": "target-session-1",
+                "targetId": "target-1"
+              }
+            }
+            """);
+
+        var header = BrowserLogsProtocol.ParseMessageHeader(payload);
+        var @event = Assert.IsType<BrowserLogsDetachedFromTargetEvent>(BrowserLogsProtocol.ParseEvent(header, payload));
+
+        Assert.Equal("browser-session", @event.SessionId);
+        Assert.Equal("target-session-1", @event.DetachedSessionId);
+        Assert.Equal("target-1", @event.TargetId);
+    }
+
+    [Fact]
+    public void ParseEvent_TargetCrashed_ReturnsTargetStatusAndErrorCode()
+    {
+        var payload = Encoding.UTF8.GetBytes("""
+            {
+              "method": "Target.targetCrashed",
+              "params": {
+                "targetId": "target-1",
+                "status": "crashed",
+                "errorCode": 1337
+              }
+            }
+            """);
+
+        var header = BrowserLogsProtocol.ParseMessageHeader(payload);
+        var @event = Assert.IsType<BrowserLogsTargetCrashedEvent>(BrowserLogsProtocol.ParseEvent(header, payload));
+
+        Assert.Equal("target-1", @event.TargetId);
+        Assert.Equal("crashed", @event.Parameters.Status);
+        Assert.Equal(1337, @event.Parameters.ErrorCode);
+    }
+
+    [Fact]
     public void CreateCommandFrame_DoesNotEscapeNonAsciiCharacters()
     {
         var payload = BrowserLogsProtocol.CreateCommandFrame(

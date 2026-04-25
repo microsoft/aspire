@@ -9,6 +9,8 @@ using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
@@ -73,6 +75,121 @@ public class BrowserLogsSessionManagerTests
         await lease.DisposeAsync();
 
         Assert.Equal(1, releaseCount);
+    }
+
+    [Fact]
+    public async Task BrowserHostRegistry_ReusesHostUntilFinalLeaseReleasesIt()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var browserExecutable = Path.Combine(userDataDirectory.FullName, "browser");
+            File.WriteAllText(browserExecutable, string.Empty);
+            var createdHosts = new List<TestBrowserHost>();
+            await using var registry = new BrowserHostRegistry(
+                fileSystemService: null!,
+                NullLogger<BrowserLogsSessionManager>.Instance,
+                TimeProvider.System,
+                createUserDataDirectory: (settings, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, settings.Profile),
+                createHostAsync: (settings, identity, _, _) =>
+                {
+                    var host = new TestBrowserHost(identity, settings.Profile);
+                    createdHosts.Add(host);
+                    return Task.FromResult<IBrowserHost>(host);
+                });
+            var settings = new BrowserLogsSettings(browserExecutable, Profile: null, BrowserUserDataMode.Shared);
+
+            var firstLease = await registry.AcquireAsync(settings, CancellationToken.None);
+            var secondLease = await registry.AcquireAsync(settings, CancellationToken.None);
+
+            Assert.Single(createdHosts);
+            Assert.Same(firstLease.Host, secondLease.Host);
+
+            await firstLease.DisposeAsync();
+            Assert.False(createdHosts[0].Disposed);
+
+            await secondLease.DisposeAsync();
+            Assert.True(createdHosts[0].Disposed);
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task BrowserHostRegistry_RejectsDifferentProfileForSharedHost()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var browserExecutable = Path.Combine(userDataDirectory.FullName, "browser");
+            File.WriteAllText(browserExecutable, string.Empty);
+            await using var registry = new BrowserHostRegistry(
+                fileSystemService: null!,
+                NullLogger<BrowserLogsSessionManager>.Instance,
+                TimeProvider.System,
+                createUserDataDirectory: (settings, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, settings.Profile),
+                createHostAsync: (settings, identity, _, _) => Task.FromResult<IBrowserHost>(new TestBrowserHost(identity, settings.Profile)));
+
+            var firstLease = await registry.AcquireAsync(
+                new BrowserLogsSettings(browserExecutable, Profile: "Profile 1", BrowserUserDataMode.Shared),
+                CancellationToken.None);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                registry.AcquireAsync(
+                    new BrowserLogsSettings(browserExecutable, Profile: "Profile 2", BrowserUserDataMode.Shared),
+                    CancellationToken.None));
+
+            await firstLease.DisposeAsync();
+            Assert.Contains("with profile 'Profile 1'", exception.Message);
+            Assert.Contains("The requested profile is 'Profile 2'", exception.Message);
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BrowserTargetSession_MapsTargetLifecycleEventsToCompletion()
+    {
+        var closed = BrowserTargetSession.TryGetTargetCompletion(
+            new BrowserLogsDetachedFromTargetEvent(
+                SessionId: null,
+                new BrowserLogsDetachedFromTargetParameters
+                {
+                    SessionId = "target-session-1",
+                    TargetId = "target-1"
+                }),
+            targetId: "target-1",
+            targetSessionId: "target-session-1");
+        var crashed = BrowserTargetSession.TryGetTargetCompletion(
+            new BrowserLogsTargetCrashedEvent(
+                SessionId: null,
+                new BrowserLogsTargetCrashedParameters
+                {
+                    TargetId = "target-1",
+                    Status = "crashed",
+                    ErrorCode = 1337
+                }),
+            targetId: "target-1",
+            targetSessionId: "target-session-1");
+        var unrelated = BrowserTargetSession.TryGetTargetCompletion(
+            new BrowserLogsInspectorDetachedEvent(
+                SessionId: "other-session",
+                new BrowserLogsInspectorDetachedParameters
+                {
+                    Reason = "target_closed"
+                }),
+            targetId: "target-1",
+            targetSessionId: "target-session-1");
+
+        Assert.Equal(BrowserTargetSessionCompletionKind.TargetClosed, closed?.CompletionKind);
+        Assert.Null(closed?.Error);
+        Assert.Equal(BrowserTargetSessionCompletionKind.TargetCrashed, crashed?.CompletionKind);
+        Assert.Contains("1337", crashed?.Error?.Message);
+        Assert.Null(unrelated);
     }
 
     [Fact]
@@ -475,9 +592,26 @@ public class BrowserLogsSessionManagerTests
 
     private sealed class TestBrowserHost : IBrowserHost
     {
-        public BrowserHostIdentity Identity { get; } = new(
-            Path.Combine(AppContext.BaseDirectory, "browser"),
-            Path.Combine(AppContext.BaseDirectory, "user-data"));
+        public TestBrowserHost()
+            : this(
+                new BrowserHostIdentity(
+                    Path.Combine(AppContext.BaseDirectory, "browser"),
+                    Path.Combine(AppContext.BaseDirectory, "user-data")),
+                profileDirectoryName: null)
+        {
+        }
+
+        public TestBrowserHost(BrowserHostIdentity identity, string? profileDirectoryName)
+        {
+            Identity = identity;
+            ProfileDirectoryName = profileDirectoryName;
+        }
+
+        public BrowserHostIdentity Identity { get; }
+
+        public string? ProfileDirectoryName { get; }
+
+        public bool Disposed { get; private set; }
 
         public BrowserHostOwnership Ownership => BrowserHostOwnership.Owned;
 
@@ -497,7 +631,11 @@ public class BrowserLogsSessionManagerTests
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        public ValueTask DisposeAsync()
+        {
+            Disposed = true;
+            return ValueTask.CompletedTask;
+        }
     }
 
     private sealed class TestResourceWithEndpoints(string name) : Resource(name), IResourceWithEndpoints;

@@ -56,6 +56,34 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
     public Task<BrowserTargetSessionResult> Completion => _monitorTask ?? throw new InvalidOperationException("Browser target session has not started.");
 
+    internal static BrowserTargetSessionResult? TryGetTargetCompletion(BrowserLogsProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
+    {
+        return protocolEvent switch
+        {
+            BrowserLogsTargetDestroyedEvent targetDestroyed when string.Equals(targetDestroyed.TargetId, targetId, StringComparison.Ordinal) =>
+                new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.TargetClosed, Error: null),
+
+            BrowserLogsTargetCrashedEvent targetCrashed when string.Equals(targetCrashed.TargetId, targetId, StringComparison.Ordinal) =>
+                new BrowserTargetSessionResult(
+                    BrowserTargetSessionCompletionKind.TargetCrashed,
+                    new InvalidOperationException($"Tracked browser target crashed with status '{targetCrashed.Parameters.Status}' and error code '{targetCrashed.Parameters.ErrorCode}'.")),
+
+            BrowserLogsDetachedFromTargetEvent detached when
+                string.Equals(detached.DetachedSessionId, targetSessionId, StringComparison.Ordinal) ||
+                string.Equals(detached.TargetId, targetId, StringComparison.Ordinal) =>
+                new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.TargetClosed, Error: null),
+
+            BrowserLogsInspectorDetachedEvent inspectorDetached when string.Equals(inspectorDetached.SessionId, targetSessionId, StringComparison.Ordinal) =>
+                string.Equals(inspectorDetached.Reason, "target_closed", StringComparison.OrdinalIgnoreCase)
+                    ? new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.TargetClosed, Error: null)
+                    : new BrowserTargetSessionResult(
+                        BrowserTargetSessionCompletionKind.ConnectionLost,
+                        new InvalidOperationException($"Tracked browser inspector detached: {inspectorDetached.Reason ?? "unknown reason"}.")),
+
+            _ => null
+        };
+    }
+
     public static async Task<BrowserTargetSession> StartAsync(
         IBrowserHost host,
         string sessionId,
@@ -275,31 +303,10 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
     private async ValueTask HandleEventAsync(BrowserLogsProtocolEvent protocolEvent)
     {
-        switch (protocolEvent)
+        if (TryGetTargetCompletion(protocolEvent, _targetId, _targetSessionId) is { } targetCompletion)
         {
-            case BrowserLogsTargetDestroyedEvent targetDestroyed when string.Equals(targetDestroyed.TargetId, _targetId, StringComparison.Ordinal):
-                _completionSource.TrySetResult(new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.TargetClosed, Error: null));
-                return;
-            case BrowserLogsTargetCrashedEvent targetCrashed when string.Equals(targetCrashed.TargetId, _targetId, StringComparison.Ordinal):
-                _completionSource.TrySetResult(new BrowserTargetSessionResult(
-                    BrowserTargetSessionCompletionKind.TargetCrashed,
-                    new InvalidOperationException($"Tracked browser target crashed with status '{targetCrashed.Parameters.Status}' and error code '{targetCrashed.Parameters.ErrorCode}'.")));
-                return;
-            case BrowserLogsDetachedFromTargetEvent detached when
-                string.Equals(detached.DetachedSessionId, _targetSessionId, StringComparison.Ordinal) ||
-                string.Equals(detached.TargetId, _targetId, StringComparison.Ordinal):
-                _completionSource.TrySetResult(new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.TargetClosed, Error: null));
-                return;
-            case BrowserLogsInspectorDetachedEvent inspectorDetached when string.Equals(inspectorDetached.SessionId, _targetSessionId, StringComparison.Ordinal):
-                var completionKind = string.Equals(inspectorDetached.Reason, "target_closed", StringComparison.OrdinalIgnoreCase)
-                    ? BrowserTargetSessionCompletionKind.TargetClosed
-                    : BrowserTargetSessionCompletionKind.ConnectionLost;
-                _completionSource.TrySetResult(new BrowserTargetSessionResult(
-                    completionKind,
-                    completionKind == BrowserTargetSessionCompletionKind.ConnectionLost
-                        ? new InvalidOperationException($"Tracked browser inspector detached: {inspectorDetached.Reason ?? "unknown reason"}.")
-                        : null));
-                return;
+            _completionSource.TrySetResult(targetCompletion);
+            return;
         }
 
         if (string.Equals(protocolEvent.SessionId, _targetSessionId, StringComparison.Ordinal))
