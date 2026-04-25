@@ -34,7 +34,7 @@ internal interface IBrowserLogsRunningSession
 internal interface IBrowserLogsRunningSessionFactory
 {
     Task<IBrowserLogsRunningSession> StartSessionAsync(
-        BrowserLogsSettings settings,
+        BrowserConfiguration configuration,
         string resourceName,
         Uri url,
         string sessionId,
@@ -56,7 +56,7 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
     }
 
     public async Task<IBrowserLogsRunningSession> StartSessionAsync(
-        BrowserLogsSettings settings,
+        BrowserConfiguration configuration,
         string resourceName,
         Uri url,
         string sessionId,
@@ -64,7 +64,7 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
         CancellationToken cancellationToken)
     {
         return await BrowserLogsRunningSession.StartAsync(
-            settings,
+            configuration,
             resourceName,
             sessionId,
             url,
@@ -78,8 +78,8 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
     public ValueTask DisposeAsync() => _browserHostRegistry.DisposeAsync();
 }
 
-// Owns one launched browser instance and its attached CDP target. The manager keeps aggregate dashboard state;
-// this type keeps per-browser lifecycle, diagnostics, and recovery.
+// Owns one tracked browser page session. The browser host may be shared with other sessions; this type keeps the
+// per-resource page lifecycle, diagnostics, and recovery.
 internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 {
     private readonly BrowserEventLogger _eventLogger;
@@ -88,7 +88,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly ILogger _resourceLogger;
     private readonly string _resourceName;
-    private readonly BrowserLogsSettings _settings;
+    private readonly BrowserConfiguration _configuration;
     private readonly string _sessionId;
     private readonly CancellationTokenSource _stopCts = new();
     private readonly TimeProvider _timeProvider;
@@ -106,7 +106,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private string? _targetSessionId;
 
     private BrowserLogsRunningSession(
-        BrowserLogsSettings settings,
+        BrowserConfiguration configuration,
         string resourceName,
         string sessionId,
         Uri url,
@@ -121,7 +121,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         _logger = logger;
         _resourceLogger = resourceLogger;
         _resourceName = resourceName;
-        _settings = settings;
+        _configuration = configuration;
         _sessionId = sessionId;
         _timeProvider = timeProvider;
         _url = url;
@@ -144,7 +144,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private Task<BrowserSessionResult> Completion => _completion ?? throw new InvalidOperationException("Session has not been started.");
 
     public static async Task<BrowserLogsRunningSession> StartAsync(
-        BrowserLogsSettings settings,
+        BrowserConfiguration configuration,
         string resourceName,
         string sessionId,
         Uri url,
@@ -154,7 +154,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var session = new BrowserLogsRunningSession(settings, resourceName, sessionId, url, browserHostRegistry, resourceLogger, logger, timeProvider);
+        var session = new BrowserLogsRunningSession(configuration, resourceName, sessionId, url, browserHostRegistry, resourceLogger, logger, timeProvider);
 
         try
         {
@@ -197,13 +197,13 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         _resourceLogger.LogInformation(
             "[{SessionId}] Resolving tracked browser host. User data mode: {UserDataMode}; browser: '{Browser}'; profile: '{Profile}'.",
             _sessionId,
-            _settings.UserDataMode,
-            _settings.Browser,
-            _settings.Profile ?? "(default)");
+            _configuration.UserDataMode,
+            _configuration.Browser,
+            _configuration.Profile ?? "(default)");
 
         try
         {
-            _browserHostLease = await _browserHostRegistry.AcquireAsync(_settings, cancellationToken).ConfigureAwait(false);
+            _browserHostLease = await _browserHostRegistry.AcquireAsync(_configuration, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

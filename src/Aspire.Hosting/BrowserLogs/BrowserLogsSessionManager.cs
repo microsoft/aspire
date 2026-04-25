@@ -55,10 +55,10 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         _sessionFactory = sessionFactory;
     }
 
-    public async Task StartSessionAsync(BrowserLogsResource resource, BrowserLogsSettings settings, string resourceName, Uri url, CancellationToken cancellationToken)
+    public async Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resource);
-        ArgumentNullException.ThrowIfNull(settings.Browser);
+        ArgumentNullException.ThrowIfNull(configuration.Browser);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
         ArgumentNullException.ThrowIfNull(url);
         ThrowIfDisposing();
@@ -77,17 +77,17 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             var sessionId = $"session-{sessionSequence:0000}";
             resourceState.LastSessionId = sessionId;
             resourceState.LastTargetUrl = url.ToString();
-            resourceState.LastBrowser = settings.Browser;
-            resourceState.LastBrowserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(settings.Browser);
+            resourceState.LastBrowser = configuration.Browser;
+            resourceState.LastBrowserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(configuration.Browser);
             if (resourceState.ActiveSessions.Count == 0)
             {
                 resourceState.LastBrowserHostOwnership = null;
             }
             resourceState.LastError = null;
-            resourceState.LastProfile = settings.Profile;
+            resourceState.LastProfile = configuration.Profile;
 
             var resourceLogger = _resourceLoggerService.GetLogger(resourceName);
-            resourceLogger.LogInformation("[{SessionId}] Opening tracked browser for '{Url}' using '{Browser}'.", sessionId, url, settings.Browser);
+            resourceLogger.LogInformation("[{SessionId}] Opening tracked browser for '{Url}' using '{Browser}'.", sessionId, url, configuration.Browser);
 
             var launchStartedAt = _timeProvider.GetUtcNow().UtcDateTime;
             var pendingSession = new PendingBrowserSession(sessionId, launchStartedAt, url);
@@ -106,7 +106,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             try
             {
                 session = await _sessionFactory.StartSessionAsync(
-                    settings,
+                    configuration,
                     resourceName,
                     url,
                     sessionId,
@@ -145,9 +145,9 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             // inspect the exact target that is producing resource logs.
             resourceState.ActiveSessions[session.SessionId] = new ActiveBrowserSession(
                 session.SessionId,
-                settings.Browser,
+                configuration.Browser,
                 session.BrowserExecutable,
-                settings.Profile,
+                configuration.Profile,
                 session.BrowserDebugEndpoint,
                 session.BrowserHostOwnership.ToString(),
                 session.ProcessId,

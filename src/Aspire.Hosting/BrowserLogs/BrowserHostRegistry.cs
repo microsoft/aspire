@@ -13,8 +13,8 @@ namespace Aspire.Hosting;
 internal sealed class BrowserHostRegistry : IAsyncDisposable
 {
     private readonly BrowserEndpointDiscovery _endpointDiscovery;
-    private readonly Func<BrowserLogsSettings, string, BrowserLogsUserDataDirectory> _createUserDataDirectory;
-    private readonly Func<BrowserLogsSettings, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>> _createHostAsync;
+    private readonly Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory> _createUserDataDirectory;
+    private readonly Func<BrowserConfiguration, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>> _createHostAsync;
     private readonly IFileSystemService _fileSystemService;
     private readonly Dictionary<BrowserHostIdentity, BrowserHostEntry> _hosts = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -35,8 +35,8 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         IFileSystemService fileSystemService,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
-        Func<BrowserLogsSettings, string, BrowserLogsUserDataDirectory>? createUserDataDirectory,
-        Func<BrowserLogsSettings, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>>? createHostAsync)
+        Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory>? createUserDataDirectory,
+        Func<BrowserConfiguration, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>>? createHostAsync)
     {
         _endpointDiscovery = new BrowserEndpointDiscovery(logger);
         _createUserDataDirectory = createUserDataDirectory ?? CreateUserDataDirectory;
@@ -46,13 +46,13 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         _timeProvider = timeProvider;
     }
 
-    public async Task<BrowserHostLease> AcquireAsync(BrowserLogsSettings settings, CancellationToken cancellationToken)
+    public async Task<BrowserHostLease> AcquireAsync(BrowserConfiguration configuration, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        var browserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(settings.Browser)
-            ?? throw new InvalidOperationException($"Unable to locate browser '{settings.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
-        var userDataDirectory = _createUserDataDirectory(settings, browserExecutable);
+        var browserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(configuration.Browser)
+            ?? throw new InvalidOperationException($"Unable to locate browser '{configuration.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
+        var userDataDirectory = _createUserDataDirectory(configuration, browserExecutable);
         var identity = new BrowserHostIdentity(browserExecutable, userDataDirectory.Path);
 
         // The core AcquireAsync flow has to make one atomic decision per browser identity:
@@ -92,7 +92,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             // start a new owned browser. The returned host is inserted before returning the first lease so future
             // callers can reuse it. This keeps the visible behavior stable when several resources request browser logs
             // together: the first request may open/adopt the browser, and the rest should attach to that result.
-            var host = await _createHostAsync(settings, identity, userDataDirectory, cancellationToken).ConfigureAwait(false);
+            var host = await _createHostAsync(configuration, identity, userDataDirectory, cancellationToken).ConfigureAwait(false);
             _hosts[identity] = new BrowserHostEntry(host, userDataDirectory.ProfileDirectoryName, ReferenceCount: 1);
             hostPublished = true;
             return new BrowserHostLease(host, releaseAsync: token => ReleaseAsync(identity, token));
@@ -278,12 +278,12 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     }
 
     private async Task<IBrowserHost> CreateHostCoreAsync(
-        BrowserLogsSettings settings,
+        BrowserConfiguration configuration,
         BrowserHostIdentity identity,
         BrowserLogsUserDataDirectory userDataDirectory,
         CancellationToken cancellationToken)
     {
-        if (settings.UserDataMode == BrowserUserDataMode.Shared)
+        if (configuration.UserDataMode == BrowserUserDataMode.Shared)
         {
             // Shared mode has three outcomes, in this order:
             //
@@ -301,7 +301,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
                 var endpoint = new Uri(metadata.Endpoint, UriKind.Absolute);
                 _logger.LogInformation("Adopting tracked browser host '{BrowserExecutable}' at '{Endpoint}'.", identity.ExecutablePath, endpoint);
                 userDataDirectory.Dispose();
-                return new AdoptedBrowserHost(identity, endpoint, settings.Browser, _logger, _timeProvider);
+                return new AdoptedBrowserHost(identity, endpoint, configuration.Browser, _logger, _timeProvider);
             }
 
             if (BrowserEndpointDiscovery.IsNonDebuggableBrowserRunning(identity.UserDataRootPath))
@@ -314,12 +314,12 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
 
         _logger.LogInformation("Starting tracked browser host '{BrowserExecutable}'.", identity.ExecutablePath);
-        return await OwnedBrowserHost.StartAsync(identity, settings.Browser, userDataDirectory, _logger, _timeProvider, cancellationToken).ConfigureAwait(false);
+        return await OwnedBrowserHost.StartAsync(identity, configuration.Browser, userDataDirectory, _logger, _timeProvider, cancellationToken).ConfigureAwait(false);
     }
 
-    private BrowserLogsUserDataDirectory CreateUserDataDirectory(BrowserLogsSettings settings, string browserExecutable)
+    private BrowserLogsUserDataDirectory CreateUserDataDirectory(BrowserConfiguration configuration, string browserExecutable)
     {
-        if (settings.UserDataMode == BrowserUserDataMode.Isolated)
+        if (configuration.UserDataMode == BrowserUserDataMode.Isolated)
         {
             // Isolated mode never reuses the user's normal profile. Each host gets a temp user data directory that can
             // be safely deleted when the last lease releases the owned browser.
@@ -330,22 +330,22 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         // extensions, and profiles are available. Chromium puts singleton locks, DevToolsActivePort, and our Aspire
         // endpoint sidecar at that root; named profiles are subdirectories selected by command-line argument. The later
         // endpoint/probe logic decides whether that root is reusable, adoptable, or locked.
-        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory(settings.Browser, browserExecutable)
-            ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{settings.Browser}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.");
+        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory(configuration.Browser, browserExecutable)
+            ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{configuration.Browser}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.");
 
         if (!Directory.Exists(userDataDirectory))
         {
-            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{settings.Browser}'.");
+            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{configuration.Browser}'.");
         }
 
-        if (BrowserLogsRunningSession.IsGoogleChromeDefaultUserDataDirectory(settings.Browser, browserExecutable, userDataDirectory))
+        if (BrowserLogsRunningSession.IsGoogleChromeDefaultUserDataDirectory(configuration.Browser, browserExecutable, userDataDirectory))
         {
             throw new InvalidOperationException(
                 $"Google Chrome blocks remote debugging against its default user data directory '{userDataDirectory}'. " +
                 $"Use '{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}'='{BrowserUserDataMode.Isolated}' or select Microsoft Edge for shared browser state.");
         }
 
-        var profileDirectoryName = settings.Profile is { } profile
+        var profileDirectoryName = configuration.Profile is { } profile
             ? BrowserLogsRunningSession.ResolveBrowserProfileDirectory(userDataDirectory, profile)
             : null;
         return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory, profileDirectoryName);

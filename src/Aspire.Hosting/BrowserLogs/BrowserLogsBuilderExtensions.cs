@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +26,7 @@ public static class BrowserLogsBuilderExtensions
     internal const string ProfilePropertyName = "Profile";
     internal const string UserDataModeConfigurationKey = "UserDataMode";
     internal const string UserDataModePropertyName = "User data mode";
-    internal const BrowserUserDataMode DefaultUserDataMode = BrowserUserDataMode.Shared;
+    internal const BrowserUserDataMode DefaultUserDataMode = BrowserConfiguration.DefaultUserDataMode;
     internal const string TargetUrlPropertyName = "Target URL";
     internal const string ActiveSessionsPropertyName = "Active sessions";
     internal const string BrowserSessionsPropertyName = "Browser sessions";
@@ -113,11 +113,11 @@ public static class BrowserLogsBuilderExtensions
         builder.ApplicationBuilder.Services.TryAddSingleton<IBrowserLogsSessionManager, BrowserLogsSessionManager>();
 
         var parentResource = builder.Resource;
-        var settings = ResolveSettings(builder.ApplicationBuilder.Configuration, parentResource.Name, browser, profile, userDataMode);
+        var initialConfiguration = BrowserConfiguration.Resolve(builder.ApplicationBuilder.Configuration, parentResource.Name, browser, profile, userDataMode);
         var browserLogsResource = new BrowserLogsResource(
             $"{parentResource.Name}-browser-logs",
             parentResource,
-            settings,
+            initialConfiguration,
             browser,
             profile,
             userDataMode);
@@ -132,7 +132,7 @@ public static class BrowserLogsBuilderExtensions
                 ResourceType = BrowserResourceType,
                 CreationTimeStamp = DateTime.UtcNow,
                 State = KnownResourceStates.NotStarted,
-                Properties = CreateInitialProperties(parentResource.Name, settings)
+                Properties = CreateInitialProperties(parentResource.Name, initialConfiguration)
             })
             .WithCommand(
                 OpenTrackedBrowserCommandName,
@@ -142,10 +142,10 @@ public static class BrowserLogsBuilderExtensions
                     try
                     {
                         var configuration = context.ServiceProvider.GetRequiredService<IConfiguration>();
-                        var currentSettings = browserLogsResource.ResolveCurrentSettings(configuration);
+                        var currentConfiguration = browserLogsResource.ResolveCurrentConfiguration(configuration);
                         var url = ResolveBrowserUrl(parentResource);
                         var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
-                        await sessionManager.StartSessionAsync(browserLogsResource, currentSettings, context.ResourceName, url, context.CancellationToken).ConfigureAwait(false);
+                        await sessionManager.StartSessionAsync(browserLogsResource, currentConfiguration, context.ResourceName, url, context.CancellationToken).ConfigureAwait(false);
                         return CommandResults.Success();
                     }
                     catch (Exception ex)
@@ -193,16 +193,16 @@ public static class BrowserLogsBuilderExtensions
         Task RefreshBrowserLogsResourceAsync(ResourceNotificationService notifications) =>
             notifications.PublishUpdateAsync(browserLogsResource, snapshot => snapshot);
 
-        static ImmutableArray<ResourcePropertySnapshot> CreateInitialProperties(string resourceName, BrowserLogsSettings settings)
+        static ImmutableArray<ResourcePropertySnapshot> CreateInitialProperties(string resourceName, BrowserConfiguration configuration)
         {
             List<ResourcePropertySnapshot> properties =
             [
                 new(CustomResourceKnownProperties.Source, resourceName),
-                new(BrowserPropertyName, settings.Browser),
-                new(UserDataModePropertyName, settings.UserDataMode.ToString())
+                new(BrowserPropertyName, configuration.Browser),
+                new(UserDataModePropertyName, configuration.UserDataMode.ToString())
             ];
 
-            if (settings.Profile is { } profile)
+            if (configuration.Profile is { } profile)
             {
                 properties.Add(new ResourcePropertySnapshot(ProfilePropertyName, profile));
             }
@@ -250,87 +250,4 @@ public static class BrowserLogsBuilderExtensions
         }
     }
 
-    internal static BrowserLogsSettings ResolveSettings(
-        IConfiguration configuration,
-        string resourceName,
-        string? browser,
-        string? profile,
-        BrowserUserDataMode? userDataMode)
-    {
-        var browserLogsSection = configuration.GetSection(BrowserLogsConfigurationSectionName);
-        var resourceSection = browserLogsSection.GetSection(resourceName);
-
-        var resolvedProfile = profile
-            ?? resourceSection[ProfileConfigurationKey]
-            ?? browserLogsSection[ProfileConfigurationKey];
-        var resolvedUserDataMode = userDataMode
-            ?? ParseUserDataMode(resourceSection[UserDataModeConfigurationKey])
-            ?? ParseUserDataMode(browserLogsSection[UserDataModeConfigurationKey])
-            ?? DefaultUserDataMode;
-        var resolvedBrowser = browser
-            ?? resourceSection[BrowserConfigurationKey]
-            ?? browserLogsSection[BrowserConfigurationKey]
-            ?? GetDefaultBrowser(resolvedUserDataMode);
-
-        if (string.IsNullOrWhiteSpace(resolvedBrowser))
-        {
-            throw new InvalidOperationException("Tracked browser configuration resolved an empty browser value.");
-        }
-
-        if (resolvedProfile is not null && string.IsNullOrWhiteSpace(resolvedProfile))
-        {
-            throw new InvalidOperationException("Tracked browser configuration resolved an empty profile value.");
-        }
-
-        if (resolvedUserDataMode == BrowserUserDataMode.Isolated && resolvedProfile is not null)
-        {
-            throw new InvalidOperationException(
-                $"Tracked browser configuration set '{ProfileConfigurationKey}' to '{resolvedProfile}' while '{UserDataModeConfigurationKey}' is '{BrowserUserDataMode.Isolated}'. " +
-                $"Profiles can only be selected when '{UserDataModeConfigurationKey}' is '{BrowserUserDataMode.Shared}'.");
-        }
-
-        return new BrowserLogsSettings(resolvedBrowser, resolvedProfile, resolvedUserDataMode);
-    }
-
-    private static BrowserUserDataMode? ParseUserDataMode(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        if (Enum.TryParse<BrowserUserDataMode>(value, ignoreCase: true, out var parsed))
-        {
-            return parsed;
-        }
-
-        throw new InvalidOperationException(
-            $"Tracked browser configuration value '{value}' is not a valid '{UserDataModeConfigurationKey}'. Expected '{BrowserUserDataMode.Shared}' or '{BrowserUserDataMode.Isolated}'.");
-    }
-
-    internal static string GetDefaultBrowser(Func<string, string?> resolveBrowserExecutable) =>
-        GetDefaultBrowser(DefaultUserDataMode, resolveBrowserExecutable);
-
-    internal static string GetDefaultBrowser(BrowserUserDataMode userDataMode, Func<string, string?> resolveBrowserExecutable)
-    {
-        if (userDataMode == BrowserUserDataMode.Shared &&
-            resolveBrowserExecutable("msedge") is not null)
-        {
-            return "msedge";
-        }
-
-        if (resolveBrowserExecutable("chrome") is not null)
-        {
-            return "chrome";
-        }
-
-        if (resolveBrowserExecutable("msedge") is not null)
-        {
-            return "msedge";
-        }
-
-        return "chrome";
-    }
-
-    private static string GetDefaultBrowser(BrowserUserDataMode userDataMode) => GetDefaultBrowser(userDataMode, BrowserLogsRunningSession.TryResolveBrowserExecutable);
 }

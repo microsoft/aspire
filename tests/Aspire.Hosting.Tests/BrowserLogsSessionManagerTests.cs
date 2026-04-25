@@ -90,17 +90,17 @@ public class BrowserLogsSessionManagerTests
                 fileSystemService: null!,
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
-                createUserDataDirectory: (settings, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, settings.Profile),
-                createHostAsync: (settings, identity, _, _) =>
+                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createHostAsync: (configuration, identity, _, _) =>
                 {
-                    var host = new TestBrowserHost(identity, settings.Profile);
+                    var host = new TestBrowserHost(identity, configuration.Profile);
                     createdHosts.Add(host);
                     return Task.FromResult<IBrowserHost>(host);
                 });
-            var settings = new BrowserLogsSettings(browserExecutable, Profile: null, BrowserUserDataMode.Shared);
+            var configuration = new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared);
 
-            var firstLease = await registry.AcquireAsync(settings, CancellationToken.None);
-            var secondLease = await registry.AcquireAsync(settings, CancellationToken.None);
+            var firstLease = await registry.AcquireAsync(configuration, CancellationToken.None);
+            var secondLease = await registry.AcquireAsync(configuration, CancellationToken.None);
 
             Assert.Single(createdHosts);
             Assert.Same(firstLease.Host, secondLease.Host);
@@ -130,16 +130,16 @@ public class BrowserLogsSessionManagerTests
                 fileSystemService: null!,
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
-                createUserDataDirectory: (settings, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, settings.Profile),
-                createHostAsync: (settings, identity, _, _) =>
+                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createHostAsync: (configuration, identity, _, _) =>
                 {
-                    var host = new TestBrowserHost(identity, settings.Profile);
+                    var host = new TestBrowserHost(identity, configuration.Profile);
                     createdHosts.Add(host);
                     return Task.FromResult<IBrowserHost>(host);
                 });
-            var settings = new BrowserLogsSettings(browserExecutable, Profile: null, BrowserUserDataMode.Shared);
+            var configuration = new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared);
 
-            var lease = await registry.AcquireAsync(settings, CancellationToken.None);
+            var lease = await registry.AcquireAsync(configuration, CancellationToken.None);
 
             await registry.DisposeAsync();
             await lease.DisposeAsync();
@@ -164,16 +164,16 @@ public class BrowserLogsSessionManagerTests
                 fileSystemService: null!,
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
-                createUserDataDirectory: (settings, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, settings.Profile),
-                createHostAsync: (settings, identity, _, _) => Task.FromResult<IBrowserHost>(new TestBrowserHost(identity, settings.Profile)));
+                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createHostAsync: (configuration, identity, _, _) => Task.FromResult<IBrowserHost>(new TestBrowserHost(identity, configuration.Profile)));
 
             var firstLease = await registry.AcquireAsync(
-                new BrowserLogsSettings(browserExecutable, Profile: "Profile 1", BrowserUserDataMode.Shared),
+                new BrowserConfiguration(browserExecutable, Profile: "Profile 1", BrowserUserDataMode.Shared),
                 CancellationToken.None);
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 registry.AcquireAsync(
-                    new BrowserLogsSettings(browserExecutable, Profile: "Profile 2", BrowserUserDataMode.Shared),
+                    new BrowserConfiguration(browserExecutable, Profile: "Profile 2", BrowserUserDataMode.Shared),
                     CancellationToken.None));
 
             await firstLease.DisposeAsync();
@@ -574,7 +574,7 @@ public class BrowserLogsSessionManagerTests
         var resource = new BrowserLogsResource(
             "web-browser-logs",
             new TestResourceWithEndpoints("web"),
-            new BrowserLogsSettings("chrome", null, BrowserUserDataMode.Isolated),
+            new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated),
             browserOverride: null,
             profileOverride: null,
             userDataModeOverride: null);
@@ -583,7 +583,7 @@ public class BrowserLogsSessionManagerTests
 
         await Assert.ThrowsAsync<ObjectDisposedException>(() => manager.StartSessionAsync(
             resource,
-            new BrowserLogsSettings("chrome", null, BrowserUserDataMode.Isolated),
+            new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated),
             resource.Name,
             new Uri("https://localhost"),
             CancellationToken.None));
@@ -646,7 +646,7 @@ public class BrowserLogsSessionManagerTests
         public bool WasCalled { get; private set; }
 
         public Task<IBrowserLogsRunningSession> StartSessionAsync(
-            BrowserLogsSettings settings,
+            BrowserConfiguration configuration,
             string resourceName,
             Uri url,
             string sessionId,

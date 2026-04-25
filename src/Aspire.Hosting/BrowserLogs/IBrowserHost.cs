@@ -94,7 +94,7 @@ internal sealed class BrowserHostLease : IAsyncDisposable
     }
 }
 
-// Stable identity used by the host registry to decide whether two requests can share a host. Two settings that
+// Stable identity used by the host registry to decide whether two requests can share a host. Two configurations that
 // produce the same identity must be safe to back with the same browser process.
 //
 // Keyed by (executable, user-data-root) only. Profile directory is intentionally NOT part of the identity:

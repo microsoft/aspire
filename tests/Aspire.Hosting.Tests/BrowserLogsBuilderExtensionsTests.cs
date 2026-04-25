@@ -103,7 +103,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     [Fact]
     public void GetDefaultBrowser_PrefersEdgeWhenSharedModeAndEdgeIsInstalled()
     {
-        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(BrowserUserDataMode.Shared, browser =>
+        var browser = BrowserConfiguration.GetDefaultBrowser(BrowserUserDataMode.Shared, browser =>
             browser switch
             {
                 "chrome" => "/resolved/chrome",
@@ -117,7 +117,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     [Fact]
     public void GetDefaultBrowser_PrefersChromeWhenIsolatedModeAndChromeIsInstalled()
     {
-        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(BrowserUserDataMode.Isolated, browser =>
+        var browser = BrowserConfiguration.GetDefaultBrowser(BrowserUserDataMode.Isolated, browser =>
             browser switch
             {
                 "chrome" => "/resolved/chrome",
@@ -131,7 +131,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     [Fact]
     public void GetDefaultBrowser_FallsBackToEdgeWhenChromeIsMissing()
     {
-        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(browser =>
+        var browser = BrowserConfiguration.GetDefaultBrowser(browser =>
             browser switch
             {
                 "msedge" => "/resolved/edge",
@@ -144,7 +144,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     [Fact]
     public void GetDefaultBrowser_FallsBackToChromeWhenKnownBrowsersAreMissing()
     {
-        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(static _ => null);
+        var browser = BrowserConfiguration.GetDefaultBrowser(static _ => null);
 
         Assert.Equal("chrome", browser);
     }
@@ -169,7 +169,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal(BrowserLogsBuilderExtensions.GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable), browserLogsResource.Browser);
+        Assert.Equal(BrowserConfiguration.GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable), browserLogsResource.Browser);
         Assert.Null(browserLogsResource.Profile);
     }
 
@@ -321,8 +321,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var call = Assert.Single(sessionManager.Calls);
         Assert.Same(browserLogsResource, call.Resource);
         Assert.Equal(browserLogsResource.Name, call.ResourceName);
-        Assert.Equal("chrome", call.Settings.Browser);
-        Assert.Null(call.Settings.Profile);
+        Assert.Equal("chrome", call.Configuration.Browser);
+        Assert.Null(call.Configuration.Profile);
         Assert.Equal(new Uri("http://localhost:8080", UriKind.Absolute), call.Url);
     }
 
@@ -367,9 +367,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         Assert.True(result.Success);
 
-        var launchSettings = Assert.Single(sessionFactory.Settings);
-        Assert.Equal("msedge", launchSettings.Browser);
-        Assert.Null(launchSettings.Profile);
+        var launchConfiguration = Assert.Single(sessionFactory.Configurations);
+        Assert.Equal("msedge", launchConfiguration.Browser);
+        Assert.Null(launchConfiguration.Profile);
 
         var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
             browserLogsResource.Name,
@@ -1162,33 +1162,33 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     {
         public List<SessionStartCall> Calls { get; } = [];
 
-        public Task StartSessionAsync(BrowserLogsResource resource, BrowserLogsSettings settings, string resourceName, Uri url, CancellationToken cancellationToken)
+        public Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
         {
-            Calls.Add(new SessionStartCall(resource, settings, resourceName, url));
+            Calls.Add(new SessionStartCall(resource, configuration, resourceName, url));
             return Task.CompletedTask;
         }
     }
 
-    private sealed record SessionStartCall(BrowserLogsResource Resource, BrowserLogsSettings Settings, string ResourceName, Uri Url);
+    private sealed record SessionStartCall(BrowserLogsResource Resource, BrowserConfiguration Configuration, string ResourceName, Uri Url);
 
     private sealed class FakeBrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory
     {
         public List<FakeBrowserLogsRunningSession> Sessions { get; } = [];
-        public List<BrowserLogsSettings> Settings { get; } = [];
+        public List<BrowserConfiguration> Configurations { get; } = [];
         public Exception? NextStartException { get; set; }
         public BrowserHostOwnership NextBrowserHostOwnership { get; set; } = BrowserHostOwnership.Owned;
         public int? NextProcessId { get; set; }
         public bool NextProcessIdIsNull { get; set; }
 
         public Task<IBrowserLogsRunningSession> StartSessionAsync(
-            BrowserLogsSettings settings,
+            BrowserConfiguration configuration,
             string resourceName,
             Uri url,
             string sessionId,
             ILogger resourceLogger,
             CancellationToken cancellationToken)
         {
-            Settings.Add(settings);
+            Configurations.Add(configuration);
 
             if (NextStartException is { } exception)
             {
