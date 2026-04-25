@@ -8,6 +8,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -98,7 +99,7 @@ func newRedisClient() *redis.Client {
 }
 
 // parseAspireRedisConnString accepts the comma-separated key/value form Aspire
-// emits for Redis (e.g. "localhost:6379,password=…").
+// emits for Redis (e.g. "localhost:6379,password=…,ssl=true").
 func parseAspireRedisConnString(s string) *redis.Options {
 	opts := &redis.Options{}
 	for i, part := range strings.Split(s, ",") {
@@ -107,10 +108,18 @@ func parseAspireRedisConnString(s string) *redis.Options {
 			opts.Addr = part
 			continue
 		}
-		if k, v, ok := strings.Cut(part, "="); ok {
-			switch strings.TrimSpace(k) {
-			case "password":
-				opts.Password = strings.TrimSpace(v)
+		k, v, ok := strings.Cut(part, "=")
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(k) {
+		case "password":
+			opts.Password = strings.TrimSpace(v)
+		case "ssl":
+			if strings.EqualFold(strings.TrimSpace(v), "true") {
+				// Aspire's local Redis uses a self-signed cert; skip verify
+				// for the starter dev experience.
+				opts.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 			}
 		}
 	}

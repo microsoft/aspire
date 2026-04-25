@@ -1619,7 +1619,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine($"func (b *{builderImpl}) Build() ({appInterface}, error) {{");
         WriteLine("\tif b.err != nil { return nil, b.err }");
         WriteLine($"\tresult, err := b.client.invokeCapability(context.Background(), \"{AtsConstants.BuildCapability}\", map[string]any{{");
-        WriteLine("\t\t\"builder\": b.handle.ToJSON(),");
+        WriteLine("\t\t\"context\": b.handle.ToJSON(),");
         WriteLine("\t})");
         WriteLine("\tif err != nil { return nil, err }");
         WriteLine($"\tapp, ok := result.({appInterface})");
