@@ -978,7 +978,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public Uri BrowserDebugEndpoint { get; } = new($"ws://127.0.0.1:{processId + 8000}/devtools/browser/browser-{processId - 1000}");
 
-        public int ProcessId { get; } = processId;
+        public int? ProcessId { get; } = processId;
 
         public DateTime StartedAt { get; } = startedAt;
 
@@ -990,7 +990,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         private TaskCompletionSource<object?> CompletionObserverStartedSource { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task StartCompletionObserver(Func<int, Exception?, Task> onCompleted)
+        public Task StartCompletionObserver(Func<int?, Exception?, Task> onCompleted)
         {
             _completionObserverTask = ObserveCompletionAsync(onCompleted);
             return _completionObserverTask;
@@ -1020,7 +1020,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             _completionObserverGate.TrySetResult(null);
         }
 
-        private async Task ObserveCompletionAsync(Func<int, Exception?, Task> onCompleted)
+        private async Task ObserveCompletionAsync(Func<int?, Exception?, Task> onCompleted)
         {
             var (exitCode, error) = await _completionSource.Task;
             CompletionObserverStartedSource.TrySetResult(null);
@@ -1042,7 +1042,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         string SessionId,
         string Browser,
         string BrowserExecutable,
-        int ProcessId,
+        int? ProcessId,
         string? Profile,
         DateTime StartedAt,
         string TargetUrl,

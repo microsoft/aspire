@@ -194,6 +194,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         {
             resourceState.Lock.Dispose();
         }
+
+        if (_sessionFactory is IAsyncDisposable asyncDisposableFactory)
+        {
+            await asyncDisposableFactory.DisposeAsync().ConfigureAwait(false);
+        }
     }
 
     private async Task HandleSessionCompletedAsync(
@@ -201,7 +206,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string resourceName,
         ResourceSessionState resourceState,
         string sessionId,
-        int exitCode,
+        int? exitCode,
         Exception? error)
     {
         if (Volatile.Read(ref _disposing) != 0)
@@ -225,7 +230,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 : error switch
                 {
                     not null => (KnownResourceStates.Exited, KnownResourceStateStyles.Error),
-                    null when exitCode == 0 => (KnownResourceStates.Finished, KnownResourceStateStyles.Success),
+                    null when exitCode is null or 0 => (KnownResourceStates.Finished, KnownResourceStateStyles.Success),
                     _ => (KnownResourceStates.Exited, KnownResourceStateStyles.Error)
                 };
 
@@ -281,7 +286,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             reports.Add(new HealthReportSnapshot(
                 session.SessionId,
                 HealthStatus.Healthy,
-                $"PID {session.ProcessId} targeting {session.TargetUrl}",
+                $"{FormatProcessId(session.ProcessId)} targeting {session.TargetUrl}",
                 null)
             {
                 LastRunAt = runAt
@@ -373,7 +378,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     {
         var activeSessions = sessions
             .OrderBy(static session => session.SessionId, StringComparer.Ordinal)
-            .Select(static session => $"{session.SessionId} (PID {session.ProcessId})")
+            .Select(static session => $"{session.SessionId} ({FormatProcessId(session.ProcessId)})")
             .ToArray();
 
         return activeSessions.Length > 0
@@ -430,13 +435,16 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         public string? LastProfile { get; set; }
     }
 
+    private static string FormatProcessId(int? processId) =>
+        processId is { } pid ? $"PID {pid}" : "adopted browser";
+
     private sealed record ActiveBrowserSession(
         string SessionId,
         string Browser,
         string BrowserExecutable,
         string? Profile,
         Uri BrowserDebugEndpoint,
-        int ProcessId,
+        int? ProcessId,
         DateTime StartedAt,
         string TargetId,
         Uri TargetUrl,
@@ -447,7 +455,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string SessionId,
         string Browser,
         string BrowserExecutable,
-        int ProcessId,
+        int? ProcessId,
         string? Profile,
         DateTime StartedAt,
         string TargetUrl,

@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Net.Sockets;
 using System.Net.WebSockets;
+using System.Text;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -70,6 +73,68 @@ public class BrowserLogsSessionManagerTests
         await lease.DisposeAsync();
 
         Assert.Equal(1, releaseCount);
+    }
+
+    [Fact]
+    public async Task BrowserEndpointDiscovery_DeletesStaleMetadataBeforeProfileCompatibilityCheck()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var identity = new BrowserHostIdentity(
+                Path.Combine(userDataDirectory.FullName, "browser"),
+                userDataDirectory.FullName);
+            var metadataPath = BrowserEndpointDiscovery.GetEndpointMetadataFilePath(userDataDirectory.FullName);
+            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserLogsSessionManager>.Instance);
+
+            await BrowserEndpointDiscovery.WriteAsync(
+                identity,
+                profileDirectoryName: "Profile 1",
+                new Uri("ws://127.0.0.1:9/devtools/browser/stale"),
+                processId: int.MaxValue,
+                CancellationToken.None);
+
+            var metadata = await discovery.TryReadAndValidateAsync(identity, profileDirectoryName: "Default", CancellationToken.None);
+
+            Assert.Null(metadata);
+            Assert.False(File.Exists(metadataPath));
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task BrowserEndpointDiscovery_ThrowsForLiveEndpointWithDifferentProfile()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var identity = new BrowserHostIdentity(
+                Path.Combine(userDataDirectory.FullName, "browser"),
+                userDataDirectory.FullName);
+            var discovery = new BrowserEndpointDiscovery(NullLogger<BrowserLogsSessionManager>.Instance);
+            var browserEndpoint = StartBrowserVersionEndpoint(out var serverTask);
+
+            await BrowserEndpointDiscovery.WriteAsync(
+                identity,
+                profileDirectoryName: "Profile 1",
+                browserEndpoint,
+                Environment.ProcessId,
+                CancellationToken.None);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                discovery.TryReadAndValidateAsync(identity, profileDirectoryName: "Default", CancellationToken.None));
+
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Contains("with profile 'Profile 1'", exception.Message);
+            Assert.Contains("The requested profile is 'Default'", exception.Message);
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]
@@ -322,6 +387,40 @@ public class BrowserLogsSessionManagerTests
         {
             userDataDirectory.Delete(recursive: true);
         }
+    }
+
+    private static Uri StartBrowserVersionEndpoint(out Task serverTask)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, port: 0);
+        listener.Start();
+
+        var browserEndpoint = new Uri($"ws://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/devtools/browser/test");
+        serverTask = Task.Run(async () =>
+        {
+            try
+            {
+                using var client = await listener.AcceptTcpClientAsync().ConfigureAwait(false);
+                await using var stream = client.GetStream();
+                var buffer = new byte[4096];
+                await stream.ReadAsync(buffer).ConfigureAwait(false);
+
+                var body = $$"""{"webSocketDebuggerUrl":"{{browserEndpoint}}"}""";
+                var response = Encoding.UTF8.GetBytes(
+                    "HTTP/1.1 200 OK\r\n" +
+                    "Content-Type: application/json\r\n" +
+                    $"Content-Length: {Encoding.UTF8.GetByteCount(body)}\r\n" +
+                    "Connection: close\r\n" +
+                    "\r\n" +
+                    body);
+                await stream.WriteAsync(response).ConfigureAwait(false);
+            }
+            finally
+            {
+                listener.Stop();
+            }
+        });
+
+        return browserEndpoint;
     }
 
     private sealed class ThrowIfCalledSessionFactory : IBrowserLogsRunningSessionFactory

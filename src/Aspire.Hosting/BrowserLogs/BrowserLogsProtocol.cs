@@ -32,7 +32,6 @@ internal static class BrowserLogsProtocol
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    internal const string BrowserCloseMethod = "Browser.close";
     internal const string LogEnableMethod = "Log.enable";
     internal const string LogEntryAddedMethod = "Log.entryAdded";
     internal const string NetworkEnableMethod = "Network.enable";

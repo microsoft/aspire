@@ -133,16 +133,6 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
             cancellationToken);
     }
 
-    public Task<BrowserLogsCommandAck> CloseBrowserAsync(CancellationToken cancellationToken)
-    {
-        return SendCommandAsync(
-            BrowserLogsProtocol.BrowserCloseMethod,
-            sessionId: null,
-            writeParameters: null,
-            BrowserLogsProtocol.ParseCommandAckResponse,
-            cancellationToken);
-    }
-
     public async ValueTask DisposeAsync()
     {
         _disposeCts.Cancel();

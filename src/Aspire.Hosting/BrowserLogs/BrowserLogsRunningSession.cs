@@ -6,7 +6,6 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -19,13 +18,13 @@ internal interface IBrowserLogsRunningSession
 
     Uri BrowserDebugEndpoint { get; }
 
-    int ProcessId { get; }
+    int? ProcessId { get; }
 
     DateTime StartedAt { get; }
 
     string TargetId { get; }
 
-    Task StartCompletionObserver(Func<int, Exception?, Task> onCompleted);
+    Task StartCompletionObserver(Func<int?, Exception?, Task> onCompleted);
 
     Task StopAsync(CancellationToken cancellationToken);
 }
@@ -41,15 +40,15 @@ internal interface IBrowserLogsRunningSessionFactory
         CancellationToken cancellationToken);
 }
 
-internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory
+internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory, IAsyncDisposable
 {
-    private readonly IFileSystemService _fileSystemService;
+    private readonly BrowserHostRegistry _browserHostRegistry;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly TimeProvider _timeProvider;
 
     public BrowserLogsRunningSessionFactory(IFileSystemService fileSystemService, ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
     {
-        _fileSystemService = fileSystemService;
+        _browserHostRegistry = new BrowserHostRegistry(fileSystemService, logger, timeProvider);
         _logger = logger;
         _timeProvider = timeProvider;
     }
@@ -67,26 +66,23 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
             resourceName,
             sessionId,
             url,
-            _fileSystemService,
+            _browserHostRegistry,
             resourceLogger,
             _logger,
             _timeProvider,
             cancellationToken).ConfigureAwait(false);
     }
+
+    public ValueTask DisposeAsync() => _browserHostRegistry.DisposeAsync();
 }
 
 // Owns one launched browser instance and its attached CDP target. The manager keeps aggregate dashboard state;
 // this type keeps per-browser lifecycle, diagnostics, and recovery.
 internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 {
-    private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan s_browserShutdownTimeout = TimeSpan.FromSeconds(5);
-    private static readonly TimeSpan s_connectionRecoveryDelay = TimeSpan.FromMilliseconds(200);
-    private static readonly TimeSpan s_connectionRecoveryTimeout = TimeSpan.FromSeconds(5);
-
     private readonly BrowserEventLogger _eventLogger;
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
-    private readonly IFileSystemService _fileSystemService;
+    private readonly BrowserHostRegistry _browserHostRegistry;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly ILogger _resourceLogger;
     private readonly string _resourceName;
@@ -98,29 +94,27 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private string? _browserExecutable;
     private Uri? _browserEndpoint;
-    private Task<ProcessResult>? _browserProcessTask;
-    private IAsyncDisposable? _browserProcessLifetime;
-    private ChromeDevToolsConnection? _connection;
+    private BrowserHostLease? _browserHostLease;
     private Task<BrowserSessionResult>? _completion;
     private int _cleanupState;
     private int? _processId;
     private string? _targetId;
+    private IBrowserTargetSession? _targetSession;
     private string? _targetSessionId;
-    private BrowserLogsUserDataDirectory? _userDataDirectory;
 
     private BrowserLogsRunningSession(
         BrowserLogsSettings settings,
         string resourceName,
         string sessionId,
         Uri url,
-        IFileSystemService fileSystemService,
+        BrowserHostRegistry browserHostRegistry,
         ILogger resourceLogger,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider)
     {
         _eventLogger = new BrowserEventLogger(sessionId, resourceLogger);
         _connectionDiagnostics = new BrowserConnectionDiagnosticsLogger(sessionId, resourceLogger);
-        _fileSystemService = fileSystemService;
+        _browserHostRegistry = browserHostRegistry;
         _logger = logger;
         _resourceLogger = resourceLogger;
         _resourceName = resourceName;
@@ -136,7 +130,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     public Uri BrowserDebugEndpoint => _browserEndpoint ?? throw new InvalidOperationException("Browser debugging endpoint is not available before the session starts.");
 
-    public int ProcessId => _processId ?? throw new InvalidOperationException("Browser process has not started.");
+    public int? ProcessId => _processId;
 
     public DateTime StartedAt { get; private set; }
 
@@ -149,13 +143,13 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         string resourceName,
         string sessionId,
         Uri url,
-        IFileSystemService fileSystemService,
+        BrowserHostRegistry browserHostRegistry,
         ILogger resourceLogger,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var session = new BrowserLogsRunningSession(settings, resourceName, sessionId, url, fileSystemService, resourceLogger, logger, timeProvider);
+        var session = new BrowserLogsRunningSession(settings, resourceName, sessionId, url, browserHostRegistry, resourceLogger, logger, timeProvider);
 
         try
         {
@@ -170,7 +164,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
     }
 
-    public Task StartCompletionObserver(Func<int, Exception?, Task> onCompleted)
+    public Task StartCompletionObserver(Func<int?, Exception?, Task> onCompleted)
     {
         return ObserveCompletionAsync(onCompleted);
     }
@@ -179,43 +173,8 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     {
         _stopCts.Cancel();
 
-        if (_connection is not null)
-        {
-            try
-            {
-                await _connection.CloseBrowserAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Failed to close tracked browser for resource '{ResourceName}' via CDP.", _resourceName);
-            }
-        }
-
-        if (_browserProcessTask is { IsCompleted: false } browserProcessTask)
-        {
-            OperationCanceledException? waitCanceledException = null;
-            using var waitCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            waitCts.CancelAfter(s_browserShutdownTimeout);
-
-            try
-            {
-                await browserProcessTask.WaitAsync(waitCts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException ex)
-            {
-                waitCanceledException = ex;
-            }
-
-            if (!browserProcessTask.IsCompleted)
-            {
-                await DisposeBrowserProcessAsync().ConfigureAwait(false);
-            }
-
-            if (waitCanceledException is not null && cancellationToken.IsCancellationRequested)
-            {
-                throw new OperationCanceledException(waitCanceledException.Message, waitCanceledException, cancellationToken);
-            }
-        }
+        await DisposeTargetSessionAsync().ConfigureAwait(false);
+        await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);
 
         try
         {
@@ -228,252 +187,66 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
     private async Task InitializeAsync(CancellationToken cancellationToken)
     {
-        _browserExecutable = TryResolveBrowserExecutable(_settings.Browser);
-        if (_browserExecutable is null)
-        {
-            throw new InvalidOperationException($"Unable to locate browser '{_settings.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
-        }
-
-        _userDataDirectory = CreateUserDataDirectory(_settings, _browserExecutable);
-        var devToolsActivePortFilePath = GetDevToolsActivePortFilePath();
-        var previousBrowserEndpointWriteTimeUtc = PrepareBrowserEndpointFile(devToolsActivePortFilePath);
-        await StartBrowserProcessAsync(cancellationToken).ConfigureAwait(false);
-        _resourceLogger.LogInformation("[{SessionId}] Started tracked browser process '{BrowserExecutable}'.", _sessionId, _browserExecutable);
-        if (_settings.Profile is not null)
-        {
-            if (_userDataDirectory?.ProfileDirectoryName is { } profileDirectoryName &&
-                !string.Equals(profileDirectoryName, _settings.Profile, StringComparison.OrdinalIgnoreCase))
-            {
-                _resourceLogger.LogInformation(
-                    "[{SessionId}] Using tracked browser profile '{Profile}' (directory '{ProfileDirectoryName}').",
-                    _sessionId,
-                    _settings.Profile,
-                    profileDirectoryName);
-            }
-            else
-            {
-                _resourceLogger.LogInformation("[{SessionId}] Using tracked browser profile '{Profile}'.", _sessionId, _settings.Profile);
-            }
-        }
-        _resourceLogger.LogInformation("[{SessionId}] Waiting for tracked browser debug endpoint metadata in '{DevToolsActivePortFilePath}'.", _sessionId, devToolsActivePortFilePath);
-
         try
         {
-            _browserEndpoint = await WaitForBrowserEndpointAsync(devToolsActivePortFilePath, previousBrowserEndpointWriteTimeUtc, cancellationToken).ConfigureAwait(false);
+            _browserHostLease = await _browserHostRegistry.AcquireAsync(_settings, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _connectionDiagnostics.LogSetupFailure("Discovering the tracked browser debug endpoint", ex);
+            _connectionDiagnostics.LogSetupFailure("Acquiring the tracked browser host", ex);
             throw;
         }
 
-        _resourceLogger.LogInformation("[{SessionId}] Discovered tracked browser debug endpoint '{Endpoint}'.", _sessionId, _browserEndpoint);
+        var browserHost = _browserHostLease.Host;
+        _browserExecutable = browserHost.Identity.ExecutablePath;
+        _browserEndpoint = browserHost.DebugEndpoint;
+        _processId = browserHost.ProcessId;
+        StartedAt = _timeProvider.GetUtcNow().UtcDateTime;
+        _resourceLogger.LogInformation(
+            "[{SessionId}] Using {Ownership} tracked browser host '{BrowserExecutable}' at '{Endpoint}'.",
+            _sessionId,
+            browserHost.Ownership,
+            _browserExecutable,
+            _browserEndpoint);
 
         try
         {
-            await ConnectAsync(createTarget: true, cancellationToken).ConfigureAwait(false);
+            _targetSession = await browserHost.CreateTargetSessionAsync(
+                _sessionId,
+                _url,
+                protocolEvent =>
+                {
+                    _eventLogger.HandleEvent(protocolEvent);
+                    return ValueTask.CompletedTask;
+                },
+                cancellationToken).ConfigureAwait(false);
+            _targetId = _targetSession.TargetId;
+            _targetSessionId = _targetSession.TargetSessionId;
         }
         catch (Exception ex)
         {
-            _connectionDiagnostics.LogSetupFailure("Setting up the tracked browser debug connection", ex);
+            _connectionDiagnostics.LogSetupFailure("Setting up the tracked browser target", ex);
             throw;
         }
 
         _resourceLogger.LogInformation("[{SessionId}] Tracking browser console logs for '{Url}'.", _sessionId, _url);
     }
 
-    private async Task StartBrowserProcessAsync(CancellationToken cancellationToken)
-    {
-        var processStarted = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var browserExecutable = _browserExecutable ?? throw new InvalidOperationException("Browser executable was not resolved.");
-        var processSpec = new ProcessSpec(browserExecutable)
-        {
-            Arguments = BuildBrowserArguments(),
-            InheritEnv = true,
-            OnErrorData = error => _logger.LogTrace("[{SessionId}] Tracked browser stderr: {Line}", _sessionId, error),
-            OnOutputData = output => _logger.LogTrace("[{SessionId}] Tracked browser stdout: {Line}", _sessionId, output),
-            OnStart = processId =>
-            {
-                _processId = processId;
-                processStarted.TrySetResult(processId);
-            },
-            ThrowOnNonZeroReturnCode = false
-        };
-
-        var (browserProcessTask, browserProcessLifetime) = ProcessUtil.Run(processSpec);
-        _browserProcessTask = browserProcessTask;
-        _browserProcessLifetime = browserProcessLifetime;
-        StartedAt = _timeProvider.GetUtcNow().UtcDateTime;
-
-        await processStarted.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-    }
-
-    private string BuildBrowserArguments()
-    {
-        var userDataDirectory = _userDataDirectory ?? throw new InvalidOperationException("Browser user data directory was not initialized.");
-        List<string> arguments =
-        [
-            $"--user-data-dir={userDataDirectory.Path}",
-            "--remote-debugging-port=0",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--new-window",
-            "--allow-insecure-localhost"
-        ];
-
-        if (userDataDirectory.ProfileDirectoryName is { } profileDirectoryName)
-        {
-            arguments.Add($"--profile-directory={profileDirectoryName}");
-        }
-
-        arguments.Add("about:blank");
-
-        return BuildCommandLine(arguments);
-    }
-
-    private async Task<string> GetOrCreateTrackedTargetAsync(CancellationToken cancellationToken)
-    {
-        var targets = await ExecuteConnectionStageAsync(
-            "Discovering the tracked browser target",
-            () => _connection!.GetTargetsAsync(cancellationToken)).ConfigureAwait(false);
-
-        if (TrySelectTrackedTargetId(targets.TargetInfos) is { } targetId)
-        {
-            _resourceLogger.LogInformation("[{SessionId}] Reusing tracked browser target '{TargetId}'.", _sessionId, targetId);
-            return targetId;
-        }
-
-        var createTargetResult = await ExecuteConnectionStageAsync(
-            "Creating the tracked browser target",
-            () => _connection!.CreateTargetAsync(cancellationToken)).ConfigureAwait(false);
-        targetId = createTargetResult.TargetId
-            ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
-        _resourceLogger.LogInformation("[{SessionId}] Created tracked browser target '{TargetId}'.", _sessionId, targetId);
-        return targetId;
-    }
-
-    private async Task ConnectAsync(bool createTarget, CancellationToken cancellationToken)
-    {
-        var browserEndpoint = _browserEndpoint ?? throw new InvalidOperationException("Browser debugging endpoint is not available.");
-
-        await DisposeConnectionAsync().ConfigureAwait(false);
-
-        _connection = await ExecuteConnectionStageAsync(
-            "Connecting to the tracked browser debug endpoint",
-            () => ChromeDevToolsConnection.ConnectAsync(browserEndpoint, HandleEventAsync, _logger, cancellationToken)).ConfigureAwait(false);
-        _resourceLogger.LogInformation("[{SessionId}] Connected to the tracked browser debug endpoint.", _sessionId);
-
-        await ExecuteConnectionStageAsync(
-            "Enabling tracked browser target discovery",
-            () => _connection.EnableTargetDiscoveryAsync(cancellationToken)).ConfigureAwait(false);
-        _resourceLogger.LogInformation("[{SessionId}] Enabled tracked browser target discovery.", _sessionId);
-
-        if (createTarget)
-        {
-            _targetId = await GetOrCreateTrackedTargetAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        if (_targetId is null)
-        {
-            throw new InvalidOperationException("Tracked browser target id is not available.");
-        }
-
-        var attachToTargetResult = await ExecuteConnectionStageAsync(
-            "Attaching to the tracked browser target",
-            () => _connection.AttachToTargetAsync(_targetId, cancellationToken)).ConfigureAwait(false);
-        _targetSessionId = attachToTargetResult.SessionId
-            ?? throw new InvalidOperationException("Browser target attachment did not return a session id.");
-        _resourceLogger.LogInformation("[{SessionId}] Attached to the tracked browser target.", _sessionId);
-
-        await ExecuteConnectionStageAsync(
-            "Enabling tracked browser instrumentation",
-            () => _connection.EnablePageInstrumentationAsync(_targetSessionId, cancellationToken)).ConfigureAwait(false);
-        _resourceLogger.LogInformation("[{SessionId}] Enabled tracked browser logging.", _sessionId);
-
-        if (createTarget)
-        {
-            await ExecuteConnectionStageAsync(
-                "Navigating the tracked browser target",
-                () => _connection.NavigateAsync(_targetSessionId, _url, cancellationToken)).ConfigureAwait(false);
-            _resourceLogger.LogInformation("[{SessionId}] Navigated tracked browser to '{Url}'.", _sessionId, _url);
-        }
-    }
-
-    // Wrap the CDP stage boundaries so resource logs can identify which phase failed without losing the inner cause.
-    private static async Task<TResult> ExecuteConnectionStageAsync<TResult>(string stage, Func<Task<TResult>> action)
-    {
-        try
-        {
-            return await action().ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw new InvalidOperationException($"{stage} failed.", ex);
-        }
-    }
-
-    private static async Task ExecuteConnectionStageAsync(string stage, Func<Task> action)
-    {
-        try
-        {
-            await action().ConfigureAwait(false);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            throw new InvalidOperationException($"{stage} failed.", ex);
-        }
-    }
-
     private async Task<BrowserSessionResult> MonitorAsync()
     {
         try
         {
-            var browserProcessTask = _browserProcessTask ?? throw new InvalidOperationException("Browser process task is not available.");
-
-            while (true)
+            var targetSession = _targetSession ?? throw new InvalidOperationException("Browser target session is not available.");
+            var result = await targetSession.Completion.ConfigureAwait(false);
+            return result.CompletionKind switch
             {
-                var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
-                var completedTask = await Task.WhenAny(browserProcessTask, connection.Completion).ConfigureAwait(false);
-
-                if (completedTask == browserProcessTask)
-                {
-                    var processResult = await browserProcessTask.ConfigureAwait(false);
-                    if (!_stopCts.IsCancellationRequested)
-                    {
-                        _resourceLogger.LogInformation("[{SessionId}] Tracked browser exited with code {ExitCode}.", _sessionId, processResult.ExitCode);
-                    }
-
-                    return new BrowserSessionResult(processResult.ExitCode, Error: null);
-                }
-
-                Exception? connectionError = null;
-                try
-                {
-                    await connection.Completion.ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    connectionError = ex;
-                }
-
-                if (_stopCts.IsCancellationRequested)
-                {
-                    var processResult = await browserProcessTask.ConfigureAwait(false);
-                    return new BrowserSessionResult(processResult.ExitCode, Error: null);
-                }
-
-                connectionError ??= new InvalidOperationException("The tracked browser debug connection closed without reporting a reason.");
-
-                if (await TryReconnectAsync(connectionError).ConfigureAwait(false))
-                {
-                    continue;
-                }
-
-                await DisposeBrowserProcessAsync().ConfigureAwait(false);
-
-                var exitResult = await browserProcessTask.ConfigureAwait(false);
-                return new BrowserSessionResult(exitResult.ExitCode, connectionError);
-            }
+                BrowserTargetSessionCompletionKind.Stopped => new BrowserSessionResult(ExitCode: null, Error: null),
+                BrowserTargetSessionCompletionKind.TargetClosed => new BrowserSessionResult(ExitCode: null, Error: null),
+                BrowserTargetSessionCompletionKind.BrowserExited => new BrowserSessionResult(ExitCode: null, result.Error),
+                BrowserTargetSessionCompletionKind.TargetCrashed => new BrowserSessionResult(ExitCode: null, result.Error),
+                BrowserTargetSessionCompletionKind.ConnectionLost => new BrowserSessionResult(ExitCode: null, result.Error),
+                _ => new BrowserSessionResult(ExitCode: null, Error: null)
+            };
         }
         finally
         {
@@ -481,81 +254,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
     }
 
-    private async Task<bool> TryReconnectAsync(Exception? connectionError)
-    {
-        if (_browserEndpoint is null || _targetId is null)
-        {
-            return false;
-        }
-
-        connectionError ??= new InvalidOperationException("The tracked browser debug connection closed without reporting a reason.");
-        _connectionDiagnostics.LogConnectionLost(connectionError);
-        await DisposeConnectionAsync().ConfigureAwait(false);
-
-        // Recovery reuses the existing target instead of creating a second browser/tab. If that cannot be restored
-        // quickly, the process is torn down so the resource state matches reality.
-        var reconnectDeadline = _timeProvider.GetUtcNow() + s_connectionRecoveryTimeout;
-        Exception? lastError = connectionError;
-        var attempt = 0;
-
-        while (!_stopCts.IsCancellationRequested && _timeProvider.GetUtcNow() < reconnectDeadline)
-        {
-            if (_browserProcessTask?.IsCompleted == true)
-            {
-                return false;
-            }
-
-            try
-            {
-                attempt++;
-                await ConnectAsync(createTarget: false, _stopCts.Token).ConfigureAwait(false);
-                _resourceLogger.LogInformation("[{SessionId}] Reconnected tracked browser debug connection.", _sessionId);
-                return true;
-            }
-            catch (OperationCanceledException) when (_stopCts.IsCancellationRequested)
-            {
-                return false;
-            }
-            catch (Exception ex)
-            {
-                lastError = ex;
-                _connectionDiagnostics.LogReconnectAttemptFailed(attempt, ex);
-                await DisposeConnectionAsync().ConfigureAwait(false);
-            }
-
-            try
-            {
-                await Task.Delay(s_connectionRecoveryDelay, _stopCts.Token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (_stopCts.IsCancellationRequested)
-            {
-                return false;
-            }
-        }
-
-        if (lastError is not null)
-        {
-            _connectionDiagnostics.LogReconnectFailed(lastError);
-            _logger.LogDebug(lastError, "Timed out reconnecting tracked browser debug session for resource '{ResourceName}' and session '{SessionId}'.", _resourceName, _sessionId);
-        }
-
-        return false;
-    }
-
-    private ValueTask HandleEventAsync(BrowserLogsProtocolEvent protocolEvent)
-    {
-        // The browser-level websocket can surface events for other targets. Only forward the target attached for
-        // this tracked browser session.
-        if (!string.Equals(protocolEvent.SessionId, _targetSessionId, StringComparison.Ordinal))
-        {
-            return ValueTask.CompletedTask;
-        }
-
-        _eventLogger.HandleEvent(protocolEvent);
-        return ValueTask.CompletedTask;
-    }
-
-    private async Task ObserveCompletionAsync(Func<int, Exception?, Task> onCompleted)
+    private async Task ObserveCompletionAsync(Func<int?, Exception?, Task> onCompleted)
     {
         try
         {
@@ -575,146 +274,31 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             return;
         }
 
-        await DisposeConnectionAsync().ConfigureAwait(false);
-        await DisposeBrowserProcessAsync().ConfigureAwait(false);
+        await DisposeTargetSessionAsync().ConfigureAwait(false);
+        await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);
         _stopCts.Dispose();
-        _userDataDirectory?.Dispose();
     }
 
-    private async Task DisposeBrowserProcessAsync()
+    private async Task DisposeTargetSessionAsync()
     {
-        var browserProcessLifetime = _browserProcessLifetime;
-        _browserProcessLifetime = null;
+        var targetSession = _targetSession;
+        _targetSession = null;
 
-        if (browserProcessLifetime is not null)
+        if (targetSession is not null)
         {
-            await browserProcessLifetime.DisposeAsync().ConfigureAwait(false);
-        }
-    }
-
-    private async Task DisposeConnectionAsync()
-    {
-        var connection = _connection;
-        _connection = null;
-
-        if (connection is not null)
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
+            await targetSession.DisposeAsync().ConfigureAwait(false);
         }
     }
 
-    private async Task<Uri> WaitForBrowserEndpointAsync(string devToolsActivePortFilePath, DateTime? previousWriteTimeUtc, CancellationToken cancellationToken)
+    private async Task DisposeBrowserHostLeaseAsync()
     {
-        var timeoutAt = _timeProvider.GetUtcNow() + s_browserEndpointTimeout;
+        var browserHostLease = _browserHostLease;
+        _browserHostLease = null;
 
-        // Chromium chooses the actual debugging port when asked for port 0 and writes it to DevToolsActivePort.
-        // Waiting on that file avoids the reserve-and-release race of probing a fixed port ahead of launch.
-        while (_timeProvider.GetUtcNow() < timeoutAt)
+        if (browserHostLease is not null)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await ThrowIfBrowserExitedBeforeEndpointWasWrittenAsync(devToolsActivePortFilePath).ConfigureAwait(false);
-
-            try
-            {
-                if (File.Exists(devToolsActivePortFilePath))
-                {
-                    if (previousWriteTimeUtc is { } previousWriteTime &&
-                        File.GetLastWriteTimeUtc(devToolsActivePortFilePath) <= previousWriteTime)
-                    {
-                        await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
-                        continue;
-                    }
-
-                    var contents = await File.ReadAllTextAsync(devToolsActivePortFilePath, cancellationToken).ConfigureAwait(false);
-                    if (BrowserLogsDebugEndpointParser.TryParseBrowserDebugEndpoint(contents) is { } browserEndpoint)
-                    {
-                        return browserEndpoint;
-                    }
-                }
-            }
-            catch (IOException)
-            {
-            }
-            catch (UnauthorizedAccessException)
-            {
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+            await browserHostLease.DisposeAsync().ConfigureAwait(false);
         }
-
-        throw new TimeoutException($"Timed out waiting for the tracked browser to write '{devToolsActivePortFilePath}'.");
-    }
-
-    private DateTime? PrepareBrowserEndpointFile(string devToolsActivePortFilePath)
-    {
-        if (!File.Exists(devToolsActivePortFilePath))
-        {
-            return null;
-        }
-
-        var previousWriteTimeUtc = File.GetLastWriteTimeUtc(devToolsActivePortFilePath);
-
-        try
-        {
-            File.Delete(devToolsActivePortFilePath);
-            return null;
-        }
-        catch (IOException ex)
-        {
-            _logger.LogDebug(ex, "[{SessionId}] Unable to delete stale tracked browser endpoint metadata '{DevToolsActivePortFilePath}'. Waiting for a fresh file instead.", _sessionId, devToolsActivePortFilePath);
-            return previousWriteTimeUtc;
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            _logger.LogDebug(ex, "[{SessionId}] Unable to delete stale tracked browser endpoint metadata '{DevToolsActivePortFilePath}'. Waiting for a fresh file instead.", _sessionId, devToolsActivePortFilePath);
-            return previousWriteTimeUtc;
-        }
-    }
-
-    private async Task ThrowIfBrowserExitedBeforeEndpointWasWrittenAsync(string devToolsActivePortFilePath)
-    {
-        if (_browserProcessTask is not { IsCompleted: true } browserProcessTask)
-        {
-            return;
-        }
-
-        var result = await browserProcessTask.ConfigureAwait(false);
-        throw new InvalidOperationException(
-            $"Tracked browser process exited with code {result.ExitCode} before the debug endpoint metadata was written to '{devToolsActivePortFilePath}'.");
-    }
-
-    private string GetDevToolsActivePortFilePath()
-    {
-        var userDataDirectory = _userDataDirectory ?? throw new InvalidOperationException("Browser user data directory was not initialized.");
-        return Path.Combine(userDataDirectory.Path, "DevToolsActivePort");
-    }
-
-    private BrowserLogsUserDataDirectory CreateUserDataDirectory(BrowserLogsSettings settings, string browserExecutable)
-    {
-        if (settings.UserDataMode == BrowserUserDataMode.Isolated)
-        {
-            return BrowserLogsUserDataDirectory.CreateTemporary(_fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-browser-logs"));
-        }
-
-        var userDataDirectory = TryResolveBrowserUserDataDirectory(settings.Browser, browserExecutable)
-            ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{settings.Browser}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.");
-
-        if (!Directory.Exists(userDataDirectory))
-        {
-            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{settings.Browser}'.");
-        }
-
-        if (IsGoogleChromeDefaultUserDataDirectory(settings.Browser, browserExecutable, userDataDirectory))
-        {
-            throw new InvalidOperationException(
-                $"Google Chrome blocks remote debugging against its default user data directory '{userDataDirectory}'. " +
-                $"Use '{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}'='{BrowserUserDataMode.Isolated}' or select Microsoft Edge for shared browser state.");
-        }
-
-        var profileDirectoryName = settings.Profile is { } profile
-            ? ResolveBrowserProfileDirectory(userDataDirectory, profile)
-            : null;
-        return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory, profileDirectoryName);
     }
 
     internal static bool IsGoogleChromeDefaultUserDataDirectory(string browser, string browserExecutable, string userDataDirectory)
@@ -1021,7 +605,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             string.Equals(propertyElement.GetString(), profile, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string BuildCommandLine(IReadOnlyList<string> arguments)
+    internal static string BuildCommandLine(IReadOnlyList<string> arguments)
     {
         var builder = new StringBuilder();
 
@@ -1093,7 +677,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         builder.Append('"');
     }
 
-    private sealed record BrowserSessionResult(int ExitCode, Exception? Error);
+    private sealed record BrowserSessionResult(int? ExitCode, Exception? Error);
 
     private enum BrowserKind
     {
@@ -1102,27 +686,6 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         Chrome
     }
 
-    private sealed class BrowserLogsUserDataDirectory : IDisposable
-    {
-        private readonly TempDirectory? _temporaryDirectory;
-
-        private BrowserLogsUserDataDirectory(string path, string? profileDirectoryName, TempDirectory? temporaryDirectory)
-        {
-            Path = path;
-            ProfileDirectoryName = profileDirectoryName;
-            _temporaryDirectory = temporaryDirectory;
-        }
-
-        public string Path { get; }
-
-        public string? ProfileDirectoryName { get; }
-
-        public static BrowserLogsUserDataDirectory CreatePersistent(string path, string? profileDirectoryName) => new(path, profileDirectoryName, temporaryDirectory: null);
-
-        public static BrowserLogsUserDataDirectory CreateTemporary(TempDirectory temporaryDirectory) => new(temporaryDirectory.Path, profileDirectoryName: null, temporaryDirectory);
-
-        public void Dispose() => _temporaryDirectory?.Dispose();
-    }
 }
 
 internal static class BrowserLogsDebugEndpointParser
