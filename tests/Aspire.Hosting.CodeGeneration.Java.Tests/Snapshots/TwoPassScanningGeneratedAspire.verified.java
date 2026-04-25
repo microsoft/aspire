@@ -10302,6 +10302,35 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an HTTP health check to the external service */
+    public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
+        var path = options == null ? null : options.getPath();
+        var statusCode = options == null ? null : options.getStatusCode();
+        var endpointName = options == null ? null : options.getEndpointName();
+        return withHttpHealthCheckImpl(path, statusCode, endpointName);
+    }
+
+    public ExternalServiceResource withHttpHealthCheck() {
+        return withHttpHealthCheck(null);
+    }
+
+    /** Adds an HTTP health check to the external service */
+    private ExternalServiceResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (path != null) {
+            reqArgs.put("path", AspireClient.serializeValue(path));
+        }
+        if (statusCode != null) {
+            reqArgs.put("statusCode", AspireClient.serializeValue(statusCode));
+        }
+        if (endpointName != null) {
+            reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withExternalServiceHttpHealthCheck", reqArgs);
+        return this;
+    }
+
     public ExternalServiceResource withRequiredCommand(String command) {
         return withRequiredCommand(command, null);
     }

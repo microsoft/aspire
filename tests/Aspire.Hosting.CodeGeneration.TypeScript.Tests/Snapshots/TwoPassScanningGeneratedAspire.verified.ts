@@ -17668,6 +17668,7 @@ export interface ExternalServiceResource {
     toJSON(): MarshalledHandle;
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
+    withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise;
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExternalServiceResourcePromise;
     withUrls(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     withUrl(url: string | ReferenceExpression, options?: WithUrlOptions): ExternalServiceResourcePromise;
@@ -17716,6 +17717,7 @@ export interface ExternalServiceResource {
 export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServiceResource> {
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise;
+    withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise;
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ExternalServiceResourcePromise;
     withUrls(callback: (obj: ResourceUrlsCallbackContext) => Promise<void>): ExternalServiceResourcePromise;
     withUrl(url: string | ReferenceExpression, options?: WithUrlOptions): ExternalServiceResourcePromise;
@@ -17803,6 +17805,27 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ExternalServiceResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (path !== undefined) rpcArgs.path = path;
+        if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
+        if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withExternalServiceHttpHealthCheck',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /** Adds an HTTP health check to the external service */
+    withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise {
+        const path = options?.path;
+        const statusCode = options?.statusCode;
+        const endpointName = options?.endpointName;
+        return new ExternalServiceResourcePromiseImpl(this._withHttpHealthCheckInternal(path, statusCode, endpointName), this._client);
     }
 
     /** @internal */
@@ -18559,6 +18582,11 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
     /** Sets the base image for a Dockerfile build */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
+    }
+
+    /** Adds an HTTP health check to the external service */
+    withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withHttpHealthCheck(options)), this._client);
     }
 
     /** Adds a required command dependency */

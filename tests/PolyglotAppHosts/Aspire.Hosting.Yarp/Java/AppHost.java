@@ -9,6 +9,7 @@ void main() throws Exception {
         backend.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         var backendService = builder.addProject("backend-service", "./src/BackendService");
         var externalBackend = builder.addExternalService("external-backend", "https://example.com");
+        externalBackend.withHttpHealthCheck();
         var proxy = builder.addYarp("proxy");
         proxy.withHostPort(8080.0);
         proxy.withHostHttpsPort(8443.0);

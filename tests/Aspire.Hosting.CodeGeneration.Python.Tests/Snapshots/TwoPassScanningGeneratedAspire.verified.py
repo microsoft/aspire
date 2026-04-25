@@ -10259,6 +10259,7 @@ class DotnetToolResource(ExecutableResource):
 class ExternalServiceResourceKwargs(_BaseResourceKwargs, total=False):
     """ExternalServiceResource options."""
 
+    http_health_check: HttpHealthCheckParameters | typing.Literal[True]
 
 class ExternalServiceResource(_BaseResource):
     """ExternalServiceResource resource."""
@@ -10266,7 +10267,35 @@ class ExternalServiceResource(_BaseResource):
     def __repr__(self) -> str:
         return "ExternalServiceResource(handle={self._handle.handle_id})"
 
+    def with_http_health_check(self, *, path: str | None = None, status_code: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+        """Adds an HTTP health check to the external service"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if path is not None:
+            rpc_args['path'] = path
+        if status_code is not None:
+            rpc_args['statusCode'] = status_code
+        if endpoint_name is not None:
+            rpc_args['endpointName'] = endpoint_name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withExternalServiceHttpHealthCheck',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ExternalServiceResourceKwargs]) -> None:
+        if _http_health_check := kwargs.pop("http_health_check", None):
+            if _validate_dict_types(_http_health_check, HttpHealthCheckParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["path"] = typing.cast(HttpHealthCheckParameters, _http_health_check).get("path")
+                rpc_args["statusCode"] = typing.cast(HttpHealthCheckParameters, _http_health_check).get("status_code")
+                rpc_args["endpointName"] = typing.cast(HttpHealthCheckParameters, _http_health_check).get("endpoint_name")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExternalServiceHttpHealthCheck', rpc_args))
+            elif _http_health_check is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExternalServiceHttpHealthCheck', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'http_health_check'. Expected: HttpHealthCheckParameters or Literal[True]")
         super().__init__(handle, client, **kwargs)
 
 

@@ -7896,6 +7896,24 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds an HTTP health check to the external service
+    pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<ExternalServiceResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = path {
+            args.insert("path".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = status_code {
+            args.insert("statusCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = endpoint_name {
+            args.insert("endpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withExternalServiceHttpHealthCheck", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ExternalServiceResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a required command dependency
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();

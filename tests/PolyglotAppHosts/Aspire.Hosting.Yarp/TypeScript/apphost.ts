@@ -8,6 +8,7 @@ const backend = await builder.addContainer("backend", "nginx")
     .withHttpEndpoint({ name: "http", targetPort: 80 });
 const backendService = await builder.addProject("backend-service", "./src/BackendService");
 const externalBackend = await builder.addExternalService("external-backend", "https://example.com");
+await externalBackend.withHttpHealthCheck();
 
 const proxy = await builder.addYarp("proxy")
     .withHostPort({ port: 8080 })

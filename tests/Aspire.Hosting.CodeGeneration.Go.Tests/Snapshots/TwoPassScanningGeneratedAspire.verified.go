@@ -8810,6 +8810,27 @@ func (s *ExternalServiceResource) WithDockerfileBaseImage(buildImage *string, ru
 	return result.(*IResource), nil
 }
 
+// WithHttpHealthCheck adds an HTTP health check to the external service
+func (s *ExternalServiceResource) WithHttpHealthCheck(path *string, statusCode *float64, endpointName *string) (*ExternalServiceResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if path != nil {
+		reqArgs["path"] = SerializeValue(path)
+	}
+	if statusCode != nil {
+		reqArgs["statusCode"] = SerializeValue(statusCode)
+	}
+	if endpointName != nil {
+		reqArgs["endpointName"] = SerializeValue(endpointName)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withExternalServiceHttpHealthCheck", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*ExternalServiceResource), nil
+}
+
 // WithRequiredCommand adds a required command dependency
 func (s *ExternalServiceResource) WithRequiredCommand(command string, helpLink *string) (*IResource, error) {
 	reqArgs := map[string]any{
