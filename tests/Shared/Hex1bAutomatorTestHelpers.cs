@@ -659,28 +659,22 @@ internal static class Hex1bAutomatorTestHelpers
         await auto.TypeAsync("aspire init --language csharp");
         await auto.EnterAsync();
 
-        // The init flow may show these prompts in varying order depending on environment:
-        // 1. NuGet.config prompt (only when NuGet.config doesn't already exist)
-        // 2. "Use *.dev.localhost URLs" interactive prompt
-        // 3. "Aspire initialization complete" message
-        // Wait for whichever appears first, then dismiss and continue.
+        // NuGet.config prompt may or may not appear depending on environment.
+        // Wait for either the NuGet.config prompt or the URLs prompt.
         await auto.WaitUntilAsync(
             s => waitingForNuGetConfigPrompt.Search(s).Count > 0
-                || waitingForUrlsPrompt.Search(s).Count > 0
-                || waitingForInitComplete.Search(s).Count > 0,
+                || waitingForUrlsPrompt.Search(s).Count > 0,
             timeout: TimeSpan.FromMinutes(2),
-            description: "NuGet.config prompt, URLs prompt, or init completion");
-        await auto.EnterAsync(); // Dismiss NuGet.config or URLs prompt if present
+            description: "NuGet.config prompt or URLs prompt");
+        await auto.EnterAsync(); // Dismiss NuGet.config prompt if present
 
-        // If NuGet.config appeared first, the URLs prompt comes next.
-        // If URLs prompt appeared first, we just dismissed it.
-        // Either way, wait for URLs prompt or init completion.
+        // Wait for the URLs prompt (if NuGet.config appeared first) or init completion.
         await auto.WaitUntilAsync(
             s => waitingForUrlsPrompt.Search(s).Count > 0
                 || waitingForInitComplete.Search(s).Count > 0,
             timeout: TimeSpan.FromMinutes(2),
             description: "URLs prompt or init completion");
-        await auto.EnterAsync(); // Dismiss URLs prompt (accept default "No") or no-op if already complete
+        await auto.EnterAsync(); // Dismiss URLs prompt (accept default "No")
 
         await auto.WaitUntilAsync(
             s => waitingForInitComplete.Search(s).Count > 0,
