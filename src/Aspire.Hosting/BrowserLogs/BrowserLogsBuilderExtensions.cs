@@ -42,8 +42,9 @@ public static class BrowserLogsBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="browser">
     /// The browser to launch. When not specified, the tracked browser uses the configured value from
-    /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise prefers an installed <c>"chrome"</c> browser, then an installed
-    /// <c>"msedge"</c> browser, before finally falling back to <c>"chrome"</c>. Supported values include logical
+    /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise prefers an installed <c>"msedge"</c> browser in shared user data
+    /// mode, an installed <c>"chrome"</c> browser in isolated user data mode, and finally falls back to <c>"chrome"</c>.
+    /// Supported values include logical
     /// browser names such as <c>"msedge"</c> and <c>"chrome"</c>, or an explicit browser executable path.
     /// </param>
     /// <param name="profile">
@@ -257,10 +258,6 @@ public static class BrowserLogsBuilderExtensions
         var browserLogsSection = configuration.GetSection(BrowserLogsConfigurationSectionName);
         var resourceSection = browserLogsSection.GetSection(resourceName);
 
-        var resolvedBrowser = browser
-            ?? resourceSection[BrowserConfigurationKey]
-            ?? browserLogsSection[BrowserConfigurationKey]
-            ?? GetDefaultBrowser();
         var resolvedProfile = profile
             ?? resourceSection[ProfileConfigurationKey]
             ?? browserLogsSection[ProfileConfigurationKey];
@@ -268,6 +265,10 @@ public static class BrowserLogsBuilderExtensions
             ?? ParseUserDataMode(resourceSection[UserDataModeConfigurationKey])
             ?? ParseUserDataMode(browserLogsSection[UserDataModeConfigurationKey])
             ?? DefaultUserDataMode;
+        var resolvedBrowser = browser
+            ?? resourceSection[BrowserConfigurationKey]
+            ?? browserLogsSection[BrowserConfigurationKey]
+            ?? GetDefaultBrowser(resolvedUserDataMode);
 
         if (string.IsNullOrWhiteSpace(resolvedBrowser))
         {
@@ -305,8 +306,17 @@ public static class BrowserLogsBuilderExtensions
             $"Tracked browser configuration value '{value}' is not a valid '{UserDataModeConfigurationKey}'. Expected '{BrowserUserDataMode.Shared}' or '{BrowserUserDataMode.Isolated}'.");
     }
 
-    internal static string GetDefaultBrowser(Func<string, string?> resolveBrowserExecutable)
+    internal static string GetDefaultBrowser(Func<string, string?> resolveBrowserExecutable) =>
+        GetDefaultBrowser(DefaultUserDataMode, resolveBrowserExecutable);
+
+    internal static string GetDefaultBrowser(BrowserUserDataMode userDataMode, Func<string, string?> resolveBrowserExecutable)
     {
+        if (userDataMode == BrowserUserDataMode.Shared &&
+            resolveBrowserExecutable("msedge") is not null)
+        {
+            return "msedge";
+        }
+
         if (resolveBrowserExecutable("chrome") is not null)
         {
             return "chrome";
@@ -320,5 +330,5 @@ public static class BrowserLogsBuilderExtensions
         return "chrome";
     }
 
-    private static string GetDefaultBrowser() => GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable);
+    private static string GetDefaultBrowser(BrowserUserDataMode userDataMode) => GetDefaultBrowser(userDataMode, BrowserLogsRunningSession.TryResolveBrowserExecutable);
 }

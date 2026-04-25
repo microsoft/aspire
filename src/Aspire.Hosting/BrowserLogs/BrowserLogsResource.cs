@@ -21,7 +21,9 @@ public enum BrowserUserDataMode
     /// relies on <c>--remote-debugging-port</c> and the <c>DevToolsActivePort</c> file written by the
     /// launched process; if launching forwards to an existing browser, the DevTools endpoint may not be
     /// discoverable and the session will fail to start. Users must close existing browser windows for the
-    /// selected user data directory before starting a tracked session in this mode.
+    /// selected user data directory before starting a tracked session in this mode. Google Chrome also
+    /// blocks remote debugging against its default user data directory; use Microsoft Edge or
+    /// <see cref="Isolated"/> mode when Chrome is selected.
     /// </remarks>
     Shared,
 

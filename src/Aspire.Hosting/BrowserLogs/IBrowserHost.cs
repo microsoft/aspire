@@ -22,18 +22,66 @@ internal interface IBrowserHost : IAsyncDisposable
     // Browser identification surfaced in dashboard properties. e.g. "Microsoft Edge", "Google Chrome".
     string BrowserDisplayName { get; }
 
-    // Completes when the host should be considered dead: the underlying process exited (Owned) or the CDP socket
-    // closed permanently (either ownership). Sessions subscribe to this to fail fast instead of waiting on the
-    // target lifecycle alone.
-    Task Completion { get; }
+    // Completes when the host itself is no longer usable: the underlying process exited (Owned), the adopted
+    // host was disposed, or recovery gave up. Transient CDP socket loss is intentionally not modeled as host
+    // termination because sessions can reconnect and reattach to their targets.
+    Task Termination { get; }
 
-    // Acquires a logical reference. Each call must be paired with ReleaseAsync. The host disposes itself when
-    // the last reference is released. Must be cheap and synchronous to keep the registry path simple.
-    void Acquire();
+    // Creates a target owned by one tracked browser-log session. The returned session owns only the target/tab;
+    // disposing it must never close the browser process. Host implementations hide CDP event fanout and recovery
+    // so callers cannot accidentally share a page target or call Browser.close on an adopted browser.
+    Task<IBrowserTargetSession> CreateTargetSessionAsync(
+        string sessionId,
+        Uri url,
+        Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+        CancellationToken cancellationToken);
+}
 
-    // Releases a logical reference. When the count reaches zero the host disposes its CDP connection and (for
-    // Owned hosts) terminates the browser process.
-    Task ReleaseAsync(CancellationToken cancellationToken);
+internal interface IBrowserTargetSession : IAsyncDisposable
+{
+    string TargetId { get; }
+
+    string TargetSessionId { get; }
+
+    // Completes when this target is no longer available: the target was closed/crashed, CDP reported a detach,
+    // or the host terminated. Host-level reconnects should reattach and preserve this session when possible.
+    Task<BrowserTargetSessionResult> Completion { get; }
+}
+
+internal readonly record struct BrowserTargetSessionResult(BrowserTargetSessionCompletionKind CompletionKind, Exception? Error);
+
+internal enum BrowserTargetSessionCompletionKind
+{
+    Stopped,
+    TargetClosed,
+    TargetCrashed,
+    BrowserExited,
+    ConnectionLost
+}
+
+internal sealed class BrowserHostLease : IAsyncDisposable
+{
+    private readonly Func<CancellationToken, ValueTask> _releaseAsync;
+    private int _disposed;
+
+    public BrowserHostLease(IBrowserHost host, Func<CancellationToken, ValueTask> releaseAsync)
+    {
+        Host = host ?? throw new ArgumentNullException(nameof(host));
+        _releaseAsync = releaseAsync ?? throw new ArgumentNullException(nameof(releaseAsync));
+    }
+
+    public IBrowserHost Host { get; }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        using var releaseCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await _releaseAsync(releaseCts.Token).ConfigureAwait(false);
+    }
 }
 
 // Stable identity used by the host registry to decide whether two requests can share a host. Two settings that
@@ -87,7 +135,7 @@ internal readonly struct BrowserHostIdentity : IEquatable<BrowserHostIdentity>
 
     private static string NormalizePath(string path)
     {
-        var rooted = Path.IsPathRooted(path) ? path : Path.GetFullPath(path);
+        var rooted = Path.GetFullPath(path);
         return Path.TrimEndingDirectorySeparator(rooted);
     }
 }

@@ -347,16 +347,30 @@ internal sealed record BrowserLogsResponseReceivedEvent(string? SessionId, Brows
 // - For Target.detachedFromTarget specifically, params.sessionId identifies the session that detached, which is
 //   the value that should be matched against the tracked target's session id.
 internal sealed record BrowserLogsTargetDestroyedEvent(string? SessionId, BrowserLogsTargetDestroyedParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetDestroyedMethod, SessionId);
+    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetDestroyedMethod, SessionId)
+{
+    public string? TargetId => Parameters.TargetId;
+}
 
 internal sealed record BrowserLogsTargetCrashedEvent(string? SessionId, BrowserLogsTargetCrashedParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetCrashedMethod, SessionId);
+    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetCrashedMethod, SessionId)
+{
+    public string? TargetId => Parameters.TargetId;
+}
 
 internal sealed record BrowserLogsDetachedFromTargetEvent(string? SessionId, BrowserLogsDetachedFromTargetParameters Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetDetachedFromTargetMethod, SessionId);
+    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetDetachedFromTargetMethod, SessionId)
+{
+    public string? DetachedSessionId => Parameters.SessionId;
+
+    public string? TargetId => Parameters.TargetId;
+}
 
 internal sealed record BrowserLogsInspectorDetachedEvent(string? SessionId, BrowserLogsInspectorDetachedParameters? Parameters)
-    : BrowserLogsProtocolEvent(BrowserLogsProtocol.InspectorDetachedMethod, SessionId);
+    : BrowserLogsProtocolEvent(BrowserLogsProtocol.InspectorDetachedMethod, SessionId)
+{
+    public string? Reason => Parameters?.Reason;
+}
 
 internal sealed class BrowserLogsAttachToTargetResponseEnvelope
 {

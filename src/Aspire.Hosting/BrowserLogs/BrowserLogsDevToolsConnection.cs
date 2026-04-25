@@ -12,6 +12,7 @@ namespace Aspire.Hosting;
 // higher-level recovery stays in BrowserLogsRunningSession.
 internal sealed class ChromeDevToolsConnection : IAsyncDisposable
 {
+    private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_commandTimeout = TimeSpan.FromSeconds(10);
 
     private readonly CancellationTokenSource _disposeCts = new();
@@ -94,6 +95,26 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
             cancellationToken);
     }
 
+    public Task<BrowserLogsCommandAck> CloseTargetAsync(string targetId, CancellationToken cancellationToken)
+    {
+        return SendCommandAsync(
+            BrowserLogsProtocol.TargetCloseTargetMethod,
+            sessionId: null,
+            writer => writer.WriteString("targetId", targetId),
+            BrowserLogsProtocol.ParseCommandAckResponse,
+            cancellationToken);
+    }
+
+    public Task<BrowserLogsCommandAck> EnableTargetDiscoveryAsync(CancellationToken cancellationToken)
+    {
+        return SendCommandAsync(
+            BrowserLogsProtocol.TargetSetDiscoverTargetsMethod,
+            sessionId: null,
+            static writer => writer.WriteBoolean("discover", true),
+            BrowserLogsProtocol.ParseCommandAckResponse,
+            cancellationToken);
+    }
+
     public async Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken)
     {
         await SendCommandAsync(BrowserLogsProtocol.RuntimeEnableMethod, sessionId, writeParameters: null, BrowserLogsProtocol.ParseCommandAckResponse, cancellationToken).ConfigureAwait(false);
@@ -130,7 +151,8 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
         {
             if (_webSocket.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {
-                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disposed", CancellationToken.None).ConfigureAwait(false);
+                using var closeCts = new CancellationTokenSource(s_closeTimeout);
+                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disposed", closeCts.Token).ConfigureAwait(false);
             }
         }
         catch

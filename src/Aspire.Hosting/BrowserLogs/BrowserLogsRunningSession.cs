@@ -363,6 +363,11 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             () => ChromeDevToolsConnection.ConnectAsync(browserEndpoint, HandleEventAsync, _logger, cancellationToken)).ConfigureAwait(false);
         _resourceLogger.LogInformation("[{SessionId}] Connected to the tracked browser debug endpoint.", _sessionId);
 
+        await ExecuteConnectionStageAsync(
+            "Enabling tracked browser target discovery",
+            () => _connection.EnableTargetDiscoveryAsync(cancellationToken)).ConfigureAwait(false);
+        _resourceLogger.LogInformation("[{SessionId}] Enabled tracked browser target discovery.", _sessionId);
+
         if (createTarget)
         {
             _targetId = await GetOrCreateTrackedTargetAsync(cancellationToken).ConfigureAwait(false);
@@ -699,10 +704,32 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{settings.Browser}'.");
         }
 
+        if (IsGoogleChromeDefaultUserDataDirectory(settings.Browser, browserExecutable, userDataDirectory))
+        {
+            throw new InvalidOperationException(
+                $"Google Chrome blocks remote debugging against its default user data directory '{userDataDirectory}'. " +
+                $"Use '{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}'='{BrowserUserDataMode.Isolated}' or select Microsoft Edge for shared browser state.");
+        }
+
         var profileDirectoryName = settings.Profile is { } profile
             ? ResolveBrowserProfileDirectory(userDataDirectory, profile)
             : null;
         return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory, profileDirectoryName);
+    }
+
+    internal static bool IsGoogleChromeDefaultUserDataDirectory(string browser, string browserExecutable, string userDataDirectory)
+    {
+        if (GetBrowserKind(browser, browserExecutable) != BrowserKind.Chrome ||
+            MatchesBrowser(browser, browserExecutable, "chromium", "chromium-browser") ||
+            TryResolveBrowserUserDataDirectory(browser, browserExecutable) is not { } defaultUserDataDirectory)
+        {
+            return false;
+        }
+
+        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        return comparer.Equals(NormalizePath(userDataDirectory), NormalizePath(defaultUserDataDirectory));
+
+        static string NormalizePath(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
     }
 
     internal static string? TryResolveBrowserExecutable(string browser)

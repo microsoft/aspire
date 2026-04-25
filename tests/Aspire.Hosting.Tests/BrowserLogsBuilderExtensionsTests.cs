@@ -101,9 +101,23 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public void GetDefaultBrowser_PrefersChromeWhenInstalled()
+    public void GetDefaultBrowser_PrefersEdgeWhenSharedModeAndEdgeIsInstalled()
     {
-        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(browser =>
+        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(BrowserUserDataMode.Shared, browser =>
+            browser switch
+            {
+                "chrome" => "/resolved/chrome",
+                "msedge" => "/resolved/edge",
+                _ => null
+            });
+
+        Assert.Equal("msedge", browser);
+    }
+
+    [Fact]
+    public void GetDefaultBrowser_PrefersChromeWhenIsolatedModeAndChromeIsInstalled()
+    {
+        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(BrowserUserDataMode.Isolated, browser =>
             browser switch
             {
                 "chrome" => "/resolved/chrome",

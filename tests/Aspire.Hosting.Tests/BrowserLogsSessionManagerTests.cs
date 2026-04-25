@@ -35,6 +35,44 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public void BrowserHostIdentity_NormalizesTrailingDirectorySeparators()
+    {
+        WithTempUserDataDirectory(userDataDirectory =>
+        {
+            var executablePath = Path.Combine(userDataDirectory, "browser");
+            var identity = new BrowserHostIdentity(executablePath, userDataDirectory);
+            var identityWithTrailingSeparator = new BrowserHostIdentity(executablePath, userDataDirectory + Path.DirectorySeparatorChar);
+
+            Assert.Equal(identity, identityWithTrailingSeparator);
+            Assert.Equal(identity.GetHashCode(), identityWithTrailingSeparator.GetHashCode());
+        });
+    }
+
+    [Fact]
+    public void BrowserHostIdentity_DefaultValueDoesNotThrowWhenHashed()
+    {
+        var exception = Record.Exception(() => default(BrowserHostIdentity).GetHashCode());
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public async Task BrowserHostLease_ReleasesOnlyOnce()
+    {
+        var releaseCount = 0;
+        var lease = new BrowserHostLease(new TestBrowserHost(), _ =>
+        {
+            releaseCount++;
+            return ValueTask.CompletedTask;
+        });
+
+        await lease.DisposeAsync();
+        await lease.DisposeAsync();
+
+        Assert.Equal(1, releaseCount);
+    }
+
+    [Fact]
     public void TryResolveBrowserUserDataDirectory_ReturnsExpectedPathForKnownBrowser()
     {
         var expectedPath = OperatingSystem.IsWindows()
@@ -52,6 +90,34 @@ public class BrowserLogsSessionManagerTests
         var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chrome", browserExecutable);
 
         Assert.Equal(expectedPath, userDataDirectory);
+    }
+
+    [Fact]
+    public void IsGoogleChromeDefaultUserDataDirectory_ReturnsTrueForGoogleChromeDefaultPath()
+    {
+        var browserExecutable = OperatingSystem.IsWindows()
+            ? @"C:\Program Files\Google\Chrome\Application\chrome.exe"
+            : OperatingSystem.IsMacOS()
+                ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                : "/usr/bin/google-chrome";
+        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chrome", browserExecutable);
+
+        Assert.NotNull(userDataDirectory);
+        Assert.True(BrowserLogsRunningSession.IsGoogleChromeDefaultUserDataDirectory("chrome", browserExecutable, userDataDirectory));
+    }
+
+    [Fact]
+    public void IsGoogleChromeDefaultUserDataDirectory_ReturnsFalseForChromium()
+    {
+        var browserExecutable = OperatingSystem.IsWindows()
+            ? @"C:\Program Files\Chromium\Application\chrome.exe"
+            : OperatingSystem.IsMacOS()
+                ? "/Applications/Chromium.app/Contents/MacOS/Chromium"
+                : "/usr/bin/chromium";
+        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chromium", browserExecutable);
+
+        Assert.NotNull(userDataDirectory);
+        Assert.False(BrowserLogsRunningSession.IsGoogleChromeDefaultUserDataDirectory("chromium", browserExecutable, userDataDirectory));
     }
 
     [Fact]
@@ -273,6 +339,32 @@ public class BrowserLogsSessionManagerTests
             WasCalled = true;
             throw new InvalidOperationException("StartSessionAsync should not be called after disposal.");
         }
+    }
+
+    private sealed class TestBrowserHost : IBrowserHost
+    {
+        public BrowserHostIdentity Identity { get; } = new(
+            Path.Combine(AppContext.BaseDirectory, "browser"),
+            Path.Combine(AppContext.BaseDirectory, "user-data"));
+
+        public BrowserHostOwnership Ownership => BrowserHostOwnership.Owned;
+
+        public Uri DebugEndpoint { get; } = new("ws://127.0.0.1/devtools/browser/test");
+
+        public int? ProcessId => 1;
+
+        public string BrowserDisplayName => "Test";
+
+        public Task Termination { get; } = Task.CompletedTask;
+
+        public Task<IBrowserTargetSession> CreateTargetSessionAsync(
+            string sessionId,
+            Uri url,
+            Func<BrowserLogsProtocolEvent, ValueTask> eventHandler,
+            CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class TestResourceWithEndpoints(string name) : Resource(name), IResourceWithEndpoints;
