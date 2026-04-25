@@ -118,6 +118,41 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public async Task BrowserHostRegistry_LateLeaseReleaseAfterRegistryDisposeNoOps()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var browserExecutable = Path.Combine(userDataDirectory.FullName, "browser");
+            File.WriteAllText(browserExecutable, string.Empty);
+            var createdHosts = new List<TestBrowserHost>();
+            var registry = new BrowserHostRegistry(
+                fileSystemService: null!,
+                NullLogger<BrowserLogsSessionManager>.Instance,
+                TimeProvider.System,
+                createUserDataDirectory: (settings, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, settings.Profile),
+                createHostAsync: (settings, identity, _, _) =>
+                {
+                    var host = new TestBrowserHost(identity, settings.Profile);
+                    createdHosts.Add(host);
+                    return Task.FromResult<IBrowserHost>(host);
+                });
+            var settings = new BrowserLogsSettings(browserExecutable, Profile: null, BrowserUserDataMode.Shared);
+
+            var lease = await registry.AcquireAsync(settings, CancellationToken.None);
+
+            await registry.DisposeAsync();
+            await lease.DisposeAsync();
+
+            Assert.True(createdHosts[0].Disposed);
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task BrowserHostRegistry_RejectsDifferentProfileForSharedHost()
     {
         var userDataDirectory = Directory.CreateTempSubdirectory();

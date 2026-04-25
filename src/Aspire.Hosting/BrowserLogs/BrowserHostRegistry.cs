@@ -17,11 +17,14 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     private readonly Func<BrowserLogsSettings, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>> _createHostAsync;
     private readonly IFileSystemService _fileSystemService;
     private readonly Dictionary<BrowserHostIdentity, BrowserHostEntry> _hosts = new();
-    // Keep the semaphore available for late no-op releases from outstanding leases during registry disposal.
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly object _lockLifetimeGate = new();
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly TimeProvider _timeProvider;
+    private TaskCompletionSource? _lockUsersDrained;
+    private int _activeLockUsers;
     private int _disposed;
+    private bool _lockDisposed;
 
     public BrowserHostRegistry(IFileSystemService fileSystemService, ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
         : this(fileSystemService, logger, timeProvider, createUserDataDirectory: null, createHostAsync: null)
@@ -62,9 +65,12 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         // start a new process, both of which depend on filesystem endpoint metadata for the same user data root. If two
         // callers ran that decision concurrently they could both miss the dictionary entry and race to adopt/start a
         // browser for the same profile.
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = false;
+        var hostPublished = false;
         try
         {
+            lockAcquired = await TryWaitForLockAsync(cancellationToken).ConfigureAwait(false);
+            ObjectDisposedException.ThrowIf(!lockAcquired, this);
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
             if (_hosts.TryGetValue(identity, out var entry))
@@ -88,11 +94,12 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             // together: the first request may open/adopt the browser, and the rest should attach to that result.
             var host = await _createHostAsync(settings, identity, userDataDirectory, cancellationToken).ConfigureAwait(false);
             _hosts[identity] = new BrowserHostEntry(host, userDataDirectory.ProfileDirectoryName, ReferenceCount: 1);
+            hostPublished = true;
             return new BrowserHostLease(host, releaseAsync: token => ReleaseAsync(identity, token));
         }
         catch
         {
-            if (!_hosts.ContainsKey(identity))
+            if (!hostPublished)
             {
                 userDataDirectory.Dispose();
             }
@@ -101,7 +108,10 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
         finally
         {
-            _lock.Release();
+            if (lockAcquired)
+            {
+                ReleaseLock();
+            }
         }
     }
 
@@ -113,7 +123,8 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
 
         List<IBrowserHost> hosts;
-        await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        var lockAcquired = await TryWaitForLockAsync(CancellationToken.None).ConfigureAwait(false);
+        ObjectDisposedException.ThrowIf(!lockAcquired, this);
         try
         {
             hosts = [.. _hosts.Values.Select(static entry => entry.Host)];
@@ -121,12 +132,19 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
         finally
         {
-            _lock.Release();
+            ReleaseLock();
         }
 
-        foreach (var host in hosts)
+        try
         {
-            await host.DisposeAsync().ConfigureAwait(false);
+            foreach (var host in hosts)
+            {
+                await host.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            await DisposeLockAsync().ConfigureAwait(false);
         }
     }
 
@@ -141,9 +159,19 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             return;
         }
 
-        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var lockAcquired = await TryWaitForLockAsync(cancellationToken).ConfigureAwait(false);
+        if (!lockAcquired)
+        {
+            return;
+        }
+
         try
         {
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                return;
+            }
+
             if (_hosts.TryGetValue(identity, out var entry))
             {
                 entry.ReferenceCount--;
@@ -156,7 +184,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
         finally
         {
-            _lock.Release();
+            ReleaseLock();
         }
 
         if (hostToDispose is not null)
@@ -164,6 +192,89 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             await hostToDispose.DisposeAsync().ConfigureAwait(false);
         }
 
+    }
+
+    private async Task<bool> TryWaitForLockAsync(CancellationToken cancellationToken)
+    {
+        if (!TryAddLockUser())
+        {
+            return false;
+        }
+
+        try
+        {
+            await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch
+        {
+            RemoveLockUser();
+            throw;
+        }
+    }
+
+    private bool TryAddLockUser()
+    {
+        lock (_lockLifetimeGate)
+        {
+            if (_lockDisposed)
+            {
+                return false;
+            }
+
+            _activeLockUsers++;
+            return true;
+        }
+    }
+
+    private void ReleaseLock()
+    {
+        try
+        {
+            _lock.Release();
+        }
+        finally
+        {
+            RemoveLockUser();
+        }
+    }
+
+    private void RemoveLockUser()
+    {
+        TaskCompletionSource? lockUsersDrained = null;
+
+        lock (_lockLifetimeGate)
+        {
+            _activeLockUsers--;
+            if (_lockDisposed && _activeLockUsers == 0)
+            {
+                lockUsersDrained = _lockUsersDrained;
+            }
+        }
+
+        lockUsersDrained?.TrySetResult();
+    }
+
+    private async Task DisposeLockAsync()
+    {
+        Task? lockUsersDrained = null;
+
+        lock (_lockLifetimeGate)
+        {
+            _lockDisposed = true;
+            if (_activeLockUsers > 0)
+            {
+                _lockUsersDrained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                lockUsersDrained = _lockUsersDrained.Task;
+            }
+        }
+
+        if (lockUsersDrained is not null)
+        {
+            await lockUsersDrained.ConfigureAwait(false);
+        }
+
+        _lock.Dispose();
     }
 
     private async Task<IBrowserHost> CreateHostCoreAsync(
