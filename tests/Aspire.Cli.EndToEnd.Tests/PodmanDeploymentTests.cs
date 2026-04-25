@@ -25,7 +25,7 @@ public sealed class PodmanDeploymentTests(ITestOutputHelper output)
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
         using var terminal = CliE2ETestHelpers.CreatePodmanDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 

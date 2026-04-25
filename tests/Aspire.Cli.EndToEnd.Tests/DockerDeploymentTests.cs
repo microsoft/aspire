@@ -24,7 +24,7 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
     public async Task CreateAndDeployToDockerCompose()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
@@ -135,7 +135,7 @@ builder.Build().Run();
     public async Task CreateAndDeployToDockerComposeInteractive()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);

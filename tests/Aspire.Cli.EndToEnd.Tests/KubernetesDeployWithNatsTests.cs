@@ -22,7 +22,7 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
     public async Task DeployK8sWithNats()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
         var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
