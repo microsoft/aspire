@@ -89,6 +89,7 @@ with create_builder() as builder:
         callback_endpoint = context.get_endpoint("http")
         context.log.debug("URLs callback logger")
         context.urls.add(ReferenceExpression.format_string("https://%s", callback_endpoint))
+        context.urls.add_for_endpoint(callback_endpoint, "/details", display_text="Details")
 
     # addContainer (pre-existing)
     container = builder.add_container("resource", "image")

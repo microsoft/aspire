@@ -201,6 +201,7 @@ await container.withUrlsCallback(async (context) => {
     const urls = await context.urls();
     await urlsLog.debug("URLs callback logger");
     await urls.add(refExpr`https://${callbackEndpoint}`);
+    await urls.addForEndpoint(callbackEndpoint, "/details", { displayText: "Details" });
 });
 
 // withConnectionProperty — with ReferenceExpression

@@ -26,23 +26,45 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
         switch (url)
         {
             case string stringUrl:
-                _urls.Add(new ResourceUrlAnnotation
-                {
-                    Url = stringUrl,
-                    DisplayText = displayText
-                });
+                AddUrlAnnotation(stringUrl, displayText);
                 break;
             case ReferenceExpression referenceExpression:
                 var endpoint = referenceExpression.ValueProviders.OfType<EndpointReference>().FirstOrDefault();
                 var urlValue = await referenceExpression.GetValueAsync(_cancellationToken).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(urlValue))
                 {
-                    _urls.Add(new ResourceUrlAnnotation
-                    {
-                        Endpoint = endpoint,
-                        Url = urlValue,
-                        DisplayText = displayText
-                    });
+                    AddUrlAnnotation(urlValue, displayText, endpoint);
+                }
+                break;
+            default:
+                throw new ArgumentException(
+                    $"Unsupported URL type '{url.GetType().Name}'. Expected string or ReferenceExpression.",
+                    nameof(url));
+        }
+    }
+
+    /// <summary>
+    /// Adds a displayed URL for a specific endpoint.
+    /// </summary>
+    /// <param name="endpoint">The endpoint the URL is associated with.</param>
+    /// <param name="url">The URL to add, specified as a string or reference expression.</param>
+    /// <param name="displayText">The optional display text to show for the URL.</param>
+    [AspireExport("ResourceUrlsEditor.addForEndpoint", MethodName = "addForEndpoint", Description = "Adds a displayed URL for a specific endpoint")]
+    public async Task AddForEndpoint(EndpointReference endpoint, [AspireUnion(typeof(string), typeof(ReferenceExpression))] object url, string? displayText = null)
+    {
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(url);
+
+        switch (url)
+        {
+            case string stringUrl:
+                AddUrlAnnotation(stringUrl, displayText, endpoint);
+                break;
+            case ReferenceExpression referenceExpression:
+                var urlValue = await referenceExpression.GetValueAsync(_cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrEmpty(urlValue))
+                {
+                    AddUrlAnnotation(urlValue, displayText, endpoint);
                 }
                 break;
             default:
@@ -57,4 +79,14 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
     /// </summary>
     [AspireExport(Description = "Gets the execution context for this URL editor")]
     public DistributedApplicationExecutionContext ExecutionContext => _executionContext;
+
+    private void AddUrlAnnotation(string url, string? displayText, EndpointReference? endpoint = null)
+    {
+        _urls.Add(new ResourceUrlAnnotation
+        {
+            Endpoint = endpoint,
+            Url = url,
+            DisplayText = displayText
+        });
+    }
 }
