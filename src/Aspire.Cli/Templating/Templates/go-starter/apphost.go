@@ -28,7 +28,6 @@ func main() {
 		WaitForCompletion(apiTidy).
 		WithReference(cache).
 		WaitFor(cache).
-		WithHttpEndpoint().
 		WithOtlpExporter()
 
 	if err := builder.Err(); err != nil {
