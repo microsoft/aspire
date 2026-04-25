@@ -188,7 +188,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public void WithBrowserLogs_DefaultsToIsolatedUserDataMode()
+    public void WithBrowserLogs_DefaultsToSharedUserDataMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -206,9 +206,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal(BrowserUserDataMode.Isolated, browserLogsResource.UserDataMode);
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.UserDataMode);
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
-        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.UserDataModePropertyName && Equals(property.Value, nameof(BrowserUserDataMode.Isolated)));
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.UserDataModePropertyName && Equals(property.Value, nameof(BrowserUserDataMode.Shared)));
     }
 
     [Fact]

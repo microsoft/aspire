@@ -25,7 +25,7 @@ public static class BrowserLogsBuilderExtensions
     internal const string ProfilePropertyName = "Profile";
     internal const string UserDataModeConfigurationKey = "UserDataMode";
     internal const string UserDataModePropertyName = "User data mode";
-    internal const BrowserUserDataMode DefaultUserDataMode = BrowserUserDataMode.Isolated;
+    internal const BrowserUserDataMode DefaultUserDataMode = BrowserUserDataMode.Shared;
     internal const string TargetUrlPropertyName = "Target URL";
     internal const string ActiveSessionsPropertyName = "Active sessions";
     internal const string BrowserSessionsPropertyName = "Browser sessions";
@@ -53,10 +53,10 @@ public static class BrowserLogsBuilderExtensions
     /// </param>
     /// <param name="userDataMode">
     /// Optional <see cref="BrowserUserDataMode"/> that selects whether the tracked browser launches against
-    /// the browser's real user data directory (<see cref="BrowserUserDataMode.Shared"/>) or a temporary
-    /// user data directory (<see cref="BrowserUserDataMode.Isolated"/>). When not specified, the tracked
-    /// browser uses the configured value from <c>Aspire:Hosting:BrowserLogs</c> and otherwise defaults to
-    /// <see cref="BrowserUserDataMode.Isolated"/>.
+    /// the browser's real user data directory (<see cref="BrowserUserDataMode.Shared"/>, the default) or a
+    /// temporary user data directory (<see cref="BrowserUserDataMode.Isolated"/>). When not specified, the
+    /// tracked browser uses the configured value from <c>Aspire:Hosting:BrowserLogs</c> and otherwise
+    /// defaults to <see cref="BrowserUserDataMode.Shared"/>.
     /// </param>
     /// <returns>A reference to the original <see cref="IResourceBuilder{T}"/> for further chaining.</returns>
     /// <remarks>

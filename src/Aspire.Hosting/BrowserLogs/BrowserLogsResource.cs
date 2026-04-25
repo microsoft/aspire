@@ -15,6 +15,14 @@ public enum BrowserUserDataMode
     /// Use the browser's real user data directory so the tracked session reuses real cookies, sessions,
     /// extensions, and profile selection. Behaves like clicking the browser icon.
     /// </summary>
+    /// <remarks>
+    /// NOTE: When the target browser is already running with the same user data directory, Chromium will
+    /// typically forward the launch to the existing instance and exit the new process. The tracked session
+    /// relies on <c>--remote-debugging-port</c> and the <c>DevToolsActivePort</c> file written by the
+    /// launched process; if launching forwards to an existing browser, the DevTools endpoint may not be
+    /// discoverable and the session will fail to start. Users must close existing browser windows for the
+    /// selected user data directory before starting a tracked session in this mode.
+    /// </remarks>
     Shared,
 
     /// <summary>
