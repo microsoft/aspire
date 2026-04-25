@@ -44,7 +44,7 @@ internal class CliDownloader(
             throw new InvalidOperationException($"Channel '{channelName}' does not support CLI downloads.");
         }
 
-        var baseUrl = channel.CliDownloadBaseUrl;
+        var baseUrl = channel.CliDownloadBaseUrl.TrimEnd('/');
 
         var (os, arch) = DetectPlatform();
         var runtimeIdentifier = $"{os}-{arch}";
@@ -61,14 +61,13 @@ internal class CliDownloader(
         {
             var archivePath = Path.Combine(tempDir, archiveFilename);
             var checksumPath = Path.Combine(tempDir, checksumFilename);
+            var archiveDescriptor = GetDownloadDescriptor(archiveUrl, $"the {channel.Name} channel");
 
-            // Download archive
-            _ = await interactionService.ShowStatusAsync($"Downloading Aspire CLI from: {archiveUrl}", async () =>
+            _ = await interactionService.ShowStatusAsync($"Downloading {archiveDescriptor}", async () =>
             {
                 logger.LogDebug("Downloading archive from {Url} to {Path}", archiveUrl, archivePath);
                 await DownloadFileAsync(archiveUrl, archivePath, ArchiveDownloadTimeoutSeconds, cancellationToken);
 
-                // Download checksum
                 logger.LogDebug("Downloading checksum from {Url} to {Path}", checksumUrl, checksumPath);
                 await DownloadFileAsync(checksumUrl, checksumPath, ChecksumDownloadTimeoutSeconds, cancellationToken);
                 
@@ -98,6 +97,28 @@ internal class CliDownloader(
             }
             throw;
         }
+    }
+
+    internal static string GetDownloadDescriptor(string url, string? source = null)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return url;
+        }
+
+        var fileName = Path.GetFileName(uri.AbsolutePath);
+
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return url;
+        }
+
+        if (string.IsNullOrWhiteSpace(source))
+        {
+            return fileName;
+        }
+
+        return $"{fileName} from {source}";
     }
 
     private static (string os, string arch) DetectPlatform()
