@@ -152,9 +152,9 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
-    public void BrowserTargetSession_MapsTargetLifecycleEventsToCompletion()
+    public void BrowserPageSession_MapsTargetLifecycleEventsToCompletion()
     {
-        var closed = BrowserTargetSession.TryGetTargetCompletion(
+        var closed = BrowserPageSession.TryGetPageCompletion(
             new BrowserLogsDetachedFromTargetEvent(
                 SessionId: null,
                 new BrowserLogsDetachedFromTargetParameters
@@ -164,7 +164,7 @@ public class BrowserLogsSessionManagerTests
                 }),
             targetId: "target-1",
             targetSessionId: "target-session-1");
-        var crashed = BrowserTargetSession.TryGetTargetCompletion(
+        var crashed = BrowserPageSession.TryGetPageCompletion(
             new BrowserLogsTargetCrashedEvent(
                 SessionId: null,
                 new BrowserLogsTargetCrashedParameters
@@ -175,7 +175,7 @@ public class BrowserLogsSessionManagerTests
                 }),
             targetId: "target-1",
             targetSessionId: "target-session-1");
-        var unrelated = BrowserTargetSession.TryGetTargetCompletion(
+        var unrelated = BrowserPageSession.TryGetPageCompletion(
             new BrowserLogsInspectorDetachedEvent(
                 SessionId: "other-session",
                 new BrowserLogsInspectorDetachedParameters
@@ -185,9 +185,9 @@ public class BrowserLogsSessionManagerTests
             targetId: "target-1",
             targetSessionId: "target-session-1");
 
-        Assert.Equal(BrowserTargetSessionCompletionKind.TargetClosed, closed?.CompletionKind);
+        Assert.Equal(BrowserPageSessionCompletionKind.PageClosed, closed?.CompletionKind);
         Assert.Null(closed?.Error);
-        Assert.Equal(BrowserTargetSessionCompletionKind.TargetCrashed, crashed?.CompletionKind);
+        Assert.Equal(BrowserPageSessionCompletionKind.PageCrashed, crashed?.CompletionKind);
         Assert.Contains("1337", crashed?.Error?.Message);
         Assert.Null(unrelated);
     }
@@ -280,6 +280,39 @@ public class BrowserLogsSessionManagerTests
             await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Contains("with profile 'Profile 1'", exception.Message);
             Assert.Contains("The requested profile is 'Default'", exception.Message);
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BrowserEndpointDiscovery_DetectsWindowsLockfileAsNonDebuggableBrowser()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(userDataDirectory.FullName, "lockfile"), string.Empty);
+
+            Assert.True(BrowserEndpointDiscovery.IsNonDebuggableBrowserRunning(userDataDirectory.FullName, isWindows: true));
+            Assert.False(BrowserEndpointDiscovery.IsNonDebuggableBrowserRunning(userDataDirectory.FullName, isWindows: false));
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BrowserEndpointDiscovery_IgnoresPosixSingletonLockWithoutPidTarget()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            File.WriteAllText(Path.Combine(userDataDirectory.FullName, "SingletonLock"), string.Empty);
+
+            Assert.False(BrowserEndpointDiscovery.IsNonDebuggableBrowserRunning(userDataDirectory.FullName, isWindows: false));
         }
         finally
         {
@@ -623,7 +656,7 @@ public class BrowserLogsSessionManagerTests
 
         public Task Termination { get; } = Task.CompletedTask;
 
-        public Task<IBrowserTargetSession> CreateTargetSessionAsync(
+        public Task<IBrowserPageSession> CreatePageSessionAsync(
             string sessionId,
             Uri url,
             BrowserConnectionDiagnosticsLogger connectionDiagnostics,

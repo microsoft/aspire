@@ -102,7 +102,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     private int _cleanupState;
     private int? _processId;
     private string? _targetId;
-    private IBrowserTargetSession? _targetSession;
+    private IBrowserPageSession? _pageSession;
     private string? _targetSessionId;
 
     private BrowserLogsRunningSession(
@@ -180,7 +180,7 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
 
         // Stopping a dashboard browser-log session should close only the page target it created. The shared browser
         // process/window is released through the lease and may stay alive while other resource sessions are still active.
-        await DisposeTargetSessionAsync().ConfigureAwait(false);
+        await DisposePageSessionAsync().ConfigureAwait(false);
         await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);
 
         try
@@ -227,9 +227,9 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         try
         {
             // A running session represents one resource URL, not one browser process. In the playground multiple
-            // resources can share a host, while each resource still gets its own CDP target so console and network
+            // resources can share a host, while each resource still gets its own page target so console and network
             // events stay scoped to the right resource logs.
-            _targetSession = await browserHost.CreateTargetSessionAsync(
+            _pageSession = await browserHost.CreatePageSessionAsync(
                 _sessionId,
                 _url,
                 _connectionDiagnostics,
@@ -239,17 +239,17 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
                     return ValueTask.CompletedTask;
                 },
                 cancellationToken).ConfigureAwait(false);
-            _targetId = _targetSession.TargetId;
-            _targetSessionId = _targetSession.TargetSessionId;
+            _targetId = _pageSession.TargetId;
+            _targetSessionId = _pageSession.TargetSessionId;
             _resourceLogger.LogInformation(
-                "[{SessionId}] Attached to tracked browser target '{TargetId}' with target session '{TargetSessionId}'.",
+                "[{SessionId}] Attached to tracked browser page target '{TargetId}' with target session '{TargetSessionId}'.",
                 _sessionId,
                 _targetId,
                 _targetSessionId);
         }
         catch (Exception ex)
         {
-            _connectionDiagnostics.LogSetupFailure("Setting up the tracked browser target", ex);
+            _connectionDiagnostics.LogSetupFailure("Setting up the tracked browser page", ex);
             throw;
         }
 
@@ -260,17 +260,17 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     {
         try
         {
-            var targetSession = _targetSession ?? throw new InvalidOperationException("Browser target session is not available.");
-            var result = await targetSession.Completion.ConfigureAwait(false);
-            // Closing the tracked tab by hand is a normal completion. Browser process exit, target crash, or an
+            var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+            var result = await pageSession.Completion.ConfigureAwait(false);
+            // Closing the tracked tab by hand is a normal completion. Browser process exit, page crash, or an
             // unrecoverable CDP connection loss is surfaced as an error so the dashboard resource shows what happened.
             return result.CompletionKind switch
             {
-                BrowserTargetSessionCompletionKind.Stopped => new BrowserSessionResult(ExitCode: null, Error: null),
-                BrowserTargetSessionCompletionKind.TargetClosed => new BrowserSessionResult(ExitCode: null, Error: null),
-                BrowserTargetSessionCompletionKind.BrowserExited => new BrowserSessionResult(ExitCode: null, result.Error),
-                BrowserTargetSessionCompletionKind.TargetCrashed => new BrowserSessionResult(ExitCode: null, result.Error),
-                BrowserTargetSessionCompletionKind.ConnectionLost => new BrowserSessionResult(ExitCode: null, result.Error),
+                BrowserPageSessionCompletionKind.Stopped => new BrowserSessionResult(ExitCode: null, Error: null),
+                BrowserPageSessionCompletionKind.PageClosed => new BrowserSessionResult(ExitCode: null, Error: null),
+                BrowserPageSessionCompletionKind.BrowserExited => new BrowserSessionResult(ExitCode: null, result.Error),
+                BrowserPageSessionCompletionKind.PageCrashed => new BrowserSessionResult(ExitCode: null, result.Error),
+                BrowserPageSessionCompletionKind.ConnectionLost => new BrowserSessionResult(ExitCode: null, result.Error),
                 _ => new BrowserSessionResult(ExitCode: null, Error: null)
             };
         }
@@ -300,19 +300,19 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             return;
         }
 
-        await DisposeTargetSessionAsync().ConfigureAwait(false);
+        await DisposePageSessionAsync().ConfigureAwait(false);
         await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);
         _stopCts.Dispose();
     }
 
-    private async Task DisposeTargetSessionAsync()
+    private async Task DisposePageSessionAsync()
     {
-        var targetSession = _targetSession;
-        _targetSession = null;
+        var pageSession = _pageSession;
+        _pageSession = null;
 
-        if (targetSession is not null)
+        if (pageSession is not null)
         {
-            await targetSession.DisposeAsync().ConfigureAwait(false);
+            await pageSession.DisposeAsync().ConfigureAwait(false);
         }
     }
 

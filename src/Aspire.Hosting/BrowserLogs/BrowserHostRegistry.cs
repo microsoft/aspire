@@ -70,9 +70,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             if (_hosts.TryGetValue(identity, out var entry))
             {
                 // The identity is rooted at the browser executable and user data directory, not at a specific profile.
-                // That lets multiple sessions share one debug-enabled browser for the same user data root while still
-                // rejecting requests that need a different named profile from the browser we already track.
-                // In the playground this shows up as one browser window/process with additional tracked targets/tabs
+                // In Playwright terms, the user data directory is the persistent-context boundary: multiple pages can
+                // share one browser process/context, while requests for a different named profile are rejected.
+                // In the playground this shows up as one browser window/process with additional tracked page targets
                 // as more resources start browser-log sessions, rather than one browser process per session.
                 ValidateProfileCompatibility(identity, entry.ProfileDirectoryName, userDataDirectory.ProfileDirectoryName);
                 entry.ReferenceCount++;
@@ -215,10 +215,10 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             return BrowserLogsUserDataDirectory.CreateTemporary(_fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-browser-logs"));
         }
 
-        // Shared mode intentionally points at the browser's real user data root so user state, extensions, and profiles
-        // are available. Chromium puts SingletonLock, DevToolsActivePort, and our Aspire endpoint sidecar at that root;
-        // named profiles are subdirectories selected by command-line argument. The later endpoint/probe logic decides
-        // whether that root is reusable, adoptable, or locked.
+        // Shared mode is a persistent browser context over the browser's real user data root, so user state,
+        // extensions, and profiles are available. Chromium puts singleton locks, DevToolsActivePort, and our Aspire
+        // endpoint sidecar at that root; named profiles are subdirectories selected by command-line argument. The later
+        // endpoint/probe logic decides whether that root is reusable, adoptable, or locked.
         var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory(settings.Browser, browserExecutable)
             ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{settings.Browser}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.");
 

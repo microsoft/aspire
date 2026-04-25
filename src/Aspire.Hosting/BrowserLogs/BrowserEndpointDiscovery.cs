@@ -32,8 +32,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
     private readonly ILogger<BrowserLogsSessionManager> _logger = logger;
 
     // Aspire sidecar file stored at the Chromium user data root next to browser singleton files such as
-    // SingletonLock and DevToolsActivePort. Keeping it under the user data root makes the adoption state specific to
-    // the same browser singleton boundary that Chromium itself uses.
+    // SingletonLock/lockfile and DevToolsActivePort. Keeping it under the user data root makes the adoption state
+    // specific to the same browser singleton boundary that Chromium itself uses.
     public static string GetEndpointMetadataFilePath(string userDataDirectory) =>
         Path.Combine(userDataDirectory, "aspire-debug-endpoint.json");
 
@@ -173,15 +173,22 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
     public static void DeleteDevToolsActivePort(string userDataDirectory) =>
         TryDelete(Path.Combine(userDataDirectory, "DevToolsActivePort"));
 
-    public static bool IsNonDebuggableBrowserRunning(string userDataDirectory)
+    public static bool IsNonDebuggableBrowserRunning(string userDataDirectory) =>
+        IsNonDebuggableBrowserRunning(userDataDirectory, OperatingSystem.IsWindows());
+
+    internal static bool IsNonDebuggableBrowserRunning(string userDataDirectory, bool isWindows)
     {
-        var singletonLockPath = Path.Combine(userDataDirectory, "SingletonLock");
-        FileInfo singletonLock;
+        // Chromium uses different singleton lock files by platform:
+        // - POSIX/macOS: SingletonLock is a symlink shaped like "<hostname>-<pid>".
+        // - Windows: lockfile is held open with FILE_FLAG_DELETE_ON_CLOSE and has no PID payload.
+        // See Chromium's process_singleton_posix.cc and process_singleton_win.cc for the platform-specific details.
+        var lockPath = Path.Combine(userDataDirectory, isWindows ? "lockfile" : "SingletonLock");
+        FileInfo lockFile;
         try
         {
-            singletonLock = new FileInfo(singletonLockPath);
+            lockFile = new FileInfo(lockPath);
             // Broken Unix symlinks can report Exists=false while still exposing the host-pid LinkTarget we need.
-            if (!singletonLock.Exists && string.IsNullOrWhiteSpace(singletonLock.LinkTarget))
+            if (!lockFile.Exists && string.IsNullOrWhiteSpace(lockFile.LinkTarget))
             {
                 return false;
             }
@@ -195,7 +202,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             return false;
         }
 
-        if (TryGetSingletonLockProcessId(singletonLock) is { } pid)
+        if (TryGetSingletonLockProcessId(lockFile) is { } pid)
         {
             return IsProcessAlive(pid);
         }
@@ -204,7 +211,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         // https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/process_singleton_posix.cc
         // On Windows the singleton is a locked file rather than a host-pid symlink, so the best available signal is the
         // presence of the lock path. On Unix we avoid treating old broken symlinks as an active browser.
-        return OperatingSystem.IsWindows();
+        return isWindows;
     }
 
     private static async Task<bool> ProbeBrowserEndpointAsync(Uri browserEndpoint, CancellationToken cancellationToken)

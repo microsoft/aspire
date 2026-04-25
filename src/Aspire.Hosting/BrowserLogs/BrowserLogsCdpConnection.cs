@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-// Owns the browser-level websocket only. Protocol parsing stays in BrowserLogsCdpProtocol, while target lifecycle and
-// reconnection policy stay in BrowserTargetSession.
+// Owns the browser-level websocket only. Protocol parsing stays in BrowserLogsCdpProtocol, while page lifecycle and
+// reconnection policy stay in BrowserPageSession.
 internal sealed class BrowserLogsCdpConnection : IAsyncDisposable
 {
     private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(3);

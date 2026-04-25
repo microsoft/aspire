@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-// Base implementation for browser hosts. It centralizes the shared mechanics for creating per-tab target sessions
+// Base implementation for browser hosts. It centralizes the shared mechanics for creating per-page sessions
 // while concrete hosts decide who owns the browser process lifetime.
 internal abstract class BrowserHost(
     BrowserHostIdentity identity,
@@ -35,14 +35,14 @@ internal abstract class BrowserHost(
 
     public abstract Task Termination { get; }
 
-    public Task<IBrowserTargetSession> CreateTargetSessionAsync(
+    public Task<IBrowserPageSession> CreatePageSessionAsync(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken)
     {
-        return CreateTargetSessionCoreAsync(sessionId, url, connectionDiagnostics, eventHandler, cancellationToken);
+        return CreatePageSessionCoreAsync(sessionId, url, connectionDiagnostics, eventHandler, cancellationToken);
     }
 
     public abstract ValueTask DisposeAsync();
@@ -51,7 +51,8 @@ internal abstract class BrowserHost(
     {
         // Chromium writes DevToolsActivePort only when remote debugging is enabled. Let it choose the port so
         // playground runs do not collide with a user's existing browser or another AppHost. The initial about:blank
-        // page gives owned hosts a predictable first target that can be navigated instead of leaving an extra blank tab.
+        // page gives owned hosts a predictable first page target that can be navigated instead of leaving an extra
+        // blank tab.
         List<string> arguments =
         [
             $"--user-data-dir={userDataDirectory.Path}",
@@ -73,14 +74,14 @@ internal abstract class BrowserHost(
         return BrowserLogsRunningSession.BuildCommandLine(arguments);
     }
 
-    private async Task<IBrowserTargetSession> CreateTargetSessionCoreAsync(
+    private async Task<IBrowserPageSession> CreatePageSessionCoreAsync(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
         Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken)
     {
-        return await BrowserTargetSession.StartAsync(
+        return await BrowserPageSession.StartAsync(
             this,
             sessionId,
             url,

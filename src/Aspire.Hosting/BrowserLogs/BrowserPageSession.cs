@@ -5,16 +5,17 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
-// Owns one browser target (tab) for one browser-log session. The host may be shared by many sessions, but each
-// BrowserTargetSession has its own browser CDP connection, attached target session id, instrumentation setup,
-// lifecycle monitoring, and reconnection loop.
-internal sealed class BrowserTargetSession : IBrowserTargetSession
+// Owns one browser page/tab for one browser-log session. CDP calls pages "targets", but this layer intentionally
+// models the user-visible page session. The host may be shared by many sessions, while each BrowserPageSession has
+// its own browser CDP connection, attached target session id, instrumentation setup, lifecycle monitoring, and
+// reconnection loop.
+internal sealed class BrowserPageSession : IBrowserPageSession
 {
     private static readonly TimeSpan s_connectionRecoveryDelay = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan s_connectionRecoveryTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_closeTargetTimeout = TimeSpan.FromSeconds(3);
 
-    private readonly TaskCompletionSource<BrowserTargetSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<BrowserPageSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
     private readonly Func<BrowserLogsCdpProtocolEvent, ValueTask> _eventHandler;
     private readonly IBrowserHost _host;
@@ -26,12 +27,12 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
     private readonly Uri _url;
 
     private BrowserLogsCdpConnection? _connection;
-    private Task<BrowserTargetSessionResult>? _monitorTask;
+    private Task<BrowserPageSessionResult>? _monitorTask;
     private int _disposed;
     private string? _targetId;
     private string? _targetSessionId;
 
-    private BrowserTargetSession(
+    private BrowserPageSession(
         IBrowserHost host,
         string sessionId,
         Uri url,
@@ -55,37 +56,37 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
     public string TargetSessionId => _targetSessionId ?? throw new InvalidOperationException("Browser target session id is not available before the target session starts.");
 
-    public Task<BrowserTargetSessionResult> Completion => _monitorTask ?? throw new InvalidOperationException("Browser target session has not started.");
+    public Task<BrowserPageSessionResult> Completion => _monitorTask ?? throw new InvalidOperationException("Browser page session has not started.");
 
-    internal static BrowserTargetSessionResult? TryGetTargetCompletion(BrowserLogsCdpProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
+    internal static BrowserPageSessionResult? TryGetPageCompletion(BrowserLogsCdpProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
     {
         return protocolEvent switch
         {
             BrowserLogsTargetDestroyedEvent targetDestroyed when string.Equals(targetDestroyed.TargetId, targetId, StringComparison.Ordinal) =>
-                new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.TargetClosed, Error: null),
+                new BrowserPageSessionResult(BrowserPageSessionCompletionKind.PageClosed, Error: null),
 
             BrowserLogsTargetCrashedEvent targetCrashed when string.Equals(targetCrashed.TargetId, targetId, StringComparison.Ordinal) =>
-                new BrowserTargetSessionResult(
-                    BrowserTargetSessionCompletionKind.TargetCrashed,
-                    new InvalidOperationException($"Tracked browser target crashed with status '{targetCrashed.Parameters.Status}' and error code '{targetCrashed.Parameters.ErrorCode}'.")),
+                new BrowserPageSessionResult(
+                    BrowserPageSessionCompletionKind.PageCrashed,
+                    new InvalidOperationException($"Tracked browser page crashed with status '{targetCrashed.Parameters.Status}' and error code '{targetCrashed.Parameters.ErrorCode}'.")),
 
             BrowserLogsDetachedFromTargetEvent detached when
                 string.Equals(detached.DetachedSessionId, targetSessionId, StringComparison.Ordinal) ||
                 string.Equals(detached.TargetId, targetId, StringComparison.Ordinal) =>
-                new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.TargetClosed, Error: null),
+                new BrowserPageSessionResult(BrowserPageSessionCompletionKind.PageClosed, Error: null),
 
             BrowserLogsInspectorDetachedEvent inspectorDetached when string.Equals(inspectorDetached.SessionId, targetSessionId, StringComparison.Ordinal) =>
                 string.Equals(inspectorDetached.Reason, "target_closed", StringComparison.OrdinalIgnoreCase)
-                    ? new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.TargetClosed, Error: null)
-                    : new BrowserTargetSessionResult(
-                        BrowserTargetSessionCompletionKind.ConnectionLost,
+                    ? new BrowserPageSessionResult(BrowserPageSessionCompletionKind.PageClosed, Error: null)
+                    : new BrowserPageSessionResult(
+                        BrowserPageSessionCompletionKind.ConnectionLost,
                         new InvalidOperationException($"Tracked browser inspector detached: {inspectorDetached.Reason ?? "unknown reason"}.")),
 
             _ => null
         };
     }
 
-    public static async Task<BrowserTargetSession> StartAsync(
+    public static async Task<BrowserPageSession> StartAsync(
         IBrowserHost host,
         string sessionId,
         Uri url,
@@ -96,16 +97,16 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         bool reuseInitialBlankTarget,
         CancellationToken cancellationToken)
     {
-        var targetSession = new BrowserTargetSession(host, sessionId, url, connectionDiagnostics, eventHandler, logger, timeProvider, reuseInitialBlankTarget);
+        var pageSession = new BrowserPageSession(host, sessionId, url, connectionDiagnostics, eventHandler, logger, timeProvider, reuseInitialBlankTarget);
         try
         {
-            await targetSession.ConnectAsync(createTarget: true, cancellationToken).ConfigureAwait(false);
-            targetSession._monitorTask = targetSession.MonitorAsync();
-            return targetSession;
+            await pageSession.ConnectAsync(createTarget: true, cancellationToken).ConfigureAwait(false);
+            pageSession._monitorTask = pageSession.MonitorAsync();
+            return pageSession;
         }
         catch
         {
-            await targetSession.DisposeAsync().ConfigureAwait(false);
+            await pageSession.DisposeAsync().ConfigureAwait(false);
             throw;
         }
     }
@@ -133,7 +134,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
             }
         }
 
-        _completionSource.TrySetResult(new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.Stopped, Error: null));
+        _completionSource.TrySetResult(new BrowserPageSessionResult(BrowserPageSessionCompletionKind.Stopped, Error: null));
 
         await DisposeConnectionAsync().ConfigureAwait(false);
 
@@ -205,7 +206,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
             ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
     }
 
-    private async Task<BrowserTargetSessionResult> MonitorAsync()
+    private async Task<BrowserPageSessionResult> MonitorAsync()
     {
         try
         {
@@ -221,9 +222,9 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
                 if (completedTask == _host.Termination)
                 {
-                    var error = new InvalidOperationException($"Tracked browser host '{_host.Identity}' ended before the target session completed.");
+                    var error = new InvalidOperationException($"Tracked browser host '{_host.Identity}' ended before the page session completed.");
                     _connectionDiagnostics.LogHostTerminated(error);
-                    return new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.BrowserExited, error);
+                    return new BrowserPageSessionResult(BrowserPageSessionCompletionKind.BrowserExited, error);
                 }
 
                 Exception? connectionError = null;
@@ -238,7 +239,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 
                 if (_stopCts.IsCancellationRequested)
                 {
-                    return new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.Stopped, Error: null);
+                    return new BrowserPageSessionResult(BrowserPageSessionCompletionKind.Stopped, Error: null);
                 }
 
                 connectionError ??= new InvalidOperationException("The tracked browser debug connection closed without reporting a reason.");
@@ -248,7 +249,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
                     continue;
                 }
 
-                return new BrowserTargetSessionResult(BrowserTargetSessionCompletionKind.ConnectionLost, connectionError);
+                return new BrowserPageSessionResult(BrowserPageSessionCompletionKind.ConnectionLost, connectionError);
             }
         }
         finally
@@ -305,7 +306,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         if (lastError is not null)
         {
             _connectionDiagnostics.LogReconnectFailed(lastError);
-            _logger.LogDebug(lastError, "Timed out reconnecting tracked browser target session '{SessionId}'.", _sessionId);
+            _logger.LogDebug(lastError, "Timed out reconnecting tracked browser page session '{SessionId}'.", _sessionId);
         }
 
         return false;
@@ -315,9 +316,9 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
     {
         // Browser-level lifecycle events often are not stamped with the attached page session id, so check completion
         // first. Only after that should ordinary Runtime/Log/Network/Page events be filtered to this target session.
-        if (TryGetTargetCompletion(protocolEvent, _targetId, _targetSessionId) is { } targetCompletion)
+        if (TryGetPageCompletion(protocolEvent, _targetId, _targetSessionId) is { } pageCompletion)
         {
-            _completionSource.TrySetResult(targetCompletion);
+            _completionSource.TrySetResult(pageCompletion);
             return;
         }
 

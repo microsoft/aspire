@@ -434,7 +434,7 @@ internal sealed class BrowserConnectionDiagnosticsLogger(string sessionId, ILogg
 
     public void LogHostTerminated(Exception exception)
     {
-        _resourceLogger.LogError("[{SessionId}] Tracked browser host ended before the tracked target session completed: {Reason}", _sessionId, DescribeConnectionProblem(exception));
+        _resourceLogger.LogError("[{SessionId}] Tracked browser host ended before the tracked page session completed: {Reason}", _sessionId, DescribeConnectionProblem(exception));
     }
 
     internal static string DescribeConnectionProblem(Exception exception)

@@ -3,9 +3,10 @@
 
 namespace Aspire.Hosting;
 
-// A browser instance that one or more tracked log sessions can share. A host either owns the browser process
-// (Owned) or is connected to a browser someone else launched (Adopted). This distinction drives lifetime: an
-// Owned host can terminate its process on disposal, an Adopted host must never close the user's real browser.
+// A browser instance/process boundary that one or more tracked log sessions can share. A host either owns the
+// browser process (Owned) or is connected to a browser someone else launched (Adopted). This distinction drives
+// lifetime: an Owned host can terminate its process on disposal, an Adopted host must never close the user's real
+// browser.
 internal interface IBrowserHost : IAsyncDisposable
 {
     BrowserHostIdentity Identity { get; }
@@ -27,10 +28,10 @@ internal interface IBrowserHost : IAsyncDisposable
     // termination because sessions can reconnect and reattach to their targets.
     Task Termination { get; }
 
-    // Creates a target owned by one tracked browser-log session. The returned session owns only the target/tab;
+    // Creates a page/tab owned by one tracked browser-log session. The returned session owns only that page target;
     // disposing it must never close the browser process. Host implementations hide CDP event fanout and recovery
     // so callers cannot accidentally share a page target or call Browser.close on an adopted browser.
-    Task<IBrowserTargetSession> CreateTargetSessionAsync(
+    Task<IBrowserPageSession> CreatePageSessionAsync(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
@@ -38,28 +39,28 @@ internal interface IBrowserHost : IAsyncDisposable
         CancellationToken cancellationToken);
 }
 
-internal interface IBrowserTargetSession : IAsyncDisposable
+internal interface IBrowserPageSession : IAsyncDisposable
 {
     string TargetId { get; }
 
     string TargetSessionId { get; }
 
-    // Completes when this target is no longer available: the target was closed/crashed, CDP reported a detach,
+    // Completes when this page target is no longer available: the tab was closed/crashed, CDP reported a detach,
     // or the host terminated. Host-level reconnects should reattach and preserve this session when possible.
-    Task<BrowserTargetSessionResult> Completion { get; }
+    Task<BrowserPageSessionResult> Completion { get; }
 }
 
-// Normalized target-session completion signal consumed by BrowserLogsRunningSession so manager state is independent of
-// the exact CDP event or transport failure that ended the target.
-internal readonly record struct BrowserTargetSessionResult(BrowserTargetSessionCompletionKind CompletionKind, Exception? Error);
+// Normalized page-session completion signal consumed by BrowserLogsRunningSession so manager state is independent of
+// the exact CDP event or transport failure that ended the page.
+internal readonly record struct BrowserPageSessionResult(BrowserPageSessionCompletionKind CompletionKind, Exception? Error);
 
-// Small vocabulary for target lifecycle outcomes. The manager uses this to distinguish normal tab closes from crashes
+// Small vocabulary for page lifecycle outcomes. The manager uses this to distinguish normal tab closes from crashes
 // or unrecoverable browser connection loss.
-internal enum BrowserTargetSessionCompletionKind
+internal enum BrowserPageSessionCompletionKind
 {
     Stopped,
-    TargetClosed,
-    TargetCrashed,
+    PageClosed,
+    PageCrashed,
     BrowserExited,
     ConnectionLost
 }

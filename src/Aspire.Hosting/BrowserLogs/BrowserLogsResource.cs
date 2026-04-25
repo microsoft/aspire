@@ -12,24 +12,21 @@ namespace Aspire.Hosting;
 public enum BrowserUserDataMode
 {
     /// <summary>
-    /// Use the browser's real user data directory so the tracked session reuses real cookies, sessions,
-    /// extensions, and profile selection. Behaves like clicking the browser icon.
+    /// Use the browser's real user data directory so the tracked session behaves like a persistent browser context
+    /// with real cookies, sessions, extensions, and profile selection.
     /// </summary>
     /// <remarks>
-    /// NOTE: When the target browser is already running with the same user data directory, Chromium will
-    /// typically forward the launch to the existing instance and exit the new process. The tracked session
-    /// relies on <c>--remote-debugging-port</c> and the <c>DevToolsActivePort</c> file written by the
-    /// launched process; if launching forwards to an existing browser, the DevTools endpoint may not be
-    /// discoverable and the session will fail to start. Users must close existing browser windows for the
-    /// selected user data directory before starting a tracked session in this mode. Google Chrome also
-    /// blocks remote debugging against its default user data directory; use Microsoft Edge or
-    /// <see cref="Isolated"/> mode when Chrome is selected.
+    /// NOTE: Aspire can adopt a shared browser only when it previously launched that browser with remote debugging
+    /// enabled. If a normal non-debuggable browser is already using the selected user data directory, the tracked
+    /// session fails with guidance instead of opening a second browser against the same profile store. Google Chrome
+    /// also blocks remote debugging against its default user data directory; use Microsoft Edge or <see cref="Isolated"/>
+    /// mode when Chrome is selected.
     /// </remarks>
     Shared,
 
     /// <summary>
-    /// Launch the tracked browser against a temporary user data directory so the session starts from clean
-    /// state and does not affect the user's normal browser profiles.
+    /// Launch the tracked browser against a temporary user data directory, like a disposable persistent browser
+    /// context, so the session starts from clean state and does not affect the user's normal browser profiles.
     /// </summary>
     Isolated,
 }
