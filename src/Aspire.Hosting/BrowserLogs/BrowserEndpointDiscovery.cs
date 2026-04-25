@@ -13,12 +13,13 @@ namespace Aspire.Hosting;
 // an existing browser can be adopted.
 internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager> logger)
 {
+    private static readonly TimeSpan s_probeHttpClientTimeout = Timeout.InfiniteTimeSpan;
     private static readonly TimeSpan s_probeTimeout = TimeSpan.FromSeconds(2);
     private static readonly HttpClient s_probeHttpClient = new()
     {
         // Keep the singleton client free of a global timeout. Each probe applies a linked CTS below so
         // endpoint-probe timeouts remain local while caller cancellation still propagates.
-        Timeout = Timeout.InfiniteTimeSpan
+        Timeout = s_probeHttpClientTimeout
     };
 
     private readonly ILogger<BrowserLogsSessionManager> _logger = logger;

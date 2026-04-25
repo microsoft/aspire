@@ -12,6 +12,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
 {
     private static readonly TimeSpan s_connectionRecoveryDelay = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan s_connectionRecoveryTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan s_closeTargetTimeout = TimeSpan.FromSeconds(3);
 
     private readonly TaskCompletionSource<BrowserTargetSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
@@ -123,7 +124,7 @@ internal sealed class BrowserTargetSession : IBrowserTargetSession
         {
             try
             {
-                using var closeTargetCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                using var closeTargetCts = new CancellationTokenSource(s_closeTargetTimeout);
                 await connection.CloseTargetAsync(_targetId, closeTargetCts.Token).ConfigureAwait(false);
             }
             catch (Exception ex)

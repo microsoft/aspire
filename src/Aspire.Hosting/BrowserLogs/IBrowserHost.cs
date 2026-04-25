@@ -68,6 +68,8 @@ internal enum BrowserTargetSessionCompletionKind
 // releases a shared host, which keeps owned/adopted browser lifetime centralized in BrowserHostRegistry.
 internal sealed class BrowserHostLease : IAsyncDisposable
 {
+    private static readonly TimeSpan s_releaseTimeout = TimeSpan.FromSeconds(5);
+
     private readonly Func<CancellationToken, ValueTask> _releaseAsync;
     private int _disposed;
 
@@ -86,7 +88,7 @@ internal sealed class BrowserHostLease : IAsyncDisposable
             return;
         }
 
-        using var releaseCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        using var releaseCts = new CancellationTokenSource(s_releaseTimeout);
         await _releaseAsync(releaseCts.Token).ConfigureAwait(false);
     }
 }

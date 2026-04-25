@@ -98,6 +98,7 @@ internal abstract class BrowserHost(
 internal sealed class OwnedBrowserHost : BrowserHost
 {
     private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_browserEndpointPollInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan s_browserShutdownTimeout = TimeSpan.FromSeconds(5);
 
     private readonly BrowserLogsUserDataDirectory _userDataDirectory;
@@ -251,7 +252,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
                     if (previousWriteTimeUtc is { } previousWriteTime &&
                         File.GetLastWriteTimeUtc(devToolsActivePortFilePath) <= previousWriteTime)
                     {
-                        await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+                        await Task.Delay(s_browserEndpointPollInterval, cancellationToken).ConfigureAwait(false);
                         continue;
                     }
 
@@ -269,7 +270,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
             {
             }
 
-            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+            await Task.Delay(s_browserEndpointPollInterval, cancellationToken).ConfigureAwait(false);
         }
 
         throw new TimeoutException($"Timed out waiting for the tracked browser to write '{devToolsActivePortFilePath}'.");

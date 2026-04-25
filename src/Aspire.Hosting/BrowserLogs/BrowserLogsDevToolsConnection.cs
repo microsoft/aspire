@@ -14,6 +14,7 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
 {
     private static readonly TimeSpan s_closeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_commandTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_keepAliveInterval = TimeSpan.FromSeconds(15);
 
     private readonly CancellationTokenSource _disposeCts = new();
     private readonly Func<BrowserLogsProtocolEvent, ValueTask> _eventHandler;
@@ -58,7 +59,7 @@ internal sealed class ChromeDevToolsConnection : IAsyncDisposable
         using var connector = connectorFactory();
         // Browser-log sessions can sit idle while the page is loading or the developer is reading the dashboard.
         // Keep-alives make transport failures show up in the receive loop instead of only on the next CDP command.
-        connector.SetKeepAliveInterval(TimeSpan.FromSeconds(15));
+        connector.SetKeepAliveInterval(s_keepAliveInterval);
         await connector.ConnectAsync(webSocketUri, cancellationToken).ConfigureAwait(false);
         return new ChromeDevToolsConnection(connector.DetachConnectedWebSocket(), eventHandler, logger);
     }
