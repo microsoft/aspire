@@ -11,6 +11,11 @@ namespace Aspire.TypeSystem;
 public sealed class AtsExportedValueInfo
 {
     /// <summary>
+    /// Gets the name of the assembly that exported this value.
+    /// </summary>
+    public required string OwningAssemblyName { get; init; }
+
+    /// <summary>
     /// Gets the full path of the exported value in generated guest SDKs.
     /// </summary>
     /// <remarks>

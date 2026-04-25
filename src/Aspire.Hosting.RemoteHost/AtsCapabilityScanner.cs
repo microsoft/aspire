@@ -1127,6 +1127,7 @@ public static class AtsCapabilityScanner
 
             exportedValues.Add(new AtsExportedValueInfo
             {
+                OwningAssemblyName = declaringType.Assembly.GetName().Name ?? declaringType.Assembly.FullName ?? declaringType.Name ?? memberName,
                 PathSegments = BuildExportedValuePath(declaringType, valueAttr, memberName),
                 Type = typeRef!,
                 Value = SerializeExportedValue(getValue(), memberType),
