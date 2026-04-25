@@ -73,6 +73,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "msedge";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Default";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
 
@@ -164,6 +165,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -175,13 +177,104 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "msedge", profile: "Default");
+        web.WithBrowserLogs(browser: "msedge", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
 
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
         Assert.Equal("msedge", browserLogsResource.Browser);
         Assert.Equal("Default", browserLogsResource.Profile);
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.UserDataMode);
+    }
+
+    [Fact]
+    public void WithBrowserLogs_DefaultsToIsolatedUserDataMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs();
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+
+        Assert.Equal(BrowserUserDataMode.Isolated, browserLogsResource.UserDataMode);
+        var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.UserDataModePropertyName && Equals(property.Value, nameof(BrowserUserDataMode.Isolated)));
+    }
+
+    [Fact]
+    public void WithBrowserLogs_ReadsUserDataModeFromConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs();
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.UserDataMode);
+    }
+
+    [Fact]
+    public void WithBrowserLogs_RejectsProfileWhenUserDataModeIsIsolated()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => web.WithBrowserLogs(profile: "Default", userDataMode: BrowserUserDataMode.Isolated));
+        Assert.Contains(BrowserLogsBuilderExtensions.UserDataModeConfigurationKey, ex.Message);
+    }
+
+    [Fact]
+    public void WithBrowserLogs_ExplicitUserDataModeOverridesConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Isolated);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(userDataMode: BrowserUserDataMode.Shared);
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.UserDataMode);
     }
 
     [Fact]
@@ -227,6 +320,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Default";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
 
         builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
             new BrowserLogsSessionManager(
@@ -518,7 +612,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome", profile: "Default");
+        web.WithBrowserLogs(browser: "chrome", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
 
         using var app = builder.Build();
         await app.StartAsync();

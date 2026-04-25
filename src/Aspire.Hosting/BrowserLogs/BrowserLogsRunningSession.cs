@@ -5,6 +5,7 @@
 
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging;
 
@@ -233,14 +234,26 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             throw new InvalidOperationException($"Unable to locate browser '{_settings.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
         }
 
-        _userDataDirectory = CreateUserDataDirectory(_settings.Browser, _browserExecutable, _settings.Profile);
+        _userDataDirectory = CreateUserDataDirectory(_settings, _browserExecutable);
         var devToolsActivePortFilePath = GetDevToolsActivePortFilePath();
         var previousBrowserEndpointWriteTimeUtc = PrepareBrowserEndpointFile(devToolsActivePortFilePath);
         await StartBrowserProcessAsync(cancellationToken).ConfigureAwait(false);
         _resourceLogger.LogInformation("[{SessionId}] Started tracked browser process '{BrowserExecutable}'.", _sessionId, _browserExecutable);
         if (_settings.Profile is not null)
         {
-            _resourceLogger.LogInformation("[{SessionId}] Using tracked browser profile '{Profile}'.", _sessionId, _settings.Profile);
+            if (_userDataDirectory?.ProfileDirectoryName is { } profileDirectoryName &&
+                !string.Equals(profileDirectoryName, _settings.Profile, StringComparison.OrdinalIgnoreCase))
+            {
+                _resourceLogger.LogInformation(
+                    "[{SessionId}] Using tracked browser profile '{Profile}' (directory '{ProfileDirectoryName}').",
+                    _sessionId,
+                    _settings.Profile,
+                    profileDirectoryName);
+            }
+            else
+            {
+                _resourceLogger.LogInformation("[{SessionId}] Using tracked browser profile '{Profile}'.", _sessionId, _settings.Profile);
+            }
         }
         _resourceLogger.LogInformation("[{SessionId}] Waiting for tracked browser debug endpoint metadata in '{DevToolsActivePortFilePath}'.", _sessionId, devToolsActivePortFilePath);
 
@@ -308,9 +321,9 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             "--allow-insecure-localhost"
         ];
 
-        if (_settings.Profile is not null)
+        if (userDataDirectory.ProfileDirectoryName is { } profileDirectoryName)
         {
-            arguments.Add($"--profile-directory={_settings.Profile}");
+            arguments.Add($"--profile-directory={profileDirectoryName}");
         }
 
         arguments.Add("about:blank");
@@ -671,28 +684,25 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         return Path.Combine(userDataDirectory.Path, "DevToolsActivePort");
     }
 
-    private BrowserLogsUserDataDirectory CreateUserDataDirectory(string browser, string browserExecutable, string? profile)
+    private BrowserLogsUserDataDirectory CreateUserDataDirectory(BrowserLogsSettings settings, string browserExecutable)
     {
-        if (profile is null)
+        if (settings.UserDataMode == BrowserUserDataMode.Isolated)
         {
             return BrowserLogsUserDataDirectory.CreateTemporary(_fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-browser-logs"));
         }
 
-        var userDataDirectory = TryResolveBrowserUserDataDirectory(browser, browserExecutable)
-            ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{browser}'. Specify a known browser such as 'msedge' or 'chrome' when using a browser profile.");
+        var userDataDirectory = TryResolveBrowserUserDataDirectory(settings.Browser, browserExecutable)
+            ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{settings.Browser}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.");
 
         if (!Directory.Exists(userDataDirectory))
         {
-            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{browser}'.");
+            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{settings.Browser}'.");
         }
 
-        var profileDirectory = Path.Combine(userDataDirectory, profile);
-        if (!Directory.Exists(profileDirectory))
-        {
-            throw new InvalidOperationException($"Browser profile '{profile}' was not found under '{userDataDirectory}'.");
-        }
-
-        return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory);
+        var profileDirectoryName = settings.Profile is { } profile
+            ? ResolveBrowserProfileDirectory(userDataDirectory, profile)
+            : null;
+        return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory, profileDirectoryName);
     }
 
     internal static string? TryResolveBrowserExecutable(string browser)
@@ -762,6 +772,91 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         };
     }
 
+    internal static string ResolveBrowserProfileDirectory(string userDataDirectory, string profile)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userDataDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profile);
+
+        if (!Directory.Exists(userDataDirectory))
+        {
+            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found.");
+        }
+
+        if (TryResolveBrowserProfileDirectoryFromDirectoryEntries(userDataDirectory, profile) is { } directMatch)
+        {
+            return directMatch;
+        }
+
+        var localStatePath = Path.Combine(userDataDirectory, "Local State");
+        if (File.Exists(localStatePath))
+        {
+            try
+            {
+                using var localStateStream = File.OpenRead(localStatePath);
+                using var localStateDocument = JsonDocument.Parse(localStateStream);
+                if (TryResolveBrowserProfileDirectory(localStateDocument.RootElement, userDataDirectory, profile) is { } profileDirectory)
+                {
+                    return profileDirectory;
+                }
+            }
+            catch (IOException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Unable to read Chromium profile metadata from '{localStatePath}' while resolving browser profile '{profile}'.",
+                    ex);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Unable to read Chromium profile metadata from '{localStatePath}' while resolving browser profile '{profile}'.",
+                    ex);
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Chromium profile metadata in '{localStatePath}' is invalid while resolving browser profile '{profile}'.",
+                    ex);
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Browser profile '{profile}' was not found under '{userDataDirectory}'. Specify the profile directory name (for example 'Default' or 'Profile 1') or a browser profile name from Chromium's profile metadata.");
+    }
+
+    internal static string? TryResolveBrowserProfileDirectory(JsonElement localStateRoot, string userDataDirectory, string profile)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userDataDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(profile);
+
+        if (!localStateRoot.TryGetProperty("profile", out var profileElement) ||
+            !profileElement.TryGetProperty("info_cache", out var infoCacheElement) ||
+            infoCacheElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        string? match = null;
+
+        foreach (var profileEntry in infoCacheElement.EnumerateObject())
+        {
+            if (!Directory.Exists(Path.Combine(userDataDirectory, profileEntry.Name)) ||
+                !MatchesBrowserProfile(profileEntry, profile))
+            {
+                continue;
+            }
+
+            if (match is not null && !string.Equals(match, profileEntry.Name, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Browser profile '{profile}' matched multiple Chromium profiles under '{userDataDirectory}'. Specify the profile directory name instead.");
+            }
+
+            match = profileEntry.Name;
+        }
+
+        return match;
+    }
+
     private static IEnumerable<string> GetBrowserCandidates(string browser)
     {
         if (OperatingSystem.IsMacOS())
@@ -812,6 +907,20 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             "chrome" or "google-chrome" => ["google-chrome", "google-chrome-stable", "chrome", "chromium-browser", "chromium"],
             _ => [browser]
         };
+    }
+
+    private static string? TryResolveBrowserProfileDirectoryFromDirectoryEntries(string userDataDirectory, string profile)
+    {
+        foreach (var directoryPath in Directory.EnumerateDirectories(userDataDirectory))
+        {
+            var directoryName = Path.GetFileName(directoryPath);
+            if (string.Equals(directoryName, profile, StringComparison.OrdinalIgnoreCase))
+            {
+                return directoryName;
+            }
+        }
+
+        return null;
     }
 
     private static BrowserKind GetBrowserKind(string browser, string browserExecutable)
@@ -869,6 +978,20 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
 
         return false;
+    }
+
+    private static bool MatchesBrowserProfile(JsonProperty profileEntry, string profile)
+    {
+        return string.Equals(profileEntry.Name, profile, StringComparison.OrdinalIgnoreCase) ||
+            MatchesBrowserProfileProperty(profileEntry.Value, "name", profile) ||
+            MatchesBrowserProfileProperty(profileEntry.Value, "shortcut_name", profile);
+    }
+
+    private static bool MatchesBrowserProfileProperty(JsonElement profileElement, string propertyName, string profile)
+    {
+        return profileElement.TryGetProperty(propertyName, out var propertyElement) &&
+            propertyElement.ValueKind == JsonValueKind.String &&
+            string.Equals(propertyElement.GetString(), profile, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string BuildCommandLine(IReadOnlyList<string> arguments)
@@ -956,17 +1079,20 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
     {
         private readonly TempDirectory? _temporaryDirectory;
 
-        private BrowserLogsUserDataDirectory(string path, TempDirectory? temporaryDirectory)
+        private BrowserLogsUserDataDirectory(string path, string? profileDirectoryName, TempDirectory? temporaryDirectory)
         {
             Path = path;
+            ProfileDirectoryName = profileDirectoryName;
             _temporaryDirectory = temporaryDirectory;
         }
 
         public string Path { get; }
 
-        public static BrowserLogsUserDataDirectory CreatePersistent(string path) => new(path, temporaryDirectory: null);
+        public string? ProfileDirectoryName { get; }
 
-        public static BrowserLogsUserDataDirectory CreateTemporary(TempDirectory temporaryDirectory) => new(temporaryDirectory.Path, temporaryDirectory);
+        public static BrowserLogsUserDataDirectory CreatePersistent(string path, string? profileDirectoryName) => new(path, profileDirectoryName, temporaryDirectory: null);
+
+        public static BrowserLogsUserDataDirectory CreateTemporary(TempDirectory temporaryDirectory) => new(temporaryDirectory.Path, profileDirectoryName: null, temporaryDirectory);
 
         public void Dispose() => _temporaryDirectory?.Dispose();
     }

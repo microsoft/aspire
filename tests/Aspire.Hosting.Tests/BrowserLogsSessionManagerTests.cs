@@ -78,6 +78,79 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public void ResolveBrowserProfileDirectory_MatchesDirectoryNameCaseInsensitively()
+    {
+        WithTempUserDataDirectory(userDataDirectory =>
+        {
+            Directory.CreateDirectory(Path.Combine(userDataDirectory, "Profile 1"));
+
+            var profileDirectory = BrowserLogsRunningSession.ResolveBrowserProfileDirectory(userDataDirectory, "profile 1");
+
+            Assert.Equal("Profile 1", profileDirectory);
+        });
+    }
+
+    [Fact]
+    public void ResolveBrowserProfileDirectory_MatchesProfileDisplayNameFromLocalState()
+    {
+        WithTempUserDataDirectory(userDataDirectory =>
+        {
+            Directory.CreateDirectory(Path.Combine(userDataDirectory, "Default"));
+            Directory.CreateDirectory(Path.Combine(userDataDirectory, "Profile 1"));
+            File.WriteAllText(
+                Path.Combine(userDataDirectory, "Local State"),
+                """
+                {
+                  "profile": {
+                    "info_cache": {
+                      "Default": {
+                        "name": "Profile 1"
+                      },
+                      "Profile 1": {
+                        "name": "Profile 2"
+                      }
+                    }
+                  }
+                }
+                """);
+
+            var profileDirectory = BrowserLogsRunningSession.ResolveBrowserProfileDirectory(userDataDirectory, "Profile 2");
+
+            Assert.Equal("Profile 1", profileDirectory);
+        });
+    }
+
+    [Fact]
+    public void ResolveBrowserProfileDirectory_ThrowsWhenDisplayNameIsAmbiguous()
+    {
+        WithTempUserDataDirectory(userDataDirectory =>
+        {
+            Directory.CreateDirectory(Path.Combine(userDataDirectory, "Default"));
+            Directory.CreateDirectory(Path.Combine(userDataDirectory, "Profile 1"));
+            File.WriteAllText(
+                Path.Combine(userDataDirectory, "Local State"),
+                """
+                {
+                  "profile": {
+                    "info_cache": {
+                      "Default": {
+                        "name": "Shared profile"
+                      },
+                      "Profile 1": {
+                        "name": "Shared profile"
+                      }
+                    }
+                  }
+                }
+                """);
+
+            var exception = Assert.Throws<InvalidOperationException>(() => BrowserLogsRunningSession.ResolveBrowserProfileDirectory(userDataDirectory, "Shared profile"));
+
+            Assert.Contains("matched multiple Chromium profiles", exception.Message);
+        });
+    }
+
+    [Fact]
     public void TrySelectTrackedTargetId_PrefersUnattachedBlankPage()
     {
         var targetId = BrowserLogsRunningSession.TrySelectTrackedTargetId(
@@ -152,15 +225,16 @@ public class BrowserLogsSessionManagerTests
         var resource = new BrowserLogsResource(
             "web-browser-logs",
             new TestResourceWithEndpoints("web"),
-            new BrowserLogsSettings("chrome", null),
+            new BrowserLogsSettings("chrome", null, BrowserUserDataMode.Isolated),
             browserOverride: null,
-            profileOverride: null);
+            profileOverride: null,
+            userDataModeOverride: null);
 
         await manager.DisposeAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(() => manager.StartSessionAsync(
             resource,
-            new BrowserLogsSettings("chrome", null),
+            new BrowserLogsSettings("chrome", null, BrowserUserDataMode.Isolated),
             resource.Name,
             new Uri("https://localhost"),
             CancellationToken.None));
@@ -170,6 +244,19 @@ public class BrowserLogsSessionManagerTests
 
     private static Task<IReadOnlyList<LogLine>> CaptureLogsAsync(ResourceLoggerService resourceLoggerService, string resourceName, int targetLogCount, Action writeLogs) =>
         ConsoleLoggingTestHelpers.CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount, writeLogs);
+
+    private static void WithTempUserDataDirectory(Action<string> action)
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            action(userDataDirectory.FullName);
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
 
     private sealed class ThrowIfCalledSessionFactory : IBrowserLogsRunningSessionFactory
     {

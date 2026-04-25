@@ -23,6 +23,9 @@ public static class BrowserLogsBuilderExtensions
     internal const string BrowserExecutablePropertyName = "Browser executable";
     internal const string ProfileConfigurationKey = "Profile";
     internal const string ProfilePropertyName = "Profile";
+    internal const string UserDataModeConfigurationKey = "UserDataMode";
+    internal const string UserDataModePropertyName = "User data mode";
+    internal const BrowserUserDataMode DefaultUserDataMode = BrowserUserDataMode.Isolated;
     internal const string TargetUrlPropertyName = "Target URL";
     internal const string ActiveSessionsPropertyName = "Active sessions";
     internal const string BrowserSessionsPropertyName = "Browser sessions";
@@ -44,8 +47,16 @@ public static class BrowserLogsBuilderExtensions
     /// browser names such as <c>"msedge"</c> and <c>"chrome"</c>, or an explicit browser executable path.
     /// </param>
     /// <param name="profile">
-    /// Optional Chromium profile directory name to use. When not specified, the tracked browser uses the configured
-    /// value from <c>Aspire:Hosting:BrowserLogs</c> if present.
+    /// Optional Chromium profile name or directory name to use. Only valid when the effective user data mode
+    /// is <see cref="BrowserUserDataMode.Shared"/>. When not specified, the tracked browser uses the
+    /// configured value from <c>Aspire:Hosting:BrowserLogs</c> if present.
+    /// </param>
+    /// <param name="userDataMode">
+    /// Optional <see cref="BrowserUserDataMode"/> that selects whether the tracked browser launches against
+    /// the browser's real user data directory (<see cref="BrowserUserDataMode.Shared"/>) or a temporary
+    /// user data directory (<see cref="BrowserUserDataMode.Isolated"/>). When not specified, the tracked
+    /// browser uses the configured value from <c>Aspire:Hosting:BrowserLogs</c> and otherwise defaults to
+    /// <see cref="BrowserUserDataMode.Isolated"/>.
     /// </param>
     /// <returns>A reference to the original <see cref="IResourceBuilder{T}"/> for further chaining.</returns>
     /// <remarks>
@@ -64,10 +75,13 @@ public static class BrowserLogsBuilderExtensions
     /// endpoints when selecting the browser target URL.
     /// </para>
     /// <para>
-    /// Browser and profile settings can also be supplied from configuration using
-    /// <c>Aspire:Hosting:BrowserLogs:Browser</c> and <c>Aspire:Hosting:BrowserLogs:Profile</c>, or scoped to a
-    /// specific resource with <c>Aspire:Hosting:BrowserLogs:{ResourceName}:Browser</c> and
-    /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:Profile</c>. Explicit method arguments override configuration.
+    /// Browser, profile, and user data mode settings can also be supplied from configuration using
+    /// <c>Aspire:Hosting:BrowserLogs:Browser</c>, <c>Aspire:Hosting:BrowserLogs:Profile</c>, and
+    /// <c>Aspire:Hosting:BrowserLogs:UserDataMode</c>, or scoped to a specific resource with
+    /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:Browser</c>,
+    /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:Profile</c>, and
+    /// <c>Aspire:Hosting:BrowserLogs:{ResourceName}:UserDataMode</c>. Explicit method arguments override
+    /// configuration.
     /// </para>
     /// </remarks>
     /// <example>
@@ -82,7 +96,11 @@ public static class BrowserLogsBuilderExtensions
     /// </example>
     [Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.")]
-    public static IResourceBuilder<T> WithBrowserLogs<T>(this IResourceBuilder<T> builder, string? browser = null, string? profile = null)
+    public static IResourceBuilder<T> WithBrowserLogs<T>(
+        this IResourceBuilder<T> builder,
+        string? browser = null,
+        string? profile = null,
+        BrowserUserDataMode? userDataMode = null)
         where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -92,8 +110,14 @@ public static class BrowserLogsBuilderExtensions
         builder.ApplicationBuilder.Services.TryAddSingleton<IBrowserLogsSessionManager, BrowserLogsSessionManager>();
 
         var parentResource = builder.Resource;
-        var settings = ResolveSettings(builder.ApplicationBuilder.Configuration, parentResource.Name, browser, profile);
-        var browserLogsResource = new BrowserLogsResource($"{parentResource.Name}-browser-logs", parentResource, settings, browser, profile);
+        var settings = ResolveSettings(builder.ApplicationBuilder.Configuration, parentResource.Name, browser, profile, userDataMode);
+        var browserLogsResource = new BrowserLogsResource(
+            $"{parentResource.Name}-browser-logs",
+            parentResource,
+            settings,
+            browser,
+            profile,
+            userDataMode);
         browserLogsResource.Annotations.Add(NameValidationPolicyAnnotation.None);
 
         builder.ApplicationBuilder.AddResource(browserLogsResource)
@@ -171,7 +195,8 @@ public static class BrowserLogsBuilderExtensions
             List<ResourcePropertySnapshot> properties =
             [
                 new(CustomResourceKnownProperties.Source, resourceName),
-                new(BrowserPropertyName, settings.Browser)
+                new(BrowserPropertyName, settings.Browser),
+                new(UserDataModePropertyName, settings.UserDataMode.ToString())
             ];
 
             if (settings.Profile is { } profile)
@@ -222,7 +247,12 @@ public static class BrowserLogsBuilderExtensions
         }
     }
 
-    internal static BrowserLogsSettings ResolveSettings(IConfiguration configuration, string resourceName, string? browser, string? profile)
+    internal static BrowserLogsSettings ResolveSettings(
+        IConfiguration configuration,
+        string resourceName,
+        string? browser,
+        string? profile,
+        BrowserUserDataMode? userDataMode)
     {
         var browserLogsSection = configuration.GetSection(BrowserLogsConfigurationSectionName);
         var resourceSection = browserLogsSection.GetSection(resourceName);
@@ -234,6 +264,10 @@ public static class BrowserLogsBuilderExtensions
         var resolvedProfile = profile
             ?? resourceSection[ProfileConfigurationKey]
             ?? browserLogsSection[ProfileConfigurationKey];
+        var resolvedUserDataMode = userDataMode
+            ?? ParseUserDataMode(resourceSection[UserDataModeConfigurationKey])
+            ?? ParseUserDataMode(browserLogsSection[UserDataModeConfigurationKey])
+            ?? DefaultUserDataMode;
 
         if (string.IsNullOrWhiteSpace(resolvedBrowser))
         {
@@ -245,7 +279,30 @@ public static class BrowserLogsBuilderExtensions
             throw new InvalidOperationException("Tracked browser configuration resolved an empty profile value.");
         }
 
-        return new BrowserLogsSettings(resolvedBrowser, resolvedProfile);
+        if (resolvedUserDataMode == BrowserUserDataMode.Isolated && resolvedProfile is not null)
+        {
+            throw new InvalidOperationException(
+                $"Tracked browser configuration set '{ProfileConfigurationKey}' to '{resolvedProfile}' while '{UserDataModeConfigurationKey}' is '{BrowserUserDataMode.Isolated}'. " +
+                $"Profiles can only be selected when '{UserDataModeConfigurationKey}' is '{BrowserUserDataMode.Shared}'.");
+        }
+
+        return new BrowserLogsSettings(resolvedBrowser, resolvedProfile, resolvedUserDataMode);
+    }
+
+    private static BrowserUserDataMode? ParseUserDataMode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        if (Enum.TryParse<BrowserUserDataMode>(value, ignoreCase: true, out var parsed))
+        {
+            return parsed;
+        }
+
+        throw new InvalidOperationException(
+            $"Tracked browser configuration value '{value}' is not a valid '{UserDataModeConfigurationKey}'. Expected '{BrowserUserDataMode.Shared}' or '{BrowserUserDataMode.Isolated}'.");
     }
 
     internal static string GetDefaultBrowser(Func<string, string?> resolveBrowserExecutable)
