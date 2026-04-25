@@ -148,28 +148,63 @@ internal static class KubernetesDeployTestHelpers
         SequenceCounter counter,
         ITestOutputHelper output)
     {
-        // Run aspire --version and assert it contains a prerelease suffix (hyphen) via shell
-        await auto.TypeAsync("VER=$(aspire --version 2>/dev/null) && echo \"$VER\" | grep -q '-' && echo \"CLI_VERSION_OK:$VER\" || { echo \"CLI_VERSION_FAIL:$VER\"; false; }");
-        await auto.EnterAsync();
+        var expectedVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_EXPECTED_CLI_VERSION");
 
-        var foundOk = false;
-        await auto.WaitUntilAsync(
-            snapshot =>
-            {
-                if (new CellPatternSearcher().Find("CLI_VERSION_OK:").Search(snapshot).Count > 0)
+        output.WriteLine($"CLI version verification: ASPIRE_E2E_EXPECTED_CLI_VERSION={expectedVersion ?? "(not set)"}");
+        output.WriteLine(string.IsNullOrEmpty(expectedVersion)
+            ? "  Mode: prerelease-suffix check (no exact version configured)"
+            : $"  Mode: exact version match against '{expectedVersion}'");
+
+        if (!string.IsNullOrEmpty(expectedVersion))
+        {
+            // When an expected version is set (CI builds), verify the exact version matches
+            await auto.TypeAsync($"VER=$(aspire --version 2>/dev/null) && [ \"$VER\" = \"{expectedVersion}\" ] && echo \"CLI_VERSION_EXACT:$VER\" || echo \"CLI_VERSION_MISMATCH:expected={expectedVersion} actual=$VER\"");
+            await auto.EnterAsync();
+
+            var foundExact = false;
+            await auto.WaitUntilAsync(
+                snapshot =>
                 {
-                    foundOk = true;
-                    return true;
-                }
-                return new CellPatternSearcher().Find("CLI_VERSION_FAIL:").Search(snapshot).Count > 0;
-            },
-            timeout: TimeSpan.FromSeconds(30),
-            description: "CLI version prerelease assertion");
+                    if (new CellPatternSearcher().Find("CLI_VERSION_EXACT:").Search(snapshot).Count > 0)
+                    {
+                        foundExact = true;
+                        return true;
+                    }
+                    return new CellPatternSearcher().Find("CLI_VERSION_MISMATCH:").Search(snapshot).Count > 0;
+                },
+                timeout: TimeSpan.FromSeconds(30),
+                description: "CLI version exact match assertion");
 
-        await auto.WaitForAnyPromptAsync(counter);
+            await auto.WaitForAnyPromptAsync(counter);
 
-        Assert.True(foundOk, "Aspire CLI version does not contain a prerelease suffix. Expected a development build (e.g. 13.3.0-dev or 13.3.0-pr.NNNNN).");
-        output.WriteLine("✅ CLI version contains prerelease suffix");
+            Assert.True(foundExact, $"Aspire CLI version mismatch. Expected '{expectedVersion}' but got a different version. This may indicate the wrong CLI binary was installed.");
+            output.WriteLine($"✅ CLI version matches expected: {expectedVersion}");
+        }
+        else
+        {
+            // Fallback: verify the CLI version contains a prerelease suffix (hyphen)
+            await auto.TypeAsync("VER=$(aspire --version 2>/dev/null) && echo \"$VER\" | grep -q '-' && echo \"CLI_VERSION_OK:$VER\" || { echo \"CLI_VERSION_FAIL:$VER\"; false; }");
+            await auto.EnterAsync();
+
+            var foundOk = false;
+            await auto.WaitUntilAsync(
+                snapshot =>
+                {
+                    if (new CellPatternSearcher().Find("CLI_VERSION_OK:").Search(snapshot).Count > 0)
+                    {
+                        foundOk = true;
+                        return true;
+                    }
+                    return new CellPatternSearcher().Find("CLI_VERSION_FAIL:").Search(snapshot).Count > 0;
+                },
+                timeout: TimeSpan.FromSeconds(30),
+                description: "CLI version prerelease assertion");
+
+            await auto.WaitForAnyPromptAsync(counter);
+
+            Assert.True(foundOk, "Aspire CLI version does not contain a prerelease suffix. Expected a development build (e.g. 13.3.0-dev or 13.3.0-pr.NNNNN).");
+            output.WriteLine("✅ CLI version contains prerelease suffix");
+        }
     }
 
     /// <summary>

@@ -17,15 +17,14 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class CliE2ETestHelpers
 {
-    internal const string CliArchiveWorkflowRunIdEnvironmentVariableName = CliInstallStrategy.CliArchiveWorkflowRunIdEnvironmentVariableName;
+    internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
 
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
     /// When running locally, some commands are replaced with echo stubs.
     /// </summary>
     internal static bool IsRunningInCI =>
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")) &&
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA"));
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"));
 
     /// <summary>
     /// Gets the PR number from the GITHUB_PR_NUMBER environment variable.
@@ -47,8 +46,8 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
-    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable.
-    /// This is the actual PR head commit, not the merge commit (GITHUB_SHA).
+    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable,
+    /// falling back to GITHUB_SHA for non-PR CI runs (e.g., schedule-triggered workflows).
     /// When running locally (not in CI), returns a dummy value for testing.
     /// </summary>
     /// <returns>The commit SHA, or a dummy value when running locally.</returns>
@@ -56,22 +55,21 @@ internal static class CliE2ETestHelpers
     {
         var commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA");
 
-        if (string.IsNullOrEmpty(commitSha))
+        if (!string.IsNullOrEmpty(commitSha))
         {
-            // Running locally - return dummy value
-            return "local0000";
+            return commitSha;
         }
 
-        return commitSha;
-    }
+        // Fallback: GITHUB_SHA is automatically set by GitHub Actions for all event types
+        var githubSha = Environment.GetEnvironmentVariable("GITHUB_SHA");
 
-    /// <summary>
-    /// Gets the workflow run ID that produced the CLI archive for the current test run, if one was provided.
-    /// </summary>
-    /// <returns>The workflow run ID, or <see langword="null"/> when the current environment should resolve the PR run dynamically.</returns>
-    internal static string? GetCliArchiveWorkflowRunId()
-    {
-        return CliInstallStrategy.GetCliArchiveWorkflowRunId();
+        if (!string.IsNullOrEmpty(githubSha))
+        {
+            return githubSha;
+        }
+
+        // Running locally - return dummy value
+        return "local0000";
     }
 
     /// <summary>
@@ -174,6 +172,7 @@ internal static class CliE2ETestHelpers
         output.WriteLine($"Creating Docker test terminal:");
         output.WriteLine($"  Test name:      {testName}");
         output.WriteLine($"  Strategy:       {strategy}");
+        output.WriteLine($"  Expected ver:   {Environment.GetEnvironmentVariable("ASPIRE_E2E_EXPECTED_CLI_VERSION") ?? "(not set)"}");
         output.WriteLine($"  Variant:        {variant}");
         output.WriteLine($"  Dockerfile:     {dockerfilePath}");
         output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");
