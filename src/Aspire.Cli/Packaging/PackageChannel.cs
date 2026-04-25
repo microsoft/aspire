@@ -280,7 +280,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
 
         var mappings = Mappings;
-        if (!VersionHelper.IsPrChannel(Name) || Type is not PackageChannelType.Explicit || mappings is not { Length: > 0 })
+        if (!VersionHelper.IsLocalBuildChannel(Name) || Type is not PackageChannelType.Explicit || mappings is not { Length: > 0 })
         {
             return this;
         }
