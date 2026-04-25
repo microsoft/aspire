@@ -46,8 +46,14 @@ internal static class BrowserLogsProtocol
     internal const string RuntimeEnableMethod = "Runtime.enable";
     internal const string RuntimeExceptionThrownMethod = "Runtime.exceptionThrown";
     internal const string TargetAttachToTargetMethod = "Target.attachToTarget";
+    internal const string TargetCloseTargetMethod = "Target.closeTarget";
     internal const string TargetCreateTargetMethod = "Target.createTarget";
+    internal const string TargetDetachedFromTargetMethod = "Target.detachedFromTarget";
     internal const string TargetGetTargetsMethod = "Target.getTargets";
+    internal const string TargetSetDiscoverTargetsMethod = "Target.setDiscoverTargets";
+    internal const string TargetTargetCrashedMethod = "Target.targetCrashed";
+    internal const string TargetTargetDestroyedMethod = "Target.targetDestroyed";
+    internal const string InspectorDetachedMethod = "Inspector.detached";
 
     internal static BrowserLogsProtocolMessageHeader ParseMessageHeader(ReadOnlySpan<byte> framePayload)
     {
@@ -146,6 +152,10 @@ internal static class BrowserLogsProtocol
         NetworkResponseReceivedMethod => CreateResponseReceivedEvent(framePayload),
         NetworkLoadingFinishedMethod => CreateLoadingFinishedEvent(framePayload),
         NetworkLoadingFailedMethod => CreateLoadingFailedEvent(framePayload),
+        TargetTargetDestroyedMethod => CreateTargetDestroyedEvent(framePayload),
+        TargetTargetCrashedMethod => CreateTargetCrashedEvent(framePayload),
+        TargetDetachedFromTargetMethod => CreateDetachedFromTargetEvent(framePayload),
+        InspectorDetachedMethod => CreateInspectorDetachedEvent(framePayload),
         _ => null
     };
 
@@ -245,6 +255,36 @@ internal static class BrowserLogsProtocol
             : new BrowserLogsLoadingFailedEvent(envelope.SessionId, envelope.Params);
     }
 
+    private static BrowserLogsTargetDestroyedEvent? CreateTargetDestroyedEvent(ReadOnlySpan<byte> framePayload)
+    {
+        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsTargetDestroyedEnvelope);
+        return envelope.Params is null
+            ? null
+            : new BrowserLogsTargetDestroyedEvent(envelope.SessionId, envelope.Params);
+    }
+
+    private static BrowserLogsTargetCrashedEvent? CreateTargetCrashedEvent(ReadOnlySpan<byte> framePayload)
+    {
+        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsTargetCrashedEnvelope);
+        return envelope.Params is null
+            ? null
+            : new BrowserLogsTargetCrashedEvent(envelope.SessionId, envelope.Params);
+    }
+
+    private static BrowserLogsDetachedFromTargetEvent? CreateDetachedFromTargetEvent(ReadOnlySpan<byte> framePayload)
+    {
+        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsDetachedFromTargetEnvelope);
+        return envelope.Params is null
+            ? null
+            : new BrowserLogsDetachedFromTargetEvent(envelope.SessionId, envelope.Params);
+    }
+
+    private static BrowserLogsInspectorDetachedEvent? CreateInspectorDetachedEvent(ReadOnlySpan<byte> framePayload)
+    {
+        var envelope = DeserializeFrame(framePayload, BrowserLogsProtocolJsonContext.Default.BrowserLogsInspectorDetachedEnvelope);
+        return new BrowserLogsInspectorDetachedEvent(envelope.SessionId, envelope.Params);
+    }
+
     private static T DeserializeFrame<T>(ReadOnlySpan<byte> framePayload, JsonTypeInfo<T> jsonTypeInfo)
         where T : class
     {
@@ -296,6 +336,18 @@ internal sealed record BrowserLogsRequestWillBeSentEvent(string? SessionId, Brow
 
 internal sealed record BrowserLogsResponseReceivedEvent(string? SessionId, BrowserLogsResponseReceivedParameters Parameters)
     : BrowserLogsProtocolEvent(BrowserLogsProtocol.NetworkResponseReceivedMethod, SessionId);
+
+internal sealed record BrowserLogsTargetDestroyedEvent(string? SessionId, BrowserLogsTargetDestroyedParameters Parameters)
+    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetDestroyedMethod, SessionId);
+
+internal sealed record BrowserLogsTargetCrashedEvent(string? SessionId, BrowserLogsTargetCrashedParameters Parameters)
+    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetTargetCrashedMethod, SessionId);
+
+internal sealed record BrowserLogsDetachedFromTargetEvent(string? SessionId, BrowserLogsDetachedFromTargetParameters Parameters)
+    : BrowserLogsProtocolEvent(BrowserLogsProtocol.TargetDetachedFromTargetMethod, SessionId);
+
+internal sealed record BrowserLogsInspectorDetachedEvent(string? SessionId, BrowserLogsInspectorDetachedParameters? Parameters)
+    : BrowserLogsProtocolEvent(BrowserLogsProtocol.InspectorDetachedMethod, SessionId);
 
 internal sealed class BrowserLogsAttachToTargetResponseEnvelope
 {
@@ -612,6 +664,75 @@ internal class BrowserLogsSourceLocation
     public string? Url { get; init; }
 }
 
+internal sealed class BrowserLogsTargetDestroyedEnvelope
+{
+    [JsonPropertyName("params")]
+    public BrowserLogsTargetDestroyedParameters? Params { get; init; }
+
+    [JsonPropertyName("sessionId")]
+    public string? SessionId { get; init; }
+}
+
+internal sealed class BrowserLogsTargetDestroyedParameters
+{
+    [JsonPropertyName("targetId")]
+    public string? TargetId { get; init; }
+}
+
+internal sealed class BrowserLogsTargetCrashedEnvelope
+{
+    [JsonPropertyName("params")]
+    public BrowserLogsTargetCrashedParameters? Params { get; init; }
+
+    [JsonPropertyName("sessionId")]
+    public string? SessionId { get; init; }
+}
+
+internal sealed class BrowserLogsTargetCrashedParameters
+{
+    [JsonPropertyName("errorCode")]
+    public int? ErrorCode { get; init; }
+
+    [JsonPropertyName("status")]
+    public string? Status { get; init; }
+
+    [JsonPropertyName("targetId")]
+    public string? TargetId { get; init; }
+}
+
+internal sealed class BrowserLogsDetachedFromTargetEnvelope
+{
+    [JsonPropertyName("params")]
+    public BrowserLogsDetachedFromTargetParameters? Params { get; init; }
+
+    [JsonPropertyName("sessionId")]
+    public string? SessionId { get; init; }
+}
+
+internal sealed class BrowserLogsDetachedFromTargetParameters
+{
+    [JsonPropertyName("sessionId")]
+    public string? SessionId { get; init; }
+
+    [JsonPropertyName("targetId")]
+    public string? TargetId { get; init; }
+}
+
+internal sealed class BrowserLogsInspectorDetachedEnvelope
+{
+    [JsonPropertyName("params")]
+    public BrowserLogsInspectorDetachedParameters? Params { get; init; }
+
+    [JsonPropertyName("sessionId")]
+    public string? SessionId { get; init; }
+}
+
+internal sealed class BrowserLogsInspectorDetachedParameters
+{
+    [JsonPropertyName("reason")]
+    public string? Reason { get; init; }
+}
+
 [JsonConverter(typeof(BrowserLogsProtocolValueJsonConverter))]
 internal abstract record BrowserLogsProtocolValue;
 
@@ -754,11 +875,15 @@ internal sealed class BrowserLogsProtocolValueJsonConverter : JsonConverter<Brow
 [JsonSerializable(typeof(BrowserLogsCommandAckResponseEnvelope))]
 [JsonSerializable(typeof(BrowserLogsConsoleApiCalledEnvelope))]
 [JsonSerializable(typeof(BrowserLogsCreateTargetResponseEnvelope))]
+[JsonSerializable(typeof(BrowserLogsDetachedFromTargetEnvelope))]
 [JsonSerializable(typeof(BrowserLogsGetTargetsResponseEnvelope))]
 [JsonSerializable(typeof(BrowserLogsExceptionThrownEnvelope))]
+[JsonSerializable(typeof(BrowserLogsInspectorDetachedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsLoadingFailedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsLoadingFinishedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsLogEntryAddedEnvelope))]
 [JsonSerializable(typeof(BrowserLogsRequestWillBeSentEnvelope))]
 [JsonSerializable(typeof(BrowserLogsResponseReceivedEnvelope))]
+[JsonSerializable(typeof(BrowserLogsTargetCrashedEnvelope))]
+[JsonSerializable(typeof(BrowserLogsTargetDestroyedEnvelope))]
 internal sealed partial class BrowserLogsProtocolJsonContext : JsonSerializerContext;
