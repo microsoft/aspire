@@ -72,6 +72,8 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
                 // The identity is rooted at the browser executable and user data directory, not at a specific profile.
                 // That lets multiple sessions share one debug-enabled browser for the same user data root while still
                 // rejecting requests that need a different named profile from the browser we already track.
+                // In the playground this shows up as one browser window/process with additional tracked targets/tabs
+                // as more resources start browser-log sessions, rather than one browser process per session.
                 ValidateProfileCompatibility(identity, entry.ProfileDirectoryName, userDataDirectory.ProfileDirectoryName);
                 entry.ReferenceCount++;
                 _logger.LogInformation("Reusing tracked browser host '{BrowserExecutable}' at '{Endpoint}'. Active leases: {ReferenceCount}.", identity.ExecutablePath, entry.Host.DebugEndpoint, entry.ReferenceCount);
@@ -82,7 +84,8 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             // No host exists for this identity yet. CreateHostCoreAsync owns the second-stage decision:
             // adopt a validated shared browser if one is already running, reject an incompatible locked profile, or
             // start a new owned browser. The returned host is inserted before returning the first lease so future
-            // callers can reuse it.
+            // callers can reuse it. This keeps the visible behavior stable when several resources request browser logs
+            // together: the first request may open/adopt the browser, and the rest should attach to that result.
             var host = await _createHostAsync(settings, identity, userDataDirectory, cancellationToken).ConfigureAwait(false);
             _hosts[identity] = new BrowserHostEntry(host, userDataDirectory.ProfileDirectoryName, ReferenceCount: 1);
             return new BrowserHostLease(host, releaseAsync: token => ReleaseAsync(identity, token));
@@ -175,10 +178,12 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             //
             // 1. Adopt a browser that Aspire previously launched for this user data root and profile. The endpoint file
             //    must validate against this browser identity, which protects us from stale metadata left behind by a
-            //    different browser or profile.
+            //    different browser or profile. Real browser sessions can leave sidecar files behind if they are closed
+            //    externally or crash, so the file is only useful after the process and /json/version endpoint respond.
             // 2. If the profile is locked but no valid Aspire endpoint exists, fail with guidance. That means a normal
             //    browser is using the profile without remote debugging, so we cannot attach and must not start a second
-            //    browser against the same locked user data directory.
+            //    browser against the same locked user data directory. On real Chromium profiles that second launch tends
+            //    to hand off to the already-running browser or fail before writing a usable DevTools endpoint.
             // 3. If nothing is running, fall through and start an owned debug-enabled browser.
             if (await _endpointDiscovery.TryReadAndValidateAsync(identity, userDataDirectory.ProfileDirectoryName, cancellationToken).ConfigureAwait(false) is { } metadata)
             {
@@ -211,7 +216,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
 
         // Shared mode intentionally points at the browser's real user data root so user state, extensions, and profiles
-        // are available. The later endpoint/probe logic decides whether that root is reusable, adoptable, or locked.
+        // are available. Chromium puts SingletonLock, DevToolsActivePort, and our Aspire endpoint sidecar at that root;
+        // named profiles are subdirectories selected by command-line argument. The later endpoint/probe logic decides
+        // whether that root is reusable, adoptable, or locked.
         var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory(settings.Browser, browserExecutable)
             ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{settings.Browser}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.");
 
