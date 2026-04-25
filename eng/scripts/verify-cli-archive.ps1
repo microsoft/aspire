@@ -7,8 +7,11 @@
     1. Cleans ~/.aspire to ensure no stale state
     2. Extracts the CLI archive to a temp location
     3. Runs 'aspire --version' to validate the binary executes
-    4. Runs 'aspire new aspire-starter' to test bundle self-extraction + project creation
-    5. Cleans up temp directories
+    4. Runs 'aspire new aspire-starter' to test bundle self-extraction + starter project creation
+    5. Builds the generated starter AppHost project
+    6. Enables hidden templates and runs 'aspire new aspire-apphost' to validate empty AppHost creation
+    7. Builds the generated empty AppHost project
+    8. Cleans up temp directories
 
 .PARAMETER ArchivePath
     Path to the CLI archive (.zip or .tar.gz)
@@ -58,6 +61,23 @@ function Set-ExecutablePermission([string]$Path) {
 $userHome = Get-UserHome
 $verifyTmpDir = $null
 $aspireBackup = $null
+$dotnetCmd = $null
+
+function Get-DotNetCommand {
+    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+    $repoDotNet = if ($IsWindows) {
+        Join-Path $repoRoot "dotnet.cmd"
+    }
+    else {
+        Join-Path $repoRoot "dotnet.sh"
+    }
+
+    if (Test-Path $repoDotNet) {
+        return $repoDotNet
+    }
+
+    return (Get-Command dotnet -ErrorAction Stop).Source
+}
 
 function Invoke-Cleanup {
     if ($verifyTmpDir -and (Test-Path $verifyTmpDir)) {
@@ -89,12 +109,14 @@ try {
     $env:DOTNET_CLI_TELEMETRY_OPTOUT = "true"
     $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = "true"
     $env:DOTNET_GENERATE_ASPNET_CERTIFICATE = "false"
+    $dotnetCmd = Get-DotNetCommand
 
     Write-Host ""
     Write-Host "=========================================="
     Write-Host "  Aspire CLI Archive Verification"
     Write-Host "=========================================="
     Write-Host "  Archive: $ArchivePath"
+    Write-Host "  dotnet:  $dotnetCmd"
     Write-Host "=========================================="
     Write-Host ""
 
@@ -163,7 +185,7 @@ try {
     Write-Host "  Version: $versionOutput"
     Write-Ok "'aspire --version' succeeded"
 
-    # Step 4: Create a new project with aspire new
+    # Step 4: Create a new starter project with aspire new
     # This exercises bundle self-extraction and aspire-managed (template search + download + scaffolding)
     $projectDir = Join-Path $verifyTmpDir "VerifyApp"
     New-Item -ItemType Directory -Path $projectDir -Force | Out-Null
@@ -183,6 +205,58 @@ try {
         exit 1
     }
     Write-Ok "'aspire new' created project successfully"
+
+    # Step 5: Build the generated starter AppHost project
+    $starterAppHostProject = Join-Path $appHostDir "VerifyApp.AppHost.csproj"
+    if (-not (Test-Path $starterAppHostProject)) {
+        Write-Err "Expected AppHost project '$starterAppHostProject' not found after 'aspire new aspire-starter'"
+        exit 1
+    }
+
+    Write-Step "Running 'dotnet build $starterAppHostProject'..."
+    & $dotnetCmd build $starterAppHostProject 2>&1 | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "'dotnet build' failed for starter AppHost with exit code $LASTEXITCODE"
+        exit 1
+    }
+    Write-Ok "Starter AppHost build succeeded"
+
+    # Step 6: Enable hidden templates so the empty .NET AppHost template is available
+    Write-Step "Enabling hidden Aspire templates..."
+    & $aspireBin config set features:showAllTemplates true --global --non-interactive 2>&1 | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "'aspire config set features:showAllTemplates' failed with exit code $LASTEXITCODE"
+        exit 1
+    }
+    Write-Ok "Hidden Aspire templates enabled"
+
+    # Step 7: Create an empty .NET AppHost project
+    $appHostTemplateDir = Join-Path $verifyTmpDir "VerifyAppHost"
+    New-Item -ItemType Directory -Path $appHostTemplateDir -Force | Out-Null
+
+    Write-Step "Running 'aspire new aspire-apphost --name VerifyAppHost --output $appHostTemplateDir --non-interactive --nologo'..."
+    & $aspireBin new aspire-apphost --name VerifyAppHost --output $appHostTemplateDir --non-interactive --nologo 2>&1 | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "'aspire new aspire-apphost' failed with exit code $LASTEXITCODE"
+        exit 1
+    }
+
+    $emptyAppHostProject = Join-Path $appHostTemplateDir "VerifyAppHost.csproj"
+    if (-not (Test-Path $emptyAppHostProject)) {
+        Write-Err "Expected AppHost project '$emptyAppHostProject' not found after 'aspire new aspire-apphost'"
+        Get-ChildItem $appHostTemplateDir | Format-Table
+        exit 1
+    }
+    Write-Ok "'aspire new aspire-apphost' created project successfully"
+
+    # Step 8: Build the generated empty AppHost project
+    Write-Step "Running 'dotnet build $emptyAppHostProject'..."
+    & $dotnetCmd build $emptyAppHostProject 2>&1 | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "'dotnet build' failed for empty AppHost with exit code $LASTEXITCODE"
+        exit 1
+    }
+    Write-Ok "Empty AppHost build succeeded"
 
     Write-Host ""
     Write-Host "=========================================="

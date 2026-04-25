@@ -55,6 +55,27 @@ steps:
               /p:BuildExtension=true
       displayName: 🟣Build
 
+    # Verify the signed win-x64 CLI archive works (version check + starter/AppHost template smokes)
+    - pwsh: |
+        $ErrorActionPreference = 'Stop'
+        $archiveDir = "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}"
+        $archive = Get-ChildItem -Path $archiveDir -Filter "aspire-cli-win-x64-*.zip" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $archive) {
+          Write-Host "##[warning]No win-x64 CLI archive found - skipping verification"
+          exit 0
+        }
+        Write-Host "Found archive: $($archive.FullName)"
+        & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.ps1" -ArchivePath $archive.FullName
+        if ($LASTEXITCODE -ne 0) {
+          Write-Host "##[error]CLI archive verification failed"
+          exit 1
+        }
+      displayName: 🟣Verify CLI archive and template smokes (win-x64)
+      condition: succeeded()
+      env:
+        ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
+        DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
     # Log MicroBuild environment for debugging
     # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml
     # which is installed via the Arcade SDK's install-microbuild.yml template that runs before our build steps.
