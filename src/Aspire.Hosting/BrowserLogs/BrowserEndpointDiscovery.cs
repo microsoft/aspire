@@ -200,6 +200,8 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             return IsProcessAlive(pid);
         }
 
+        // Chromium documents this singleton behavior in process_singleton_posix.cc:
+        // https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/process_singleton_posix.cc
         // On Windows the singleton is a locked file rather than a host-pid symlink, so the best available signal is the
         // presence of the lock path. On Unix we avoid treating old broken symlinks as an active browser.
         return OperatingSystem.IsWindows();
@@ -246,8 +248,9 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
                 return null;
             }
 
-            // Unix Chromium SingletonLock symlinks are usually shaped like "<hostname>-<pid>". The host segment can
-            // contain dashes, so parse from the final dash instead of splitting on every dash.
+            // The Chromium source describes the POSIX lock as a symlink to a non-existent destination shaped like
+            // "<hostname>-<pid>". The host segment can contain dashes, so parse from the final dash instead of splitting
+            // on every dash.
             return int.TryParse(linkTarget.AsSpan(separatorIndex + 1), out var pid) ? pid : null;
         }
         catch (IOException)
