@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Configuration;
+using Semver;
 
 namespace Aspire.Cli.DotNet;
 
@@ -71,7 +72,7 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
                     if (SemVersion.TryParse(versionString, SemVersionStyles.Strict, out var sdkVersion))
                     {
                         // Track the highest version
-                        if (highestDetectedVersion == null || sdkVersion.IsNewerThan(highestDetectedVersion))
+                        if (highestDetectedVersion == null || SemVersion.ComparePrecedence(sdkVersion, highestDetectedVersion) > 0)
                         {
                             highestDetectedVersion = sdkVersion;
                         }
@@ -148,6 +149,6 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
         }
 
         // For all other requirements, use strict version comparison
-        return installedVersion.IsAtLeast(requiredVersion);
+        return SemVersion.ComparePrecedence(installedVersion, requiredVersion) >= 0;
     }
 }

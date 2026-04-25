@@ -940,6 +940,28 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_ListGet_ReturnsItemFromTypedList()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var listResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnTypedMutableList", null);
+        var listHandle = (listResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(listHandle);
+
+        var args = new JsonObject
+        {
+            ["list"] = new JsonObject { ["$handle"] = listHandle },
+            ["index"] = 1
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting/List.get", args);
+
+        Assert.NotNull(result);
+        Assert.Equal(20, result.GetValue<int>());
+    }
+
+    [Fact]
     public void Invoke_ListRemoveAt_RemovesItem()
     {
         var handles = new HandleRegistry();
@@ -1064,6 +1086,50 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
+    public void Invoke_DictGet_ReturnsValueFromTypedDictionary()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var dictResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnTypedMutableDict", null);
+        var dictHandle = (dictResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(dictHandle);
+
+        var args = new JsonObject
+        {
+            ["dict"] = new JsonObject { ["$handle"] = dictHandle },
+            ["key"] = "key1"
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting/Dict.get", args);
+
+        Assert.NotNull(result);
+        Assert.Equal(10, result.GetValue<int>());
+    }
+
+    [Fact]
+    public void Invoke_DictGet_ReturnsValueFromIntKeyDictionary()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var dictResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnIntKeyMutableDict", null);
+        var dictHandle = (dictResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(dictHandle);
+
+        var args = new JsonObject
+        {
+            ["dict"] = new JsonObject { ["$handle"] = dictHandle },
+            ["key"] = 1
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting/Dict.get", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("one", result.GetValue<string>());
+    }
+
+    [Fact]
     public void Invoke_DictRemove_RemovesKey()
     {
         var handles = new HandleRegistry();
@@ -1154,6 +1220,49 @@ public class CapabilityDispatcherTests
         Assert.Equal(2, keysArray.Count);
         Assert.Contains("key1", keysArray.Select(k => k?.GetValue<string>()));
         Assert.Contains("key2", keysArray.Select(k => k?.GetValue<string>()));
+    }
+
+    [Fact]
+    public void Invoke_DictKeys_ReturnsAllIntKeys()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var dictResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnIntKeyMutableDict", null);
+        var dictHandle = (dictResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(dictHandle);
+
+        var args = new JsonObject
+        {
+            ["dict"] = new JsonObject { ["$handle"] = dictHandle }
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting/Dict.keys", args);
+
+        Assert.NotNull(result);
+        var keysArray = Assert.IsType<JsonArray>(result);
+        Assert.Equal(2, keysArray.Count);
+        Assert.Contains(1, keysArray.Select(k => k?.GetValue<int>()));
+        Assert.Contains(2, keysArray.Select(k => k?.GetValue<int>()));
+    }
+
+    [Fact]
+    public void Invoke_DictToObject_ThrowsForNonStringKeyDictionary()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestTypeCategoryCapabilities).Assembly, typeof(AspireExportAttribute).Assembly]);
+
+        var dictResult = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/returnIntKeyMutableDict", null);
+        var dictHandle = (dictResult as JsonObject)?["$handle"]?.GetValue<string>();
+        Assert.NotNull(dictHandle);
+
+        var args = new JsonObject
+        {
+            ["dict"] = new JsonObject { ["$handle"] = dictHandle }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() => dispatcher.Invoke("Aspire.Hosting/Dict.toObject", args));
+        Assert.Contains("only supports string-key dictionaries", ex.Message);
     }
 
     [Fact]
@@ -1798,7 +1907,7 @@ internal static class TestGenericPolyglotErrorCapabilities
     public static void WithHttpEndpoint<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
         throw new DistributedApplicationException(
-            $"Endpoint with name 'http' already exists on resource '{builder.Resource.Name}'. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking");
+            $"Endpoint with name 'http' already exists on resource '{builder.Resource.Name}'. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/aspire/networking");
     }
 }
 
@@ -2016,13 +2125,39 @@ internal static class TestTypeCategoryCapabilities
         return ["first", "second", "third"];
     }
 
-    [AspireExport(Description = "Returns a mutable Dictionary<string, object>")]
+    [AspireExport("returnTypedMutableList", Description = "Returns a mutable List<int>")]
+    public static List<int> ReturnTypedMutableList()
+    {
+        return [10, 20, 30];
+    }
+
+    [AspireExport("returnMutableDict", Description = "Returns a mutable Dictionary<string, object>")]
     public static Dictionary<string, object> ReturnMutableDict()
     {
         return new Dictionary<string, object>
         {
             ["key1"] = "value1",
             ["key2"] = 42
+        };
+    }
+
+    [AspireExport("returnTypedMutableDict", Description = "Returns a mutable Dictionary<string, int>")]
+    public static Dictionary<string, int> ReturnTypedMutableDict()
+    {
+        return new Dictionary<string, int>
+        {
+            ["key1"] = 10,
+            ["key2"] = 20
+        };
+    }
+
+    [AspireExport("returnIntKeyMutableDict", Description = "Returns a mutable Dictionary<int, string>")]
+    public static Dictionary<int, string> ReturnIntKeyMutableDict()
+    {
+        return new Dictionary<int, string>
+        {
+            [1] = "one",
+            [2] = "two"
         };
     }
 }

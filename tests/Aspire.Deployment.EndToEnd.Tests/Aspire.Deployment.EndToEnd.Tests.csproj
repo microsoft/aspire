@@ -52,9 +52,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(TestsSharedDir)CliInstallStrategy.cs" Link="shared\CliInstallStrategy.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
     <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)Hex1bAutomatorTestHelpers.cs" Link="shared\Hex1bAutomatorTestHelpers.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.Designer.cs" Link="Resources\ConsoleActivityLoggerStrings.Designer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.resx" Link="Resources\ConsoleActivityLoggerStrings.resx" LogicalName="Aspire.Cli.Resources.ConsoleActivityLoggerStrings.resources" />
   </ItemGroup>
 
 </Project>

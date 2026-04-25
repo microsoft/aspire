@@ -94,12 +94,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   tests_no_nugets_overflow:
     name: ${{ matrix.shortname }}
@@ -113,12 +111,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   # Split requires-nugets tests by OS so each group depends only on
   # the CLI archive build for its platform, avoiding cross-OS blocking.
@@ -134,12 +130,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_nugets_windows:
     name: ${{ matrix.shortname }}
@@ -153,12 +147,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_nugets_macos:
     name: ${{ matrix.shortname }}
@@ -172,12 +164,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
+      properties: ${{ toJson(matrix.properties) }}
 
   tests_requires_cli_archive:
     name: ${{ matrix.shortname }}
@@ -191,13 +181,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
-      requiresCliArchive: true
+      properties: ${{ toJson(matrix.properties) }}
 
   polyglot_validation:
     name: Polyglot SDK Validation
@@ -320,14 +307,6 @@ jobs:
     name: TypeScript SDK Unit Tests
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
-  java_sdk_tests:
-    name: Java SDK Unit Tests
-    uses: ./.github/workflows/run-tests.yml
-    with:
-      testShortName: Java SDK
-      testProjectPath: tests/Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.Java.Tests.csproj
-      extraTestArgs: --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
-
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
@@ -343,7 +322,6 @@ jobs:
       extension_tests_win,
       cli_starter_validation_windows,
       typescript_sdk_tests,
-      java_sdk_tests,
       tests_no_nugets,
       tests_no_nugets_overflow,
       tests_requires_nugets_linux,
@@ -425,7 +403,6 @@ jobs:
                  (needs.extension_tests_win.result == 'skipped' ||
                     needs.cli_starter_validation_windows.result == 'skipped' ||
                     needs.typescript_sdk_tests.result == 'skipped' ||
-                    needs.java_sdk_tests.result == 'skipped' ||
                     needs.tests_no_nugets.result == 'skipped' ||
                     needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||
@@ -436,7 +413,6 @@ jobs:
                 (github.event_name != 'pull_request' &&
                  (needs.extension_tests_win.result == 'skipped' ||
                     needs.typescript_sdk_tests.result == 'skipped' ||
-                    needs.java_sdk_tests.result == 'skipped' ||
                     needs.tests_no_nugets.result == 'skipped' ||
                    needs.tests_requires_nugets_linux.result == 'skipped' ||
                    needs.tests_requires_nugets_windows.result == 'skipped' ||

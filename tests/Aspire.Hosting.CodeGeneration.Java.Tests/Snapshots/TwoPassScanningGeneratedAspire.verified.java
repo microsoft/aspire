@@ -105,6 +105,33 @@ public final class AddParameterWithValueOptions {
 
 }
 
+// ===== AddStepOptions.java =====
+// AddStepOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for AddStep. */
+public final class AddStepOptions {
+    private String[] dependsOn;
+    private String[] requiredBy;
+
+    public String[] getDependsOn() { return dependsOn; }
+    public AddStepOptions dependsOn(String[] value) {
+        this.dependsOn = value;
+        return this;
+    }
+
+    public String[] getRequiredBy() { return requiredBy; }
+    public AddStepOptions requiredBy(String[] value) {
+        this.requiredBy = value;
+        return this;
+    }
+
+}
+
 // ===== AfterResourcesCreatedEvent.java =====
 // AfterResourcesCreatedEvent.java - GENERATED CODE - DO NOT EDIT
 
@@ -967,6 +994,49 @@ public class AspireDict<K, V> extends HandleWrapperBase {
         }
         return resolvedHandle;
     }
+
+    public int size() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.count", Map.of("dict", ensureHandle().toJson()));
+        return ((Number) result).intValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    public V get(K key) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("dict", ensureHandle().toJson());
+        args.put("key", AspireClient.serializeValue(key));
+        return (V) getClient().invokeCapability("Aspire.Hosting/Dict.get", args);
+    }
+
+    public void put(K key, V value) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("dict", ensureHandle().toJson());
+        args.put("key", AspireClient.serializeValue(key));
+        args.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/Dict.set", args);
+    }
+
+    public boolean remove(K key) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("dict", ensureHandle().toJson());
+        args.put("key", AspireClient.serializeValue(key));
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.remove", args);
+        return Boolean.TRUE.equals(result);
+    }
+
+    public boolean containsKey(K key) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("dict", ensureHandle().toJson());
+        args.put("key", AspireClient.serializeValue(key));
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.has", args);
+        return Boolean.TRUE.equals(result);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<K> keys() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.keys", Map.of("dict", ensureHandle().toJson()));
+        return (List<K>) result;
+    }
 }
 
 // ===== AspireFunc0.java =====
@@ -1086,8 +1156,12 @@ import java.util.function.*;
 public class AspireRegistrations {
     static {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", (h, c) -> new IDistributedApplicationBuilder(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline", (h, c) -> new IDistributedApplicationPipeline(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplication", (h, c) -> new DistributedApplication(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference", (h, c) -> new EndpointReference(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", (h, c) -> new IAspireStore(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder", (h, c) -> new IExecutionConfigurationBuilder(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult", (h, c) -> new IExecutionConfigurationResult(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", (h, c) -> new IResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment", (h, c) -> new IResourceWithEnvironment(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", (h, c) -> new IResourceWithEndpoints(h, c));
@@ -1099,6 +1173,9 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource", (h, c) -> new ExecutableResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", (h, c) -> new ProjectResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource", (h, c) -> new ParameterResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation", (h, c) -> new ContainerMountAnnotation(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference", (h, c) -> new ContainerImageReference(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference", (h, c) -> new ContainerPortReference(h, c));
         AspireClient.registerHandleWrapper("System.ComponentModel/System.IServiceProvider", (h, c) -> new IServiceProvider(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", (h, c) -> new ResourceNotificationService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", (h, c) -> new ResourceLoggerService(h, c));
@@ -1124,13 +1201,18 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEvent", (h, c) -> new IDistributedApplicationEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationResourceEvent", (h, c) -> new IDistributedApplicationResourceEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", (h, c) -> new IDistributedApplicationEventing(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", (h, c) -> new EventingSubscriberRegistrationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", (h, c) -> new AfterResourcesCreatedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", (h, c) -> new BeforeResourceStartedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", (h, c) -> new BeforeStartEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", (h, c) -> new CommandLineArgsCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", (h, c) -> new ConnectionStringAvailableEvent(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", (h, c) -> new ContainerImagePushOptions(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext", (h, c) -> new ContainerImagePushOptionsCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel", (h, c) -> new DistributedApplicationModel(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext", (h, c) -> new DockerfileBuilderCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", (h, c) -> new EndpointReferenceExpression(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", (h, c) -> new EndpointUpdateContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", (h, c) -> new EnvironmentCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue", (h, c) -> new IExpressionValue(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", (h, c) -> new InitializeResourceEvent(h, c));
@@ -1141,6 +1223,8 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent", (h, c) -> new ResourceReadyEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", (h, c) -> new ResourceStoppedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", (h, c) -> new ResourceUrlsCallbackContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder", (h, c) -> new DockerfileBuilder(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage", (h, c) -> new DockerfileStage(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ConnectionStringResource", (h, c) -> new ConnectionStringResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource", (h, c) -> new ContainerRegistryResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource", (h, c) -> new DotnetToolResource(h, c));
@@ -1301,6 +1385,33 @@ public class BeforeStartEvent extends HandleWrapperBase {
 
 }
 
+// ===== BuildOptions.java =====
+// BuildOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for Build. */
+public final class BuildOptions {
+    private ILogger resourceLogger;
+    private CancellationToken cancellationToken;
+
+    public ILogger getResourceLogger() { return resourceLogger; }
+    public BuildOptions resourceLogger(ILogger value) {
+        this.resourceLogger = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public BuildOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
 // ===== CSharpAppResource.java =====
 // CSharpAppResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -1313,6 +1424,31 @@ import java.util.function.*;
 public class CSharpAppResource extends ResourceBuilderBase {
     CSharpAppResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public CSharpAppResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
+    public CSharpAppResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    private CSharpAppResource withBrowserLogsImpl(String browser, String profile) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
     }
 
     /** Configures a resource to use a container registry */
@@ -1647,6 +1783,96 @@ public class CSharpAppResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
         getClient().invokeCapability("Aspire.Hosting/withReferenceEndpoint", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback) {
+        return withEndpointCallback(endpointName, callback, null);
+    }
+
+    /** Updates a named endpoint via callback */
+    public CSharpAppResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    public CSharpAppResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public CSharpAppResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    private CSharpAppResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private CSharpAppResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -2048,6 +2274,23 @@ public class CSharpAppResource extends ResourceBuilderBase {
         return this;
     }
 
+    public CSharpAppResource withHttpCommand(String path, String displayName) {
+        return withHttpCommand(path, displayName, null);
+    }
+
+    /** Adds an HTTP resource command */
+    public CSharpAppResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("displayName", AspireClient.serializeValue(displayName));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpCommand", reqArgs);
+        return this;
+    }
+
     /** Configures developer certificate trust */
     public CSharpAppResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -2196,6 +2439,22 @@ public class CSharpAppResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Sets image push options via callback */
+    public CSharpAppResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs);
         return this;
     }
 
@@ -2360,6 +2619,13 @@ public class CSharpAppResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     /** Adds an optional string parameter */
@@ -2758,6 +3024,70 @@ public class CapabilityError extends RuntimeException {
 
     String getCode() { return code; }
     Object getData() { return data; }
+}
+
+// ===== CertificateTrustExecutionConfigurationContext.java =====
+// CertificateTrustExecutionConfigurationContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** CertificateTrustExecutionConfigurationContext DTO. */
+public class CertificateTrustExecutionConfigurationContext {
+    private ReferenceExpression certificateBundlePath;
+    private ReferenceExpression certificateDirectoriesPath;
+    private String rootCertificatesPath;
+    private boolean isContainer;
+
+    public ReferenceExpression getCertificateBundlePath() { return certificateBundlePath; }
+    public void setCertificateBundlePath(ReferenceExpression value) { this.certificateBundlePath = value; }
+    public ReferenceExpression getCertificateDirectoriesPath() { return certificateDirectoriesPath; }
+    public void setCertificateDirectoriesPath(ReferenceExpression value) { this.certificateDirectoriesPath = value; }
+    public String getRootCertificatesPath() { return rootCertificatesPath; }
+    public void setRootCertificatesPath(String value) { this.rootCertificatesPath = value; }
+    public boolean getIsContainer() { return isContainer; }
+    public void setIsContainer(boolean value) { this.isContainer = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("CertificateBundlePath", AspireClient.serializeValue(certificateBundlePath));
+        map.put("CertificateDirectoriesPath", AspireClient.serializeValue(certificateDirectoriesPath));
+        map.put("RootCertificatesPath", AspireClient.serializeValue(rootCertificatesPath));
+        map.put("IsContainer", AspireClient.serializeValue(isContainer));
+        return map;
+    }
+}
+
+// ===== CertificateTrustExecutionConfigurationExportData.java =====
+// CertificateTrustExecutionConfigurationExportData.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** CertificateTrustExecutionConfigurationExportData DTO. */
+public class CertificateTrustExecutionConfigurationExportData {
+    private CertificateTrustScope scope;
+    private String[] certificateSubjects;
+    private String[] customBundlePaths;
+
+    public CertificateTrustScope getScope() { return scope; }
+    public void setScope(CertificateTrustScope value) { this.scope = value; }
+    public String[] getCertificateSubjects() { return certificateSubjects; }
+    public void setCertificateSubjects(String[] value) { this.certificateSubjects = value; }
+    public String[] getCustomBundlePaths() { return customBundlePaths; }
+    public void setCustomBundlePaths(String[] value) { this.customBundlePaths = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Scope", AspireClient.serializeValue(scope));
+        map.put("CertificateSubjects", AspireClient.serializeValue(certificateSubjects));
+        map.put("CustomBundlePaths", AspireClient.serializeValue(customBundlePaths));
+        return map;
+    }
 }
 
 // ===== CertificateTrustScope.java =====
@@ -3620,6 +3950,13 @@ public class ConnectionStringResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
+    }
+
     /** Adds an optional string parameter */
     public ConnectionStringResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
@@ -3944,6 +4281,135 @@ public class ConnectionStringResource extends ResourceBuilderBase {
 
 }
 
+// ===== ContainerImagePushOptions.java =====
+// ContainerImagePushOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions. */
+public class ContainerImagePushOptions extends HandleWrapperBase {
+    ContainerImagePushOptions(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the RemoteImageName property */
+    public String remoteImageName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName", reqArgs);
+    }
+
+    /** Sets the RemoteImageName property */
+    public ContainerImagePushOptions setRemoteImageName(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (ContainerImagePushOptions) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName", reqArgs);
+    }
+
+    /** Gets the RemoteImageTag property */
+    public String remoteImageTag() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag", reqArgs);
+    }
+
+    /** Sets the RemoteImageTag property */
+    public ContainerImagePushOptions setRemoteImageTag(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (ContainerImagePushOptions) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag", reqArgs);
+    }
+
+}
+
+// ===== ContainerImagePushOptionsCallbackContext.java =====
+// ContainerImagePushOptionsCallbackContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext. */
+public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase {
+    ContainerImagePushOptionsCallbackContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Resource property */
+    public IResource resource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.resource", reqArgs);
+    }
+
+    /** Sets the Resource property */
+    public ContainerImagePushOptionsCallbackContext setResource(IResource value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (ContainerImagePushOptionsCallbackContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setResource", reqArgs);
+    }
+
+    public ContainerImagePushOptionsCallbackContext setResource(ResourceBuilderBase value) {
+        return setResource(new IResource(value.getHandle(), value.getClient()));
+    }
+
+    /** Gets the CancellationToken property */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.cancellationToken", reqArgs);
+    }
+
+    /** Sets the CancellationToken property */
+    public ContainerImagePushOptionsCallbackContext setCancellationToken(CancellationToken value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        if (value != null) {
+            reqArgs.put("value", getClient().registerCancellation(value));
+        }
+        return (ContainerImagePushOptionsCallbackContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setCancellationToken", reqArgs);
+    }
+
+    /** Gets the Options property */
+    public ContainerImagePushOptions options() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (ContainerImagePushOptions) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.options", reqArgs);
+    }
+
+    /** Sets the Options property */
+    public ContainerImagePushOptionsCallbackContext setOptions(ContainerImagePushOptions value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (ContainerImagePushOptionsCallbackContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.setOptions", reqArgs);
+    }
+
+}
+
+// ===== ContainerImageReference.java =====
+// ContainerImageReference.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference. */
+public class ContainerImageReference extends HandleWrapperBase {
+    ContainerImageReference(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
 // ===== ContainerLifetime.java =====
 // ContainerLifetime.java - GENERATED CODE - DO NOT EDIT
 
@@ -3971,6 +4437,38 @@ public enum ContainerLifetime implements WireValueEnum {
         }
         throw new IllegalArgumentException("Unknown value: " + value);
     }
+}
+
+// ===== ContainerMountAnnotation.java =====
+// ContainerMountAnnotation.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation. */
+public class ContainerMountAnnotation extends HandleWrapperBase {
+    ContainerMountAnnotation(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
+// ===== ContainerPortReference.java =====
+// ContainerPortReference.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference. */
+public class ContainerPortReference extends HandleWrapperBase {
+    ContainerPortReference(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
 }
 
 // ===== ContainerRegistryResource.java =====
@@ -4348,6 +4846,13 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
+    }
+
     /** Adds an optional string parameter */
     public ContainerRegistryResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
@@ -4668,6 +5173,31 @@ public class ContainerResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ContainerResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
+    public ContainerResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    private ContainerResource withBrowserLogsImpl(String browser, String profile) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public ContainerResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4883,6 +5413,30 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
         getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return withDockerfileBuilder(contextPath, callback, null);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    public ContainerResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs);
         return this;
     }
 
@@ -5185,6 +5739,96 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
         getClient().invokeCapability("Aspire.Hosting/withReferenceEndpoint", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback) {
+        return withEndpointCallback(endpointName, callback, null);
+    }
+
+    /** Updates a named endpoint via callback */
+    public ContainerResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    public ContainerResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ContainerResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    private ContainerResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private ContainerResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -5572,6 +6216,23 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ContainerResource withHttpCommand(String path, String displayName) {
+        return withHttpCommand(path, displayName, null);
+    }
+
+    /** Adds an HTTP resource command */
+    public ContainerResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("displayName", AspireClient.serializeValue(displayName));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpCommand", reqArgs);
+        return this;
+    }
+
     /** Configures developer certificate trust */
     public ContainerResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -5720,6 +6381,22 @@ public class ContainerResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Sets image push options via callback */
+    public ContainerResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs);
         return this;
     }
 
@@ -5910,6 +6587,13 @@ public class ContainerResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     /** Adds an optional string parameter */
@@ -6509,6 +7193,304 @@ public class DistributedApplicationResourceEventSubscription extends HandleWrapp
 
 }
 
+// ===== DockerfileBuilder.java =====
+// DockerfileBuilder.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder. */
+public class DockerfileBuilder extends HandleWrapperBase {
+    DockerfileBuilder(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    public DockerfileBuilder arg(String name) {
+        return arg(name, null);
+    }
+
+    /** Adds a global ARG statement to the Dockerfile */
+    public DockerfileBuilder arg(String name, String defaultValue) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (defaultValue != null) {
+            reqArgs.put("defaultValue", AspireClient.serializeValue(defaultValue));
+        }
+        return (DockerfileBuilder) getClient().invokeCapability("Aspire.Hosting/dockerfileBuilderArg", reqArgs);
+    }
+
+    public DockerfileStage from(String image) {
+        return from(image, null);
+    }
+
+    /** Adds a FROM statement to start a Dockerfile stage */
+    public DockerfileStage from(String image, String stageName) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("image", AspireClient.serializeValue(image));
+        if (stageName != null) {
+            reqArgs.put("stageName", AspireClient.serializeValue(stageName));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileBuilderFrom", reqArgs);
+    }
+
+    public DockerfileBuilder addContainerFilesStages(IResource resource) {
+        return addContainerFilesStages(resource, null);
+    }
+
+    public DockerfileBuilder addContainerFilesStages(ResourceBuilderBase resource) {
+        return addContainerFilesStages(new IResource(resource.getHandle(), resource.getClient()));
+    }
+
+    /** Adds Dockerfile stages for published container files */
+    public DockerfileBuilder addContainerFilesStages(IResource resource, ILogger logger) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        if (logger != null) {
+            reqArgs.put("logger", AspireClient.serializeValue(logger));
+        }
+        return (DockerfileBuilder) getClient().invokeCapability("Aspire.Hosting/dockerfileBuilderAddContainerFilesStages", reqArgs);
+    }
+
+    public DockerfileBuilder addContainerFilesStages(ResourceBuilderBase resource, ILogger logger) {
+        return addContainerFilesStages(new IResource(resource.getHandle(), resource.getClient()), logger);
+    }
+
+    public DockerfileBuilder addContainerFilesStages(IResource resource, HandleWrapperBase logger) {
+        return addContainerFilesStages(resource, new ILogger(logger.getHandle(), logger.getClient()));
+    }
+
+    public DockerfileBuilder addContainerFilesStages(ResourceBuilderBase resource, HandleWrapperBase logger) {
+        return addContainerFilesStages(new IResource(resource.getHandle(), resource.getClient()), new ILogger(logger.getHandle(), logger.getClient()));
+    }
+
+}
+
+// ===== DockerfileBuilderCallbackContext.java =====
+// DockerfileBuilderCallbackContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext. */
+public class DockerfileBuilderCallbackContext extends HandleWrapperBase {
+    DockerfileBuilderCallbackContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Resource property */
+    public IResource resource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource", reqArgs);
+    }
+
+    /** Gets the Builder property */
+    public DockerfileBuilder builder() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (DockerfileBuilder) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder", reqArgs);
+    }
+
+    /** Gets the Services property */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services", reqArgs);
+    }
+
+    /** Gets the CancellationToken property */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationToken", reqArgs);
+    }
+
+}
+
+// ===== DockerfileStage.java =====
+// DockerfileStage.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage. */
+public class DockerfileStage extends HandleWrapperBase {
+    DockerfileStage(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    public DockerfileStage arg(String name) {
+        return arg(name, null);
+    }
+
+    /** Adds an ARG statement to a Dockerfile stage */
+    public DockerfileStage arg(String name, String defaultValue) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (defaultValue != null) {
+            reqArgs.put("defaultValue", AspireClient.serializeValue(defaultValue));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageArg", reqArgs);
+    }
+
+    /** Adds a WORKDIR statement to a Dockerfile stage */
+    public DockerfileStage workDir(String path) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/workDir", reqArgs);
+    }
+
+    /** Adds a RUN statement to a Dockerfile stage */
+    public DockerfileStage run(String command) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageRun", reqArgs);
+    }
+
+    public DockerfileStage copy(String source, String destination) {
+        return copy(source, destination, null);
+    }
+
+    /** Adds a COPY statement to a Dockerfile stage */
+    public DockerfileStage copy(String source, String destination, String chown) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("source", AspireClient.serializeValue(source));
+        reqArgs.put("destination", AspireClient.serializeValue(destination));
+        if (chown != null) {
+            reqArgs.put("chown", AspireClient.serializeValue(chown));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageCopy", reqArgs);
+    }
+
+    public DockerfileStage copyFrom(String from, String source, String destination) {
+        return copyFrom(from, source, destination, null);
+    }
+
+    /** Adds a COPY --from statement to a Dockerfile stage */
+    public DockerfileStage copyFrom(String from, String source, String destination, String chown) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("from", AspireClient.serializeValue(from));
+        reqArgs.put("source", AspireClient.serializeValue(source));
+        reqArgs.put("destination", AspireClient.serializeValue(destination));
+        if (chown != null) {
+            reqArgs.put("chown", AspireClient.serializeValue(chown));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageCopyFrom", reqArgs);
+    }
+
+    /** Adds an ENV statement to a Dockerfile stage */
+    public DockerfileStage env(String name, String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/env", reqArgs);
+    }
+
+    /** Adds an EXPOSE statement to a Dockerfile stage */
+    public DockerfileStage expose(double port) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("port", AspireClient.serializeValue(port));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/expose", reqArgs);
+    }
+
+    /** Adds a CMD statement to a Dockerfile stage */
+    public DockerfileStage cmd(String[] command) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/cmd", reqArgs);
+    }
+
+    /** Adds an ENTRYPOINT statement to a Dockerfile stage */
+    public DockerfileStage entrypoint(String[] command) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/entrypoint", reqArgs);
+    }
+
+    /** Adds a RUN statement with mounts to a Dockerfile stage */
+    public DockerfileStage runWithMounts(String command, String[] mounts) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("command", AspireClient.serializeValue(command));
+        reqArgs.put("mounts", AspireClient.serializeValue(mounts));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/runWithMounts", reqArgs);
+    }
+
+    /** Adds a USER statement to a Dockerfile stage */
+    public DockerfileStage user(String user) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("user", AspireClient.serializeValue(user));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/user", reqArgs);
+    }
+
+    /** Adds an empty line to a Dockerfile stage */
+    public DockerfileStage emptyLine() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/emptyLine", reqArgs);
+    }
+
+    /** Adds a comment to a Dockerfile stage */
+    public DockerfileStage comment(String comment) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("comment", AspireClient.serializeValue(comment));
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/comment", reqArgs);
+    }
+
+    public DockerfileStage addContainerFiles(IResource resource, String rootDestinationPath) {
+        return addContainerFiles(resource, rootDestinationPath, null);
+    }
+
+    public DockerfileStage addContainerFiles(ResourceBuilderBase resource, String rootDestinationPath) {
+        return addContainerFiles(new IResource(resource.getHandle(), resource.getClient()), rootDestinationPath);
+    }
+
+    /** Adds COPY --from statements for published container files */
+    public DockerfileStage addContainerFiles(IResource resource, String rootDestinationPath, ILogger logger) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
+        reqArgs.put("rootDestinationPath", AspireClient.serializeValue(rootDestinationPath));
+        if (logger != null) {
+            reqArgs.put("logger", AspireClient.serializeValue(logger));
+        }
+        return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageAddContainerFiles", reqArgs);
+    }
+
+    public DockerfileStage addContainerFiles(ResourceBuilderBase resource, String rootDestinationPath, ILogger logger) {
+        return addContainerFiles(new IResource(resource.getHandle(), resource.getClient()), rootDestinationPath, logger);
+    }
+
+    public DockerfileStage addContainerFiles(IResource resource, String rootDestinationPath, HandleWrapperBase logger) {
+        return addContainerFiles(resource, rootDestinationPath, new ILogger(logger.getHandle(), logger.getClient()));
+    }
+
+    public DockerfileStage addContainerFiles(ResourceBuilderBase resource, String rootDestinationPath, HandleWrapperBase logger) {
+        return addContainerFiles(new IResource(resource.getHandle(), resource.getClient()), rootDestinationPath, new ILogger(logger.getHandle(), logger.getClient()));
+    }
+
+}
+
 // ===== DotnetToolResource.java =====
 // DotnetToolResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -6521,6 +7503,31 @@ import java.util.function.*;
 public class DotnetToolResource extends ResourceBuilderBase {
     DotnetToolResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public DotnetToolResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
+    public DotnetToolResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    private DotnetToolResource withBrowserLogsImpl(String browser, String profile) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
     }
 
     /** Configures a resource to use a container registry */
@@ -6914,6 +7921,96 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return this;
     }
 
+    public DotnetToolResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback) {
+        return withEndpointCallback(endpointName, callback, null);
+    }
+
+    /** Updates a named endpoint via callback */
+    public DotnetToolResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    public DotnetToolResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public DotnetToolResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    private DotnetToolResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private DotnetToolResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
+        return this;
+    }
+
     /** Adds a network endpoint */
     public DotnetToolResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
@@ -7298,6 +8395,23 @@ public class DotnetToolResource extends ResourceBuilderBase {
         return this;
     }
 
+    public DotnetToolResource withHttpCommand(String path, String displayName) {
+        return withHttpCommand(path, displayName, null);
+    }
+
+    /** Adds an HTTP resource command */
+    public DotnetToolResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("displayName", AspireClient.serializeValue(displayName));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpCommand", reqArgs);
+        return this;
+    }
+
     /** Configures developer certificate trust */
     public DotnetToolResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -7446,6 +8560,22 @@ public class DotnetToolResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Sets image push options via callback */
+    public DotnetToolResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs);
         return this;
     }
 
@@ -7610,6 +8740,13 @@ public class DotnetToolResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     /** Adds an optional string parameter */
@@ -8056,6 +9193,13 @@ public class EndpointReference extends HandleWrapperBase {
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled", reqArgs);
     }
 
+    /** Gets the IsHttpSchemeNamedEndpoint property */
+    public boolean isHttpSchemeNamedEndpoint() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint", reqArgs);
+    }
+
     /** Gets the ExcludeReferenceEndpoint property */
     public boolean excludeReferenceEndpoint() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -8160,6 +9304,179 @@ public class EndpointReferenceExpression extends HandleWrapperBase {
 
 }
 
+// ===== EndpointUpdateContext.java =====
+// EndpointUpdateContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext. */
+public class EndpointUpdateContext extends HandleWrapperBase {
+    EndpointUpdateContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Name property */
+    public String name() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.name", reqArgs);
+    }
+
+    /** Gets the Protocol property */
+    public ProtocolType protocol() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (ProtocolType) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.protocol", reqArgs);
+    }
+
+    /** Sets the Protocol property */
+    public EndpointUpdateContext setProtocol(ProtocolType value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setProtocol", reqArgs);
+    }
+
+    /** Gets the Port property */
+    public double port() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (double) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port", reqArgs);
+    }
+
+    /** Sets the Port property */
+    public EndpointUpdateContext setPort(double value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort", reqArgs);
+    }
+
+    /** Gets the TargetPort property */
+    public double targetPort() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (double) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort", reqArgs);
+    }
+
+    /** Sets the TargetPort property */
+    public EndpointUpdateContext setTargetPort(double value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort", reqArgs);
+    }
+
+    /** Gets the UriScheme property */
+    public String uriScheme() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.uriScheme", reqArgs);
+    }
+
+    /** Sets the UriScheme property */
+    public EndpointUpdateContext setUriScheme(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setUriScheme", reqArgs);
+    }
+
+    /** Gets the TargetHost property */
+    public String targetHost() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetHost", reqArgs);
+    }
+
+    /** Sets the TargetHost property */
+    public EndpointUpdateContext setTargetHost(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetHost", reqArgs);
+    }
+
+    /** Gets the Transport property */
+    public String transport() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.transport", reqArgs);
+    }
+
+    /** Sets the Transport property */
+    public EndpointUpdateContext setTransport(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTransport", reqArgs);
+    }
+
+    /** Gets the IsExternal property */
+    public boolean isExternal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isExternal", reqArgs);
+    }
+
+    /** Sets the IsExternal property */
+    public EndpointUpdateContext setIsExternal(boolean value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsExternal", reqArgs);
+    }
+
+    /** Gets the IsProxied property */
+    public boolean isProxied() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.isProxied", reqArgs);
+    }
+
+    /** Sets the IsProxied property */
+    public EndpointUpdateContext setIsProxied(boolean value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsProxied", reqArgs);
+    }
+
+    /** Gets the ExcludeReferenceEndpoint property */
+    public boolean excludeReferenceEndpoint() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.excludeReferenceEndpoint", reqArgs);
+    }
+
+    /** Sets the ExcludeReferenceEndpoint property */
+    public EndpointUpdateContext setExcludeReferenceEndpoint(boolean value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setExcludeReferenceEndpoint", reqArgs);
+    }
+
+    /** Gets the TlsEnabled property */
+    public boolean tlsEnabled() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.tlsEnabled", reqArgs);
+    }
+
+    /** Sets the TlsEnabled property */
+    public EndpointUpdateContext setTlsEnabled(boolean value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTlsEnabled", reqArgs);
+    }
+
+}
+
 // ===== EnvironmentCallbackContext.java =====
 // EnvironmentCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -8225,6 +9542,66 @@ public class EnvironmentCallbackContext extends HandleWrapperBase {
 
 }
 
+// ===== EventingSubscriberRegistrationContext.java =====
+// EventingSubscriberRegistrationContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext. */
+public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
+    EventingSubscriberRegistrationContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Subscribes an eventing subscriber to the BeforeStart event */
+    public DistributedApplicationEventSubscription onBeforeStart(AspireAction1<BeforeStartEvent> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (BeforeStartEvent) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnBeforeStart", reqArgs);
+    }
+
+    /** Subscribes an eventing subscriber to the AfterResourcesCreated event */
+    public DistributedApplicationEventSubscription onAfterResourcesCreated(AspireAction1<AfterResourcesCreatedEvent> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (AfterResourcesCreatedEvent) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated", reqArgs);
+    }
+
+    /** Gets the ExecutionContext property */
+    public DistributedApplicationExecutionContext executionContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext", reqArgs);
+    }
+
+    /** Gets the CancellationToken property */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken", reqArgs);
+    }
+
+}
+
 // ===== ExecutableResource.java =====
 // ExecutableResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -8237,6 +9614,31 @@ import java.util.function.*;
 public class ExecutableResource extends ResourceBuilderBase {
     ExecutableResource(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ExecutableResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
+    public ExecutableResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    private ExecutableResource withBrowserLogsImpl(String browser, String profile) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
     }
 
     /** Configures a resource to use a container registry */
@@ -8576,6 +9978,96 @@ public class ExecutableResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
         getClient().invokeCapability("Aspire.Hosting/withReferenceEndpoint", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback) {
+        return withEndpointCallback(endpointName, callback, null);
+    }
+
+    /** Updates a named endpoint via callback */
+    public ExecutableResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    public ExecutableResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ExecutableResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    private ExecutableResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private ExecutableResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -8963,6 +10455,23 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ExecutableResource withHttpCommand(String path, String displayName) {
+        return withHttpCommand(path, displayName, null);
+    }
+
+    /** Adds an HTTP resource command */
+    public ExecutableResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("displayName", AspireClient.serializeValue(displayName));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpCommand", reqArgs);
+        return this;
+    }
+
     /** Configures developer certificate trust */
     public ExecutableResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -9111,6 +10620,22 @@ public class ExecutableResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Sets image push options via callback */
+    public ExecutableResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs);
         return this;
     }
 
@@ -9275,6 +10800,13 @@ public class ExecutableResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     /** Adds an optional string parameter */
@@ -10132,6 +11664,13 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
+    }
+
     /** Adds an optional string parameter */
     public ExternalServiceResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
@@ -10561,6 +12100,222 @@ public class HandleWrapperBase {
     }
 }
 
+// ===== HttpCommandExportOptions.java =====
+// HttpCommandExportOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** HttpCommandExportOptions DTO. */
+public class HttpCommandExportOptions {
+    private String description;
+    private String confirmationMessage;
+    private String iconName;
+    private IconVariant iconVariant;
+    private boolean isHighlighted;
+    private String commandName;
+    private String endpointName;
+    private String methodName;
+    private HttpCommandResultMode resultMode;
+
+    public String getDescription() { return description; }
+    public void setDescription(String value) { this.description = value; }
+    public String getConfirmationMessage() { return confirmationMessage; }
+    public void setConfirmationMessage(String value) { this.confirmationMessage = value; }
+    public String getIconName() { return iconName; }
+    public void setIconName(String value) { this.iconName = value; }
+    public IconVariant getIconVariant() { return iconVariant; }
+    public void setIconVariant(IconVariant value) { this.iconVariant = value; }
+    public boolean getIsHighlighted() { return isHighlighted; }
+    public void setIsHighlighted(boolean value) { this.isHighlighted = value; }
+    public String getCommandName() { return commandName; }
+    public void setCommandName(String value) { this.commandName = value; }
+    public String getEndpointName() { return endpointName; }
+    public void setEndpointName(String value) { this.endpointName = value; }
+    public String getMethodName() { return methodName; }
+    public void setMethodName(String value) { this.methodName = value; }
+    public HttpCommandResultMode getResultMode() { return resultMode; }
+    public void setResultMode(HttpCommandResultMode value) { this.resultMode = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Description", AspireClient.serializeValue(description));
+        map.put("ConfirmationMessage", AspireClient.serializeValue(confirmationMessage));
+        map.put("IconName", AspireClient.serializeValue(iconName));
+        map.put("IconVariant", AspireClient.serializeValue(iconVariant));
+        map.put("IsHighlighted", AspireClient.serializeValue(isHighlighted));
+        map.put("CommandName", AspireClient.serializeValue(commandName));
+        map.put("EndpointName", AspireClient.serializeValue(endpointName));
+        map.put("MethodName", AspireClient.serializeValue(methodName));
+        map.put("ResultMode", AspireClient.serializeValue(resultMode));
+        return map;
+    }
+}
+
+// ===== HttpCommandResultMode.java =====
+// HttpCommandResultMode.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** HttpCommandResultMode enum. */
+public enum HttpCommandResultMode implements WireValueEnum {
+    NONE("None"),
+    AUTO("Auto"),
+    JSON("Json"),
+    TEXT("Text");
+
+    private final String value;
+
+    HttpCommandResultMode(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static HttpCommandResultMode fromValue(String value) {
+        for (HttpCommandResultMode e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== HttpsCertificateExecutionConfigurationContext.java =====
+// HttpsCertificateExecutionConfigurationContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** HttpsCertificateExecutionConfigurationContext DTO. */
+public class HttpsCertificateExecutionConfigurationContext {
+    private ReferenceExpression certificatePath;
+    private ReferenceExpression keyPath;
+    private ReferenceExpression pfxPath;
+
+    public ReferenceExpression getCertificatePath() { return certificatePath; }
+    public void setCertificatePath(ReferenceExpression value) { this.certificatePath = value; }
+    public ReferenceExpression getKeyPath() { return keyPath; }
+    public void setKeyPath(ReferenceExpression value) { this.keyPath = value; }
+    public ReferenceExpression getPfxPath() { return pfxPath; }
+    public void setPfxPath(ReferenceExpression value) { this.pfxPath = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("CertificatePath", AspireClient.serializeValue(certificatePath));
+        map.put("KeyPath", AspireClient.serializeValue(keyPath));
+        map.put("PfxPath", AspireClient.serializeValue(pfxPath));
+        return map;
+    }
+}
+
+// ===== HttpsCertificateExecutionConfigurationExportData.java =====
+// HttpsCertificateExecutionConfigurationExportData.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** HttpsCertificateExecutionConfigurationExportData DTO. */
+public class HttpsCertificateExecutionConfigurationExportData {
+    private String subject;
+    private String thumbprint;
+    private String keyPathExpression;
+    private String pfxPathExpression;
+    private boolean isKeyPathReferenced;
+    private boolean isPfxPathReferenced;
+    private String password;
+
+    public String getSubject() { return subject; }
+    public void setSubject(String value) { this.subject = value; }
+    public String getThumbprint() { return thumbprint; }
+    public void setThumbprint(String value) { this.thumbprint = value; }
+    public String getKeyPathExpression() { return keyPathExpression; }
+    public void setKeyPathExpression(String value) { this.keyPathExpression = value; }
+    public String getPfxPathExpression() { return pfxPathExpression; }
+    public void setPfxPathExpression(String value) { this.pfxPathExpression = value; }
+    public boolean getIsKeyPathReferenced() { return isKeyPathReferenced; }
+    public void setIsKeyPathReferenced(boolean value) { this.isKeyPathReferenced = value; }
+    public boolean getIsPfxPathReferenced() { return isPfxPathReferenced; }
+    public void setIsPfxPathReferenced(boolean value) { this.isPfxPathReferenced = value; }
+    public String getPassword() { return password; }
+    public void setPassword(String value) { this.password = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Subject", AspireClient.serializeValue(subject));
+        map.put("Thumbprint", AspireClient.serializeValue(thumbprint));
+        map.put("KeyPathExpression", AspireClient.serializeValue(keyPathExpression));
+        map.put("PfxPathExpression", AspireClient.serializeValue(pfxPathExpression));
+        map.put("IsKeyPathReferenced", AspireClient.serializeValue(isKeyPathReferenced));
+        map.put("IsPfxPathReferenced", AspireClient.serializeValue(isPfxPathReferenced));
+        map.put("Password", AspireClient.serializeValue(password));
+        return map;
+    }
+}
+
+// ===== HttpsCertificateInfo.java =====
+// HttpsCertificateInfo.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** HttpsCertificateInfo DTO. */
+public class HttpsCertificateInfo {
+    private String subject;
+    private String issuer;
+    private String thumbprint;
+
+    public String getSubject() { return subject; }
+    public void setSubject(String value) { this.subject = value; }
+    public String getIssuer() { return issuer; }
+    public void setIssuer(String value) { this.issuer = value; }
+    public String getThumbprint() { return thumbprint; }
+    public void setThumbprint(String value) { this.thumbprint = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Subject", AspireClient.serializeValue(subject));
+        map.put("Issuer", AspireClient.serializeValue(issuer));
+        map.put("Thumbprint", AspireClient.serializeValue(thumbprint));
+        return map;
+    }
+}
+
+// ===== IAspireStore.java =====
+// IAspireStore.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore. */
+public class IAspireStore extends HandleWrapperBase {
+    IAspireStore(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets a deterministic file path for the specified file contents */
+    public String getFileNameWithContent(String filenameTemplate, String sourceFilename) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("aspireStore", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("filenameTemplate", AspireClient.serializeValue(filenameTemplate));
+        reqArgs.put("sourceFilename", AspireClient.serializeValue(sourceFilename));
+        return (String) getClient().invokeCapability("Aspire.Hosting/getFileNameWithContent", reqArgs);
+    }
+
+}
+
 // ===== IComputeResource.java =====
 // IComputeResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -10778,6 +12533,30 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (ContainerResource) getClient().invokeCapability("Aspire.Hosting/addDockerfile", reqArgs);
     }
 
+    public ContainerResource addDockerfileBuilder(String name, String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return addDockerfileBuilder(name, contextPath, callback, null);
+    }
+
+    /** Adds a container resource built from a programmatically generated Dockerfile */
+    public ContainerResource addDockerfileBuilder(String name, String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        return (ContainerResource) getClient().invokeCapability("Aspire.Hosting/addDockerfileBuilder", reqArgs);
+    }
+
     /** Adds a .NET tool resource */
     public DotnetToolResource addDotnetTool(String name, String packageId) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10851,6 +12630,13 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.executionContext", reqArgs);
+    }
+
+    /** Gets the Pipeline property */
+    public IDistributedApplicationPipeline pipeline() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IDistributedApplicationPipeline) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.pipeline", reqArgs);
     }
 
     /** Gets the UserSecretsManager property */
@@ -11064,6 +12850,36 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeAfterResourcesCreated", reqArgs);
     }
 
+    /** Adds an eventing subscriber */
+    public void addEventingSubscriber(AspireAction1<EventingSubscriberRegistrationContext> subscribe) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var subscribeId = getClient().registerCallback(args -> {
+            var arg = (EventingSubscriberRegistrationContext) args[0];
+            subscribe.invoke(arg);
+            return null;
+        });
+        if (subscribeId != null) {
+            reqArgs.put("subscribe", subscribeId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/addEventingSubscriber", reqArgs);
+    }
+
+    /** Attempts to add an eventing subscriber */
+    public void tryAddEventingSubscriber(AspireAction1<EventingSubscriberRegistrationContext> subscribe) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var subscribeId = getClient().registerCallback(args -> {
+            var arg = (EventingSubscriberRegistrationContext) args[0];
+            subscribe.invoke(arg);
+            return null;
+        });
+        if (subscribeId != null) {
+            reqArgs.put("subscribe", subscribeId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/tryAddEventingSubscriber", reqArgs);
+    }
+
     public TestRedisResource addTestRedis(String name) {
         return addTestRedis(name, null);
     }
@@ -11129,6 +12945,70 @@ public class IDistributedApplicationEventing extends HandleWrapperBase {
 
 }
 
+// ===== IDistributedApplicationPipeline.java =====
+// IDistributedApplicationPipeline.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline. */
+public class IDistributedApplicationPipeline extends HandleWrapperBase {
+    IDistributedApplicationPipeline(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Adds a pipeline step to the application */
+    public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions options) {
+        var dependsOn = options == null ? null : options.getDependsOn();
+        var requiredBy = options == null ? null : options.getRequiredBy();
+        addStepImpl(stepName, callback, dependsOn, requiredBy);
+    }
+
+    public void addStep(String stepName, AspireAction1<PipelineStepContext> callback) {
+        addStep(stepName, callback, null);
+    }
+
+    /** Adds a pipeline step to the application */
+    private void addStepImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("stepName", AspireClient.serializeValue(stepName));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (PipelineStepContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (dependsOn != null) {
+            reqArgs.put("dependsOn", AspireClient.serializeValue(dependsOn));
+        }
+        if (requiredBy != null) {
+            reqArgs.put("requiredBy", AspireClient.serializeValue(requiredBy));
+        }
+        getClient().invokeCapability("Aspire.Hosting/addStep", reqArgs);
+    }
+
+    /** Configures the application pipeline via a callback */
+    public void configure(AspireAction1<PipelineConfigurationContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (PipelineConfigurationContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/configure", reqArgs);
+    }
+
+}
+
 // ===== IDistributedApplicationResourceEvent.java =====
 // IDistributedApplicationResourceEvent.java - GENERATED CODE - DO NOT EDIT
 
@@ -11141,6 +13021,119 @@ import java.util.function.*;
 public class IDistributedApplicationResourceEvent extends HandleWrapperBase {
     IDistributedApplicationResourceEvent(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+}
+
+// ===== IExecutionConfigurationBuilder.java =====
+// IExecutionConfigurationBuilder.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder. */
+public class IExecutionConfigurationBuilder extends HandleWrapperBase {
+    IExecutionConfigurationBuilder(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Builds the execution configuration */
+    public IExecutionConfigurationResult build(DistributedApplicationExecutionContext executionContext, BuildOptions options) {
+        var resourceLogger = options == null ? null : options.getResourceLogger();
+        var cancellationToken = options == null ? null : options.getCancellationToken();
+        return buildImpl(executionContext, resourceLogger, cancellationToken);
+    }
+
+    public IExecutionConfigurationResult build(DistributedApplicationExecutionContext executionContext) {
+        return build(executionContext, null);
+    }
+
+    /** Builds the execution configuration */
+    private IExecutionConfigurationResult buildImpl(DistributedApplicationExecutionContext executionContext, ILogger resourceLogger, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("executionContext", AspireClient.serializeValue(executionContext));
+        if (resourceLogger != null) {
+            reqArgs.put("resourceLogger", AspireClient.serializeValue(resourceLogger));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        return (IExecutionConfigurationResult) getClient().invokeCapability("Aspire.Hosting/buildExecutionConfiguration", reqArgs);
+    }
+
+    /** Adds an HTTPS certificate configuration gatherer */
+    public IExecutionConfigurationBuilder withHttpsCertificateConfig(AspireFunc1<HttpsCertificateInfo, HttpsCertificateExecutionConfigurationContext> configContextFactory) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configContextFactoryId = getClient().registerCallback(args -> {
+            var arg = (HttpsCertificateInfo) args[0];
+            return AspireClient.awaitValue(configContextFactory.invoke(arg));
+        });
+        if (configContextFactoryId != null) {
+            reqArgs.put("configContextFactory", configContextFactoryId);
+        }
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfigExport", reqArgs);
+    }
+
+    /** Adds an arguments configuration gatherer */
+    public IExecutionConfigurationBuilder withArgumentsConfig() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/withArgumentsConfig", reqArgs);
+    }
+
+    /** Adds an environment variables configuration gatherer */
+    public IExecutionConfigurationBuilder withEnvironmentVariablesConfig() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/withEnvironmentVariablesConfig", reqArgs);
+    }
+
+    /** Adds a certificate trust configuration gatherer */
+    public IExecutionConfigurationBuilder withCertificateTrustConfig(AspireFunc1<CertificateTrustScope, CertificateTrustExecutionConfigurationContext> configContextFactory) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var configContextFactoryId = getClient().registerCallback(args -> {
+            var arg = (CertificateTrustScope) args[0];
+            return AspireClient.awaitValue(configContextFactory.invoke(arg));
+        });
+        if (configContextFactoryId != null) {
+            reqArgs.put("configContextFactory", configContextFactoryId);
+        }
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/withCertificateTrustConfig", reqArgs);
+    }
+
+}
+
+// ===== IExecutionConfigurationResult.java =====
+// IExecutionConfigurationResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult. */
+public class IExecutionConfigurationResult extends HandleWrapperBase {
+    IExecutionConfigurationResult(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets certificate trust execution-configuration data */
+    public CertificateTrustExecutionConfigurationExportData getCertificateTrustData() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
+        return (CertificateTrustExecutionConfigurationExportData) getClient().invokeCapability("Aspire.Hosting/getCertificateTrustData", reqArgs);
+    }
+
+    /** Gets HTTPS certificate execution-configuration data */
+    public HttpsCertificateExecutionConfigurationExportData getHttpsCertificateData() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
+        return (HttpsCertificateExecutionConfigurationExportData) getClient().invokeCapability("Aspire.Hosting/getHttpsCertificateData", reqArgs);
     }
 
 }
@@ -11692,6 +13685,13 @@ public class IServiceProvider extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         return (ResourceNotificationService) getClient().invokeCapability("Aspire.Hosting/getResourceNotificationService", reqArgs);
+    }
+
+    /** Gets the Aspire store from the service provider */
+    public IAspireStore getAspireStore() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
+        return (IAspireStore) getClient().invokeCapability("Aspire.Hosting/getAspireStore", reqArgs);
     }
 
     /** Gets the user secrets manager from the service provider */
@@ -12317,6 +14317,13 @@ public class ParameterResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     /** Adds an optional string parameter */
@@ -13118,6 +15125,31 @@ public class ProjectResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public ProjectResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
+    public ProjectResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    private ProjectResource withBrowserLogsImpl(String browser, String profile) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public ProjectResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -13450,6 +15482,96 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
         getClient().invokeCapability("Aspire.Hosting/withReferenceEndpoint", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback) {
+        return withEndpointCallback(endpointName, callback, null);
+    }
+
+    /** Updates a named endpoint via callback */
+    public ProjectResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    public ProjectResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ProjectResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    private ProjectResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private ProjectResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -13851,6 +15973,23 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ProjectResource withHttpCommand(String path, String displayName) {
+        return withHttpCommand(path, displayName, null);
+    }
+
+    /** Adds an HTTP resource command */
+    public ProjectResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("displayName", AspireClient.serializeValue(displayName));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpCommand", reqArgs);
+        return this;
+    }
+
     /** Configures developer certificate trust */
     public ProjectResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -13999,6 +16138,22 @@ public class ProjectResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Sets image push options via callback */
+    public ProjectResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs);
         return this;
     }
 
@@ -14163,6 +16318,13 @@ public class ProjectResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     /** Adds an optional string parameter */
@@ -15395,6 +17557,31 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestDatabaseResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
+    public TestDatabaseResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    private TestDatabaseResource withBrowserLogsImpl(String browser, String profile) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public TestDatabaseResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -15610,6 +17797,30 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
         getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return withDockerfileBuilder(contextPath, callback, null);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    public TestDatabaseResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs);
         return this;
     }
 
@@ -15912,6 +18123,96 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
         getClient().invokeCapability("Aspire.Hosting/withReferenceEndpoint", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback) {
+        return withEndpointCallback(endpointName, callback, null);
+    }
+
+    /** Updates a named endpoint via callback */
+    public TestDatabaseResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    public TestDatabaseResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestDatabaseResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    private TestDatabaseResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private TestDatabaseResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -16299,6 +18600,23 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    public TestDatabaseResource withHttpCommand(String path, String displayName) {
+        return withHttpCommand(path, displayName, null);
+    }
+
+    /** Adds an HTTP resource command */
+    public TestDatabaseResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("displayName", AspireClient.serializeValue(displayName));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpCommand", reqArgs);
+        return this;
+    }
+
     /** Configures developer certificate trust */
     public TestDatabaseResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -16447,6 +18765,22 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Sets image push options via callback */
+    public TestDatabaseResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs);
         return this;
     }
 
@@ -16637,6 +18971,13 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     /** Adds an optional string parameter */
@@ -17135,6 +19476,31 @@ public class TestRedisResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestRedisResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
+    public TestRedisResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    private TestRedisResource withBrowserLogsImpl(String browser, String profile) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public TestRedisResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17350,6 +19716,30 @@ public class TestRedisResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
         getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return withDockerfileBuilder(contextPath, callback, null);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    public TestRedisResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs);
         return this;
     }
 
@@ -17688,6 +20078,96 @@ public class TestRedisResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
         getClient().invokeCapability("Aspire.Hosting/withReferenceEndpoint", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback) {
+        return withEndpointCallback(endpointName, callback, null);
+    }
+
+    /** Updates a named endpoint via callback */
+    public TestRedisResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    public TestRedisResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestRedisResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    private TestRedisResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private TestRedisResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -18075,6 +20555,23 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    public TestRedisResource withHttpCommand(String path, String displayName) {
+        return withHttpCommand(path, displayName, null);
+    }
+
+    /** Adds an HTTP resource command */
+    public TestRedisResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("displayName", AspireClient.serializeValue(displayName));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpCommand", reqArgs);
+        return this;
+    }
+
     /** Configures developer certificate trust */
     public TestRedisResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -18223,6 +20720,22 @@ public class TestRedisResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Sets image push options via callback */
+    public TestRedisResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs);
         return this;
     }
 
@@ -18429,6 +20942,13 @@ public class TestRedisResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     public TestDatabaseResource addTestChildDatabase(String name) {
@@ -19028,6 +21548,31 @@ public class TestVaultResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    public TestVaultResource withBrowserLogs(WithBrowserLogsOptions options) {
+        var browser = options == null ? null : options.getBrowser();
+        var profile = options == null ? null : options.getProfile();
+        return withBrowserLogsImpl(browser, profile);
+    }
+
+    public TestVaultResource withBrowserLogs() {
+        return withBrowserLogs(null);
+    }
+
+    /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
+    private TestVaultResource withBrowserLogsImpl(String browser, String profile) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (browser != null) {
+            reqArgs.put("browser", AspireClient.serializeValue(browser));
+        }
+        if (profile != null) {
+            reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
+        return this;
+    }
+
     /** Configures a resource to use a container registry */
     public TestVaultResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -19243,6 +21788,30 @@ public class TestVaultResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
         getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
+        return withDockerfileBuilder(contextPath, callback, null);
+    }
+
+    /** Configures the resource to use a programmatically generated Dockerfile */
+    public TestVaultResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("contextPath", AspireClient.serializeValue(contextPath));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (DockerfileBuilderCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (stage != null) {
+            reqArgs.put("stage", AspireClient.serializeValue(stage));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withDockerfileBuilder", reqArgs);
         return this;
     }
 
@@ -19545,6 +22114,96 @@ public class TestVaultResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("endpointReference", AspireClient.serializeValue(endpointReference));
         getClient().invokeCapability("Aspire.Hosting/withReferenceEndpoint", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback) {
+        return withEndpointCallback(endpointName, callback, null);
+    }
+
+    /** Updates a named endpoint via callback */
+    public TestVaultResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("endpointName", AspireClient.serializeValue(endpointName));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    public TestVaultResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestVaultResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTP endpoint via callback */
+    private TestVaultResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpEndpointCallback", reqArgs);
+        return this;
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
+        var name = options == null ? null : options.getName();
+        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+        return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
+    }
+
+    public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback) {
+        return withHttpsEndpointCallback(callback, null);
+    }
+
+    /** Updates an HTTPS endpoint via callback */
+    private TestVaultResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var obj = (EndpointUpdateContext) args[0];
+            callback.invoke(obj);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        if (name != null) {
+            reqArgs.put("name", AspireClient.serializeValue(name));
+        }
+        if (createIfNotExists != null) {
+            reqArgs.put("createIfNotExists", AspireClient.serializeValue(createIfNotExists));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpsEndpointCallback", reqArgs);
         return this;
     }
 
@@ -19932,6 +22591,23 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    public TestVaultResource withHttpCommand(String path, String displayName) {
+        return withHttpCommand(path, displayName, null);
+    }
+
+    /** Adds an HTTP resource command */
+    public TestVaultResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("path", AspireClient.serializeValue(path));
+        reqArgs.put("displayName", AspireClient.serializeValue(displayName));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHttpCommand", reqArgs);
+        return this;
+    }
+
     /** Configures developer certificate trust */
     public TestVaultResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -20080,6 +22756,22 @@ public class TestVaultResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Sets image push options via callback */
+    public TestVaultResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (ContainerImagePushOptionsCallbackContext) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs);
         return this;
     }
 
@@ -20270,6 +22962,13 @@ public class TestVaultResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/onResourceReady", reqArgs);
         return this;
+    }
+
+    /** Creates an execution configuration builder */
+    public IExecutionConfigurationBuilder createExecutionConfiguration() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
+        return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
     /** Adds an optional string parameter */
@@ -20719,6 +23418,33 @@ public interface WireValueEnum {
     String getValue();
 }
 
+// ===== WithBrowserLogsOptions.java =====
+// WithBrowserLogsOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithBrowserLogs. */
+public final class WithBrowserLogsOptions {
+    private String browser;
+    private String profile;
+
+    public String getBrowser() { return browser; }
+    public WithBrowserLogsOptions browser(String value) {
+        this.browser = value;
+        return this;
+    }
+
+    public String getProfile() { return profile; }
+    public WithBrowserLogsOptions profile(String value) {
+        this.profile = value;
+        return this;
+    }
+
+}
+
 // ===== WithContainerCertificatePathsOptions.java =====
 // WithContainerCertificatePathsOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -20930,6 +23656,33 @@ public final class WithExternalServiceHttpHealthCheckOptions {
 
 }
 
+// ===== WithHttpEndpointCallbackOptions.java =====
+// WithHttpEndpointCallbackOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithHttpEndpointCallback. */
+public final class WithHttpEndpointCallbackOptions {
+    private String name;
+    private Boolean createIfNotExists;
+
+    public String getName() { return name; }
+    public WithHttpEndpointCallbackOptions name(String value) {
+        this.name = value;
+        return this;
+    }
+
+    public Boolean getCreateIfNotExists() { return createIfNotExists; }
+    public WithHttpEndpointCallbackOptions createIfNotExists(Boolean value) {
+        this.createIfNotExists = value;
+        return this;
+    }
+
+}
+
 // ===== WithHttpEndpointOptions.java =====
 // WithHttpEndpointOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -21069,6 +23822,33 @@ public final class WithHttpProbeOptions {
     public String getEndpointName() { return endpointName; }
     public WithHttpProbeOptions endpointName(String value) {
         this.endpointName = value;
+        return this;
+    }
+
+}
+
+// ===== WithHttpsEndpointCallbackOptions.java =====
+// WithHttpsEndpointCallbackOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithHttpsEndpointCallback. */
+public final class WithHttpsEndpointCallbackOptions {
+    private String name;
+    private Boolean createIfNotExists;
+
+    public String getName() { return name; }
+    public WithHttpsEndpointCallbackOptions name(String value) {
+        this.name = value;
+        return this;
+    }
+
+    public Boolean getCreateIfNotExists() { return createIfNotExists; }
+    public WithHttpsEndpointCallbackOptions createIfNotExists(Boolean value) {
+        this.createIfNotExists = value;
         return this;
     }
 
@@ -21337,6 +24117,7 @@ public final class WithVolumeOptions {
 .modules/AddDockerfileOptions.java
 .modules/AddParameterWithGeneratedValueOptions.java
 .modules/AddParameterWithValueOptions.java
+.modules/AddStepOptions.java
 .modules/AfterResourcesCreatedEvent.java
 .modules/Aspire.java
 .modules/AspireAction0.java
@@ -21357,9 +24138,12 @@ public final class WithVolumeOptions {
 .modules/BaseRegistrations.java
 .modules/BeforeResourceStartedEvent.java
 .modules/BeforeStartEvent.java
+.modules/BuildOptions.java
 .modules/CSharpAppResource.java
 .modules/CancellationToken.java
 .modules/CapabilityError.java
+.modules/CertificateTrustExecutionConfigurationContext.java
+.modules/CertificateTrustExecutionConfigurationExportData.java
 .modules/CertificateTrustScope.java
 .modules/CommandLineArgsCallbackContext.java
 .modules/CommandOptions.java
@@ -21371,7 +24155,12 @@ public final class WithVolumeOptions {
 .modules/CompleteTaskOptions.java
 .modules/ConnectionStringAvailableEvent.java
 .modules/ConnectionStringResource.java
+.modules/ContainerImagePushOptions.java
+.modules/ContainerImagePushOptionsCallbackContext.java
+.modules/ContainerImageReference.java
 .modules/ContainerLifetime.java
+.modules/ContainerMountAnnotation.java
+.modules/ContainerPortReference.java
 .modules/ContainerRegistryResource.java
 .modules/ContainerResource.java
 .modules/CreateBuilderOptions.java
@@ -21382,11 +24171,16 @@ public final class WithVolumeOptions {
 .modules/DistributedApplicationModel.java
 .modules/DistributedApplicationOperation.java
 .modules/DistributedApplicationResourceEventSubscription.java
+.modules/DockerfileBuilder.java
+.modules/DockerfileBuilderCallbackContext.java
+.modules/DockerfileStage.java
 .modules/DotnetToolResource.java
 .modules/EndpointProperty.java
 .modules/EndpointReference.java
 .modules/EndpointReferenceExpression.java
+.modules/EndpointUpdateContext.java
 .modules/EnvironmentCallbackContext.java
+.modules/EventingSubscriberRegistrationContext.java
 .modules/ExecutableResource.java
 .modules/ExecuteCommandContext.java
 .modules/ExecuteCommandResult.java
@@ -21394,6 +24188,12 @@ public final class WithVolumeOptions {
 .modules/GenerateParameterDefault.java
 .modules/Handle.java
 .modules/HandleWrapperBase.java
+.modules/HttpCommandExportOptions.java
+.modules/HttpCommandResultMode.java
+.modules/HttpsCertificateExecutionConfigurationContext.java
+.modules/HttpsCertificateExecutionConfigurationExportData.java
+.modules/HttpsCertificateInfo.java
+.modules/IAspireStore.java
 .modules/IComputeResource.java
 .modules/IConfiguration.java
 .modules/IConfigurationSection.java
@@ -21401,7 +24201,10 @@ public final class WithVolumeOptions {
 .modules/IDistributedApplicationBuilder.java
 .modules/IDistributedApplicationEvent.java
 .modules/IDistributedApplicationEventing.java
+.modules/IDistributedApplicationPipeline.java
 .modules/IDistributedApplicationResourceEvent.java
+.modules/IExecutionConfigurationBuilder.java
+.modules/IExecutionConfigurationResult.java
 .modules/IExpressionValue.java
 .modules/IHostEnvironment.java
 .modules/ILogger.java
@@ -21463,15 +24266,18 @@ public final class WithVolumeOptions {
 .modules/UrlDisplayLocation.java
 .modules/WaitBehavior.java
 .modules/WireValueEnum.java
+.modules/WithBrowserLogsOptions.java
 .modules/WithContainerCertificatePathsOptions.java
 .modules/WithDataVolumeOptions.java
 .modules/WithDockerfileBaseImageOptions.java
 .modules/WithDockerfileOptions.java
 .modules/WithEndpointOptions.java
 .modules/WithExternalServiceHttpHealthCheckOptions.java
+.modules/WithHttpEndpointCallbackOptions.java
 .modules/WithHttpEndpointOptions.java
 .modules/WithHttpHealthCheckOptions.java
 .modules/WithHttpProbeOptions.java
+.modules/WithHttpsEndpointCallbackOptions.java
 .modules/WithHttpsEndpointOptions.java
 .modules/WithMcpServerOptions.java
 .modules/WithMergeLoggingOptions.java

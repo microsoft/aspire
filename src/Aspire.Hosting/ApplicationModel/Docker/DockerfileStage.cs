@@ -8,6 +8,7 @@ namespace Aspire.Hosting.ApplicationModel.Docker;
 /// <summary>
 /// Represents a stage within a multi-stage Dockerfile.
 /// </summary>
+[AspireExport]
 [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class DockerfileStage : DockerfileStatement
 {

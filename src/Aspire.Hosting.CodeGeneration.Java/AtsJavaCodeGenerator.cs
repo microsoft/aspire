@@ -1747,14 +1747,19 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             _classNames[typeId] = CreateClassName(typeId);
         }
 
-        var handleTypeMap = context.HandleTypes.ToDictionary(t => t.AtsTypeId, StringComparer.Ordinal);
+        var handleTypeMap = context.HandleTypes
+            .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Any(t => t.IsResourceBuilder),
+                StringComparer.Ordinal);
         var results = new List<JavaHandleType>();
         foreach (var typeId in handleTypeIds)
         {
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.IsResourceBuilder;
+                isResourceBuilder = typeInfo;
             }
 
             var className = _classNames[typeId];

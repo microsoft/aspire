@@ -13,6 +13,7 @@
     <SplitTestsOnCI>true</SplitTestsOnCI>
     <RequiresNugets>true</RequiresNugets>
     <RequiresCliArchive>true</RequiresCliArchive>
+    <RequiresGitHubToken>true</RequiresGitHubToken>
 
     <!-- Disable strong name signing because Hex1b package is not signed -->
     <SignAssembly>false</SignAssembly>
@@ -53,6 +54,7 @@
 
   <ItemGroup>
       <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
+      <Compile Include="$(TestsSharedDir)CliInstallStrategy.cs" Link="shared\CliInstallStrategy.cs" />
       <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />
       <Compile Include="$(TestsSharedDir)Hex1bAutomatorTestHelpers.cs" Link="shared\Hex1bAutomatorTestHelpers.cs" />
       <Compile Include="..\Aspire.Hosting.Tests\Utils\MSBuildUtils.cs" Link="Utils\MSBuildUtils.cs" />
@@ -64,6 +66,7 @@
 
   <ItemGroup>
     <Compile Include="..\..\src\Aspire.Cli\Resources\AddCommandStrings.Designer.cs" Link="Resources\AddCommandStrings.Designer.cs" />
+    <Compile Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.Designer.cs" Link="Resources\ConsoleActivityLoggerStrings.Designer.cs" />
     <Compile Include="..\..\src\Aspire.Cli\Resources\HelpGroupStrings.Designer.cs" Link="Resources\HelpGroupStrings.Designer.cs" />
     <Compile Include="..\..\src\Aspire.Cli\Resources\RootCommandStrings.Designer.cs" Link="Resources\RootCommandStrings.Designer.cs" />
     <Compile Include="..\..\src\Aspire.Cli\Resources\RunCommandStrings.Designer.cs" Link="Resources\RunCommandStrings.Designer.cs" />
@@ -73,6 +76,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\AddCommandStrings.resx" Link="Resources\AddCommandStrings.resx" LogicalName="Aspire.Cli.Resources.AddCommandStrings.resources" />
+    <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\ConsoleActivityLoggerStrings.resx" Link="Resources\ConsoleActivityLoggerStrings.resx" LogicalName="Aspire.Cli.Resources.ConsoleActivityLoggerStrings.resources" />
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\HelpGroupStrings.resx" Link="Resources\HelpGroupStrings.resx" LogicalName="Aspire.Cli.Resources.HelpGroupStrings.resources" />
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\RootCommandStrings.resx" Link="Resources\RootCommandStrings.resx" LogicalName="Aspire.Cli.Resources.RootCommandStrings.resources" />
     <EmbeddedResource Include="..\..\src\Aspire.Cli\Resources\RunCommandStrings.resx" Link="Resources\RunCommandStrings.resx" LogicalName="Aspire.Cli.Resources.RunCommandStrings.resources" />

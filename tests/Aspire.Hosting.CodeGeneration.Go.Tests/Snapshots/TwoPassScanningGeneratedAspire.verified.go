@@ -138,6 +138,16 @@ const (
 	EndpointPropertyTlsEnabled EndpointProperty = "TlsEnabled"
 )
 
+// HttpCommandResultMode represents HttpCommandResultMode.
+type HttpCommandResultMode string
+
+const (
+	HttpCommandResultModeNone HttpCommandResultMode = "None"
+	HttpCommandResultModeAuto HttpCommandResultMode = "Auto"
+	HttpCommandResultModeJson HttpCommandResultMode = "Json"
+	HttpCommandResultModeText HttpCommandResultMode = "Text"
+)
+
 // CommandResultFormat represents CommandResultFormat.
 type CommandResultFormat string
 
@@ -218,6 +228,62 @@ func (d *CreateBuilderOptions) ToMap() map[string]any {
 	return m
 }
 
+// HttpsCertificateInfo represents HttpsCertificateInfo.
+type HttpsCertificateInfo struct {
+	Subject string `json:"Subject,omitempty"`
+	Issuer string `json:"Issuer,omitempty"`
+	Thumbprint string `json:"Thumbprint,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateInfo) ToMap() map[string]any {
+	return map[string]any{
+		"Subject": SerializeValue(d.Subject),
+		"Issuer": SerializeValue(d.Issuer),
+		"Thumbprint": SerializeValue(d.Thumbprint),
+	}
+}
+
+// CertificateTrustExecutionConfigurationExportData represents CertificateTrustExecutionConfigurationExportData.
+type CertificateTrustExecutionConfigurationExportData struct {
+	Scope CertificateTrustScope `json:"Scope,omitempty"`
+	CertificateSubjects []string `json:"CertificateSubjects,omitempty"`
+	CustomBundlePaths []string `json:"CustomBundlePaths,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CertificateTrustExecutionConfigurationExportData) ToMap() map[string]any {
+	return map[string]any{
+		"Scope": SerializeValue(d.Scope),
+		"CertificateSubjects": SerializeValue(d.CertificateSubjects),
+		"CustomBundlePaths": SerializeValue(d.CustomBundlePaths),
+	}
+}
+
+// HttpsCertificateExecutionConfigurationExportData represents HttpsCertificateExecutionConfigurationExportData.
+type HttpsCertificateExecutionConfigurationExportData struct {
+	Subject string `json:"Subject,omitempty"`
+	Thumbprint string `json:"Thumbprint,omitempty"`
+	KeyPathExpression string `json:"KeyPathExpression,omitempty"`
+	PfxPathExpression string `json:"PfxPathExpression,omitempty"`
+	IsKeyPathReferenced bool `json:"IsKeyPathReferenced,omitempty"`
+	IsPfxPathReferenced bool `json:"IsPfxPathReferenced,omitempty"`
+	Password string `json:"Password,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]any {
+	return map[string]any{
+		"Subject": SerializeValue(d.Subject),
+		"Thumbprint": SerializeValue(d.Thumbprint),
+		"KeyPathExpression": SerializeValue(d.KeyPathExpression),
+		"PfxPathExpression": SerializeValue(d.PfxPathExpression),
+		"IsKeyPathReferenced": SerializeValue(d.IsKeyPathReferenced),
+		"IsPfxPathReferenced": SerializeValue(d.IsPfxPathReferenced),
+		"Password": SerializeValue(d.Password),
+	}
+}
+
 // ResourceEventDto represents ResourceEventDto.
 type ResourceEventDto struct {
 	ResourceName string `json:"ResourceName,omitempty"`
@@ -258,6 +324,24 @@ func (d *ReferenceEnvironmentInjectionOptions) ToMap() map[string]any {
 	return m
 }
 
+// CertificateTrustExecutionConfigurationContext represents CertificateTrustExecutionConfigurationContext.
+type CertificateTrustExecutionConfigurationContext struct {
+	CertificateBundlePath *ReferenceExpression `json:"CertificateBundlePath,omitempty"`
+	CertificateDirectoriesPath *ReferenceExpression `json:"CertificateDirectoriesPath,omitempty"`
+	RootCertificatesPath string `json:"RootCertificatesPath,omitempty"`
+	IsContainer bool `json:"IsContainer,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *CertificateTrustExecutionConfigurationContext) ToMap() map[string]any {
+	return map[string]any{
+		"CertificateBundlePath": SerializeValue(d.CertificateBundlePath),
+		"CertificateDirectoriesPath": SerializeValue(d.CertificateDirectoriesPath),
+		"RootCertificatesPath": SerializeValue(d.RootCertificatesPath),
+		"IsContainer": SerializeValue(d.IsContainer),
+	}
+}
+
 // CommandOptions represents CommandOptions.
 type CommandOptions struct {
 	Description string `json:"Description,omitempty"`
@@ -280,6 +364,50 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m["IsHighlighted"] = serializeValue(d.IsHighlighted)
 	if d.UpdateState != nil { m["UpdateState"] = serializeValue(d.UpdateState) }
 	return m
+}
+
+// HttpCommandExportOptions represents HttpCommandExportOptions.
+type HttpCommandExportOptions struct {
+	Description string `json:"Description,omitempty"`
+	ConfirmationMessage string `json:"ConfirmationMessage,omitempty"`
+	IconName string `json:"IconName,omitempty"`
+	IconVariant IconVariant `json:"IconVariant,omitempty"`
+	IsHighlighted bool `json:"IsHighlighted,omitempty"`
+	CommandName string `json:"CommandName,omitempty"`
+	EndpointName string `json:"EndpointName,omitempty"`
+	MethodName string `json:"MethodName,omitempty"`
+	ResultMode HttpCommandResultMode `json:"ResultMode,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpCommandExportOptions) ToMap() map[string]any {
+	return map[string]any{
+		"Description": SerializeValue(d.Description),
+		"ConfirmationMessage": SerializeValue(d.ConfirmationMessage),
+		"IconName": SerializeValue(d.IconName),
+		"IconVariant": SerializeValue(d.IconVariant),
+		"IsHighlighted": SerializeValue(d.IsHighlighted),
+		"CommandName": SerializeValue(d.CommandName),
+		"EndpointName": SerializeValue(d.EndpointName),
+		"MethodName": SerializeValue(d.MethodName),
+		"ResultMode": SerializeValue(d.ResultMode),
+	}
+}
+
+// HttpsCertificateExecutionConfigurationContext represents HttpsCertificateExecutionConfigurationContext.
+type HttpsCertificateExecutionConfigurationContext struct {
+	CertificatePath *ReferenceExpression `json:"CertificatePath,omitempty"`
+	KeyPath *ReferenceExpression `json:"KeyPath,omitempty"`
+	PfxPath *ReferenceExpression `json:"PfxPath,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HttpsCertificateExecutionConfigurationContext) ToMap() map[string]any {
+	return map[string]any{
+		"CertificatePath": SerializeValue(d.CertificatePath),
+		"KeyPath": SerializeValue(d.KeyPath),
+		"PfxPath": SerializeValue(d.PfxPath),
+	}
 }
 
 // GenerateParameterDefault represents GenerateParameterDefault.
@@ -11810,6 +11938,18 @@ func (s *executableResource) WithOptionalCallback(options ...*WithOptionalCallba
 	return s
 }
 
+// CreateExecutionConfiguration creates an execution configuration builder
+func (s *ExternalServiceResource) CreateExecutionConfiguration() (*IExecutionConfigurationBuilder, error) {
+	reqArgs := map[string]any{
+		"resource": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IExecutionConfigurationBuilder), nil
+}
+
 // WithOptionalString adds an optional string parameter
 func (s *executableResource) WithOptionalString(options ...*WithOptionalStringOptions) ExecutableResource {
 	if s.err != nil { return s }
@@ -19373,6 +19513,21 @@ func (s *testDatabaseResource) WithRelationship(resourceBuilder Resource, type_ 
 	return s
 }
 
+// WithImagePushOptions sets image push options via callback
+func (s *TestDatabaseResource) WithImagePushOptions(callback func(...any) any) (*IComputeResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IComputeResource), nil
+}
+
 // WithRemoteImageName sets the remote image name for publishing
 func (s *testDatabaseResource) WithRemoteImageName(remoteImageName string) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -21478,6 +21633,21 @@ func (s *testRedisResource) WithRelationship(resourceBuilder Resource, type_ str
 	reqArgs["type"] = serializeValue(type_)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderRelationship", reqArgs); err != nil { s.setErr(err) }
 	return s
+}
+
+// WithImagePushOptions sets image push options via callback
+func (s *TestRedisResource) WithImagePushOptions(callback func(...any) any) (*IComputeResource, error) {
+	reqArgs := map[string]any{
+		"builder": SerializeValue(s.Handle()),
+	}
+	if callback != nil {
+		reqArgs["callback"] = RegisterCallback(callback)
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting/withImagePushOptions", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IComputeResource), nil
 }
 
 // WithRemoteImageName sets the remote image name for publishing

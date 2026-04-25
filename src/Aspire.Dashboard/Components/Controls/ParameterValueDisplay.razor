@@ -1,0 +1,59 @@
+﻿@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
+
+@if (SetCommand is not null)
+{
+    <button type="button"
+            class="value-not-set-link"
+            disabled="@IsSetCommandDisabled"
+            @onclick="OnClickAsync"
+            title="@ControlsStringsLoc[nameof(ControlsStrings.ParameterSetValueAction)]">
+        @ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]
+    </button>
+}
+else
+{
+    @ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public required ResourceViewModel Resource { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<ResourceViewModel, CommandViewModel, Task> OnExecuteCommandAsync { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<ResourceViewModel, CommandViewModel, bool> IsCommandExecuting { get; set; }
+
+    private CommandViewModel? SetCommand { get; set; }
+    private bool IsSetCommandDisabled => SetCommand is null || SetCommand.State == CommandViewModelState.Disabled || IsSetCommandExecuting;
+    private bool IsSetCommandExecuting => SetCommand is not null && IsCommandExecuting(Resource, SetCommand);
+
+    protected override void OnParametersSet()
+    {
+        SetCommand = null;
+        foreach (var command in Resource.Commands)
+        {
+            if (string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName)
+                && command.State != CommandViewModelState.Hidden)
+            {
+                SetCommand = command;
+                break;
+            }
+        }
+    }
+
+    private Task OnClickAsync()
+    {
+        if (SetCommand is not { } setCommand ||
+            setCommand.State == CommandViewModelState.Disabled ||
+            IsCommandExecuting(Resource, setCommand))
+        {
+            return Task.CompletedTask;
+        }
+
+        return OnExecuteCommandAsync(Resource, setCommand);
+    }
+}

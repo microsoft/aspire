@@ -1,7 +1,7 @@
 # Multi-stage Dockerfile for Aspire E2E testing (polyglot base variant).
 #
 # Includes: Docker CLI (via host socket mount), gh CLI,
-#           Node.js, Aspire install scripts.
+#           Node.js, Bun, Yarn, pnpm, Aspire install scripts.
 # Does NOT include .NET SDK or Java.
 #
 # Usage:
@@ -51,7 +51,7 @@ FROM ubuntu:24.04 AS runtime
 # Install base tools and Docker CLI.
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
-      ca-certificates curl gpg docker.io git libicu74 && \
+      ca-certificates curl gpg docker.io git libicu-dev unzip && \
     rm -rf /var/lib/apt/lists/*
 
 # Install gh CLI (needed by get-aspire-cli-pr.sh to download PR artifacts).
@@ -63,9 +63,13 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
     apt-get install -y --no-install-recommends gh && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (needed for TypeScript AppHosts and JS templates).
+# Install Node.js plus supported TypeScript AppHost toolchains.
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
+    npm install -g yarn@1.22.22 pnpm@10 && \
+    curl -fsSL https://bun.sh/install | bash && \
+    ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
+    ln -s /root/.bun/bin/bunx /usr/local/bin/bunx && \
     rm -rf /var/lib/apt/lists/*
 
 # --- Aspire CLI setup ---
@@ -89,6 +93,7 @@ RUN if ls /tmp/aspire-*-linux-x64.tar.gz 1>/dev/null 2>&1; then \
 RUN mkdir -p /workspace
 WORKDIR /workspace
 
-ENV PATH="/root/.aspire/bin:/root/.aspire:${PATH}"
+ENV BUN_INSTALL="/root/.bun"
+ENV PATH="/root/.bun/bin:/root/.aspire/bin:/root/.aspire:${PATH}"
 ENV ASPIRE_PLAYGROUND=true
 ENV TERM=xterm

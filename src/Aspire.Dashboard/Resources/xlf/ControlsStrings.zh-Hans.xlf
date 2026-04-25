@@ -93,18 +93,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ClearAllResources">
-        <source>Remove all</source>
-        <target state="translated">全部移除</target>
+        <source>Remove all telemetry</source>
+        <target state="needs-review-translation">全部移除</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
-        <source>Remove for resource</source>
-        <target state="translated">删除资源</target>
+        <source>Remove telemetry for resource</source>
+        <target state="needs-review-translation">删除资源</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
-        <source>Remove for {0}</source>
-        <target state="translated">删除 {0}</target>
+        <source>Remove telemetry for {0}</source>
+        <target state="needs-review-translation">删除 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
@@ -357,6 +357,11 @@
         <target state="translated">页面工具栏</target>
         <note />
       </trans-unit>
+      <trans-unit id="ParameterSetValueAction">
+        <source>Click to set parameter value</source>
+        <target state="new">Click to set parameter value</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ParameterValueNotSet">
         <source>Value not set</source>
         <target state="translated">未设置值</target>
@@ -435,6 +440,11 @@
       <trans-unit id="ResourceDetailsResourceHeader">
         <source>Resource</source>
         <target state="translated">资源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceDetailsStateDescriptionHeader">
+        <source>State details</source>
+        <target state="new">State details</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsTypeHeader">

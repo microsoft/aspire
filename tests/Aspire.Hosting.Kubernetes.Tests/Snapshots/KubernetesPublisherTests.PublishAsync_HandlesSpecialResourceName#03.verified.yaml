@@ -1,12 +1,28 @@
----
+﻿---
 apiVersion: "v1"
-kind: "ConfigMap"
+kind: "Service"
 metadata:
-  name: "special-app-config"
+  name: "env-dashboard-service"
   labels:
     app.kubernetes.io/name: "my-chart"
-    app.kubernetes.io/component: "SpeciaL-ApP"
+    app.kubernetes.io/component: "env-dashboard"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
-data:
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.SpeciaL_ApP.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
-  ConnectionStrings__api-cs2: "{{ .Values.config.SpeciaL_ApP.ConnectionStrings__api_cs2 }}"
+spec:
+  type: "ClusterIP"
+  selector:
+    app.kubernetes.io/name: "my-chart"
+    app.kubernetes.io/component: "env-dashboard"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+  ports:
+    - name: "http"
+      protocol: "TCP"
+      port: 18888
+      targetPort: 18888
+    - name: "otlp-grpc"
+      protocol: "TCP"
+      port: 18889
+      targetPort: 18889
+    - name: "otlp-http"
+      protocol: "TCP"
+      port: 18890
+      targetPort: 18890

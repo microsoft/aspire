@@ -98,7 +98,7 @@ internal sealed class LanguageService : ILanguageService
             "Which language would you like to use?",
             languages,
             lang => lang.DisplayName,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return (_projectFactory.GetProject(selected), selected);
     }
@@ -135,7 +135,7 @@ internal sealed class LanguageService : ILanguageService
         if (saveSelection)
         {
             await SetLanguageAsync(selectedLanguage.LanguageId, isGlobal: false, cancellationToken);
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, $"Language preference saved to local configuration: {selectedProject.DisplayName}");
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Language preference saved to local configuration: {selectedProject.DisplayName}");
         }
 
         return selectedProject;

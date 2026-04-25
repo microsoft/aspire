@@ -29,6 +29,7 @@
     <Compile Include="$(SharedDir)KnownEndpointNames.cs" Link="Utils\KnownEndpointNames.cs" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="ApplicationModel\EnvironmentVariableNameEncoder.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Publishing\ContainerRuntimeDetector.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)OtlpEndpointResolver.cs" Link="Utils\OtlpEndpointResolver.cs" />
     <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
@@ -48,7 +49,6 @@
     <Compile Include="$(SharedDir)LaunchProfiles\*.cs" />
     <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />
     <Compile Include="$(SharedDir)PackageUpdateHelpers.cs" Link="Utils\PackageUpdateHelpers.cs" />
-    <Compile Include="$(SharedDir)SmolSemVer.cs" Link="SmolSemVer.cs" />
     <Compile Include="$(SharedDir)InteractionHelpers.cs" Link="Utils\InteractionHelpers.cs" />
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
@@ -56,6 +56,7 @@
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="UserSecrets\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
     <Compile Include="$(SharedDir)PasswordGenerator.cs" Link="Utils\PasswordGenerator.cs" />
+    <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -67,7 +68,7 @@
     <PackageReference Include="Polly.Core" />
     <PackageReference Include="JsonPatch.Net" />
     <PackageReference Include="AspNetCore.HealthChecks.Uris" />
-
+    <PackageReference Include="Semver" />
     <PackageReference Include="System.IO.Hashing" />
     <PackageReference Include="StreamJsonRpc" />
   </ItemGroup>

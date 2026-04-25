@@ -196,5 +196,5 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["namespace"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.servicebus.windows.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.servicebus.windows.net"];
 }

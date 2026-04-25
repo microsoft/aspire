@@ -79,8 +79,11 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder"> The Docker compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="ComposeFile"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts because <see cref="ComposeFile"/> and its nested types are not exported to ATS.</remarks>
-    [AspireExportIgnore(Reason = "ComposeFile and its nested types are not exported to ATS.")]
+    /// <remarks>
+    /// This callback runs after the Docker Compose model has been generated and before it is written to disk.
+    /// Use it to customize the generated <see cref="ComposeFile"/> for the environment.
+    /// </remarks>
+    [AspireExport(Description = "Configures the generated Docker Compose file before it is written to disk")]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureComposeFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<ComposeFile> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -97,13 +100,12 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="configure">A method that can be used for customizing the captured environment variables.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
-    /// This method is not available in polyglot app hosts.
     /// <para>
     /// This callback is invoked during the prepare phase, allowing programmatic modification of the environment variables
-    /// that will be written to the .env file adjacent to the Docker Compose file.
+    /// that will be written to the environment-specific <c>.env</c> file adjacent to the Docker Compose file.
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Action<IDictionary<string, CapturedEnvironmentVariable>> callbacks are not ATS-compatible.")]
+    [AspireExport(Description = "Configures the captured environment variables written to the Docker Compose .env file")]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureEnvFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IDictionary<string, CapturedEnvironmentVariable>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);

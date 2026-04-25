@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
@@ -408,6 +410,11 @@ public static class FoundryExtensions
 
     private static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
     {
+        var azureResource = (FoundryResource)infrastructure.AspireResource;
+
+        // Check if this Foundry resource has a private endpoint (via annotation)
+        var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
         var cogServicesAccount = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -427,7 +434,9 @@ public static class FoundryExtensions
                         // Until this bug is fixed, CustomSubDomainName must be set to the
                         // account's name: https://msdata.visualstudio.com/Vienna/_workitems/edit/4866592
                         CustomSubDomainName = ToLower(Take(Concat(infrastructure.AspireResource.Name, GetUniqueString(GetResourceGroup().Id)), 24)),
-                        PublicNetworkAccess = ServiceAccountPublicNetworkAccess.Enabled,
+                        PublicNetworkAccess = hasPrivateEndpoint
+                            ? ServiceAccountPublicNetworkAccess.Disabled
+                            : ServiceAccountPublicNetworkAccess.Enabled,
                         DisableLocalAuth = true,
                         AllowProjectManagement = true
                     },

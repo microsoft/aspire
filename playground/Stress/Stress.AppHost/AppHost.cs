@@ -28,6 +28,8 @@ for (var i = 0; i < 2; i++)
 }
 
 builder.AddParameter("testParameterResource", () => "value", secret: true);
+var apiKeyParam = builder.AddParameter("api-key", secret: true);
+var connectionStringParam = builder.AddParameter("db-connection-string");
 builder.AddContainer("hiddenContainer", "alpine")
     .WithInitialState(new CustomResourceSnapshot
     {
@@ -40,6 +42,8 @@ builder.AddContainer("hiddenContainer", "alpine")
 // See https://github.com/open-telemetry/opentelemetry-dotnet/blob/main/RELEASENOTES.md#1100
 var serviceBuilder = builder.AddProject<Projects.Stress_ApiService>("stress-apiservice", launchProfileName: null)
     .WithEnvironment("OTEL_DOTNET_EXPERIMENTAL_METRICS_EMIT_OVERFLOW_ATTRIBUTE", "true")
+    .WithEnvironment("API_KEY", apiKeyParam)
+    .WithEnvironment("DB_CONNECTION_STRING", connectionStringParam)
     .WithIconName("Server");
 serviceBuilder
     .WithEnvironment("HOST", $"{serviceBuilder.GetEndpoint("http").Property(EndpointProperty.Host)}")
@@ -84,6 +88,9 @@ serviceBuilder.WithHttpCommand("/trace-limit", "Trace limit", commandOptions: ne
 serviceBuilder.WithHttpCommand("/log-message", "Log message", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
 serviceBuilder.WithHttpCommand("/log-message-limit", "Log message limit", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
 serviceBuilder.WithHttpCommand("/log-message-limit-large", "Log message limit large", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+serviceBuilder.WithHttpCommand("/http-command-auto-result", "HTTP command auto result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Auto, Description = "Run an HTTP command and infer the result format from the response content type" });
+serviceBuilder.WithHttpCommand("/http-command-json-result", "HTTP command JSON result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Json, Description = "Run an HTTP command and flow the JSON response back to the caller" });
+serviceBuilder.WithHttpCommand("/http-command-text-result", "HTTP command text result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Text, Description = "Run an HTTP command and flow the plain-text response back to the caller" });
 serviceBuilder.WithHttpCommand("/multiple-traces-linked", "Multiple traces linked", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
 serviceBuilder.WithHttpCommand("/overflow-counter", "Overflow counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
 serviceBuilder.WithHttpCommand("/nested-trace-spans", "Out of order nested spans", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });

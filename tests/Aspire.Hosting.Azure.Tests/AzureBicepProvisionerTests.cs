@@ -269,5 +269,7 @@ public class AzureBicepProvisionerTests
         {
             return Task.CompletedTask;
         }
+
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

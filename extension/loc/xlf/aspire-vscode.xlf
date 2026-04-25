@@ -7,6 +7,9 @@
     <trans-unit id="command.add">
       <source xml:lang="en">Add an integration</source>
     </trans-unit>
+    <trans-unit id="extension.debug.args">
+      <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
+    </trans-unit>
     <trans-unit id="mcpServerDefinitionProviders.aspire.label">
       <source xml:lang="en">Aspire</source>
     </trans-unit>
@@ -177,6 +180,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.enterPipelineStep">
       <source xml:lang="en">Enter the pipeline step to execute</source>
+    </trans-unit>
+    <trans-unit id="extension.debug.env">
+      <source xml:lang="en">Environment variables to set when launching the Aspire AppHost</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.errorGettingConfigInfo">
       <source xml:lang="en">Error getting Aspire config info: {0}. Try updating the Aspire CLI with: aspire update</source>

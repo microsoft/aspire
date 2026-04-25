@@ -18,6 +18,7 @@ using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -106,6 +107,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
+        Options.Add(NewCommand.s_suppressAgentInitOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(features, configuration);
@@ -128,6 +130,8 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
+
+        var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
 
         // Get the language selection (from command line, config, or prompt).
         var explicitLanguage = parseResult.GetValue(_languageOption);
@@ -154,7 +158,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 return polyglotResult;
             }
 
-            return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, polyglotResult, _executionContext.WorkingDirectory, cancellationToken);
+            return await _agentInitCommand.PromptAndChainAsync(InteractionService, polyglotResult, _executionContext.WorkingDirectory, agentInitBinding, cancellationToken);
         }
 
         // For C#, we need the .NET SDK
@@ -194,7 +198,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return initResult;
         }
 
-        return await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, initResult, workspaceRoot, cancellationToken);
+        return await _agentInitCommand.PromptAndChainAsync(InteractionService, initResult, workspaceRoot, agentInitBinding, cancellationToken);
     }
 
     private async Task<int> InitializeExistingSolutionAsync(InitContext initContext, ParseResult parseResult, CancellationToken cancellationToken)
@@ -254,7 +258,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         if (initContext.AlreadyHasAppHost)
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMark, InitCommandStrings.SolutionAlreadyInitialized);
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, InitCommandStrings.SolutionAlreadyInitialized);
             return ExitCodeConstants.Success;
         }
 
@@ -291,14 +295,14 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
                 foreach (var project in initContext.ExecutableProjectsToAddToAppHost)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.CheckBoxWithCheck, project.ProjectFile.Name);
+                    InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, project.ProjectFile.Name);
                 }
 
                 var addServiceDefaultsMessage = """
                                 # Add ServiceDefaults reference to selected projects?
 
                                 Do you want to add a reference to the ServiceDefaults project to
-                                the executable projects that will be added to the AppHost? The 
+                                the executable projects that will be added to the AppHost? The
                                 ServiceDefaults project contains helper code to make it easier
                                 for you to configure telemetry and service discovery in Aspire.
                                 """;
@@ -318,7 +322,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     "Add ServiceDefaults reference?",
                     serviceDefaultsActions,
                     (action) => action.Value,
-                    cancellationToken
+                    cancellationToken: cancellationToken
                 );
 
                 switch (selection.Key)
@@ -591,7 +595,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
             if (File.Exists(appHostPath))
             {
-                InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"{appHostFileName} already exists in this directory.");
+                InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists in this directory.");
                 return ExitCodeConstants.Success;
             }
         }
@@ -783,6 +787,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             throw new InvalidOperationException("No template versions found");
         }
 
+        var hasPrHives = _executionContext.GetPrHiveCount() > 0;
         var orderedPackagesFromChannels = packagesFromChannels.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
 
         // Check for explicit version specified via command line
@@ -795,7 +800,17 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             }
         }
 
-        // If channel was specified via --channel option or global setting (but no --version), 
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            orderedPackagesFromChannels,
+            p => p.Package.Version,
+            out var cliVersionPackageFromChannel,
+            channelName: channelName,
+            hasPrHives: hasPrHives))
+        {
+            return cliVersionPackageFromChannel;
+        }
+
+        // If channel was specified via --channel option or global setting (but no --version),
         // automatically select the highest version from that channel without prompting
         if (hasChannelSetting)
         {
@@ -924,7 +939,7 @@ internal sealed class InitContext
 
                     if (SemVersion.TryParse(versionString, SemVersionStyles.Strict, out var version))
                     {
-                        if (highestVersion is null || version.IsNewerThan(highestVersion))
+                        if (highestVersion is null || SemVersion.ComparePrecedence(version, highestVersion) > 0)
                         {
                             highestVersion = version;
                             highestTfm = tfm;

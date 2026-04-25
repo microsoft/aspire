@@ -48,6 +48,8 @@ public class KubernetesPublisherTests()
         {
             "Chart.yaml",
             "values.yaml",
+            "templates/env-dashboard/deployment.yaml",
+            "templates/env-dashboard/service.yaml",
             "templates/project1/deployment.yaml",
             "templates/project1/config.yaml",
             "templates/myapp/deployment.yaml",
@@ -145,6 +147,8 @@ public class KubernetesPublisherTests()
         {
             "Chart.yaml",
             "values.yaml",
+            "templates/env-dashboard/deployment.yaml",
+            "templates/env-dashboard/service.yaml",
             "templates/myapp/rollout.yaml",
             "templates/myapp/service.yaml",
             "templates/myapp/config.yaml",
@@ -200,6 +204,8 @@ public class KubernetesPublisherTests()
         {
             "Chart.yaml",
             "values.yaml",
+            "templates/env-dashboard/deployment.yaml",
+            "templates/env-dashboard/service.yaml",
             "templates/SpeciaL-ApP/deployment.yaml",
             "templates/SpeciaL-ApP/config.yaml",
             "templates/SpeciaL-ApP/secrets.yaml"
@@ -256,6 +262,7 @@ public class KubernetesPublisherTests()
         // Assert
         var expectedFiles = new[]
         {
+            "templates/env-dashboard/deployment.yaml",
             "templates/myapp/deployment.yaml",
             "templates/project1/deployment.yaml",
         };
@@ -380,6 +387,8 @@ public class KubernetesPublisherTests()
         {
             "Chart.yaml",
             "values.yaml",
+            "templates/env-dashboard/deployment.yaml",
+            "templates/env-dashboard/service.yaml",
             "templates/project1/deployment.yaml",
             "templates/project1/service.yaml",
             "templates/project1/config.yaml",
@@ -426,6 +435,8 @@ public class KubernetesPublisherTests()
         {
             "Chart.yaml",
             "values.yaml",
+            "templates/env-dashboard/deployment.yaml",
+            "templates/env-dashboard/service.yaml",
             "templates/api/deployment.yaml",
             "templates/api/service.yaml",
             "templates/api/config.yaml",
@@ -484,6 +495,8 @@ public class KubernetesPublisherTests()
         {
             "Chart.yaml",
             "values.yaml",
+            "templates/env-dashboard/deployment.yaml",
+            "templates/env-dashboard/service.yaml",
             "templates/myapp/deployment.yaml",
             "templates/myapp/config.yaml",
         };
@@ -538,6 +551,8 @@ public class KubernetesPublisherTests()
         {
             "Chart.yaml",
             "values.yaml",
+            "templates/env-dashboard/deployment.yaml",
+            "templates/env-dashboard/service.yaml",
             "templates/myapp/deployment.yaml",
             "templates/myapp/config.yaml",
         };
@@ -595,6 +610,8 @@ public class KubernetesPublisherTests()
         {
             "Chart.yaml",
             "values.yaml",
+            "templates/env-dashboard/deployment.yaml",
+            "templates/env-dashboard/service.yaml",
             "templates/myapp/deployment.yaml",
             "templates/myapp/config.yaml",
         };

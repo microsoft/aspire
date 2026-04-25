@@ -40,6 +40,54 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfiguration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "docs": {
+                "llmsTxtUrl": "http://localhost:4321/llms-small.txt",
+                "api": {
+                  "sitemapUrl": "http://localhost:4321/sitemap-0.xml"
+                }
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.Equal("http://localhost:4321/llms-small.txt", result.Docs?.LlmsTxtUrl);
+        Assert.Equal("http://localhost:4321/sitemap-0.xml", result.Docs?.Api?.SitemapUrl);
+    }
+
+    [Fact]
+    public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfigurationWithDifferentCasing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "Docs": {
+                "LlmsTxtUrl": "http://localhost:4321/llms-small.txt",
+                "API": {
+                  "SitemapUrl": "http://localhost:4321/sitemap-0.xml"
+                }
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.Equal("http://localhost:4321/llms-small.txt", result.Docs?.LlmsTxtUrl);
+        Assert.Equal("http://localhost:4321/sitemap-0.xml", result.Docs?.Api?.SitemapUrl);
+    }
+
+    [Fact]
     public void Load_ReturnsConfig_WhenFileContainsJsonComments()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

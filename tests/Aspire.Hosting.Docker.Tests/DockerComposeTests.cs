@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIRECOMPUTE003
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
@@ -12,6 +13,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Publishing;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
@@ -640,7 +642,6 @@ public class DockerComposeTests(ITestOutputHelper output)
 
         // Add an Azure Container Registry - should be picked up automatically as IContainerRegistry
         var acr = builder.AddAzureContainerRegistry("myacr");
-        acr.Resource.Outputs["loginServer"] = "myacr.azurecr.io";
 
         var composeEnv = builder.AddDockerComposeEnvironment("docker-compose")
             .WithContainerRegistry(acr);
@@ -650,6 +651,10 @@ public class DockerComposeTests(ITestOutputHelper output)
         using var app = builder.Build();
 
         await ExecuteBeforeStartHooksAsync(app, default);
+
+        acr.Resource.Outputs["loginServer"] = "myacr.azurecr.io";
+        Assert.NotNull(acr.Resource.ProvisioningTaskCompletionSource);
+        acr.Resource.ProvisioningTaskCompletionSource.TrySetResult();
 
         // With Azure Container Registry, the full image name should use the ACR login server
         var containerImageReference = new ContainerImageReference(project.Resource);
@@ -668,6 +673,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "push-servicea");
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
         builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
 
         // No registry added - will use LocalContainerRegistry with empty endpoint
         builder.AddDockerComposeEnvironment("docker-compose");
@@ -698,6 +704,7 @@ public class DockerComposeTests(ITestOutputHelper output)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "push-servicea");
         builder.Services.AddSingleton<IResourceContainerImageManager>(new MockImageBuilderWithRuntime(fakeRuntime));
         builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
 
         // Add a remote registry with a non-empty endpoint
         var registry = builder.AddContainerRegistry("acr", "myregistry.azurecr.io");
@@ -895,4 +902,132 @@ public class DockerComposeTests(ITestOutputHelper output)
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public async Task DestroyCompose_WithState_RunsComposeDown()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var fakeRuntime = new FakeContainerRuntime();
+        var stateManager = new InMemoryDeploymentStateManager();
+        stateManager.SetSection("DockerCompose:env", new System.Text.Json.Nodes.JsonObject
+        {
+            ["OutputPath"] = tempDir.Path,
+            ["ProjectName"] = "aspire-env-test",
+            ["ComposeFilePath"] = Path.Combine(tempDir.Path, "docker-compose.yaml")
+        });
+
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Destroy);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddDockerComposeEnvironment("env");
+        builder.AddProject<Projects.ServiceA>("api").PublishAsDockerFile();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        // Verify compose down was called
+        Assert.True(fakeRuntime.WasComposeDownCalled);
+
+        // Verify destroy uses project-name-only mode (no compose file)
+        // so it doesn't fail on stale build contexts in the compose file
+        Assert.NotNull(fakeRuntime.LastComposeDownContext);
+        Assert.Null(fakeRuntime.LastComposeDownContext.ComposeFilePath);
+        Assert.Equal("aspire-env-test", fakeRuntime.LastComposeDownContext.ProjectName);
+
+        // Verify the destroy step ran
+        var createdSteps = mockActivityReporter.CreatedSteps;
+        Assert.Contains(createdSteps, s => s.Contains("destroy-compose-", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DestroyCompose_WithNoState_ReportsNothingToDestroy()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var fakeRuntime = new FakeContainerRuntime();
+        var stateManager = new InMemoryDeploymentStateManager();
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Destroy);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        builder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        builder.AddDockerComposeEnvironment("env");
+        builder.AddProject<Projects.ServiceA>("api").PublishAsDockerFile();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        // Verify compose down was NOT called
+        Assert.False(fakeRuntime.WasComposeDownCalled);
+
+        // Verify it reported nothing to destroy
+        var completedSteps = mockActivityReporter.CompletedSteps;
+        Assert.Contains(completedSteps, s => s.CompletionText.Contains("Nothing to destroy", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task DeployThenDestroy_RoundTrip_UsesPersistedState()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var fakeRuntime = new FakeContainerRuntime();
+        var stateManager = new InMemoryDeploymentStateManager();
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        // Step 1: Deploy — this should persist state
+        var deployBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Deploy);
+        deployBuilder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        deployBuilder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
+        deployBuilder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        deployBuilder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        deployBuilder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        deployBuilder.AddDockerComposeEnvironment("env");
+        deployBuilder.AddProject<Projects.ServiceA>("api").PublishAsDockerFile();
+
+        using (var deployApp = deployBuilder.Build())
+        {
+            await deployApp.RunAsync();
+        }
+
+        // Verify deploy persisted state
+        var stateSection = await stateManager.AcquireSectionAsync("DockerCompose:env");
+        Assert.NotNull(stateSection.Data["ComposeFilePath"]?.ToString());
+        Assert.NotNull(stateSection.Data["ProjectName"]?.ToString());
+
+        // Step 2: Destroy — should read the persisted state and call compose down
+        fakeRuntime = new FakeContainerRuntime(); // fresh runtime to track destroy calls
+        mockActivityReporter.Clear();
+
+        var destroyBuilder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: WellKnownPipelineSteps.Destroy);
+        destroyBuilder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        destroyBuilder.Services.AddSingleton<IContainerRuntime>(fakeRuntime);
+        destroyBuilder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        destroyBuilder.Services.AddSingleton<IDeploymentStateManager>(stateManager);
+        destroyBuilder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+        destroyBuilder.Services.Configure<PipelineOptions>(o => o.SkipConfirmation = true);
+
+        destroyBuilder.AddDockerComposeEnvironment("env");
+        destroyBuilder.AddProject<Projects.ServiceA>("api").PublishAsDockerFile();
+
+        using (var destroyApp = destroyBuilder.Build())
+        {
+            await destroyApp.RunAsync();
+        }
+
+        // Verify compose down was called using the state from deploy
+        Assert.True(fakeRuntime.WasComposeDownCalled, "ComposeDownAsync should have been called using persisted state from deploy");
+    }
 }
