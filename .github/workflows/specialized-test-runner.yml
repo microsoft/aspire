@@ -196,7 +196,7 @@ jobs:
 
   run_tests:
     needs: [generate_tests_matrix, build_packages, build_cli_archives]
-    if: ${{ !cancelled() && !failure() }}
+    if: ${{ github.repository_owner == 'microsoft' && !cancelled() && !failure() }}
     uses: ./.github/workflows/run-tests-core.yml
     with:
       tests_matrix_no_nugets: ${{ needs.generate_tests_matrix.outputs.tests_matrix_no_nugets }}
