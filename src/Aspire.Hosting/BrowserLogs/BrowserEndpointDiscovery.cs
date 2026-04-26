@@ -52,6 +52,16 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             // This file is intentionally durable so adoption can survive an AppHost restart, but real browsers can leave
             // it behind when the process is closed externally. Treat unreadable or invalid metadata as stale and delete it
             // so future starts take the normal owned-browser path.
+            // Aspire endpoint metadata shape:
+            // {
+            //   "schemaVersion": 1,
+            //   "endpoint": "ws://127.0.0.1:50981/devtools/browser/<id>",
+            //   "processId": 12345,
+            //   "executablePath": "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            //   "userDataRootPath": "/Users/me/Library/Application Support/Microsoft Edge",
+            //   "profileDirectoryName": "Profile 1",
+            //   "createdAt": "2026-04-25T19:37:25Z"
+            // }
             using var stream = File.OpenRead(metadataPath);
             metadata = await JsonSerializer.DeserializeAsync(stream, BrowserEndpointJsonContext.Default.BrowserDebugEndpointMetadata, cancellationToken).ConfigureAwait(false);
         }
@@ -234,6 +244,12 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             return false;
         }
 
+        // Chromium /json/version shape includes the browser-level websocket URL used for future CDP connections:
+        // {
+        //   "Browser": "Chrome/...",
+        //   "Protocol-Version": "1.3",
+        //   "webSocketDebuggerUrl": "ws://127.0.0.1:50981/devtools/browser/<id>"
+        // }
         using var stream = await response.Content.ReadAsStreamAsync(probeCts.Token).ConfigureAwait(false);
         var version = await JsonSerializer.DeserializeAsync(stream, BrowserEndpointJsonContext.Default.BrowserJsonVersionResponse, probeCts.Token).ConfigureAwait(false);
         return Uri.TryCreate(version?.WebSocketDebuggerUrl, UriKind.Absolute, out _);

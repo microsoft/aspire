@@ -131,6 +131,16 @@ internal static class ChromiumBrowserResolver
 
         // Chromium stores display names in the user-data-root "Local State" file under profile.info_cache. Directory
         // names like "Default" or "Profile 1" are stable command-line values, while display names are user-facing.
+        //
+        // Relevant Local State shape:
+        // {
+        //   "profile": {
+        //     "info_cache": {
+        //       "Default": { "name": "Person 1", "shortcut_name": "Person 1" },
+        //       "Profile 1": { "name": "Work", "shortcut_name": "Work" }
+        //     }
+        //   }
+        // }
         var localStatePath = Path.Combine(userDataDirectory, "Local State");
         if (File.Exists(localStatePath))
         {
