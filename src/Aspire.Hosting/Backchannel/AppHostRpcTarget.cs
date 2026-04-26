@@ -47,7 +47,7 @@ internal class AppHostRpcTarget(
 
             // Stream live entries — uses a helper that swallows OperationCanceledException on cancellation
             // instead of propagating it, since yield return cannot appear in a try/catch block.
-            await foreach (var entry in AsyncEnumerableUtils.ReadChannelUntilCancelledAsync(channel.Reader, linkedToken).ConfigureAwait(false))
+            await foreach (var entry in AsyncEnumerableUtils.ReadUntilCancelledAsync(channel.Reader.ReadAllAsync(linkedToken), linkedToken).ConfigureAwait(false))
             {
                 yield return entry;
             }
@@ -99,7 +99,7 @@ internal class AppHostRpcTarget(
 
         // Use a helper that swallows OperationCanceledException on cancellation instead of propagating it,
         // since yield return cannot appear in a try/catch block.
-        await foreach (var resourceEvent in AsyncEnumerableUtils.ReadEnumerableUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
+        await foreach (var resourceEvent in AsyncEnumerableUtils.ReadUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
         {
             if (resourceEvent.Resource.Name == "aspire-dashboard")
             {
