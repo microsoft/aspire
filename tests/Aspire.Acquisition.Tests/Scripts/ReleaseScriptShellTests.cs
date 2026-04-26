@@ -90,7 +90,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         // In dry-run mode, the script outputs a download descriptor like:
-        // [DRY RUN] Would download aspire-cli-linux-x64.tar.gz from 'ga/daily'
+        // [DRY RUN] Would download aspire-cli-linux-x64.tar.gz from the stable channel
         Assert.Contains("[DRY RUN] Would download", result.Output);
     }
 
@@ -107,9 +107,9 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Theory]
-    [InlineData("dev", "from 'daily'")]
-    [InlineData("staging", "from 'rc/daily'")]
-    [InlineData("release", "from 'ga/daily'")]
+    [InlineData("dev", "from the daily channel")]
+    [InlineData("staging", "from the staging channel")]
+    [InlineData("release", "from the stable channel")]
     public async Task QualityVariants_AreRecognized(string quality, string expectedSource)
     {
         using var env = new TestEnvironment();
@@ -119,6 +119,9 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("[DRY RUN]", result.Output);
         Assert.Contains(expectedSource, result.Output);
+        Assert.DoesNotContain("dotnet", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ga/daily", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("rc/daily", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -477,37 +477,25 @@ function Get-DownloadDescriptor {
     [OutputType([string])]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$Uri
+        [string]$Uri,
+
+        [Parameter()]
+        [string]$Source
     )
 
     try {
         $downloadUri = [System.Uri]$Uri
         $fileName = [System.IO.Path]::GetFileName($downloadUri.AbsolutePath)
-        $trimmedPath = $downloadUri.AbsolutePath.Trim("/")
-        $source = $downloadUri.Host
-
-        if ($trimmedPath -match "^dotnet/[^/]+/aspire/(?<source>.+)/(?<file>[^/]+)$") {
-            $source = $Matches["source"]
-            $fileName = $Matches["file"]
-        }
-        elseif ($trimmedPath -match "^public(?:-checksums)?/aspire/+(?<version>[^/]+)/(?<file>[^/]+)$") {
-            $source = "version/$($Matches["version"])"
-            $fileName = $Matches["file"]
-        }
-        elseif ($trimmedPath -match "^(?<source>.+)/(?<file>[^/]+)$") {
-            $source = $Matches["source"]
-            $fileName = $Matches["file"]
-        }
 
         if ([string]::IsNullOrWhiteSpace($fileName)) {
             return $Uri
         }
 
-        if ([string]::IsNullOrWhiteSpace($source)) {
+        if ([string]::IsNullOrWhiteSpace($Source)) {
             return $fileName
         }
 
-        return "$fileName from '$source'"
+        return "$fileName from $Source"
     }
     catch {
         return $Uri
@@ -986,7 +974,11 @@ function Get-AspireExtension {
     Write-Message "Downloading Aspire VS Code extension" -Level Info
 
     $extensionUrl = Get-AspireExtensionUrl -Version $Version -Quality $Quality
-    $extensionDescriptor = Get-DownloadDescriptor -Uri $extensionUrl
+    $extensionSource = $null
+    if ([string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($Quality)) {
+        $extensionSource = "the $(ConvertTo-ChannelName -Quality $Quality) channel"
+    }
+    $extensionDescriptor = Get-DownloadDescriptor -Uri $extensionUrl -Source $extensionSource
     $extensionArchive = Join-Path $TempDir $Script:ExtensionArtifactName
 
     try {
@@ -1212,8 +1204,12 @@ function Install-AspireCli {
         $runtimeIdentifier = "$targetOS-$targetArch"
         $extension = if ($targetOS -eq "win") { "zip" } else { "tar.gz" }
         $urls = Get-AspireCliUrl -Version $Version -Quality $Quality -RuntimeIdentifier $runtimeIdentifier -Extension $extension
-        $archiveDescriptor = Get-DownloadDescriptor -Uri $urls.ArchiveUrl
-        $checksumDescriptor = Get-DownloadDescriptor -Uri $urls.ChecksumUrl
+        $downloadSource = $null
+        if ([string]::IsNullOrWhiteSpace($Version) -and -not [string]::IsNullOrWhiteSpace($Quality)) {
+            $downloadSource = "the $(ConvertTo-ChannelName -Quality $Quality) channel"
+        }
+        $archiveDescriptor = Get-DownloadDescriptor -Uri $urls.ArchiveUrl -Source $downloadSource
+        $checksumDescriptor = Get-DownloadDescriptor -Uri $urls.ChecksumUrl -Source $downloadSource
 
         $archivePath = Join-Path $tempDir $urls.ArchiveFilename
         $checksumPath = Join-Path $tempDir $urls.ChecksumFilename
