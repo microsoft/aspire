@@ -45,10 +45,10 @@ internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
     private readonly ConcurrentDictionary<long, IPendingCommand> _pendingCommands = new();
     private readonly Task _receiveLoop;
     private readonly SemaphoreSlim _sendLock = new(1, 1);
-    private readonly ClientWebSocket _webSocket;
+    private readonly WebSocket _webSocket;
     private long _nextCommandId;
 
-    private BrowserLogsCdpConnection(ClientWebSocket webSocket, Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler, ILogger<BrowserLogsSessionManager> logger)
+    private BrowserLogsCdpConnection(WebSocket webSocket, Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler, ILogger<BrowserLogsSessionManager> logger)
     {
         _eventHandler = eventHandler;
         _logger = logger;
@@ -403,7 +403,7 @@ internal interface IClientWebSocketConnector : IDisposable
 
     Task ConnectAsync(Uri webSocketUri, CancellationToken cancellationToken);
 
-    ClientWebSocket DetachConnectedWebSocket();
+    WebSocket DetachConnectedWebSocket();
 }
 
 // Thin ownership wrapper around ClientWebSocket. It lets BrowserLogsCdpConnection transfer the connected socket into
@@ -422,7 +422,7 @@ internal sealed class ClientWebSocketConnector : IClientWebSocketConnector
         return GetWebSocket().ConnectAsync(webSocketUri, cancellationToken);
     }
 
-    public ClientWebSocket DetachConnectedWebSocket()
+    public WebSocket DetachConnectedWebSocket()
     {
         var webSocket = GetWebSocket();
         _webSocket = null;
