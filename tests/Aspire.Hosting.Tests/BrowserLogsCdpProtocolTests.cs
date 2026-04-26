@@ -123,6 +123,21 @@ public class BrowserLogsCdpProtocolTests
     }
 
     [Fact]
+    public void ParseEvent_InspectorDetachedWithoutParams_ReturnsNull()
+    {
+        var payload = Encoding.UTF8.GetBytes("""
+            {
+              "method": "Inspector.detached",
+              "sessionId": "target-session-1"
+            }
+            """);
+
+        var header = BrowserLogsCdpProtocol.ParseMessageHeader(payload);
+
+        Assert.Null(BrowserLogsCdpProtocol.ParseEvent(header, payload));
+    }
+
+    [Fact]
     public void CreateCommandFrame_DoesNotEscapeNonAsciiCharacters()
     {
         var payload = BrowserLogsCdpProtocol.CreateCommandFrame(

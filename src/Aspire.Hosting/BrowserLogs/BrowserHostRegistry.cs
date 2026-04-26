@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
+using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
@@ -126,6 +127,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
 
         List<IBrowserHost> hosts;
         var lockAcquired = await TryWaitForLockAsync(CancellationToken.None).ConfigureAwait(false);
+        // DisposeAsync is the only path that flips _lockDisposed, and the Interlocked guard above allows exactly one
+        // disposer through. Therefore the first disposer must be able to acquire the lock here; if a future refactor
+        // changes that lifetime ordering, throwing is safer than continuing with a partially-disposed registry.
         ObjectDisposedException.ThrowIf(!lockAcquired, this);
         try
         {
@@ -176,6 +180,13 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
 
             if (_hosts.TryGetValue(identity, out var entry))
             {
+                Debug.Assert(entry.ReferenceCount > 0, "BrowserHostRegistry reference count underflow.");
+                if (entry.ReferenceCount <= 0)
+                {
+                    _logger.LogError("Tracked browser host '{BrowserExecutable}' for user data directory '{UserDataDirectory}' had an invalid reference count '{ReferenceCount}' during release.", identity.ExecutablePath, identity.UserDataRootPath, entry.ReferenceCount);
+                    return;
+                }
+
                 entry.ReferenceCount--;
                 if (entry.ReferenceCount == 0)
                 {

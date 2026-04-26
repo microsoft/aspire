@@ -279,6 +279,8 @@ internal static class ChromiumBrowserResolver
         foreach (var directoryPath in Directory.EnumerateDirectories(userDataDirectory))
         {
             var directoryName = Path.GetFileName(directoryPath);
+            // Treat configured profile directory names as user input and match case-insensitively, then return the
+            // actual directory name so the Chromium command line preserves the filesystem casing.
             if (string.Equals(directoryName, profile, StringComparison.OrdinalIgnoreCase))
             {
                 return directoryName;

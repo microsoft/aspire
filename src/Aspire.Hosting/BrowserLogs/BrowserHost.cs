@@ -74,6 +74,9 @@ internal abstract class BrowserHost(
 // browser-level CDP endpoint, writing adoption metadata, and terminating the browser when the final lease is released.
 internal sealed class OwnedBrowserHost : BrowserHost
 {
+    // Browser startup is a local process + file hand-off. Give Chromium enough time to initialize under CI/dev-machine
+    // load, poll frequently enough for a responsive dashboard command, and cap shutdown so AppHost disposal cannot hang
+    // forever on a stuck browser process.
     private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan s_browserEndpointPollInterval = TimeSpan.FromMilliseconds(100);
     private static readonly TimeSpan s_browserShutdownTimeout = TimeSpan.FromSeconds(5);
@@ -240,7 +243,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
         try
         {
             processId = await WaitForProcessStartAsync(processStarted.Task, processTask, cancellationToken).ConfigureAwait(false);
-            browserEndpoint = await WaitForBrowserEndpointAsync(processTask, devToolsActivePortFilePath, previousWriteTimeUtc, timeProvider, cancellationToken).ConfigureAwait(false);
+            browserEndpoint = await WaitForBrowserEndpointAsync(processTask, devToolsActivePortFilePath, previousWriteTimeUtc, logger, timeProvider, cancellationToken).ConfigureAwait(false);
             // Once Chromium has written DevToolsActivePort and responded with a browser endpoint, write our sidecar so a
             // later AppHost run can adopt the same debug-enabled browser instead of opening a second window.
             await BrowserEndpointDiscovery.WriteAsync(identity, userDataDirectory.ProfileDirectoryName, browserEndpoint, processId, cancellationToken).ConfigureAwait(false);
@@ -305,6 +308,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
         Task<ProcessResult> processTask,
         string devToolsActivePortFilePath,
         DateTime? previousWriteTimeUtc,
+        ILogger logger,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
@@ -328,6 +332,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
                     if (previousWriteTimeUtc is { } previousWriteTime &&
                         File.GetLastWriteTimeUtc(devToolsActivePortFilePath) <= previousWriteTime)
                     {
+                        logger.LogTrace("Ignoring stale tracked browser endpoint metadata '{DevToolsActivePortFilePath}' while waiting for a fresh Chromium write.", devToolsActivePortFilePath);
                         await Task.Delay(s_browserEndpointPollInterval, cancellationToken).ConfigureAwait(false);
                         continue;
                     }
@@ -335,15 +340,20 @@ internal sealed class OwnedBrowserHost : BrowserHost
                     var contents = await File.ReadAllTextAsync(devToolsActivePortFilePath, cancellationToken).ConfigureAwait(false);
                     if (ChromiumDevToolsActivePortParser.TryParseBrowserDebugEndpoint(contents) is { } browserEndpoint)
                     {
+                        logger.LogTrace("Read tracked browser debug endpoint '{BrowserDebugEndpoint}' from '{DevToolsActivePortFilePath}'.", browserEndpoint, devToolsActivePortFilePath);
                         return browserEndpoint;
                     }
+
+                    logger.LogTrace("Tracked browser endpoint metadata '{DevToolsActivePortFilePath}' was present but not parseable yet.", devToolsActivePortFilePath);
                 }
             }
-            catch (IOException)
+            catch (IOException ex)
             {
+                logger.LogTrace(ex, "Unable to read tracked browser endpoint metadata '{DevToolsActivePortFilePath}' yet.", devToolsActivePortFilePath);
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException ex)
             {
+                logger.LogTrace(ex, "Unable to read tracked browser endpoint metadata '{DevToolsActivePortFilePath}' yet.", devToolsActivePortFilePath);
             }
 
             await Task.Delay(s_browserEndpointPollInterval, cancellationToken).ConfigureAwait(false);

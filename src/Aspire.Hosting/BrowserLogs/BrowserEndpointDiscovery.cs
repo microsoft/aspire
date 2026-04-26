@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Hosting.Resources;
@@ -23,6 +24,8 @@ namespace Aspire.Hosting;
 internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager> logger)
 {
     private static readonly TimeSpan s_probeHttpClientTimeout = Timeout.InfiniteTimeSpan;
+    // Endpoint adoption is on the command path, so fail quickly when stale metadata points at a dead or reused port.
+    // Two seconds is long enough for a local /json/version response under load while keeping browser launch responsive.
     private static readonly TimeSpan s_probeTimeout = TimeSpan.FromSeconds(2);
     private static readonly HttpClient s_probeHttpClient = new()
     {
@@ -30,6 +33,12 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         // endpoint-probe timeouts remain local while caller cancellation still propagates.
         Timeout = s_probeHttpClientTimeout
     };
+    private static readonly BrowserEndpointJsonContext s_jsonContext = new(new JsonSerializerOptions(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        WriteIndented = true
+    });
 
     private readonly ILogger<BrowserLogsSessionManager> _logger = logger;
 
@@ -65,7 +74,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             //   "createdAt": "2026-04-25T19:37:25Z"
             // }
             using var stream = File.OpenRead(metadataPath);
-            metadata = await JsonSerializer.DeserializeAsync(stream, BrowserEndpointJsonContext.Default.BrowserDebugEndpointMetadata, cancellationToken).ConfigureAwait(false);
+                metadata = await JsonSerializer.DeserializeAsync(stream, s_jsonContext.BrowserDebugEndpointMetadata, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -172,7 +181,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             // malformed document is handled as stale, but atomic replacement avoids unnecessary delete/restart cycles.
             using (var stream = File.Create(tempPath))
             {
-                await JsonSerializer.SerializeAsync(stream, metadata, BrowserEndpointJsonContext.Default.BrowserDebugEndpointMetadata, cancellationToken).ConfigureAwait(false);
+                await JsonSerializer.SerializeAsync(stream, metadata, s_jsonContext.BrowserDebugEndpointMetadata, cancellationToken).ConfigureAwait(false);
             }
 
             File.Move(tempPath, metadataPath, overwrite: true);
@@ -254,7 +263,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         //   "webSocketDebuggerUrl": "ws://127.0.0.1:50981/devtools/browser/<id>"
         // }
         using var stream = await response.Content.ReadAsStreamAsync(probeCts.Token).ConfigureAwait(false);
-        var version = await JsonSerializer.DeserializeAsync(stream, BrowserEndpointJsonContext.Default.BrowserJsonVersionResponse, probeCts.Token).ConfigureAwait(false);
+        var version = await JsonSerializer.DeserializeAsync(stream, s_jsonContext.BrowserJsonVersionResponse, probeCts.Token).ConfigureAwait(false);
         return Uri.TryCreate(version?.WebSocketDebuggerUrl, UriKind.Absolute, out _);
     }
 
@@ -277,7 +286,7 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
             // The Chromium source describes the POSIX lock as a symlink to a non-existent destination shaped like
             // "<hostname>-<pid>". The host segment can contain dashes, so parse from the final dash instead of splitting
             // on every dash.
-            return int.TryParse(linkTarget.AsSpan(separatorIndex + 1), out var pid) ? pid : null;
+            return int.TryParse(linkTarget.AsSpan(separatorIndex + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var pid) ? pid : null;
         }
         catch (IOException)
         {

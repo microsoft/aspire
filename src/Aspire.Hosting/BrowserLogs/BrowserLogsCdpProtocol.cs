@@ -202,89 +202,83 @@ internal static class BrowserLogsCdpProtocol
     }
 
     private static BrowserLogsConsoleApiCalledEvent? CreateConsoleApiCalledEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsConsoleApiCalledEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsConsoleApiCalledEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsConsoleApiCalledEnvelope,
+            static (string? sessionId, BrowserLogsRuntimeConsoleApiCalledParameters parameters) => new BrowserLogsConsoleApiCalledEvent(sessionId, parameters));
 
     private static BrowserLogsExceptionThrownEvent? CreateExceptionThrownEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsExceptionThrownEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsExceptionThrownEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsExceptionThrownEnvelope,
+            static (string? sessionId, BrowserLogsExceptionThrownParameters parameters) => new BrowserLogsExceptionThrownEvent(sessionId, parameters));
 
     private static BrowserLogsLogEntryAddedEvent? CreateLogEntryAddedEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLogEntryAddedEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsLogEntryAddedEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLogEntryAddedEnvelope,
+            static (string? sessionId, BrowserLogsLogEntryAddedParameters parameters) => new BrowserLogsLogEntryAddedEvent(sessionId, parameters));
 
     private static BrowserLogsRequestWillBeSentEvent? CreateRequestWillBeSentEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsRequestWillBeSentEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsRequestWillBeSentEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsRequestWillBeSentEnvelope,
+            static (string? sessionId, BrowserLogsRequestWillBeSentParameters parameters) => new BrowserLogsRequestWillBeSentEvent(sessionId, parameters));
 
     private static BrowserLogsResponseReceivedEvent? CreateResponseReceivedEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsResponseReceivedEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsResponseReceivedEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsResponseReceivedEnvelope,
+            static (string? sessionId, BrowserLogsResponseReceivedParameters parameters) => new BrowserLogsResponseReceivedEvent(sessionId, parameters));
 
     private static BrowserLogsLoadingFinishedEvent? CreateLoadingFinishedEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLoadingFinishedEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsLoadingFinishedEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLoadingFinishedEnvelope,
+            static (string? sessionId, BrowserLogsLoadingFinishedParameters parameters) => new BrowserLogsLoadingFinishedEvent(sessionId, parameters));
 
     private static BrowserLogsLoadingFailedEvent? CreateLoadingFailedEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLoadingFailedEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsLoadingFailedEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsLoadingFailedEnvelope,
+            static (string? sessionId, BrowserLogsLoadingFailedParameters parameters) => new BrowserLogsLoadingFailedEvent(sessionId, parameters));
 
     private static BrowserLogsTargetDestroyedEvent? CreateTargetDestroyedEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsTargetDestroyedEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsTargetDestroyedEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsTargetDestroyedEnvelope,
+            static (string? sessionId, BrowserLogsTargetDestroyedParameters parameters) => new BrowserLogsTargetDestroyedEvent(sessionId, parameters));
 
     private static BrowserLogsTargetCrashedEvent? CreateTargetCrashedEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsTargetCrashedEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsTargetCrashedEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsTargetCrashedEnvelope,
+            static (string? sessionId, BrowserLogsTargetCrashedParameters parameters) => new BrowserLogsTargetCrashedEvent(sessionId, parameters));
 
     private static BrowserLogsDetachedFromTargetEvent? CreateDetachedFromTargetEvent(ReadOnlySpan<byte> framePayload)
-    {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsDetachedFromTargetEnvelope);
-        return envelope.Params is null
-            ? null
-            : new BrowserLogsDetachedFromTargetEvent(envelope.SessionId, envelope.Params);
-    }
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsDetachedFromTargetEnvelope,
+            static (string? sessionId, BrowserLogsDetachedFromTargetParameters parameters) => new BrowserLogsDetachedFromTargetEvent(sessionId, parameters));
 
     private static BrowserLogsInspectorDetachedEvent? CreateInspectorDetachedEvent(ReadOnlySpan<byte> framePayload)
+        => CreateEvent(
+            framePayload,
+            BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsInspectorDetachedEnvelope,
+            static (string? sessionId, BrowserLogsInspectorDetachedParameters parameters) => new BrowserLogsInspectorDetachedEvent(sessionId, parameters));
+
+    private static TEvent? CreateEvent<TEnvelope, TParameters, TEvent>(
+        ReadOnlySpan<byte> framePayload,
+        JsonTypeInfo<TEnvelope> jsonTypeInfo,
+        Func<string?, TParameters, TEvent> createEvent)
+        where TEnvelope : class, IBrowserLogsEventEnvelope<TParameters>
+        where TParameters : class
+        where TEvent : class
     {
-        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsInspectorDetachedEnvelope);
-        return new BrowserLogsInspectorDetachedEvent(envelope.SessionId, envelope.Params);
+        var envelope = DeserializeFrame(framePayload, jsonTypeInfo);
+        return envelope.Params is null
+            ? null
+            : createEvent(envelope.SessionId, envelope.Params);
     }
 
     private static T DeserializeFrame<T>(ReadOnlySpan<byte> framePayload, JsonTypeInfo<T> jsonTypeInfo)
@@ -368,10 +362,10 @@ internal sealed record BrowserLogsDetachedFromTargetEvent(string? SessionId, Bro
     public string? TargetId => Parameters.TargetId;
 }
 
-internal sealed record BrowserLogsInspectorDetachedEvent(string? SessionId, BrowserLogsInspectorDetachedParameters? Parameters)
+internal sealed record BrowserLogsInspectorDetachedEvent(string? SessionId, BrowserLogsInspectorDetachedParameters Parameters)
     : BrowserLogsCdpProtocolEvent(BrowserLogsCdpProtocol.InspectorDetachedMethod, SessionId)
 {
-    public string? Reason => Parameters?.Reason;
+    public string? Reason => Parameters.Reason;
 }
 
 internal sealed class BrowserLogsAttachToTargetResponseEnvelope
@@ -410,7 +404,15 @@ internal sealed class BrowserLogsCommandAckResponseEnvelope
     public long Id { get; init; }
 }
 
-internal sealed class BrowserLogsConsoleApiCalledEnvelope
+internal interface IBrowserLogsEventEnvelope<out TParameters>
+    where TParameters : class
+{
+    TParameters? Params { get; }
+
+    string? SessionId { get; }
+}
+
+internal sealed class BrowserLogsConsoleApiCalledEnvelope : IBrowserLogsEventEnvelope<BrowserLogsRuntimeConsoleApiCalledParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsRuntimeConsoleApiCalledParameters? Params { get; init; }
@@ -485,7 +487,7 @@ internal sealed class BrowserLogsExceptionObject
     public string? Description { get; init; }
 }
 
-internal sealed class BrowserLogsExceptionThrownEnvelope
+internal sealed class BrowserLogsExceptionThrownEnvelope : IBrowserLogsEventEnvelope<BrowserLogsExceptionThrownParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsExceptionThrownParameters? Params { get; init; }
@@ -500,7 +502,7 @@ internal sealed class BrowserLogsExceptionThrownParameters
     public BrowserLogsExceptionDetails? ExceptionDetails { get; init; }
 }
 
-internal sealed class BrowserLogsLoadingFailedEnvelope
+internal sealed class BrowserLogsLoadingFailedEnvelope : IBrowserLogsEventEnvelope<BrowserLogsLoadingFailedParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsLoadingFailedParameters? Params { get; init; }
@@ -527,7 +529,7 @@ internal sealed class BrowserLogsLoadingFailedParameters
     public double? Timestamp { get; init; }
 }
 
-internal sealed class BrowserLogsLoadingFinishedEnvelope
+internal sealed class BrowserLogsLoadingFinishedEnvelope : IBrowserLogsEventEnvelope<BrowserLogsLoadingFinishedParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsLoadingFinishedParameters? Params { get; init; }
@@ -557,7 +559,7 @@ internal sealed class BrowserLogsLogEntry : BrowserLogsSourceLocation
     public string? Text { get; init; }
 }
 
-internal sealed class BrowserLogsLogEntryAddedEnvelope
+internal sealed class BrowserLogsLogEntryAddedEnvelope : IBrowserLogsEventEnvelope<BrowserLogsLogEntryAddedParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsLogEntryAddedParameters? Params { get; init; }
@@ -602,7 +604,7 @@ internal sealed class BrowserLogsRequest
     public string? Url { get; init; }
 }
 
-internal sealed class BrowserLogsRequestWillBeSentEnvelope
+internal sealed class BrowserLogsRequestWillBeSentEnvelope : IBrowserLogsEventEnvelope<BrowserLogsRequestWillBeSentParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsRequestWillBeSentParameters? Params { get; init; }
@@ -647,7 +649,7 @@ internal sealed class BrowserLogsResponse
     public string? Url { get; init; }
 }
 
-internal sealed class BrowserLogsResponseReceivedEnvelope
+internal sealed class BrowserLogsResponseReceivedEnvelope : IBrowserLogsEventEnvelope<BrowserLogsResponseReceivedParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsResponseReceivedParameters? Params { get; init; }
@@ -689,7 +691,7 @@ internal class BrowserLogsSourceLocation
     public string? Url { get; init; }
 }
 
-internal sealed class BrowserLogsTargetDestroyedEnvelope
+internal sealed class BrowserLogsTargetDestroyedEnvelope : IBrowserLogsEventEnvelope<BrowserLogsTargetDestroyedParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsTargetDestroyedParameters? Params { get; init; }
@@ -704,7 +706,7 @@ internal sealed class BrowserLogsTargetDestroyedParameters
     public string? TargetId { get; init; }
 }
 
-internal sealed class BrowserLogsTargetCrashedEnvelope
+internal sealed class BrowserLogsTargetCrashedEnvelope : IBrowserLogsEventEnvelope<BrowserLogsTargetCrashedParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsTargetCrashedParameters? Params { get; init; }
@@ -725,7 +727,7 @@ internal sealed class BrowserLogsTargetCrashedParameters
     public string? TargetId { get; init; }
 }
 
-internal sealed class BrowserLogsDetachedFromTargetEnvelope
+internal sealed class BrowserLogsDetachedFromTargetEnvelope : IBrowserLogsEventEnvelope<BrowserLogsDetachedFromTargetParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsDetachedFromTargetParameters? Params { get; init; }
@@ -743,7 +745,7 @@ internal sealed class BrowserLogsDetachedFromTargetParameters
     public string? TargetId { get; init; }
 }
 
-internal sealed class BrowserLogsInspectorDetachedEnvelope
+internal sealed class BrowserLogsInspectorDetachedEnvelope : IBrowserLogsEventEnvelope<BrowserLogsInspectorDetachedParameters>
 {
     [JsonPropertyName("params")]
     public BrowserLogsInspectorDetachedParameters? Params { get; init; }

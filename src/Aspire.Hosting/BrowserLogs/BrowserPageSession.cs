@@ -11,6 +11,9 @@ namespace Aspire.Hosting;
 // reconnection loop.
 internal sealed class BrowserPageSession : IBrowserPageSession
 {
+    // Keep reconnects quick and local to transient websocket loss. A 200 ms cadence gives the browser a few chances to
+    // recover within the 5 s window without making the dashboard look healthy after the page is truly gone. Target close
+    // uses a shorter 3 s budget because disposal should not block AppHost shutdown on an unresponsive browser.
     private static readonly TimeSpan s_connectionRecoveryDelay = TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan s_connectionRecoveryTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_closeTargetTimeout = TimeSpan.FromSeconds(3);
@@ -121,7 +124,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         _stopCts.Cancel();
 
         var connection = _connection;
-        if (connection is not null && _targetId is not null)
+        if (connection is not null && ReferenceEquals(connection, _connection) && _targetId is not null)
         {
             try
             {
@@ -268,6 +271,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
 
                 if (_stopCts.IsCancellationRequested)
                 {
+                    _logger.LogTrace("Stopping tracked browser page session '{SessionId}' after debug connection completed.", _sessionId);
                     return new BrowserPageSessionResult(BrowserPageSessionCompletionKind.Stopped, Error: null);
                 }
 
@@ -302,12 +306,15 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         {
             if (_host.Termination.IsCompleted)
             {
+                _logger.LogTrace("Skipping tracked browser page session reconnect for '{SessionId}' because the browser host has terminated.", _sessionId);
                 return false;
             }
 
             try
             {
+                _logger.LogTrace("Attempting to reconnect tracked browser page session '{SessionId}' to target '{TargetId}'.", _sessionId, _targetId);
                 await ConnectAsync(createTarget: false, _stopCts.Token).ConfigureAwait(false);
+                _logger.LogTrace("Reconnected tracked browser page session '{SessionId}' to target '{TargetId}'.", _sessionId, _targetId);
                 return true;
             }
             catch (OperationCanceledException) when (_stopCts.IsCancellationRequested)

@@ -234,6 +234,36 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public async Task BrowserEndpointDiscovery_DoesNotEscapeNonAsciiMetadata()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var identity = new BrowserHostIdentity(
+                Path.Combine(userDataDirectory.FullName, "bröwser"),
+                userDataDirectory.FullName);
+            var metadataPath = BrowserEndpointDiscovery.GetEndpointMetadataFilePath(userDataDirectory.FullName);
+
+            await BrowserEndpointDiscovery.WriteAsync(
+                identity,
+                profileDirectoryName: "Pröfile 1",
+                new Uri("ws://127.0.0.1:9/devtools/browser/stale"),
+                processId: int.MaxValue,
+                CancellationToken.None);
+
+            var metadata = await File.ReadAllTextAsync(metadataPath);
+
+            Assert.Contains("bröwser", metadata);
+            Assert.Contains("Pröfile 1", metadata);
+            Assert.DoesNotContain("\\u00f6", metadata);
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task BrowserEndpointDiscovery_DeletesMalformedEndpointMetadata()
     {
         var userDataDirectory = Directory.CreateTempSubdirectory();
