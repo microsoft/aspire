@@ -71,7 +71,7 @@ USAGE:
                                 The directory must contain CLI archive files (aspire-cli-*.tar.gz or .zip)
                                 and optionally NuGet packages (*.nupkg).
     --hive-label LABEL          Override the NuGet hive label (default: pr-<PR_NUMBER>, run-<RUN_ID>,
-                                or run-<GITHUB_RUN_ID>/run-local for --local-dir)
+                                or run-<GITHUB_RUN_ID> (or run-local if GITHUB_RUN_ID is unset) for --local-dir)
     -i, --install-path PATH     Directory prefix to install (default: ~/.aspire)
                                 CLI installs to: <install-path>/bin
                                 NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages (or run-<RUN_ID>)

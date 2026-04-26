@@ -96,7 +96,7 @@ param(
     [Parameter(HelpMessage = "Use pre-downloaded artifacts from a local directory instead of downloading from GitHub")]
     [string]$LocalDir = "",
 
-    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or run-<GITHUB_RUN_ID>/run-local)")]
+    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or run-<GITHUB_RUN_ID> (run-local when GITHUB_RUN_ID is unset))")]
     [string]$HiveLabel = "",
 
     [Parameter(HelpMessage = "Directory prefix to install")]

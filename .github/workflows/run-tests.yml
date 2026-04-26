@@ -219,25 +219,34 @@ jobs:
       - name: Extract expected CLI version from nupkg
         if: ${{ fromJson(inputs.properties).requiresCliArchive == true }}
         id: extract_cli_version
-        shell: bash
+        shell: pwsh
         run: |
           # Look for Aspire.Cli.{version}.nupkg in cli-archives or built packages
-          for dir in "${{ github.workspace }}/cli-archives" "${{ github.workspace }}/artifacts/packages/Debug/Shipping"; do
-            if [ -d "$dir" ]; then
-              nupkg=$(find "$dir" -maxdepth 1 -name 'Aspire.Cli.[0-9]*.nupkg' ! -name '*.symbols.*' 2>/dev/null | head -1)
-              if [ -n "$nupkg" ]; then
-                filename=$(basename "$nupkg")
+          $directories = @(
+            "${{ github.workspace }}/cli-archives",
+            "${{ github.workspace }}/artifacts/packages/Debug/Shipping"
+          )
+
+          foreach ($dir in $directories) {
+            if (Test-Path -Path $dir) {
+              $nupkg = Get-ChildItem -Path $dir -Filter 'Aspire.Cli.[0-9]*.nupkg' -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -notlike '*.symbols.*' } |
+                Select-Object -First 1
+
+              if ($null -ne $nupkg) {
+                $filename = $nupkg.Name
                 # Strip 'Aspire.Cli.' prefix and '.nupkg' suffix to get version
-                version="${filename#Aspire.Cli.}"
-                version="${version%.nupkg}"
-                echo "Extracted expected CLI version: $version (from $filename)"
-                echo "version=$version" >> "$GITHUB_OUTPUT"
+                $version = $filename.Substring('Aspire.Cli.'.Length)
+                $version = $version.Substring(0, $version.Length - '.nupkg'.Length)
+                Write-Host "Extracted expected CLI version: $version (from $filename)"
+                "version=$version" >> $env:GITHUB_OUTPUT
                 exit 0
-              fi
-            fi
-          done
-          echo "WARNING: Could not extract CLI version from nupkg files — version check will be skipped"
-          echo "version=" >> "$GITHUB_OUTPUT"
+              }
+            }
+          }
+
+          Write-Host "WARNING: Could not extract CLI version from nupkg files — version check will be skipped"
+          "version=" >> $env:GITHUB_OUTPUT
 
       - name: Install sdk for nuget based testing
         if: ${{ fromJson(inputs.properties).requiresTestSdk == true }}

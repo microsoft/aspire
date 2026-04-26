@@ -139,9 +139,11 @@ internal static class KubernetesDeployTestHelpers
     }
 
     /// <summary>
-    /// Runs <c>aspire --version</c> and asserts the CLI version contains a prerelease suffix (e.g. <c>-dev</c>, <c>-pr.NNNNN</c>).
-    /// This ensures the test is running against a development build, not a GA release.
-    /// Fails the test if the version does not contain a hyphen (indicating a prerelease suffix).
+    /// Runs <c>aspire --version</c> and verifies the CLI version.
+    /// When the <c>ASPIRE_E2E_EXPECTED_CLI_VERSION</c> environment variable is set (CI builds),
+    /// performs an exact version match against the expected value.
+    /// Otherwise, falls back to asserting the version contains a prerelease suffix
+    /// (e.g. <c>-dev</c>, <c>-pr.NNNNN</c>) to ensure the test runs against a development build.
     /// </summary>
     internal static async Task AssertAspireVersionAsync(
         this Hex1bTerminalAutomator auto,
@@ -157,8 +159,10 @@ internal static class KubernetesDeployTestHelpers
 
         if (!string.IsNullOrEmpty(expectedVersion))
         {
-            // When an expected version is set (CI builds), verify the exact version matches
-            await auto.TypeAsync($"VER=$(aspire --version 2>/dev/null) && [ \"$VER\" = \"{expectedVersion}\" ] && echo \"CLI_VERSION_EXACT:$VER\" || echo \"CLI_VERSION_MISMATCH:expected={expectedVersion} actual=$VER\"");
+            // When an expected version is set (CI builds), verify the version matches after stripping
+            // build metadata (+commit). The nupkg version omits the +metadata suffix per NuGet spec,
+            // but aspire --version includes it via AssemblyInformationalVersion.
+            await auto.TypeAsync($"VER=$(aspire --version 2>/dev/null) && BASE_VER=${{VER%%+*}} && [ \"$BASE_VER\" = \"{expectedVersion}\" ] && echo \"CLI_VERSION_EXACT:$VER\" || echo \"CLI_VERSION_MISMATCH:expected={expectedVersion} actual=$VER\"");
             await auto.EnterAsync();
 
             var foundExact = false;

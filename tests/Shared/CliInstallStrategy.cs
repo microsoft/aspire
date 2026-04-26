@@ -133,6 +133,12 @@ internal static class AspireCliShellCommandHelpers
     internal static string GetLocalArchiveInstallCommandFromCurrentRef(string localDir)
     {
         var sha = Environment.GetEnvironmentVariable("GITHUB_SHA") ?? "main";
+
+        if (!Regex.IsMatch(sha, @"^[0-9a-fA-F]{7,40}$") && sha != "main")
+        {
+            throw new InvalidOperationException($"GITHUB_SHA contains an unexpected value: '{sha}'. Expected a hex commit SHA or 'main'.");
+        }
+
         return $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/{sha}/eng/scripts/get-aspire-cli-pr.sh | bash -s -- --local-dir {QuoteBashArg(localDir)}";
     }
 
