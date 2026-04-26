@@ -324,32 +324,5 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
     }
 
-    internal static string? TrySelectTrackedTargetId(IReadOnlyList<BrowserLogsTargetInfo>? targetInfos)
-    {
-        if (targetInfos is null)
-        {
-            return null;
-        }
-
-        // Owned Chromium launches start with the about:blank target from BuildBrowserArguments. Reusing it means the
-        // first tracked session navigates the visible empty tab instead of creating a second tab and leaving a blank one
-        // behind. If the browser reported a different unattached page first, fall back to that.
-        var preferredTarget = targetInfos.FirstOrDefault(static targetInfo =>
-            string.Equals(targetInfo.Type, "page", StringComparison.Ordinal) &&
-            targetInfo.Attached != true &&
-            string.Equals(targetInfo.Url, "about:blank", StringComparison.Ordinal));
-
-        if (!string.IsNullOrWhiteSpace(preferredTarget?.TargetId))
-        {
-            return preferredTarget.TargetId;
-        }
-
-        return targetInfos.FirstOrDefault(static targetInfo =>
-            string.Equals(targetInfo.Type, "page", StringComparison.Ordinal) &&
-            targetInfo.Attached != true &&
-            !string.IsNullOrWhiteSpace(targetInfo.TargetId))
-            ?.TargetId;
-    }
-
     private sealed record BrowserSessionResult(int? ExitCode, Exception? Error);
 }

@@ -50,7 +50,64 @@ internal abstract class BrowserHost(
 
     public abstract ValueTask DisposeAsync();
 
-    protected static string BuildBrowserArguments(BrowserLogsUserDataDirectory userDataDirectory)
+    private async Task<IBrowserPageSession> CreatePageSessionCoreAsync(
+        string sessionId,
+        Uri url,
+        BrowserConnectionDiagnosticsLogger connectionDiagnostics,
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        CancellationToken cancellationToken)
+    {
+        return await BrowserPageSession.StartAsync(
+            this,
+            sessionId,
+            url,
+            connectionDiagnostics,
+            eventHandler,
+            _logger,
+            _timeProvider,
+            _reuseInitialBlankTarget,
+            cancellationToken).ConfigureAwait(false);
+    }
+}
+
+// Host implementation for browsers Aspire starts itself. Owned hosts are responsible for spawning Chromium with a
+// browser-level CDP endpoint, writing adoption metadata, and terminating the browser when the final lease is released.
+internal sealed class OwnedBrowserHost : BrowserHost
+{
+    private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_browserEndpointPollInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan s_browserShutdownTimeout = TimeSpan.FromSeconds(5);
+
+    private readonly BrowserLogsUserDataDirectory _userDataDirectory;
+    private readonly IAsyncDisposable _processLifetime;
+    private readonly Task<ProcessResult> _processTask;
+    private readonly Task _termination;
+    private int _disposed;
+
+    private OwnedBrowserHost(
+        BrowserHostIdentity identity,
+        Uri debugEndpoint,
+        string browserDisplayName,
+        int processId,
+        BrowserLogsUserDataDirectory userDataDirectory,
+        IAsyncDisposable processLifetime,
+        Task<ProcessResult> processTask,
+        ILogger<BrowserLogsSessionManager> logger,
+        TimeProvider timeProvider)
+        : base(identity, BrowserHostOwnership.Owned, debugEndpoint, browserDisplayName, logger, timeProvider, reuseInitialBlankTarget: true)
+    {
+        _processLifetime = processLifetime;
+        _processTask = processTask;
+        _termination = processTask;
+        _userDataDirectory = userDataDirectory;
+        ProcessId = processId;
+    }
+
+    public override int? ProcessId { get; }
+
+    public override Task Termination => _termination;
+
+    private static string BuildBrowserArguments(BrowserLogsUserDataDirectory userDataDirectory)
     {
         // Chromium writes DevToolsActivePort only when remote debugging is enabled. Let it choose the port so
         // playground runs do not collide with a user's existing browser or another AppHost. The initial about:blank
@@ -148,63 +205,6 @@ internal abstract class BrowserHost(
 
         builder.Append('"');
     }
-
-    private async Task<IBrowserPageSession> CreatePageSessionCoreAsync(
-        string sessionId,
-        Uri url,
-        BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-        CancellationToken cancellationToken)
-    {
-        return await BrowserPageSession.StartAsync(
-            this,
-            sessionId,
-            url,
-            connectionDiagnostics,
-            eventHandler,
-            _logger,
-            _timeProvider,
-            _reuseInitialBlankTarget,
-            cancellationToken).ConfigureAwait(false);
-    }
-}
-
-// Host implementation for browsers Aspire starts itself. Owned hosts are responsible for spawning Chromium with a
-// browser-level CDP endpoint, writing adoption metadata, and terminating the browser when the final lease is released.
-internal sealed class OwnedBrowserHost : BrowserHost
-{
-    private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan s_browserEndpointPollInterval = TimeSpan.FromMilliseconds(100);
-    private static readonly TimeSpan s_browserShutdownTimeout = TimeSpan.FromSeconds(5);
-
-    private readonly BrowserLogsUserDataDirectory _userDataDirectory;
-    private readonly IAsyncDisposable _processLifetime;
-    private readonly Task<ProcessResult> _processTask;
-    private readonly Task _termination;
-    private int _disposed;
-
-    private OwnedBrowserHost(
-        BrowserHostIdentity identity,
-        Uri debugEndpoint,
-        string browserDisplayName,
-        int processId,
-        BrowserLogsUserDataDirectory userDataDirectory,
-        IAsyncDisposable processLifetime,
-        Task<ProcessResult> processTask,
-        ILogger<BrowserLogsSessionManager> logger,
-        TimeProvider timeProvider)
-        : base(identity, BrowserHostOwnership.Owned, debugEndpoint, browserDisplayName, logger, timeProvider, reuseInitialBlankTarget: true)
-    {
-        _processLifetime = processLifetime;
-        _processTask = processTask;
-        _termination = processTask;
-        _userDataDirectory = userDataDirectory;
-        ProcessId = processId;
-    }
-
-    public override int? ProcessId { get; }
-
-    public override Task Termination => _termination;
 
     public static async Task<OwnedBrowserHost> StartAsync(
         BrowserHostIdentity identity,

@@ -186,9 +186,6 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
     public static void DeleteEndpointMetadata(string userDataDirectory) =>
         TryDelete(GetEndpointMetadataFilePath(userDataDirectory));
 
-    public static void DeleteDevToolsActivePort(string userDataDirectory) =>
-        TryDelete(Path.Combine(userDataDirectory, "DevToolsActivePort"));
-
     public static bool IsNonDebuggableBrowserRunning(string userDataDirectory) =>
         IsNonDebuggableBrowserRunning(userDataDirectory, OperatingSystem.IsWindows());
 

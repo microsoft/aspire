@@ -193,7 +193,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         if (_reuseInitialBlankTarget && _connection is not null)
         {
             var targets = await _connection.GetTargetsAsync(cancellationToken).ConfigureAwait(false);
-            if (BrowserLogsRunningSession.TrySelectTrackedTargetId(targets.TargetInfos) is { } targetId)
+            if (TrySelectReusableStartupPageTargetId(targets.TargetInfos) is { } targetId)
             {
                 return targetId;
             }
@@ -204,6 +204,35 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         var createTargetResult = await _connection!.CreateTargetAsync(cancellationToken).ConfigureAwait(false);
         return createTargetResult.TargetId
             ?? throw new InvalidOperationException("Browser target creation did not return a target id.");
+    }
+
+    internal static string? TrySelectReusableStartupPageTargetId(IReadOnlyList<BrowserLogsTargetInfo>? targetInfos)
+    {
+        if (targetInfos is null)
+        {
+            return null;
+        }
+
+        // Only owned browser hosts ask to reuse a startup target. Owned launches append about:blank to the Chromium
+        // command line so the first tracked page session can navigate that visible empty tab instead of creating a
+        // second tab. Adopted hosts disable this path so Aspire never navigates an arbitrary tab in a user's browser.
+        var preferredTarget = targetInfos.FirstOrDefault(static targetInfo =>
+            string.Equals(targetInfo.Type, "page", StringComparison.Ordinal) &&
+            targetInfo.Attached != true &&
+            string.Equals(targetInfo.Url, "about:blank", StringComparison.Ordinal));
+
+        if (!string.IsNullOrWhiteSpace(preferredTarget?.TargetId))
+        {
+            return preferredTarget.TargetId;
+        }
+
+        // Chromium can report another unattached startup page first, especially with restored profile state. Reusing
+        // that page is still preferable to opening an extra tab because this helper is never used for adopted browsers.
+        return targetInfos.FirstOrDefault(static targetInfo =>
+            string.Equals(targetInfo.Type, "page", StringComparison.Ordinal) &&
+            targetInfo.Attached != true &&
+            !string.IsNullOrWhiteSpace(targetInfo.TargetId))
+            ?.TargetId;
     }
 
     private async Task<BrowserPageSessionResult> MonitorAsync()
