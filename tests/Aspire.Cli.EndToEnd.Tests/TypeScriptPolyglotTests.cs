@@ -29,7 +29,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
     public async Task CreateTypeScriptAppHostWithViteApp_UsesConfiguredToolchain(string toolchain)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
         var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
@@ -126,7 +126,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
     public async Task InitTypeScriptAppHost_AugmentsExistingViteRepoAtRoot()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
         var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);

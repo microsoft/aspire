@@ -420,3 +420,4 @@ Additional instructions are automatically applied when editing files matching sp
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
 | `tests/**/*.cs` | `.github/instructions/test-review-guidelines.instructions.md` - Flaky test patterns and test review guidelines |
 | `**/*.{yml,yaml,props,targets,projitems,proj,csproj}` | `.github/instructions/msbuild-paths.instructions.md` - MSBuild argument prefix and path conventions |
+| `eng/scripts/get-aspire-cli*.sh`, `eng/scripts/get-aspire-cli*.ps1` | `.github/instructions/acquisition-tests.instructions.md` - CLI acquisition script tests |

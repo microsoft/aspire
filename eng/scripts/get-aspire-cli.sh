@@ -297,22 +297,12 @@ secure_curl() {
 # Build a compact display string for download messages without exposing the full URL.
 get_download_descriptor() {
     local url="$1"
-    local file_name source
-
-    if [[ "$url" =~ ^https://aka\.ms/dotnet/[^/]+/aspire/(.+)/([^/]+)$ ]]; then
-        source="${BASH_REMATCH[1]}"
-        file_name="${BASH_REMATCH[2]}"
-    elif [[ "$url" =~ ^https://ci\.dot\.net/public(-checksums)?/aspire/+([^/]+)/([^/]+)$ ]]; then
-        source="version/${BASH_REMATCH[2]}"
-        file_name="${BASH_REMATCH[3]}"
-    else
-        file_name="${url##*/}"
-        source="${url#https://}"
-        source="${source%%/*}"
-    fi
+    local source="${2:-}"
+    local url_without_query="${url%%[\?#]*}"
+    local file_name="${url_without_query##*/}"
 
     if [[ -n "$file_name" && -n "$source" ]]; then
-        printf "%s from '%s'" "$file_name" "$source"
+        printf "%s from %s" "$file_name" "$source"
     else
         printf "%s" "$file_name"
     fi
@@ -348,9 +338,10 @@ download_file() {
     local max_retries="${4:-5}"
     local validate_content_type="${5:-true}"
     local use_temp_file="${6:-true}"
+    local descriptor_source="${7:-}"
     local download_descriptor
 
-    download_descriptor=$(get_download_descriptor "$url")
+    download_descriptor=$(get_download_descriptor "$url" "$descriptor_source")
 
     if [[ "$DRY_RUN" == true ]]; then
         say_info "[DRY RUN] Would download $download_descriptor"
@@ -861,6 +852,7 @@ download_aspire_extension() {
     local version="$2"
     local quality="$3"
     local url extension_archive
+    local download_source=""
 
     say_info "Downloading Aspire VS Code extension"
 
@@ -869,8 +861,11 @@ download_aspire_extension() {
     fi
 
     extension_archive="${temp_dir}/${EXTENSION_ARTIFACT_NAME}"
+    if [[ -z "$version" && -n "$quality" ]]; then
+        download_source="the $(map_quality_to_channel "$quality") channel"
+    fi
 
-    if ! download_file "$url" "$extension_archive" $ARCHIVE_DOWNLOAD_TIMEOUT_SEC; then
+    if ! download_file "$url" "$extension_archive" "$ARCHIVE_DOWNLOAD_TIMEOUT_SEC" 5 true true "$download_source"; then
         return 1
     fi
 
@@ -948,6 +943,7 @@ download_and_install_archive() {
     local temp_dir="$1"
     local os arch runtimeIdentifier url filename checksum_url checksum_filename extension
     local cli_exe cli_path
+    local download_source=""
 
     # Detect OS and architecture if not provided
     if [[ -z "$OS" ]]; then
@@ -989,14 +985,17 @@ download_and_install_archive() {
 
     filename="${temp_dir}/aspire-cli-${runtimeIdentifier}.${extension}"
     checksum_filename="${temp_dir}/aspire-cli-${runtimeIdentifier}.${extension}.sha512"
+    if [[ -z "$VERSION" && -n "$QUALITY" ]]; then
+        download_source="the $(map_quality_to_channel "$QUALITY") channel"
+    fi
 
     # Download the Aspire CLI archive
-    if ! download_file "$url" "$filename" $ARCHIVE_DOWNLOAD_TIMEOUT_SEC; then
+    if ! download_file "$url" "$filename" "$ARCHIVE_DOWNLOAD_TIMEOUT_SEC" 5 true true "$download_source"; then
         return 1
     fi
 
     # Download and test the checksum
-    if ! download_file "$checksum_url" "$checksum_filename" $CHECKSUM_DOWNLOAD_TIMEOUT_SEC; then
+    if ! download_file "$checksum_url" "$checksum_filename" "$CHECKSUM_DOWNLOAD_TIMEOUT_SEC" 5 true true "$download_source"; then
         return 1
     fi
 

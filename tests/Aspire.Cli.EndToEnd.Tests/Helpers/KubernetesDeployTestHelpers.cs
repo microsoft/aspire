@@ -139,40 +139,6 @@ internal static class KubernetesDeployTestHelpers
     }
 
     /// <summary>
-    /// Runs <c>aspire --version</c> and asserts the CLI version contains a prerelease suffix (e.g. <c>-dev</c>, <c>-pr.NNNNN</c>).
-    /// This ensures the test is running against a development build, not a GA release.
-    /// Fails the test if the version does not contain a hyphen (indicating a prerelease suffix).
-    /// </summary>
-    internal static async Task AssertAspireVersionAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter,
-        ITestOutputHelper output)
-    {
-        // Run aspire --version and assert it contains a prerelease suffix (hyphen) via shell
-        await auto.TypeAsync("VER=$(aspire --version 2>/dev/null) && echo \"$VER\" | grep -q '-' && echo \"CLI_VERSION_OK:$VER\" || { echo \"CLI_VERSION_FAIL:$VER\"; false; }");
-        await auto.EnterAsync();
-
-        var foundOk = false;
-        await auto.WaitUntilAsync(
-            snapshot =>
-            {
-                if (new CellPatternSearcher().Find("CLI_VERSION_OK:").Search(snapshot).Count > 0)
-                {
-                    foundOk = true;
-                    return true;
-                }
-                return new CellPatternSearcher().Find("CLI_VERSION_FAIL:").Search(snapshot).Count > 0;
-            },
-            timeout: TimeSpan.FromSeconds(30),
-            description: "CLI version prerelease assertion");
-
-        await auto.WaitForAnyPromptAsync(counter);
-
-        Assert.True(foundOk, "Aspire CLI version does not contain a prerelease suffix. Expected a development build (e.g. 13.3.0-dev or 13.3.0-pr.NNNNN).");
-        output.WriteLine("✅ CLI version contains prerelease suffix");
-    }
-
-    /// <summary>
     /// Scaffolds an Aspire project using <c>aspire new</c> (Starter template, no Redis),
     /// then adds hosting/client packages and injects custom code into the existing source files.
     /// Asserts the "Using project templates version:" message appears with a prerelease suffix.

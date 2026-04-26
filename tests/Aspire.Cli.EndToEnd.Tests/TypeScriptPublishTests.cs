@@ -18,7 +18,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
     public async Task PublishWithDockerComposeServiceCallbackSucceeds()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
@@ -105,7 +105,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
     public async Task PublishWithoutOutputPathUsesAppHostDirectoryDefault()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         if (strategy.Mode == CliInstallMode.InstallScript && strategy.Quality is null && strategy.Version is null)
         {
@@ -196,7 +196,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
     public async Task PublishWithConfigureEnvFileUpdatesEnvOutput()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         if (strategy.Mode == CliInstallMode.InstallScript && strategy.Quality is null && strategy.Version is null)
         {

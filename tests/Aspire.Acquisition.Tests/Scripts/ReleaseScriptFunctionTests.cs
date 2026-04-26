@@ -157,6 +157,33 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
 
     #endregion
 
+    #region get_download_descriptor
+
+    [Theory]
+    [InlineData("https://aka.ms/dotnet/9/aspire/ga/daily/aspire-cli-linux-x64.tar.gz", "the stable channel", "aspire-cli-linux-x64.tar.gz from the stable channel")]
+    [InlineData("https://aka.ms/dotnet/9/aspire/daily/aspire-cli-linux-x64.tar.gz", "the daily channel", "aspire-cli-linux-x64.tar.gz from the daily channel")]
+    [InlineData("https://aka.ms/dotnet/9/aspire/rc/daily/aspire-cli-linux-x64.tar.gz", "the staging channel", "aspire-cli-linux-x64.tar.gz from the staging channel")]
+    public async Task GetDownloadDescriptor_WithSource_ReturnsFriendlyChannelSource(string url, string source, string expectedDescriptor)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            $"get_download_descriptor '{url}' '{source}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var descriptor = result.Output.Trim();
+        Assert.Equal(expectedDescriptor, descriptor);
+        Assert.DoesNotContain("dotnet", descriptor, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ga/daily", descriptor, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("rc/daily", descriptor, StringComparison.OrdinalIgnoreCase);
+    }
+
+    #endregion
+
     #region validate_checksum
 
     [Fact]

@@ -18,7 +18,7 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
     public async Task DetachFormatJsonProducesValidJson()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
@@ -81,7 +81,7 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
     public async Task DetachFormatJsonProducesValidJsonWhenRestartingExistingInstance()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

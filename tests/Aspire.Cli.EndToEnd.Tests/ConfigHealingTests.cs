@@ -25,7 +25,7 @@ public sealed class ConfigHealingTests(ITestOutputHelper output)
     public async Task InvalidAppHostPathWithComments_IsHealedOnRun()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

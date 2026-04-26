@@ -108,7 +108,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalSettings_MigratedFromLegacyFormat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
@@ -173,7 +173,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_SkipsWhenNewConfigExists()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
@@ -223,7 +223,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_HandlesMalformedLegacyJson()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
@@ -282,7 +282,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_HandlesCommentsAndTrailingCommas()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
@@ -352,7 +352,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task ConfigSetGet_CreatesNestedJsonFormat()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
@@ -436,7 +436,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task GlobalMigration_PreservesAllValueTypes()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
@@ -522,7 +522,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
     public async Task FullUpgrade_LegacyCliToNewCli_MigratesGlobalSettings()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
