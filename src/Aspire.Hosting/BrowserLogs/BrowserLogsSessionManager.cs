@@ -78,7 +78,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceState.LastSessionId = sessionId;
             resourceState.LastTargetUrl = url.ToString();
             resourceState.LastBrowser = configuration.Browser;
-            resourceState.LastBrowserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(configuration.Browser);
+            resourceState.LastBrowserExecutable = ChromiumBrowserResolver.TryResolveExecutable(configuration.Browser);
             if (resourceState.ActiveSessions.Count == 0)
             {
                 resourceState.LastBrowserHostOwnership = null;

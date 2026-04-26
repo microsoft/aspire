@@ -169,7 +169,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal(BrowserConfiguration.GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable), browserLogsResource.InitialConfiguration.Browser);
+        Assert.Equal(BrowserConfiguration.GetDefaultBrowser(ChromiumBrowserResolver.TryResolveExecutable), browserLogsResource.InitialConfiguration.Browser);
         Assert.Null(browserLogsResource.InitialConfiguration.Profile);
     }
 

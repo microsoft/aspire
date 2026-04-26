@@ -356,7 +356,7 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
-    public void TryResolveBrowserUserDataDirectory_ReturnsExpectedPathForKnownBrowser()
+    public void TryResolveUserDataDirectory_ReturnsExpectedPathForKnownBrowser()
     {
         var expectedPath = OperatingSystem.IsWindows()
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "User Data")
@@ -370,7 +370,7 @@ public class BrowserLogsSessionManagerTests
                 ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
                 : "google-chrome";
 
-        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chrome", browserExecutable);
+        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("chrome", browserExecutable);
 
         Assert.Equal(expectedPath, userDataDirectory);
     }
@@ -383,10 +383,10 @@ public class BrowserLogsSessionManagerTests
             : OperatingSystem.IsMacOS()
                 ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
                 : "/usr/bin/google-chrome";
-        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chrome", browserExecutable);
+        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("chrome", browserExecutable);
 
         Assert.NotNull(userDataDirectory);
-        Assert.True(BrowserLogsRunningSession.IsGoogleChromeDefaultUserDataDirectory("chrome", browserExecutable, userDataDirectory));
+        Assert.True(ChromiumBrowserResolver.IsGoogleChromeDefaultUserDataDirectory("chrome", browserExecutable, userDataDirectory));
     }
 
     [Fact]
@@ -397,22 +397,22 @@ public class BrowserLogsSessionManagerTests
             : OperatingSystem.IsMacOS()
                 ? "/Applications/Chromium.app/Contents/MacOS/Chromium"
                 : "/usr/bin/chromium";
-        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chromium", browserExecutable);
+        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("chromium", browserExecutable);
 
         Assert.NotNull(userDataDirectory);
-        Assert.False(BrowserLogsRunningSession.IsGoogleChromeDefaultUserDataDirectory("chromium", browserExecutable, userDataDirectory));
+        Assert.False(ChromiumBrowserResolver.IsGoogleChromeDefaultUserDataDirectory("chromium", browserExecutable, userDataDirectory));
     }
 
     [Fact]
-    public void TryResolveBrowserUserDataDirectory_ReturnsNullForUnknownBrowser()
+    public void TryResolveUserDataDirectory_ReturnsNullForUnknownBrowser()
     {
-        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("custom-browser", "/opt/custom-browser");
+        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("custom-browser", "/opt/custom-browser");
 
         Assert.Null(userDataDirectory);
     }
 
     [Fact]
-    public void TryResolveBrowserUserDataDirectory_UsesChromiumPathOnLinux()
+    public void TryResolveUserDataDirectory_UsesChromiumPathOnLinux()
     {
         if (!OperatingSystem.IsLinux())
         {
@@ -421,26 +421,26 @@ public class BrowserLogsSessionManagerTests
 
         var expectedPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "chromium");
 
-        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory("chrome", "/usr/bin/chromium");
+        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("chrome", "/usr/bin/chromium");
 
         Assert.Equal(expectedPath, userDataDirectory);
     }
 
     [Fact]
-    public void ResolveBrowserProfileDirectory_MatchesDirectoryNameCaseInsensitively()
+    public void ResolveProfileDirectory_MatchesDirectoryNameCaseInsensitively()
     {
         WithTempUserDataDirectory(userDataDirectory =>
         {
             Directory.CreateDirectory(Path.Combine(userDataDirectory, "Profile 1"));
 
-            var profileDirectory = BrowserLogsRunningSession.ResolveBrowserProfileDirectory(userDataDirectory, "profile 1");
+            var profileDirectory = ChromiumBrowserResolver.ResolveProfileDirectory(userDataDirectory, "profile 1");
 
             Assert.Equal("Profile 1", profileDirectory);
         });
     }
 
     [Fact]
-    public void ResolveBrowserProfileDirectory_MatchesProfileDisplayNameFromLocalState()
+    public void ResolveProfileDirectory_MatchesProfileDisplayNameFromLocalState()
     {
         WithTempUserDataDirectory(userDataDirectory =>
         {
@@ -463,14 +463,14 @@ public class BrowserLogsSessionManagerTests
                 }
                 """);
 
-            var profileDirectory = BrowserLogsRunningSession.ResolveBrowserProfileDirectory(userDataDirectory, "Profile 2");
+            var profileDirectory = ChromiumBrowserResolver.ResolveProfileDirectory(userDataDirectory, "Profile 2");
 
             Assert.Equal("Profile 1", profileDirectory);
         });
     }
 
     [Fact]
-    public void ResolveBrowserProfileDirectory_ThrowsWhenDisplayNameIsAmbiguous()
+    public void ResolveProfileDirectory_ThrowsWhenDisplayNameIsAmbiguous()
     {
         WithTempUserDataDirectory(userDataDirectory =>
         {
@@ -493,7 +493,7 @@ public class BrowserLogsSessionManagerTests
                 }
                 """);
 
-            var exception = Assert.Throws<InvalidOperationException>(() => BrowserLogsRunningSession.ResolveBrowserProfileDirectory(userDataDirectory, "Shared profile"));
+            var exception = Assert.Throws<InvalidOperationException>(() => ChromiumBrowserResolver.ResolveProfileDirectory(userDataDirectory, "Shared profile"));
 
             Assert.Contains("matched multiple Chromium profiles", exception.Message);
         });

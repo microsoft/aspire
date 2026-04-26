@@ -141,7 +141,7 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
     }
 
     private static string GetDefaultBrowser(BrowserUserDataMode userDataMode) =>
-        GetDefaultBrowser(userDataMode, BrowserLogsRunningSession.TryResolveBrowserExecutable);
+        GetDefaultBrowser(userDataMode, ChromiumBrowserResolver.TryResolveExecutable);
 }
 
 /// <summary>

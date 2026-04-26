@@ -50,7 +50,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        var browserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(configuration.Browser)
+        var browserExecutable = ChromiumBrowserResolver.TryResolveExecutable(configuration.Browser)
             ?? throw new InvalidOperationException($"Unable to locate browser '{configuration.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
         var userDataDirectory = _createUserDataDirectory(configuration, browserExecutable);
         var identity = new BrowserHostIdentity(browserExecutable, userDataDirectory.Path);
@@ -330,7 +330,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         // extensions, and profiles are available. Chromium puts singleton locks, DevToolsActivePort, and our Aspire
         // endpoint sidecar at that root; named profiles are subdirectories selected by command-line argument. The later
         // endpoint/probe logic decides whether that root is reusable, adoptable, or locked.
-        var userDataDirectory = BrowserLogsRunningSession.TryResolveBrowserUserDataDirectory(configuration.Browser, browserExecutable)
+        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory(configuration.Browser, browserExecutable)
             ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{configuration.Browser}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.");
 
         if (!Directory.Exists(userDataDirectory))
@@ -338,7 +338,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{configuration.Browser}'.");
         }
 
-        if (BrowserLogsRunningSession.IsGoogleChromeDefaultUserDataDirectory(configuration.Browser, browserExecutable, userDataDirectory))
+        if (ChromiumBrowserResolver.IsGoogleChromeDefaultUserDataDirectory(configuration.Browser, browserExecutable, userDataDirectory))
         {
             throw new InvalidOperationException(
                 $"Google Chrome blocks remote debugging against its default user data directory '{userDataDirectory}'. " +
@@ -346,7 +346,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
 
         var profileDirectoryName = configuration.Profile is { } profile
-            ? BrowserLogsRunningSession.ResolveBrowserProfileDirectory(userDataDirectory, profile)
+            ? ChromiumBrowserResolver.ResolveProfileDirectory(userDataDirectory, profile)
             : null;
         return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory, profileDirectoryName);
     }
