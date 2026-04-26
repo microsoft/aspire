@@ -19,6 +19,13 @@
 .PARAMETER WorkflowRunId
     Workflow run ID to download from (optional)
 
+.PARAMETER LocalDir
+    Use pre-downloaded artifacts from a local directory instead of downloading from GitHub.
+    Mutually exclusive with PRNumber and WorkflowRunId.
+
+.PARAMETER HiveLabel
+    Override the NuGet hive label (default: pr-PRNUMBER, run-RUNID, or run-GITHUB_RUN_ID for LocalDir).
+
 .PARAMETER InstallPath
     Directory prefix to install (default: $HOME/.aspire on Unix, %USERPROFILE%\.aspire on Windows)
     CLI will be installed to InstallPath\bin (or InstallPath/bin on Unix)
@@ -47,6 +54,12 @@
 
 .EXAMPLE
     .\get-aspire-cli-pr.ps1 1234 -WorkflowRunId 12345678
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 -LocalDir "C:\path\to\artifacts"
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 -LocalDir "C:\path\to\artifacts" -HiveLabel my-build
 
 .EXAMPLE
     .\get-aspire-cli-pr.ps1 1234 -InstallPath "C:\my-aspire"
@@ -1421,11 +1434,15 @@ DESCRIPTION:
 
 Usage:
     get-aspire-cli-pr.ps1 <PRNumber> [OPTIONS]
+    get-aspire-cli-pr.ps1 -WorkflowRunId <RunId> [OPTIONS]
+    get-aspire-cli-pr.ps1 -LocalDir <Path> [OPTIONS]
     iex "& { `$(irm <url>/get-aspire-cli-pr.ps1) } <PRNumber> [OPTIONS]"
 
 OPTIONS:
     -PRNumber <int>         Pull request number (required, positional)
     -WorkflowRunId <long>   Workflow run ID to download from (optional)
+    -LocalDir <string>      Use pre-downloaded artifacts from a local directory
+    -HiveLabel <string>     Override the NuGet hive label
     -InstallPath <string>   Directory prefix to install
     -OS <string>            Override OS detection (win, linux, linux-musl, osx)
     -Architecture <string>  Override architecture detection (x64, arm64)

@@ -44,6 +44,8 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("--run-id", result.Output);
+        Assert.Contains("--local-dir", result.Output);
+        Assert.Contains("--hive-label", result.Output);
         Assert.Contains("--install-path", result.Output);
         Assert.Contains("--os", result.Output);
         Assert.Contains("--arch", result.Output);
@@ -104,6 +106,28 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("987654321", result.Output);
+    }
+
+    [Fact]
+    public async Task LocalDir_DryRun_UsesLocalDirectoryWithoutGh()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "local artifacts");
+        Directory.CreateDirectory(localDir);
+        await FakeArchiveHelper.CreateFakeNupkgAsync(localDir, "Aspire.Cli", "13.3.0-preview.1.12345.1");
+
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--hive-label", "test-hive",
+            "--hive-only",
+            "--dry-run");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Installing from local directory", result.Output);
+        Assert.Contains(localDir, result.Output);
+        Assert.Contains("test-hive", result.Output);
+        Assert.DoesNotContain("Downloading CLI from GitHub", result.Output);
     }
 
     [Fact]

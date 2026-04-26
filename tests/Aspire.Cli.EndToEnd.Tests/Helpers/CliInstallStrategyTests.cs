@@ -51,7 +51,7 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void Detect_ReturnsPullRequest_WhenBothPrMetadataAndArchiveDirAreSet()
+    public void Detect_ReturnsLocalArchive_WhenBothPrMetadataAndArchiveDirAreSet()
     {
         var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
         try
@@ -62,14 +62,15 @@ public class CliInstallStrategyTests
                 ("ASPIRE_E2E_VERSION", null),
                 ("ASPIRE_E2E_PREINSTALLED", null),
                 ("GITHUB_PR_NUMBER", "16131"),
-                ("GITHUB_PR_HEAD_SHA", "abc123"),
+                ("GITHUB_PR_HEAD_SHA", "52669a7cac3d4f10c6269909fc38e77124ed177c"),
                 (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, tempDir.FullName),
                 ("CI", null),
                 ("GITHUB_ACTIONS", null));
 
             var strategy = CliInstallStrategy.Detect();
 
-            Assert.Equal(CliInstallMode.PullRequest, strategy.Mode);
+            Assert.Equal(CliInstallMode.LocalArchive, strategy.Mode);
+            Assert.Equal(tempDir.FullName, strategy.ArchiveDir);
         }
         finally
         {
@@ -373,6 +374,61 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void FromLocalArchive_ExtractsExpectedVersionFromNupkg()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0-preview.1.12345.1.nupkg"), "");
+
+            var strategy = CliInstallStrategy.FromLocalArchive(tempDir.FullName);
+
+            Assert.Equal("13.3.0-preview.1.12345.1", strategy.ExpectedVersion);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FromLocalArchive_ThrowsWhenNupkgVersionIsMalformed()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0;bad.nupkg"), "");
+
+            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
+
+            Assert.Contains("Invalid Aspire.Cli nupkg version", exception.Message);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FromLocalArchive_ThrowsWhenMultipleCliNupkgsArePresent()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.4.0.nupkg"), "");
+
+            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
+
+            Assert.Contains("Found 2 Aspire.Cli nupkg files", exception.Message);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Detect_ReturnsDotnetToolLocalSource_WhenBothToolSourceAndArchiveDirAreSet()
     {
         var nupkgDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
@@ -441,6 +497,62 @@ public class CliInstallStrategyTests
             ("GITHUB_PR_HEAD_SHA", null));
 
         Assert.Throws<InvalidOperationException>(CliInstallStrategy.FromPullRequest);
+    }
+
+    [Fact]
+    public void TryGetPullRequestHeadSha_ReturnsFalseOutsidePrContext()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("GITHUB_EVENT_NAME", null),
+            ("GITHUB_SHA", "52669a7cac3d4f10c6269909fc38e77124ed177c"));
+
+        var result = CliE2ETestHelpers.TryGetPullRequestHeadSha(out var commitSha);
+
+        Assert.False(result);
+        Assert.Equal(string.Empty, commitSha);
+    }
+
+    [Fact]
+    public void TryGetPullRequestHeadSha_ThrowsInPrContextWithoutHeadSha()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", "16131"),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("GITHUB_EVENT_NAME", null));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CliE2ETestHelpers.TryGetPullRequestHeadSha(out _));
+
+        Assert.Contains("GITHUB_PR_HEAD_SHA must be set", exception.Message);
+    }
+
+    [Fact]
+    public void TryGetPullRequestHeadSha_ThrowsInPrContextWithInvalidHeadSha()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", "abc123"),
+            ("GITHUB_EVENT_NAME", "pull_request"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CliE2ETestHelpers.TryGetPullRequestHeadSha(out _));
+
+        Assert.Contains("40-character commit SHA", exception.Message);
+    }
+
+    [Fact]
+    public void TryGetPullRequestHeadSha_ReturnsHeadShaInPrContext()
+    {
+        const string expectedSha = "52669a7cac3d4f10c6269909fc38e77124ed177c";
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", "16131"),
+            ("GITHUB_PR_HEAD_SHA", expectedSha),
+            ("GITHUB_EVENT_NAME", null));
+
+        var result = CliE2ETestHelpers.TryGetPullRequestHeadSha(out var commitSha);
+
+        Assert.True(result);
+        Assert.Equal(expectedSha, commitSha);
     }
 
     [Fact]

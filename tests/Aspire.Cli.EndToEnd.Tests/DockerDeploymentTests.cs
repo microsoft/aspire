@@ -37,11 +37,7 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (strategy.Mode == CliInstallMode.PullRequest)
-        {
-            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         // Step 1: Create a new Aspire Starter App (no Redis cache)
         await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);
@@ -148,11 +144,7 @@ builder.Build().Run();
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (strategy.Mode == CliInstallMode.PullRequest)
-        {
-            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         // Step 1: Create a new Aspire Starter App (no Redis cache)
         await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);

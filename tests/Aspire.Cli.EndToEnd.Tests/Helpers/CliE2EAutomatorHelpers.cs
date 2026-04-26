@@ -371,6 +371,16 @@ internal static class CliE2EAutomatorHelpers
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
+    internal static async Task VerifyPullRequestCliVersionAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        if (CliE2ETestHelpers.TryGetPullRequestHeadSha(out var commitSha))
+        {
+            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
+        }
+    }
+
     private static string GetExpectedStableVersionMarker()
     {
         var versionsPropsPath = Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "Versions.props");

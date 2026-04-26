@@ -18,6 +18,7 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 internal static class CliE2ETestHelpers
 {
     internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
+    private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
 
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
@@ -45,31 +46,31 @@ internal static class CliE2ETestHelpers
         return prNumber;
     }
 
-    /// <summary>
-    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable,
-    /// falling back to GITHUB_SHA for non-PR CI runs (e.g., schedule-triggered workflows).
-    /// When running locally (not in CI), returns a dummy value for testing.
-    /// </summary>
-    /// <returns>The commit SHA, or a dummy value when running locally.</returns>
-    internal static string GetRequiredCommitSha()
+    internal static bool IsPullRequestContext =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")) ||
+        string.Equals(Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME"), "pull_request", StringComparison.OrdinalIgnoreCase);
+
+    internal static bool TryGetPullRequestHeadSha(out string commitSha)
     {
-        var commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA");
+        commitSha = string.Empty;
 
-        if (!string.IsNullOrEmpty(commitSha))
+        if (!IsPullRequestContext)
         {
-            return commitSha;
+            return false;
         }
 
-        // Fallback: GITHUB_SHA is automatically set by GitHub Actions for all event types
-        var githubSha = Environment.GetEnvironmentVariable("GITHUB_SHA");
-
-        if (!string.IsNullOrEmpty(githubSha))
+        commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA") ?? string.Empty;
+        if (string.IsNullOrEmpty(commitSha))
         {
-            return githubSha;
+            throw new InvalidOperationException("GITHUB_PR_HEAD_SHA must be set when running CLI E2E tests in pull request context.");
         }
 
-        // Running locally - return dummy value
-        return "local0000";
+        if (!s_commitShaPattern.IsMatch(commitSha))
+        {
+            throw new InvalidOperationException($"GITHUB_PR_HEAD_SHA must be a 40-character commit SHA, got: '{commitSha}'.");
+        }
+
+        return true;
     }
 
     /// <summary>

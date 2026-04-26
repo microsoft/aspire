@@ -393,7 +393,15 @@ internal sealed class CliInstallStrategy
                 "Expected exactly one non-symbol Aspire.Cli.*.nupkg.");
         }
 
-        return matches[0]!["Aspire.Cli.".Length..^".nupkg".Length];
+        var version = matches[0]!["Aspire.Cli.".Length..^".nupkg".Length];
+        if (!s_versionPattern.IsMatch(version))
+        {
+            throw new InvalidOperationException(
+                $"Invalid Aspire.Cli nupkg version '{version}' in '{matches[0]}'. " +
+                "Expected only alphanumeric characters, dots, and dashes.");
+        }
+
+        return version;
     }
 
     /// <summary>
@@ -405,8 +413,8 @@ internal sealed class CliInstallStrategy
     ///   4. ASPIRE_E2E_QUALITY → InstallScript with quality
     ///   5. ASPIRE_E2E_VERSION → InstallScript with version
     ///   6. ASPIRE_E2E_PREINSTALLED → Preinstalled
-    ///   7. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
-    ///   8. ASPIRE_E2E_CLI_ARCHIVE_DIR → LocalArchive
+    ///   7. ASPIRE_E2E_CLI_ARCHIVE_DIR → LocalArchive
+    ///   8. GITHUB_PR_NUMBER + GITHUB_PR_HEAD_SHA → PullRequest
     ///   9. CI/GITHUB_ACTIONS → InstallScript (dev/daily)
     ///  10. Local fallback → InstallScript (latest GA)
     /// </summary>
@@ -472,19 +480,19 @@ internal sealed class CliInstallStrategy
             return Preinstalled();
         }
 
+        var archiveDir = Environment.GetEnvironmentVariable(CliArchiveDirEnvironmentVariableName);
+        if (!string.IsNullOrEmpty(archiveDir))
+        {
+            log?.Invoke($"  → Selected: LocalArchive ({CliArchiveDirEnvironmentVariableName}={archiveDir})");
+            return FromLocalArchive(archiveDir);
+        }
+
         var prNumber = Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER");
         var headSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA");
         if (!string.IsNullOrEmpty(prNumber) && !string.IsNullOrEmpty(headSha))
         {
             log?.Invoke($"  → Selected: PullRequest (PR #{prNumber}, SHA={headSha})");
             return FromPullRequest();
-        }
-
-        var archiveDir = Environment.GetEnvironmentVariable(CliArchiveDirEnvironmentVariableName);
-        if (!string.IsNullOrEmpty(archiveDir))
-        {
-            log?.Invoke($"  → Selected: LocalArchive ({CliArchiveDirEnvironmentVariableName}={archiveDir})");
-            return FromLocalArchive(archiveDir);
         }
 
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")) ||
