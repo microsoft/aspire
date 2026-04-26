@@ -8,9 +8,29 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+// Browser-level CDP connection operations used by BrowserPageSession.
+internal interface IBrowserLogsCdpConnection : IAsyncDisposable
+{
+    Task Completion { get; }
+
+    Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken);
+
+    Task<BrowserLogsGetTargetsResult> GetTargetsAsync(CancellationToken cancellationToken);
+
+    Task<BrowserLogsAttachToTargetResult> AttachToTargetAsync(string targetId, CancellationToken cancellationToken);
+
+    Task<BrowserLogsCommandAck> CloseTargetAsync(string targetId, CancellationToken cancellationToken);
+
+    Task<BrowserLogsCommandAck> EnableTargetDiscoveryAsync(CancellationToken cancellationToken);
+
+    Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken);
+
+    Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken);
+}
+
 // Owns the browser-level websocket only. Protocol parsing stays in BrowserLogsCdpProtocol, while page lifecycle and
 // reconnection policy stay in BrowserPageSession.
-internal sealed class BrowserLogsCdpConnection : IAsyncDisposable
+internal sealed class BrowserLogsCdpConnection : IBrowserLogsCdpConnection
 {
     // CDP commands should fail fast enough to surface a broken browser session in the dashboard. Close uses a shorter
     // budget because it runs during disposal, while the websocket keep-alive stays comfortably below common proxy idle

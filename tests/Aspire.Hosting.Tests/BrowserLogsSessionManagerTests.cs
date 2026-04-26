@@ -163,6 +163,49 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public async Task BrowserHostRegistry_AdoptsValidatedSharedEndpointMetadata()
+    {
+        var userDataDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var browserExecutable = Path.Combine(userDataDirectory.FullName, "browser");
+            File.WriteAllText(browserExecutable, string.Empty);
+            var identity = new BrowserHostIdentity(browserExecutable, userDataDirectory.FullName);
+            var browserEndpoint = StartBrowserVersionEndpoint(out var serverTask);
+
+            await BrowserEndpointDiscovery.WriteAsync(
+                identity,
+                profileDirectoryName: null,
+                browserEndpoint,
+                Environment.ProcessId,
+                CancellationToken.None);
+
+            await using var registry = new BrowserHostRegistry(
+                fileSystemService: null!,
+                NullLogger<BrowserLogsSessionManager>.Instance,
+                TimeProvider.System,
+                createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
+                createHostAsync: null);
+
+            var lease = await registry.AcquireAsync(
+                new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared),
+                CancellationToken.None);
+
+            await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(BrowserHostOwnership.Adopted, lease.Host.Ownership);
+            Assert.Equal(identity, lease.Host.Identity);
+            Assert.Equal(browserEndpoint, lease.Host.DebugEndpoint);
+            Assert.Null(lease.Host.ProcessId);
+
+            await lease.DisposeAsync();
+        }
+        finally
+        {
+            userDataDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void BrowserPageSession_MapsTargetLifecycleEventsToCompletion()
     {
         var closed = BrowserPageSession.TryGetPageCompletion(

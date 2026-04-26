@@ -5,6 +5,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+// Factory for browser-level CDP connections.
+internal delegate Task<IBrowserLogsCdpConnection> BrowserLogsCdpConnectionFactory(
+    Uri webSocketUri,
+    Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+    ILogger<BrowserLogsSessionManager> logger,
+    CancellationToken cancellationToken);
+
 // Owns one browser page/tab for one browser-log session. CDP calls pages "targets", but this layer intentionally
 // models the user-visible page session. The host may be shared by many sessions, while each BrowserPageSession has
 // its own browser CDP connection, attached target session id, instrumentation setup, lifecycle monitoring, and
@@ -20,6 +27,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
 
     private readonly TaskCompletionSource<BrowserPageSessionResult> _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly BrowserConnectionDiagnosticsLogger _connectionDiagnostics;
+    private readonly BrowserLogsCdpConnectionFactory _connectionFactory;
     private readonly Func<BrowserLogsCdpProtocolEvent, ValueTask> _eventHandler;
     private readonly IBrowserHost _host;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
@@ -29,7 +37,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
     private readonly TimeProvider _timeProvider;
     private readonly Uri _url;
 
-    private BrowserLogsCdpConnection? _connection;
+    private IBrowserLogsCdpConnection? _connection;
     private Task<BrowserPageSessionResult>? _monitorTask;
     private int _disposed;
     private string? _targetId;
@@ -40,12 +48,14 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
+        BrowserLogsCdpConnectionFactory connectionFactory,
         Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         bool reuseInitialBlankTarget)
     {
         _connectionDiagnostics = connectionDiagnostics;
+        _connectionFactory = connectionFactory;
         _eventHandler = eventHandler;
         _host = host;
         _logger = logger;
@@ -100,7 +110,33 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         bool reuseInitialBlankTarget,
         CancellationToken cancellationToken)
     {
-        var pageSession = new BrowserPageSession(host, sessionId, url, connectionDiagnostics, eventHandler, logger, timeProvider, reuseInitialBlankTarget);
+        return await StartAsync(
+            host,
+            sessionId,
+            url,
+            connectionDiagnostics,
+            static async (webSocketUri, eventHandler, logger, cancellationToken) =>
+                await BrowserLogsCdpConnection.ConnectAsync(webSocketUri, eventHandler, logger, cancellationToken).ConfigureAwait(false),
+            eventHandler,
+            logger,
+            timeProvider,
+            reuseInitialBlankTarget,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<BrowserPageSession> StartAsync(
+        IBrowserHost host,
+        string sessionId,
+        Uri url,
+        BrowserConnectionDiagnosticsLogger connectionDiagnostics,
+        BrowserLogsCdpConnectionFactory connectionFactory,
+        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserLogsSessionManager> logger,
+        TimeProvider timeProvider,
+        bool reuseInitialBlankTarget,
+        CancellationToken cancellationToken)
+    {
+        var pageSession = new BrowserPageSession(host, sessionId, url, connectionDiagnostics, connectionFactory, eventHandler, logger, timeProvider, reuseInitialBlankTarget);
         try
         {
             await pageSession.ConnectAsync(createTarget: true, cancellationToken).ConfigureAwait(false);
@@ -159,7 +195,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
     {
         await DisposeConnectionAsync().ConfigureAwait(false);
 
-        _connection = await BrowserLogsCdpConnection.ConnectAsync(_host.DebugEndpoint, HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
+        _connection = await _connectionFactory(_host.DebugEndpoint, HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
         // Target discovery must be re-enabled for every browser-level connection, including reconnects. The
         // subscription is attached to this websocket, not to the browser process, and it is what makes Chromium emit
         // targetDestroyed/targetCrashed/detachedFromTarget events that tell us whether the tracked tab is gone.
