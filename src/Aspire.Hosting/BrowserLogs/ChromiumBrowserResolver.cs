@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
+using Aspire.Hosting.Resources;
 
 namespace Aspire.Hosting;
 
@@ -121,7 +123,7 @@ internal static class ChromiumBrowserResolver
 
         if (!Directory.Exists(userDataDirectory))
         {
-            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found.");
+            throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUserDataDirectoryNotFound, userDataDirectory));
         }
 
         if (TryResolveProfileDirectoryFromDirectoryEntries(userDataDirectory, profile) is { } directMatch)
@@ -156,25 +158,25 @@ internal static class ChromiumBrowserResolver
             catch (IOException ex)
             {
                 throw new InvalidOperationException(
-                    $"Unable to read Chromium profile metadata from '{localStatePath}' while resolving browser profile '{profile}'.",
+                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUnableToReadProfileMetadata, localStatePath, profile),
                     ex);
             }
             catch (UnauthorizedAccessException ex)
             {
                 throw new InvalidOperationException(
-                    $"Unable to read Chromium profile metadata from '{localStatePath}' while resolving browser profile '{profile}'.",
+                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUnableToReadProfileMetadata, localStatePath, profile),
                     ex);
             }
             catch (JsonException ex)
             {
                 throw new InvalidOperationException(
-                    $"Chromium profile metadata in '{localStatePath}' is invalid while resolving browser profile '{profile}'.",
+                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsInvalidProfileMetadata, localStatePath, profile),
                     ex);
             }
         }
 
         throw new InvalidOperationException(
-            $"Browser profile '{profile}' was not found under '{userDataDirectory}'. Specify the profile directory name (for example 'Default' or 'Profile 1') or a browser profile name from Chromium's profile metadata.");
+            string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsProfileNotFound, profile, userDataDirectory));
     }
 
     /// <summary>
@@ -208,7 +210,7 @@ internal static class ChromiumBrowserResolver
             if (match is not null && !string.Equals(match, profileEntry.Name, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
-                    $"Browser profile '{profile}' matched multiple Chromium profiles under '{userDataDirectory}'. Specify the profile directory name instead.");
+                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsAmbiguousProfile, profile, userDataDirectory));
             }
 
             match = profileEntry.Name;

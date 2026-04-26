@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
@@ -76,19 +78,25 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
 
         if (string.IsNullOrWhiteSpace(resolvedBrowser))
         {
-            throw new InvalidOperationException("Tracked browser configuration resolved an empty browser value.");
+            throw new InvalidOperationException(MessageStrings.BrowserLogsEmptyBrowserConfiguration);
         }
 
         if (resolvedProfile is not null && string.IsNullOrWhiteSpace(resolvedProfile))
         {
-            throw new InvalidOperationException("Tracked browser configuration resolved an empty profile value.");
+            throw new InvalidOperationException(MessageStrings.BrowserLogsEmptyProfileConfiguration);
         }
 
         if (resolvedUserDataMode == BrowserUserDataMode.Isolated && resolvedProfile is not null)
         {
             throw new InvalidOperationException(
-                $"Tracked browser configuration set '{BrowserLogsBuilderExtensions.ProfileConfigurationKey}' to '{resolvedProfile}' while '{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}' is '{BrowserUserDataMode.Isolated}'. " +
-                $"Profiles can only be selected when '{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}' is '{BrowserUserDataMode.Shared}'.");
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    MessageStrings.BrowserLogsProfileRequiresSharedUserDataMode,
+                    BrowserLogsBuilderExtensions.ProfileConfigurationKey,
+                    resolvedProfile,
+                    BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
+                    BrowserUserDataMode.Isolated,
+                    BrowserUserDataMode.Shared));
         }
 
         return new BrowserConfiguration(resolvedBrowser, resolvedProfile, resolvedUserDataMode);
@@ -137,7 +145,13 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
         }
 
         throw new InvalidOperationException(
-            $"Tracked browser configuration value '{value}' is not a valid '{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}'. Expected '{BrowserUserDataMode.Shared}' or '{BrowserUserDataMode.Isolated}'.");
+            string.Format(
+                CultureInfo.CurrentCulture,
+                MessageStrings.BrowserLogsInvalidUserDataModeConfiguration,
+                value,
+                BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
+                BrowserUserDataMode.Shared,
+                BrowserUserDataMode.Isolated));
     }
 
     private static string GetDefaultBrowser(BrowserUserDataMode userDataMode) =>

@@ -3,6 +3,8 @@
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
+using System.Globalization;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -51,7 +53,7 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
         var browserExecutable = ChromiumBrowserResolver.TryResolveExecutable(configuration.Browser)
-            ?? throw new InvalidOperationException($"Unable to locate browser '{configuration.Browser}'. Specify an installed Chromium-based browser or an explicit executable path.");
+            ?? throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUnableToLocateBrowser, configuration.Browser));
         var userDataDirectory = _createUserDataDirectory(configuration, browserExecutable);
         var identity = new BrowserHostIdentity(browserExecutable, userDataDirectory.Path);
 
@@ -308,8 +310,12 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
             {
                 userDataDirectory.Dispose();
                 throw new InvalidOperationException(
-                    $"Browser user data directory '{identity.UserDataRootPath}' is already in use by a non-debuggable browser. " +
-                    $"Close that browser, use '{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}'='{BrowserUserDataMode.Isolated}', or start the browser from Aspire first.");
+                    string.Format(
+                        CultureInfo.CurrentCulture,
+                        MessageStrings.BrowserLogsNonDebuggableBrowserRunning,
+                        identity.UserDataRootPath,
+                        BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
+                        BrowserUserDataMode.Isolated));
             }
         }
 
@@ -331,18 +337,22 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         // endpoint sidecar at that root; named profiles are subdirectories selected by command-line argument. The later
         // endpoint/probe logic decides whether that root is reusable, adoptable, or locked.
         var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory(configuration.Browser, browserExecutable)
-            ?? throw new InvalidOperationException($"Unable to resolve the user data directory for browser '{configuration.Browser}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.");
+            ?? throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUnableToResolveUserDataDirectory, configuration.Browser));
 
         if (!Directory.Exists(userDataDirectory))
         {
-            throw new InvalidOperationException($"Browser user data directory '{userDataDirectory}' was not found for browser '{configuration.Browser}'.");
+            throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUserDataDirectoryNotFoundForBrowser, userDataDirectory, configuration.Browser));
         }
 
         if (ChromiumBrowserResolver.IsGoogleChromeDefaultUserDataDirectory(configuration.Browser, browserExecutable, userDataDirectory))
         {
             throw new InvalidOperationException(
-                $"Google Chrome blocks remote debugging against its default user data directory '{userDataDirectory}'. " +
-                $"Use '{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}'='{BrowserUserDataMode.Isolated}' or select Microsoft Edge for shared browser state.");
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    MessageStrings.BrowserLogsGoogleChromeDefaultUserDataDirectoryNotSupported,
+                    userDataDirectory,
+                    BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
+                    BrowserUserDataMode.Isolated));
         }
 
         var profileDirectoryName = configuration.Profile is { } profile
@@ -363,8 +373,12 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         }
 
         throw new InvalidOperationException(
-            $"A tracked browser is already running for user data directory '{identity.UserDataRootPath}' with profile '{existingProfileDirectoryName ?? "(default)"}'. " +
-            $"The requested profile is '{requestedProfileDirectoryName}'. Close the existing tracked browser session or use isolated user data mode.");
+            string.Format(
+                CultureInfo.CurrentCulture,
+                MessageStrings.BrowserLogsTrackedBrowserProfileConflict,
+                identity.UserDataRootPath,
+                existingProfileDirectoryName ?? MessageStrings.BrowserLogsDefaultProfileName,
+                requestedProfileDirectoryName));
     }
 
     private sealed class BrowserHostEntry(IBrowserHost host, string? profileDirectoryName, int ReferenceCount)

@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -125,8 +127,12 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         if (!string.Equals(metadata.ProfileDirectoryName, profileDirectoryName, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"A tracked browser is already running for user data directory '{identity.UserDataRootPath}' with profile '{metadata.ProfileDirectoryName ?? "(default)"}'. " +
-                $"The requested profile is '{profileDirectoryName ?? "(default)"}'. Close the existing tracked browser session or use isolated user data mode.");
+                string.Format(
+                    CultureInfo.CurrentCulture,
+                    MessageStrings.BrowserLogsTrackedBrowserProfileConflict,
+                    identity.UserDataRootPath,
+                    metadata.ProfileDirectoryName ?? MessageStrings.BrowserLogsDefaultProfileName,
+                    profileDirectoryName ?? MessageStrings.BrowserLogsDefaultProfileName));
         }
 
         return metadata with { Endpoint = endpoint.ToString() };

@@ -3,7 +3,9 @@
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
+using System.Globalization;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -223,7 +225,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
         }
 
         var result = await processTask.ConfigureAwait(false);
-        throw new InvalidOperationException($"Tracked browser process exited with code {result.ExitCode} before reporting its process id.");
+        throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsProcessExitedBeforeProcessId, result.ExitCode));
     }
 
     private static async Task<Uri> WaitForBrowserEndpointAsync(
@@ -243,7 +245,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
             {
                 var result = await processTask.ConfigureAwait(false);
                 throw new InvalidOperationException(
-                    $"Tracked browser process exited with code {result.ExitCode} before the debug endpoint metadata was written to '{devToolsActivePortFilePath}'.");
+                    string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsProcessExitedBeforeDebugEndpoint, result.ExitCode, devToolsActivePortFilePath));
             }
 
             try

@@ -3,11 +3,12 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Resources;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
 
@@ -228,13 +229,13 @@ public static class BrowserLogsBuilderExtensions
 
             if (endpointAnnotation is null)
             {
-                throw new InvalidOperationException($"Resource '{resource.Name}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.");
+                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsResourceMissingHttpEndpoint, resource.Name));
             }
 
             var endpointReference = resource.GetEndpoint(endpointAnnotation.Name);
             if (!endpointReference.IsAllocated)
             {
-                throw new InvalidOperationException($"Endpoint '{endpointAnnotation.Name}' for resource '{resource.Name}' has not been allocated yet.");
+                throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsEndpointNotAllocated, endpointAnnotation.Name, resource.Name));
             }
 
             return new Uri(endpointReference.Url, UriKind.Absolute);
