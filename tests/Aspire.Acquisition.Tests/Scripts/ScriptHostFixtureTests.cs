@@ -12,8 +12,7 @@ namespace Aspire.Acquisition.Tests.Scripts;
 /// Repeatedly initializing and disposing the fixture exercises the bind/teardown sequence
 /// the way xUnit class fixtures do across parallel test classes, and would catch a return
 /// of the <c>Address already in use</c> race that the original <c>HttpListener</c>-based
-/// implementation hit during <c>DisposeAsync</c>. See
-/// <see href="https://github.com/microsoft/aspire/issues/...">the tracking issue</see>.
+/// implementation hit during <c>DisposeAsync</c>.
 /// </remarks>
 public class ScriptHostFixtureTests
 {

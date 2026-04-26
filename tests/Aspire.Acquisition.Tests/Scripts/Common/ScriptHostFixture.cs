@@ -64,14 +64,19 @@ public sealed class ScriptHostFixture : IAsyncLifetime
         app.MapGet("/{fileName}", (string fileName) =>
         {
             // Prevent directory traversal — only serve files directly inside the scripts directory.
+            // The route template `{fileName}` already restricts matches to a single path segment
+            // (no embedded `/`); Path.GetFileName + a startsWith check on the resolved absolute
+            // path act as defense-in-depth against any decoded traversal sequences.
             var safeName = Path.GetFileName(fileName);
             if (string.IsNullOrEmpty(safeName) || _scriptsDirectory is null)
             {
                 return Results.NotFound();
             }
 
-            var filePath = Path.Combine(_scriptsDirectory, safeName);
-            if (!File.Exists(filePath))
+            var scriptsRoot = Path.GetFullPath(_scriptsDirectory);
+            var filePath = Path.GetFullPath(Path.Combine(scriptsRoot, safeName));
+            if (!filePath.StartsWith(scriptsRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                || !File.Exists(filePath))
             {
                 return Results.NotFound();
             }
