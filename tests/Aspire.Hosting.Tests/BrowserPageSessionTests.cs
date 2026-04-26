@@ -3,6 +3,7 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Hosting.Tests;
 
@@ -135,11 +136,82 @@ public class BrowserPageSessionTests
         Assert.Equal(BrowserPageSessionCompletionKind.Stopped, result.CompletionKind);
     }
 
-    private static BrowserLogsCdpConnectionFactory CreateConnectionFactory(TestBrowserHost host, FakeBrowserLogsCdpConnection connection)
+    [Fact]
+    public async Task MonitorAsync_ReconnectsToExistingTargetAfterConnectionLoss()
     {
+        var host = new TestBrowserHost();
+        var firstConnection = new FakeBrowserLogsCdpConnection
+        {
+            CreatedTargetId = "target-1",
+            AttachSessionId = "target-session-1"
+        };
+        var secondConnection = new FakeBrowserLogsCdpConnection
+        {
+            AttachSessionId = "target-session-2"
+        };
+        var routedEvents = new List<BrowserLogsCdpProtocolEvent>();
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 4, 26, 0, 0, 0, TimeSpan.Zero));
+
+        var session = await BrowserPageSession.StartAsync(
+            host,
+            "session-0001",
+            new Uri("https://localhost:5001/"),
+            new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
+            CreateConnectionFactory(host, firstConnection, secondConnection),
+            protocolEvent =>
+            {
+                routedEvents.Add(protocolEvent);
+                return ValueTask.CompletedTask;
+            },
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            timeProvider,
+            reuseInitialBlankTarget: false,
+            CancellationToken.None);
+
+        Assert.Equal("target-1", session.TargetId);
+        Assert.Equal("target-session-1", session.TargetSessionId);
+
+        firstConnection.FailCompletion(new InvalidOperationException("Socket reset."));
+
+        await secondConnection.InstrumentationEnabled.DefaultTimeout();
+
+        Assert.True(firstConnection.Disposed);
+        Assert.Equal("target-1", session.TargetId);
+        Assert.Equal("target-session-2", session.TargetSessionId);
+        Assert.Equal(
+            new[]
+            {
+                "EnableTargetDiscovery",
+                "Attach:target-1",
+                "EnablePageInstrumentation:target-session-2"
+            },
+            secondConnection.Calls);
+
+        var routedEvent = new BrowserLogsConsoleApiCalledEvent("target-session-2", new BrowserLogsRuntimeConsoleApiCalledParameters { Type = "log" });
+        await secondConnection.RaiseEventAsync(routedEvent);
+
+        Assert.Same(routedEvent, Assert.Single(routedEvents));
+
+        await secondConnection.RaiseEventAsync(new BrowserLogsTargetDestroyedEvent(
+            SessionId: null,
+            new BrowserLogsTargetDestroyedParameters { TargetId = "target-1" }));
+
+        var result = await session.Completion.DefaultTimeout();
+        Assert.Equal(BrowserPageSessionCompletionKind.PageClosed, result.CompletionKind);
+        Assert.Null(result.Error);
+        Assert.True(secondConnection.Disposed);
+
+        await session.DisposeAsync();
+    }
+
+    private static BrowserLogsCdpConnectionFactory CreateConnectionFactory(TestBrowserHost host, params FakeBrowserLogsCdpConnection[] connections)
+    {
+        var nextConnectionIndex = 0;
         return (webSocketUri, eventHandler, _, _) =>
         {
             Assert.Equal(host.DebugEndpoint, webSocketUri);
+            Assert.True(nextConnectionIndex < connections.Length);
+            var connection = connections[nextConnectionIndex++];
             connection.SetEventHandler(eventHandler);
             return Task.FromResult<IBrowserLogsCdpConnection>(connection);
         };
@@ -181,17 +253,22 @@ public class BrowserPageSessionTests
     private sealed class FakeBrowserLogsCdpConnection : IBrowserLogsCdpConnection
     {
         private readonly TaskCompletionSource _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _instrumentationEnabled = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private Func<BrowserLogsCdpProtocolEvent, ValueTask>? _eventHandler;
 
         public List<string> Calls { get; } = [];
 
         public string CreatedTargetId { get; init; } = "target-1";
 
+        public string AttachSessionId { get; init; } = "target-session-1";
+
         public bool Disposed { get; private set; }
 
         public BrowserLogsTargetInfo[]? TargetInfos { get; init; }
 
         public Task Completion => _completionSource.Task;
+
+        public Task InstrumentationEnabled => _instrumentationEnabled.Task;
 
         public Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)
         {
@@ -208,7 +285,7 @@ public class BrowserPageSessionTests
         public Task<BrowserLogsAttachToTargetResult> AttachToTargetAsync(string targetId, CancellationToken cancellationToken)
         {
             Calls.Add($"Attach:{targetId}");
-            return Task.FromResult(new BrowserLogsAttachToTargetResult { SessionId = "target-session-1" });
+            return Task.FromResult(new BrowserLogsAttachToTargetResult { SessionId = AttachSessionId });
         }
 
         public Task<BrowserLogsCommandAck> CloseTargetAsync(string targetId, CancellationToken cancellationToken)
@@ -226,6 +303,7 @@ public class BrowserPageSessionTests
         public Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken)
         {
             Calls.Add($"EnablePageInstrumentation:{sessionId}");
+            _instrumentationEnabled.TrySetResult();
             return Task.CompletedTask;
         }
 
@@ -245,6 +323,11 @@ public class BrowserPageSessionTests
             return _eventHandler is null
                 ? throw new InvalidOperationException("The fake connection is not connected.")
                 : _eventHandler(protocolEvent);
+        }
+
+        public void FailCompletion(Exception exception)
+        {
+            _completionSource.TrySetException(exception);
         }
 
         public ValueTask DisposeAsync()
