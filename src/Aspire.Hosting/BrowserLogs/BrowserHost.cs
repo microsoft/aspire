@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
 using System.Globalization;
+using System.Text;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Logging;
@@ -73,7 +74,79 @@ internal abstract class BrowserHost(
 
         arguments.Add("about:blank");
 
-        return BrowserLogsRunningSession.BuildCommandLine(arguments);
+        return BuildCommandLine(arguments);
+    }
+
+    private static string BuildCommandLine(IReadOnlyList<string> arguments)
+    {
+        var builder = new StringBuilder();
+
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (i > 0)
+            {
+                builder.Append(' ');
+            }
+
+            AppendCommandLineArgument(builder, arguments[i]);
+        }
+
+        return builder.ToString();
+    }
+
+    // Adapted from dotnet/runtime PasteArguments.AppendArgument so ProcessSpec can safely represent Chromium flags.
+    private static void AppendCommandLineArgument(StringBuilder builder, string argument)
+    {
+        if (argument.Length != 0 && !argument.AsSpan().ContainsAny(' ', '\t', '"'))
+        {
+            builder.Append(argument);
+            return;
+        }
+
+        builder.Append('"');
+
+        var index = 0;
+        while (index < argument.Length)
+        {
+            var character = argument[index++];
+            if (character == '\\')
+            {
+                var backslashCount = 1;
+                while (index < argument.Length && argument[index] == '\\')
+                {
+                    index++;
+                    backslashCount++;
+                }
+
+                if (index == argument.Length)
+                {
+                    builder.Append('\\', backslashCount * 2);
+                }
+                else if (argument[index] == '"')
+                {
+                    builder.Append('\\', backslashCount * 2 + 1);
+                    builder.Append('"');
+                    index++;
+                }
+                else
+                {
+                    builder.Append('\\', backslashCount);
+                }
+
+                continue;
+            }
+
+            if (character == '"')
+            {
+                builder.Append('\\');
+                builder.Append('"');
+                continue;
+            }
+
+            builder.Append(character);
+        }
+
+        builder.Append('"');
     }
 
     private async Task<IBrowserPageSession> CreatePageSessionCoreAsync(
@@ -260,7 +333,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
                     }
 
                     var contents = await File.ReadAllTextAsync(devToolsActivePortFilePath, cancellationToken).ConfigureAwait(false);
-                    if (BrowserLogsDebugEndpointParser.TryParseBrowserDebugEndpoint(contents) is { } browserEndpoint)
+                    if (ChromiumDevToolsActivePortParser.TryParseBrowserDebugEndpoint(contents) is { } browserEndpoint)
                     {
                         return browserEndpoint;
                     }

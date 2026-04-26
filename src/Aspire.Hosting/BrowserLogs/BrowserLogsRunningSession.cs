@@ -3,8 +3,6 @@
 
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
 
-using System.Globalization;
-using System.Text;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -353,112 +351,5 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             ?.TargetId;
     }
 
-    internal static string BuildCommandLine(IReadOnlyList<string> arguments)
-    {
-        var builder = new StringBuilder();
-
-        for (var i = 0; i < arguments.Count; i++)
-        {
-            if (i > 0)
-            {
-                builder.Append(' ');
-            }
-
-            AppendCommandLineArgument(builder, arguments[i]);
-        }
-
-        return builder.ToString();
-    }
-
-    // Adapted from dotnet/runtime PasteArguments.AppendArgument so ProcessSpec can safely represent Chromium flags.
-    private static void AppendCommandLineArgument(StringBuilder builder, string argument)
-    {
-        if (argument.Length != 0 && !argument.AsSpan().ContainsAny(' ', '\t', '"'))
-        {
-            builder.Append(argument);
-            return;
-        }
-
-        builder.Append('"');
-
-        var index = 0;
-        while (index < argument.Length)
-        {
-            var character = argument[index++];
-            if (character == '\\')
-            {
-                var backslashCount = 1;
-                while (index < argument.Length && argument[index] == '\\')
-                {
-                    index++;
-                    backslashCount++;
-                }
-
-                if (index == argument.Length)
-                {
-                    builder.Append('\\', backslashCount * 2);
-                }
-                else if (argument[index] == '"')
-                {
-                    builder.Append('\\', backslashCount * 2 + 1);
-                    builder.Append('"');
-                    index++;
-                }
-                else
-                {
-                    builder.Append('\\', backslashCount);
-                }
-
-                continue;
-            }
-
-            if (character == '"')
-            {
-                builder.Append('\\');
-                builder.Append('"');
-                continue;
-            }
-
-            builder.Append(character);
-        }
-
-        builder.Append('"');
-    }
-
     private sealed record BrowserSessionResult(int? ExitCode, Exception? Error);
-
-}
-
-internal static class BrowserLogsDebugEndpointParser
-{
-    internal static Uri? TryParseBrowserDebugEndpoint(string activePortFileContents)
-    {
-        if (string.IsNullOrWhiteSpace(activePortFileContents))
-        {
-            return null;
-        }
-
-        using var reader = new StringReader(activePortFileContents);
-        var portLine = reader.ReadLine();
-        var browserPathLine = reader.ReadLine();
-
-        if (!int.TryParse(portLine, NumberStyles.None, CultureInfo.InvariantCulture, out var port) || port <= 0)
-        {
-            return null;
-        }
-
-        if (string.IsNullOrWhiteSpace(browserPathLine))
-        {
-            return null;
-        }
-
-        if (!browserPathLine.StartsWith("/", StringComparison.Ordinal))
-        {
-            browserPathLine = $"/{browserPathLine}";
-        }
-
-        return Uri.TryCreate($"ws://127.0.0.1:{port}{browserPathLine}", UriKind.Absolute, out var browserEndpoint)
-            ? browserEndpoint
-            : null;
-    }
 }
