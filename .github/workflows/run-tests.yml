@@ -229,8 +229,8 @@ jobs:
 
           foreach ($dir in $directories) {
             if (Test-Path -Path $dir) {
-              $nupkg = Get-ChildItem -Path $dir -Filter 'Aspire.Cli.[0-9]*.nupkg' -File -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -notlike '*.symbols.*' } |
+              $nupkg = Get-ChildItem -Path $dir -Filter 'Aspire.Cli.*.nupkg' -File -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -notlike '*.symbols.*' -and $_.Name -match '^Aspire\.Cli\.\d' } |
                 Select-Object -First 1
 
               if ($null -ne $nupkg) {
