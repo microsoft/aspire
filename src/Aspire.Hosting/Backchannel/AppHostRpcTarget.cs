@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
-using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Exec;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -47,7 +47,7 @@ internal class AppHostRpcTarget(
 
             // Stream live entries — uses a helper that swallows OperationCanceledException on cancellation
             // instead of propagating it, since yield return cannot appear in a try/catch block.
-            await foreach (var entry in ReadChannelUntilCancelledAsync(channel.Reader, linkedToken).ConfigureAwait(false))
+            await foreach (var entry in AsyncEnumerableUtils.ReadChannelUntilCancelledAsync(channel.Reader, linkedToken).ConfigureAwait(false))
             {
                 yield return entry;
             }
@@ -55,38 +55,6 @@ internal class AppHostRpcTarget(
         finally
         {
             loggerProvider.Unsubscribe(subscriberId);
-        }
-    }
-
-    /// <summary>
-    /// Reads items from a <see cref="ChannelReader{T}"/> until the channel completes or the token is cancelled,
-    /// yielding each item. Cancellation causes the sequence to complete gracefully rather than throwing.
-    /// </summary>
-    private static async IAsyncEnumerable<T> ReadChannelUntilCancelledAsync<T>(
-        ChannelReader<T> reader,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            bool hasMore;
-            try
-            {
-                hasMore = await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                yield break;
-            }
-
-            if (!hasMore)
-            {
-                yield break;
-            }
-
-            while (reader.TryRead(out var item))
-            {
-                yield return item;
-            }
         }
     }
 
@@ -107,7 +75,7 @@ internal class AppHostRpcTarget(
             catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
             {
                 // Expected when the stream is cancelled due to shutdown or client disconnect.
-                logger.LogDebug("Publishing activities stream cancelled due to AppHost shutdown");
+                logger.LogDebug("Publishing activities stream cancelled.");
                 yield break;
             }
 
@@ -131,7 +99,7 @@ internal class AppHostRpcTarget(
 
         // Use a helper that swallows OperationCanceledException on cancellation instead of propagating it,
         // since yield return cannot appear in a try/catch block.
-        await foreach (var resourceEvent in ReadEnumerableUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
+        await foreach (var resourceEvent in AsyncEnumerableUtils.ReadEnumerableUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
         {
             if (resourceEvent.Resource.Name == "aspire-dashboard")
             {
@@ -161,43 +129,6 @@ internal class AppHostRpcTarget(
                 Endpoints = endpointUris,
                 Health = healthStatus?.ToString()
             };
-        }
-    }
-
-    /// <summary>
-    /// Iterates an <see cref="IAsyncEnumerable{T}"/> until it completes or the token is cancelled,
-    /// yielding each item. Cancellation causes the sequence to complete gracefully rather than throwing.
-    /// </summary>
-    private static async IAsyncEnumerable<T> ReadEnumerableUntilCancelledAsync<T>(
-        IAsyncEnumerable<T> source,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        var enumerator = source.GetAsyncEnumerator(cancellationToken);
-        try
-        {
-            while (true)
-            {
-                bool hasNext;
-                try
-                {
-                    hasNext = await enumerator.MoveNextAsync().ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    yield break;
-                }
-
-                if (!hasNext)
-                {
-                    yield break;
-                }
-
-                yield return enumerator.Current;
-            }
-        }
-        finally
-        {
-            await enumerator.DisposeAsync().ConfigureAwait(false);
         }
     }
 
