@@ -442,6 +442,11 @@
         <target state="translated">资源</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceDetailsStateDescriptionHeader">
+        <source>State details</source>
+        <target state="new">State details</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceDetailsTypeHeader">
         <source>Type</source>
         <target state="translated">类型</target>

@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Tests.Shared.DashboardModel;
@@ -366,6 +367,29 @@ public class ResourceDetailsTests : DashboardTestContext
                 Assert.Equal("envvar3", e.Name);
                 Assert.True(e.IsValueMasked);
             });
+    }
+
+    [Fact]
+    public void Render_StateDescription_ShowsAsResourceDetailEntry()
+    {
+        // Arrange
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            state: KnownResourceState.Waiting);
+
+        // Act
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        // Assert
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
+        Assert.Contains(Columns.StateColumnResourceWaiting, resourcePropertyGrid.TextContent);
     }
 
     [Fact]

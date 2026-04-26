@@ -853,6 +853,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to State details.
+        /// </summary>
+        public static string ResourceDetailsStateDescriptionHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsStateDescriptionHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Type.
         /// </summary>
         public static string ResourceDetailsTypeHeader {
