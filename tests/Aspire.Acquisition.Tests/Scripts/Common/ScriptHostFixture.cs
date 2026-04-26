@@ -1,8 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Net;
 using Aspire.Templates.Tests;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Aspire.Acquisition.Tests.Scripts;
@@ -12,11 +18,16 @@ namespace Aspire.Acquisition.Tests.Scripts;
 /// This enables testing the documented <c>curl | bash -s</c> and <c>irm | iex</c> piped install
 /// patterns against a real HTTP server, closely matching production behavior.
 /// </summary>
+/// <remarks>
+/// The fixture uses Kestrel bound to loopback port 0 so the OS atomically allocates a free port.
+/// This avoids the TOCTOU window inherent in probing a free port via <c>TcpListener</c> and then
+/// re-binding via a different listener, and avoids the process-global prefix teardown behavior of
+/// <c>HttpListener</c> that previously caused intermittent <c>Address already in use</c> failures
+/// during fixture disposal under CI parallelism.
+/// </remarks>
 public sealed class ScriptHostFixture : IAsyncLifetime
 {
-    private HttpListener? _listener;
-    private CancellationTokenSource? _cts;
-    private Task? _serverTask;
+    private WebApplication? _app;
     private string? _scriptsDirectory;
 
     /// <summary>
@@ -25,9 +36,9 @@ public sealed class ScriptHostFixture : IAsyncLifetime
     public int Port { get; private set; }
 
     /// <summary>
-    /// Gets the base URL for the HTTP server (e.g., <c>http://localhost:12345</c>).
+    /// Gets the base URL for the HTTP server (e.g., <c>http://127.0.0.1:12345</c>).
     /// </summary>
-    public string BaseUrl => $"http://localhost:{Port}";
+    public string BaseUrl => $"http://127.0.0.1:{Port}";
 
     public async ValueTask InitializeAsync()
     {
@@ -41,38 +52,43 @@ public sealed class ScriptHostFixture : IAsyncLifetime
             throw new DirectoryNotFoundException($"Scripts directory not found: {_scriptsDirectory}");
         }
 
-        // Retry binding to avoid TOCTOU port races: another process can claim the
-        // probed port between TcpListener.Stop() and HttpListener.Start().
-        const int maxRetries = 5;
-        for (var attempt = 0; attempt < maxRetries; attempt++)
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+
+        var app = builder.Build();
+
+        // Bind to loopback port 0 — the OS will allocate a free port atomically when Kestrel starts.
+        app.Urls.Clear();
+        app.Urls.Add("http://127.0.0.1:0");
+
+        app.MapGet("/{fileName}", (string fileName) =>
         {
-            // Find a free port by binding to port 0
-            using (var portFinder = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0))
+            // Prevent directory traversal — only serve files directly inside the scripts directory.
+            var safeName = Path.GetFileName(fileName);
+            if (string.IsNullOrEmpty(safeName) || _scriptsDirectory is null)
             {
-                portFinder.Start();
-                Port = ((IPEndPoint)portFinder.LocalEndpoint).Port;
-                portFinder.Stop();
+                return Results.NotFound();
             }
 
-            _cts = new CancellationTokenSource();
-            _listener = new HttpListener();
-            _listener.Prefixes.Add($"http://localhost:{Port}/");
-
-            try
+            var filePath = Path.Combine(_scriptsDirectory, safeName);
+            if (!File.Exists(filePath))
             {
-                _listener.Start();
-                break;
+                return Results.NotFound();
             }
-            catch (HttpListenerException) when (attempt < maxRetries - 1)
-            {
-                _listener.Close();
-                _cts.Dispose();
-                _listener = null;
-                _cts = null;
-            }
-        }
 
-        _serverTask = Task.Run(() => ServeAsync(_cts!.Token));
+            // Serve as text/plain — this matches what raw.githubusercontent.com does
+            return Results.File(filePath, contentType: "text/plain; charset=utf-8");
+        });
+
+        await app.StartAsync();
+        _app = app;
+
+        // Read the actually-bound address from the server features rather than guessing it.
+        var addresses = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()
+            ?? throw new InvalidOperationException("Server addresses feature is not available.");
+        var boundAddress = addresses.Addresses.FirstOrDefault()
+            ?? throw new InvalidOperationException("Kestrel did not report any bound addresses.");
+        Port = new Uri(boundAddress).Port;
 
         // Verify the server is reachable
         using var client = new HttpClient();
@@ -81,121 +97,23 @@ public sealed class ScriptHostFixture : IAsyncLifetime
         {
             throw new InvalidOperationException($"Script host failed to start: HTTP {response.StatusCode}");
         }
-
-        await Task.CompletedTask;
     }
 
     public async ValueTask DisposeAsync()
     {
-        _cts?.Cancel();
-
-        try
-        {
-            _listener?.Stop();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Already disposed
-        }
-        catch (HttpListenerException)
-        {
-            // The listener may already be torn down while another process has reused the probed port.
-        }
-
-        if (_serverTask is not null)
+        if (_app is not null)
         {
             try
             {
-                await _serverTask.WaitAsync(TimeSpan.FromSeconds(5));
-            }
-            catch (TimeoutException)
-            {
-                // Server didn't stop in time — ignore
+                await _app.StopAsync(TimeSpan.FromSeconds(5));
             }
             catch (OperationCanceledException)
             {
-                // Expected
-            }
-        }
-
-        try
-        {
-            _listener?.Close();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Already disposed
-        }
-        catch (HttpListenerException)
-        {
-            // Closing only releases cleanup state; the server loop has already been canceled.
-        }
-
-        _cts?.Dispose();
-    }
-
-    private async Task ServeAsync(CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested && _listener?.IsListening == true)
-        {
-            HttpListenerContext ctx;
-            try
-            {
-                ctx = await _listener.GetContextAsync().WaitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
-            catch (HttpListenerException)
-            {
-                break;
+                // Shutdown timeout — ignore; DisposeAsync below will release the socket.
             }
 
-            try
-            {
-                await HandleRequestAsync(ctx);
-            }
-            catch
-            {
-                // Don't let a single request crash the server
-            }
+            await _app.DisposeAsync();
+            _app = null;
         }
-    }
-
-    private async Task HandleRequestAsync(HttpListenerContext ctx)
-    {
-        var requestPath = ctx.Request.Url?.AbsolutePath.TrimStart('/');
-
-        if (string.IsNullOrEmpty(requestPath) || _scriptsDirectory is null)
-        {
-            ctx.Response.StatusCode = 404;
-            ctx.Response.Close();
-            return;
-        }
-
-        // Prevent directory traversal
-        var safeName = Path.GetFileName(requestPath);
-        var filePath = Path.Combine(_scriptsDirectory, safeName);
-
-        if (!File.Exists(filePath))
-        {
-            ctx.Response.StatusCode = 404;
-            ctx.Response.Close();
-            return;
-        }
-
-        var content = await File.ReadAllBytesAsync(filePath);
-
-        // Serve as text/plain — this matches what raw.githubusercontent.com does
-        ctx.Response.ContentType = "text/plain; charset=utf-8";
-        ctx.Response.ContentLength64 = content.Length;
-        ctx.Response.StatusCode = 200;
-        await ctx.Response.OutputStream.WriteAsync(content);
-        ctx.Response.Close();
     }
 }
