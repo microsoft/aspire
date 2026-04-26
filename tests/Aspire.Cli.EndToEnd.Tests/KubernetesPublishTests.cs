@@ -32,10 +32,9 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
     public async Task CreateAndPublishToKubernetes()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
         var clusterName = GenerateUniqueClusterName();
 
         output.WriteLine($"Using KinD version: {KindVersion}");
@@ -52,10 +51,7 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (strategy.Mode == CliInstallMode.PullRequest)
-        {
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         try
         {

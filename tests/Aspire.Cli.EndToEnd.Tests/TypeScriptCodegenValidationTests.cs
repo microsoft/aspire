@@ -28,7 +28,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
     public async Task RestoreGeneratesSdkFiles_WithConfiguredToolchain(string toolchain)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
         var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.Redis.", "Aspire.Hosting.SqlServer."]);
@@ -118,7 +118,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
     public async Task RestoreRefreshesGeneratedSdkAfterAddingIntegration()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         // Use the DotNet container variant even for the TypeScript AppHost so local LocalHive
@@ -250,7 +250,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
     public async Task UnAwaitedChainsCompileWithAutoResolvePromises()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(

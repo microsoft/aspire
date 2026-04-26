@@ -19,7 +19,7 @@ public sealed class LogsCommandTests(ITestOutputHelper output)
     public async Task LogsCommandShowsResourceLogs()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

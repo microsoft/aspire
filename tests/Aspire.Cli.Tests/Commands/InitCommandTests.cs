@@ -372,8 +372,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
-        // Act - Invoke init command
-        var parseResult = initCommand.Parse("init");
+        // Act - Invoke init command (suppress agent init to isolate the prompt behavior being tested)
+        var parseResult = initCommand.Parse("init --suppress-agent-init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         // Assert

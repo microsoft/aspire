@@ -127,6 +127,22 @@
               "step": {
                 "type": "string",
                 "description": "%extension.debug.step%"
+              },
+              "args": {
+                "type": "array",
+                "description": "%extension.debug.args%",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "env": {
+                "type": "object",
+                "description": "%extension.debug.env%",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "default": {}
               }
             }
           }

@@ -17,15 +17,15 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class CliE2ETestHelpers
 {
-    internal const string CliArchiveWorkflowRunIdEnvironmentVariableName = CliInstallStrategy.CliArchiveWorkflowRunIdEnvironmentVariableName;
+    internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
+    private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
 
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
     /// When running locally, some commands are replaced with echo stubs.
     /// </summary>
     internal static bool IsRunningInCI =>
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")) &&
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA"));
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"));
 
     /// <summary>
     /// Gets the PR number from the GITHUB_PR_NUMBER environment variable.
@@ -46,32 +46,31 @@ internal static class CliE2ETestHelpers
         return prNumber;
     }
 
-    /// <summary>
-    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable.
-    /// This is the actual PR head commit, not the merge commit (GITHUB_SHA).
-    /// When running locally (not in CI), returns a dummy value for testing.
-    /// </summary>
-    /// <returns>The commit SHA, or a dummy value when running locally.</returns>
-    internal static string GetRequiredCommitSha()
-    {
-        var commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA");
+    internal static bool IsPullRequestContext =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")) ||
+        string.Equals(Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME"), "pull_request", StringComparison.OrdinalIgnoreCase);
 
-        if (string.IsNullOrEmpty(commitSha))
+    internal static bool TryGetPullRequestHeadSha(out string commitSha)
+    {
+        commitSha = string.Empty;
+
+        if (!IsPullRequestContext)
         {
-            // Running locally - return dummy value
-            return "local0000";
+            return false;
         }
 
-        return commitSha;
-    }
+        commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA") ?? string.Empty;
+        if (string.IsNullOrEmpty(commitSha))
+        {
+            throw new InvalidOperationException("GITHUB_PR_HEAD_SHA must be set when running CLI E2E tests in pull request context.");
+        }
 
-    /// <summary>
-    /// Gets the workflow run ID that produced the CLI archive for the current test run, if one was provided.
-    /// </summary>
-    /// <returns>The workflow run ID, or <see langword="null"/> when the current environment should resolve the PR run dynamically.</returns>
-    internal static string? GetCliArchiveWorkflowRunId()
-    {
-        return CliInstallStrategy.GetCliArchiveWorkflowRunId();
+        if (!s_commitShaPattern.IsMatch(commitSha))
+        {
+            throw new InvalidOperationException($"GITHUB_PR_HEAD_SHA must be a 40-character commit SHA, got: '{commitSha}'.");
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -174,6 +173,7 @@ internal static class CliE2ETestHelpers
         output.WriteLine($"Creating Docker test terminal:");
         output.WriteLine($"  Test name:      {testName}");
         output.WriteLine($"  Strategy:       {strategy}");
+        output.WriteLine($"  Expected ver:   {strategy.ExpectedVersion ?? "(not available)"}");
         output.WriteLine($"  Variant:        {variant}");
         output.WriteLine($"  Dockerfile:     {dockerfilePath}");
         output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");

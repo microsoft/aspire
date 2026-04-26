@@ -18,7 +18,7 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
     public async Task RestoreGeneratesSdkFiles()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.PolyglotJava, workspace: workspace);

@@ -117,6 +117,19 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_TextVisualizerDialog_WithPlaintextUrl_RendersClickableLinkAsync()
+    {
+        const string rawText = "See https://aka.ms/aspire/container-runtime-unhealthy for more information.";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var link = cut.Find("a[href='https://aka.ms/aspire/container-runtime-unhealthy']");
+        Assert.Equal("_blank", link.GetAttribute("target"));
+    }
+
+    [Fact]
     public async Task Render_TextVisualizerDialog_WithDifferentThemes_LineClassesChange()
     {
         var xml = @"<hello><!-- world --></hello>";

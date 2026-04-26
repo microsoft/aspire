@@ -309,6 +309,9 @@
   <data name="ResourceDetailsResourceHeader" xml:space="preserve">
     <value>Resource</value>
   </data>
+  <data name="ResourceDetailsStateDescriptionHeader" xml:space="preserve">
+    <value>State details</value>
+  </data>
   <data name="SpanDetailsEventsHeader" xml:space="preserve">
     <value>Events</value>
   </data>

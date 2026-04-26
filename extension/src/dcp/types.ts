@@ -163,6 +163,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     command?: AspireCommandType;
     args?: string[];
     step?: string;
+    env?: { [key: string]: string };
 }
 
 interface AspireDebuggersConfiguration {

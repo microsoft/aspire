@@ -24,7 +24,7 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
     public async Task CreateAndDeployToDockerCompose()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
@@ -37,11 +37,7 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (strategy.Mode == CliInstallMode.PullRequest)
-        {
-            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         // Step 1: Create a new Aspire Starter App (no Redis cache)
         await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);
@@ -135,7 +131,7 @@ builder.Build().Run();
     public async Task CreateAndDeployToDockerComposeInteractive()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
@@ -148,11 +144,7 @@ builder.Build().Run();
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (strategy.Mode == CliInstallMode.PullRequest)
-        {
-            var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         // Step 1: Create a new Aspire Starter App (no Redis cache)
         await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);
