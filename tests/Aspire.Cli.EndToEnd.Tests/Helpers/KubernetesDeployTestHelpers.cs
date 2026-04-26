@@ -139,51 +139,6 @@ internal static class KubernetesDeployTestHelpers
     }
 
     /// <summary>
-    /// Runs <c>aspire --version</c> and verifies the CLI version matches the expected version
-    /// from the <c>ASPIRE_E2E_EXPECTED_CLI_VERSION</c> environment variable.
-    /// Build metadata (<c>+commit</c>) is stripped before comparison since NuGet package versions
-    /// omit it, while <c>aspire --version</c> includes it via AssemblyInformationalVersion.
-    /// When the environment variable is not set (e.g. local development), the check is skipped.
-    /// </summary>
-    internal static async Task AssertAspireVersionAsync(
-        this Hex1bTerminalAutomator auto,
-        SequenceCounter counter,
-        ITestOutputHelper output)
-    {
-        var expectedVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_EXPECTED_CLI_VERSION");
-
-        if (string.IsNullOrEmpty(expectedVersion))
-        {
-            output.WriteLine("⚠️ ASPIRE_E2E_EXPECTED_CLI_VERSION is not set — skipping exact version verification.");
-            return;
-        }
-
-        output.WriteLine($"CLI version verification: exact match against '{expectedVersion}'");
-
-        await auto.TypeAsync($"VER=$(aspire --version 2>/dev/null) && BASE_VER=${{VER%%+*}} && [ \"$BASE_VER\" = \"{expectedVersion}\" ] && echo \"CLI_VERSION_EXACT:$VER\" || echo \"CLI_VERSION_MISMATCH:expected={expectedVersion} actual=$VER\"");
-        await auto.EnterAsync();
-
-        var foundExact = false;
-        await auto.WaitUntilAsync(
-            snapshot =>
-            {
-                if (new CellPatternSearcher().Find("CLI_VERSION_EXACT:").Search(snapshot).Count > 0)
-                {
-                    foundExact = true;
-                    return true;
-                }
-                return new CellPatternSearcher().Find("CLI_VERSION_MISMATCH:").Search(snapshot).Count > 0;
-            },
-            timeout: TimeSpan.FromSeconds(30),
-            description: "CLI version exact match assertion");
-
-        await auto.WaitForAnyPromptAsync(counter);
-
-        Assert.True(foundExact, $"Aspire CLI version mismatch. Expected '{expectedVersion}' but got a different version. This may indicate the wrong CLI binary was installed.");
-        output.WriteLine($"✅ CLI version matches expected: {expectedVersion}");
-    }
-
-    /// <summary>
     /// Scaffolds an Aspire project using <c>aspire new</c> (Starter template, no Redis),
     /// then adds hosting/client packages and injects custom code into the existing source files.
     /// Asserts the "Using project templates version:" message appears with a prerelease suffix.

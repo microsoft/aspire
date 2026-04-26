@@ -134,7 +134,7 @@ internal static class CliE2EAutomatorHelpers
                 throw new ArgumentOutOfRangeException(nameof(strategy), strategy.Mode, "Unknown install mode");
         }
 
-        await auto.LogAspireCliVersionAsync(counter);
+        await auto.VerifyAspireCliVersionAsync(strategy, counter);
     }
 
     /// <summary>
@@ -230,7 +230,66 @@ internal static class CliE2EAutomatorHelpers
                 throw new ArgumentOutOfRangeException(nameof(strategy), strategy.Mode, "Unknown install mode");
         }
 
-        await auto.LogAspireCliVersionAsync(counter);
+        await auto.VerifyAspireCliVersionAsync(strategy, counter);
+    }
+
+    /// <summary>
+    /// Verifies the installed Aspire CLI version matches the expected version from the install strategy.
+    /// When <see cref="CliInstallStrategy.ExpectedVersion"/> is set, runs <c>aspire --version</c> and asserts
+    /// an exact match (stripping build metadata like <c>+commit</c>).
+    /// On CI with <see cref="CliInstallMode.LocalArchive"/>, fails hard if no expected version could be determined.
+    /// Otherwise, just logs the installed version for diagnostics.
+    /// </summary>
+    internal static async Task VerifyAspireCliVersionAsync(
+        this Hex1bTerminalAutomator auto,
+        CliInstallStrategy strategy,
+        SequenceCounter counter)
+    {
+        var expectedVersion = strategy.ExpectedVersion;
+
+        if (expectedVersion is null)
+        {
+            if (CliE2ETestHelpers.IsRunningInCI && strategy.Mode is CliInstallMode.LocalArchive)
+            {
+                Assert.Fail(
+                    "Running on CI with LocalArchive mode but could not extract expected CLI version " +
+                    $"from Aspire.Cli.*.nupkg in the archive directory ({strategy.ArchiveDir}). " +
+                    "This may indicate the nupkg was not included in the archive or the copy step failed.");
+            }
+
+            // No version to verify — just log for diagnostics
+            await auto.LogAspireCliVersionAsync(counter);
+            return;
+        }
+
+        // Run bash version comparison: get installed version, strip +commit build metadata, compare
+        await auto.TypeAsync(
+            $"VER=$(aspire --version 2>/dev/null) && BASE_VER=${{VER%%+*}} && " +
+            $"[ \"$BASE_VER\" = \"{expectedVersion}\" ] && " +
+            $"echo \"CLI_VERSION_EXACT:$VER\" || " +
+            $"echo \"CLI_VERSION_MISMATCH:expected={expectedVersion} actual=$VER\"");
+        await auto.EnterAsync();
+
+        var foundExact = false;
+        await auto.WaitUntilAsync(
+            snapshot =>
+            {
+                if (new CellPatternSearcher().Find("CLI_VERSION_EXACT:").Search(snapshot).Count > 0)
+                {
+                    foundExact = true;
+                    return true;
+                }
+
+                return new CellPatternSearcher().Find("CLI_VERSION_MISMATCH:").Search(snapshot).Count > 0;
+            },
+            timeout: TimeSpan.FromSeconds(30),
+            description: "CLI version verification");
+
+        await auto.WaitForAnyPromptAsync(counter);
+
+        Assert.True(foundExact,
+            $"Aspire CLI version mismatch. Expected '{expectedVersion}' (from {strategy.Mode}) " +
+            "but got a different version. This may indicate the wrong CLI binary was installed.");
     }
 
     /// <summary>

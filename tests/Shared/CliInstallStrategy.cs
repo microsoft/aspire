@@ -207,6 +207,7 @@ internal sealed class CliInstallStrategy
 
     private const string PreinstalledEnvironmentVariableName = "ASPIRE_E2E_PREINSTALLED";
     private static readonly Regex s_versionPattern = new(@"^[0-9A-Za-z.\-]+$", RegexOptions.Compiled);
+    private static readonly Regex s_cliNupkgPattern = new(@"^Aspire\.Cli\.\d", RegexOptions.Compiled);
 
     /// <summary>
     /// The install mode.
@@ -238,7 +239,14 @@ internal sealed class CliInstallStrategy
     /// </summary>
     public string? NupkgSourcePath { get; }
 
-    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null, string? archiveDir = null, string? nupkgSourcePath = null)
+    /// <summary>
+    /// The expected CLI version after installation, when known.
+    /// Set automatically for modes where the version is deterministic (LocalArchive, DotnetTool local source, explicit version).
+    /// Used by post-install verification to assert the correct CLI binary was installed.
+    /// </summary>
+    public string? ExpectedVersion { get; }
+
+    private CliInstallStrategy(CliInstallMode mode, string? archivePath = null, CliInstallQuality? quality = null, string? version = null, string? archiveDir = null, string? nupkgSourcePath = null, string? expectedVersion = null)
     {
         Mode = mode;
         ArchivePath = archivePath;
@@ -246,6 +254,7 @@ internal sealed class CliInstallStrategy
         Version = version;
         ArchiveDir = archiveDir;
         NupkgSourcePath = nupkgSourcePath;
+        ExpectedVersion = expectedVersion;
     }
 
     /// <summary>
@@ -308,6 +317,7 @@ internal sealed class CliInstallStrategy
 
     /// <summary>
     /// Creates a LocalArchive strategy from a directory containing pre-downloaded CLI archives and NuGet packages.
+    /// Automatically extracts the expected CLI version from the <c>Aspire.Cli.{version}.nupkg</c> file in the directory.
     /// </summary>
     public static CliInstallStrategy FromLocalArchive(string archiveDir)
     {
@@ -316,7 +326,8 @@ internal sealed class CliInstallStrategy
             throw new DirectoryNotFoundException($"LocalArchive directory not found: {archiveDir}");
         }
 
-        return new CliInstallStrategy(CliInstallMode.LocalArchive, archiveDir: archiveDir);
+        var expectedVersion = ExtractExpectedVersionFromNupkgs(archiveDir);
+        return new CliInstallStrategy(CliInstallMode.LocalArchive, archiveDir: archiveDir, expectedVersion: expectedVersion);
     }
 
     /// <summary>
@@ -355,7 +366,34 @@ internal sealed class CliInstallStrategy
             throw new ArgumentException($"Invalid version format: '{version}'. Must contain only alphanumeric characters, dots, and dashes.", nameof(version));
         }
 
-        return new CliInstallStrategy(CliInstallMode.DotnetTool, version: version, nupkgSourcePath: nupkgSourcePath);
+        return new CliInstallStrategy(CliInstallMode.DotnetTool, version: version, nupkgSourcePath: nupkgSourcePath, expectedVersion: version);
+    }
+
+    /// <summary>
+    /// Extracts the CLI version from an <c>Aspire.Cli.{version}.nupkg</c> file in the given directory.
+    /// Returns <c>null</c> when no matching nupkg is found.
+    /// Throws if multiple non-symbol <c>Aspire.Cli.*.nupkg</c> files are found (ambiguous).
+    /// </summary>
+    internal static string? ExtractExpectedVersionFromNupkgs(string archiveDir)
+    {
+        var matches = Directory.GetFiles(archiveDir, "Aspire.Cli.*.nupkg")
+            .Select(Path.GetFileName)
+            .Where(f => f is not null && !f.Contains(".symbols.", StringComparison.OrdinalIgnoreCase) && s_cliNupkgPattern.IsMatch(f))
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            return null;
+        }
+
+        if (matches.Count > 1)
+        {
+            throw new InvalidOperationException(
+                $"Found {matches.Count} Aspire.Cli nupkg files in '{archiveDir}': {string.Join(", ", matches)}. " +
+                "Expected exactly one non-symbol Aspire.Cli.*.nupkg.");
+        }
+
+        return matches[0]!["Aspire.Cli.".Length..^".nupkg".Length];
     }
 
     /// <summary>
@@ -376,9 +414,6 @@ internal sealed class CliInstallStrategy
     public static CliInstallStrategy Detect(Action<string>? log = null)
     {
         log?.Invoke("CLI install strategy detection starting...");
-
-        var expectedVersion = Environment.GetEnvironmentVariable("ASPIRE_E2E_EXPECTED_CLI_VERSION");
-        log?.Invoke($"  ASPIRE_E2E_EXPECTED_CLI_VERSION = {(string.IsNullOrEmpty(expectedVersion) ? "(not set)" : expectedVersion)}");
 
         var archivePath = Environment.GetEnvironmentVariable("ASPIRE_E2E_ARCHIVE");
         if (!string.IsNullOrEmpty(archivePath))
@@ -520,7 +555,7 @@ internal sealed class CliInstallStrategy
     /// </summary>
     public override string ToString()
     {
-        return Mode switch
+        var description = Mode switch
         {
             CliInstallMode.LocalHive => $"LocalHive ({ArchivePath})",
             CliInstallMode.Preinstalled => "Preinstalled (~/.aspire)",
@@ -534,5 +569,9 @@ internal sealed class CliInstallStrategy
             CliInstallMode.DotnetTool => "DotnetTool (latest)",
             _ => Mode.ToString(),
         };
+
+        return ExpectedVersion is not null
+            ? $"{description} [expected={ExpectedVersion}]"
+            : description;
     }
 }

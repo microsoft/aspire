@@ -172,7 +172,7 @@ internal static class CliE2ETestHelpers
         output.WriteLine($"Creating Docker test terminal:");
         output.WriteLine($"  Test name:      {testName}");
         output.WriteLine($"  Strategy:       {strategy}");
-        output.WriteLine($"  Expected ver:   {Environment.GetEnvironmentVariable("ASPIRE_E2E_EXPECTED_CLI_VERSION") ?? "(not set)"}");
+        output.WriteLine($"  Expected ver:   {strategy.ExpectedVersion ?? "(not available)"}");
         output.WriteLine($"  Variant:        {variant}");
         output.WriteLine($"  Dockerfile:     {dockerfilePath}");
         output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");

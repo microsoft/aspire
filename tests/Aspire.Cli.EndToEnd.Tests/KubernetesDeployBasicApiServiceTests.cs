@@ -45,9 +45,6 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
-        // Assert CLI version has a prerelease suffix (runs in both CI and local)
-        await auto.AssertAspireVersionAsync(counter, output);
-
         try
         {
             // =====================================================================

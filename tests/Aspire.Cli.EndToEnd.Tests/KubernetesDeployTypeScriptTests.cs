@@ -45,8 +45,6 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
             await auto.VerifyAspireCliVersionAsync(commitSha, counter);
         }
 
-        await auto.AssertAspireVersionAsync(counter, output);
-
         try
         {
             // =====================================================================
