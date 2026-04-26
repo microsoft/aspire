@@ -346,7 +346,8 @@ internal static class CommandsConfigurationExtensions
             else
             {
                 var failureMessage = $"Build failed with exit code {exitCode}.";
-                LogBuildError(mainLogger, buildOutput, failureMessage);
+                buildOutput.Append(failureMessage);
+                mainLogger.LogError(BuildLogPrefix + "Build failed with exit code {ExitCode}.", exitCode);
                 await resourceNotificationService.PublishUpdateAsync(projectResource, s => s with
                 {
                     State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
@@ -463,16 +464,29 @@ internal static class CommandsConfigurationExtensions
 
         public void Append(string content)
         {
+            var lines = content
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Split('\n');
+
             lock (_lock)
             {
-                if (_lines.Count == MaxBuildOutputLineCount)
+                foreach (var line in lines)
                 {
-                    _lines.Dequeue();
-                    _droppedLineCount++;
+                    AppendLine(line);
                 }
-
-                _lines.Enqueue(BuildLogPrefix + content);
             }
+        }
+
+        private void AppendLine(string content)
+        {
+            if (_lines.Count == MaxBuildOutputLineCount)
+            {
+                _lines.Dequeue();
+                _droppedLineCount++;
+            }
+
+            _lines.Enqueue(BuildLogPrefix + content);
         }
 
         public string GetOutput()
