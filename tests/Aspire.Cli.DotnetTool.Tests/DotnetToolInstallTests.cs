@@ -67,6 +67,7 @@ public sealed class DotnetToolInstallTests(ITestOutputHelper output) : IAsyncLif
         // Framework-dependent tools (Runner="dotnet") get an .exe shim on Windows.
         _aspirePath = FindToolShim(_toolPath);
         Assert.True(_aspirePath is not null, BuildShimNotFoundMessage(_toolPath));
+        Assert.True(Directory.Exists(Path.Combine(_toolPath, ".store")), BuildStoreNotFoundMessage(_toolPath));
     }
 
     public ValueTask DisposeAsync()
@@ -214,5 +215,13 @@ public sealed class DotnetToolInstallTests(ITestOutputHelper output) : IAsyncLif
             ? string.Join(", ", Directory.GetFiles(toolPath).Select(Path.GetFileName))
             : "(directory does not exist)";
         return $"Tool shim not found in {toolPath}. Files present: [{files}]";
+    }
+
+    private static string BuildStoreNotFoundMessage(string toolPath)
+    {
+        var directories = Directory.Exists(toolPath)
+            ? string.Join(", ", Directory.GetDirectories(toolPath).Select(Path.GetFileName))
+            : "(directory does not exist)";
+        return $"Tool store directory not found in {toolPath}. Directories present: [{directories}]";
     }
 }

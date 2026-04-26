@@ -490,6 +490,49 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
+    public void FromDotnetToolLocalSource_InfersVersionAndIgnoresRidPackages()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0-preview.1.12345.1.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0-preview.1.12345.1.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.win-x64.13.3.0-preview.1.12345.1.nupkg"), "");
+
+            var strategy = CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName);
+
+            Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+            Assert.Equal(tempDir.FullName, strategy.NupkgSourcePath);
+            Assert.Equal("13.3.0-preview.1.12345.1", strategy.Version);
+            Assert.Equal("13.3.0-preview.1.12345.1", strategy.ExpectedVersion);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FromDotnetToolLocalSource_ThrowsWhenOnlyRidPackagesArePresent()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0-preview.1.12345.1.nupkg"), "");
+
+            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName));
+
+            Assert.Contains("No Aspire.Cli tool nupkg found", exception.Message);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void FromPullRequest_ThrowsWhenPrMetadataIsMissing()
     {
         using var environment = new EnvironmentVariableScope(

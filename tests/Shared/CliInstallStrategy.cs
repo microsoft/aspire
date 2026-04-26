@@ -370,6 +370,24 @@ internal sealed class CliInstallStrategy
     }
 
     /// <summary>
+    /// Creates a DotnetTool strategy to install from a local directory of nupkg files, inferring
+    /// the tool package version from the <c>Aspire.Cli.{version}.nupkg</c> package.
+    /// </summary>
+    public static CliInstallStrategy FromDotnetToolLocalSource(string nupkgSourcePath)
+    {
+        if (!Directory.Exists(nupkgSourcePath))
+        {
+            throw new DirectoryNotFoundException($"Nupkg source directory not found: {nupkgSourcePath}");
+        }
+
+        var version = ExtractExpectedVersionFromNupkgs(nupkgSourcePath)
+            ?? throw new InvalidOperationException(
+                $"No Aspire.Cli tool nupkg found in '{nupkgSourcePath}'. Expected exactly one non-symbol Aspire.Cli.{{version}}.nupkg package.");
+
+        return FromDotnetToolLocalSource(nupkgSourcePath, version);
+    }
+
+    /// <summary>
     /// Extracts the CLI version from an <c>Aspire.Cli.{version}.nupkg</c> file in the given directory.
     /// Returns <c>null</c> when no matching nupkg is found.
     /// Throws if multiple non-symbol <c>Aspire.Cli.*.nupkg</c> files are found (ambiguous).
