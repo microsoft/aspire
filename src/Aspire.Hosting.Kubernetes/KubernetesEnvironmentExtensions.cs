@@ -238,4 +238,110 @@ public static class KubernetesEnvironmentExtensions
     {
         builder.Resource.DeploymentEngineStepsFactory ??= HelmDeploymentEngine.CreateStepsAsync;
     }
+
+    /// <summary>
+    /// Sets the default ingress configuration for all resources with external HTTP endpoints
+    /// deployed to this Kubernetes environment.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="configure">
+    /// A callback that configures ingress for each resource with external HTTP endpoints.
+    /// The callback typically adds <see cref="Kubernetes.Resources.Ingress"/> objects
+    /// to <see cref="KubernetesResource.AdditionalResources"/>.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This sets the environment-level default. Individual resources can override this
+    /// using <see cref="KubernetesServiceExtensions.WithKubernetesIngress{T}"/>.
+    /// The last annotation added wins.
+    /// </remarks>
+    [AspireExport("withIngressConfigure", Description = "Configures the default ingress strategy for a Kubernetes environment")]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithIngress(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        Func<KubernetesIngressContext, Task> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        return builder.WithAnnotation(new KubernetesIngressConfigurationAnnotation(configure));
+    }
+
+    /// <summary>
+    /// Enables or disables automatic ingress generation for all resources in this
+    /// Kubernetes environment.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="enabled">
+    /// <c>true</c> to leave ingress behavior as-is (no-op); <c>false</c> to suppress
+    /// any previously configured ingress annotation on this environment.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// Calling <c>WithIngress(false)</c> removes any existing
+    /// <see cref="KubernetesIngressConfigurationAnnotation"/> from the environment,
+    /// preventing automatic ingress generation for all resources.
+    /// </remarks>
+    [AspireExport("withIngressEnabled", Description = "Enables or disables automatic ingress for a Kubernetes environment")]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithIngress(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        bool enabled)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (!enabled)
+        {
+            var toRemove = builder.Resource.Annotations.OfType<KubernetesIngressConfigurationAnnotation>().ToList();
+            foreach (var annotation in toRemove)
+            {
+                builder.Resource.Annotations.Remove(annotation);
+            }
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Installs a Helm chart into the Kubernetes cluster before the application is deployed.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="releaseName">The Helm release name for the chart.</param>
+    /// <param name="configure">A callback to configure the chart options (chart URL, version, namespace, values).</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// The chart is installed via <c>helm upgrade --install</c> after AKS/cluster credentials
+    /// are fetched and before the application's Helm chart is deployed.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// builder.AddKubernetesEnvironment("k8s")
+    ///     .WithHelmChart("cert-manager", options =>
+    ///     {
+    ///         options.Chart = "oci://quay.io/jetstack/charts/cert-manager";
+    ///         options.Version = "v1.19.3";
+    ///         options.Namespace = "cert-manager";
+    ///         options.Values["crds.enabled"] = "true";
+    ///     });
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Installs a Helm chart into the Kubernetes cluster", RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<KubernetesEnvironmentResource> WithHelmChart(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        string releaseName,
+        Action<HelmChartInstallOptions> configure)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(releaseName);
+        ArgumentNullException.ThrowIfNull(configure);
+
+        var options = new HelmChartInstallOptions();
+        configure(options);
+
+        if (string.IsNullOrEmpty(options.Chart))
+        {
+            throw new InvalidOperationException($"HelmChartInstallOptions.Chart must be set for release '{releaseName}'.");
+        }
+
+        builder.WithAnnotation(new HelmChartAnnotation(releaseName, options));
+        return builder;
+    }
 }

@@ -10,6 +10,7 @@ using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Extensions;
+using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
@@ -98,6 +99,16 @@ public static class AzureKubernetesEnvironmentExtensions
         // can create an AcrPull role assignment for the kubelet identity.
         // The publishing context will wire this as a parameter in main.bicep.
         resource.Parameters["acrName"] = defaultRegistry.Resource.NameOutputReference;
+
+        // Configure default ingress for external HTTP endpoints.
+        // This generates Kubernetes Ingress resources with the AGC ingress class.
+        // NOTE: The AGC Azure resource (trafficController + frontend + association)
+        // requires a dedicated subnet in a VNet. The Bicep provisioning is not
+        // included by default — it will be added when the user calls
+        // WithApplicationGateway() which ensures a VNet/subnet is configured.
+        // The Ingress YAML is still generated so users who install their own
+        // ingress controller (or AGC manually) get working ingress rules.
+        k8sEnvBuilder.WithIngress(ConfigureAksDefaultIngress);
 
         // Ensure push steps wait for ALL Azure provisioning to complete. Push steps
         // call registry.Endpoint.GetValueAsync() which awaits the BicepOutputReference
@@ -350,6 +361,121 @@ public static class AzureKubernetesEnvironmentExtensions
     }
 
     /// <summary>
+    /// Provisions an Azure Application Gateway for Containers (AGC) instance and configures it
+    /// as the ingress controller for this AKS environment. A dedicated subnet for AGC is
+    /// automatically created in the same VNet as the AKS cluster.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// This method requires that the AKS environment has a VNet subnet configured via
+    /// <see cref="WithSubnet(IResourceBuilder{AzureKubernetesEnvironmentResource}, IResourceBuilder{AzureSubnetResource})"/>.
+    /// An AGC-dedicated subnet (<c>agc-subnet</c>) is automatically created in the same VNet.
+    /// </para>
+    /// <para>
+    /// The AGC traffic controller and frontend are provisioned via Bicep, and the generated
+    /// Kubernetes Ingress resources include the <c>alb.networking.azure.io/alb-id</c> annotation
+    /// pointing to the provisioned AGC instance.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+    /// var aksSubnet = vnet.AddSubnet("aks-subnet", "10.0.0.0/22");
+    ///
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks")
+    ///     .WithSubnet(aksSubnet)
+    ///     .WithApplicationGateway();
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Provisions Azure Application Gateway for Containers as the ingress controller")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithApplicationGateway(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // Find the AKS subnet to discover the parent VNet
+        if (!builder.Resource.TryGetLastAnnotation<AksSubnetAnnotation>(out _))
+        {
+            throw new InvalidOperationException(
+                $"WithApplicationGateway() requires a VNet subnet. " +
+                $"Call WithSubnet() before WithApplicationGateway(), or use " +
+                $"WithApplicationGateway(subnet) to specify the AGC subnet explicitly.");
+        }
+
+        // The AKS subnet ID is a BicepOutputReference like "{vnet.outputs.aksSubnet_Id}".
+        // We need to find the parent VNet resource in the app model to add a new subnet.
+        var vnetResource = builder.ApplicationBuilder.Resources
+            .OfType<AzureVirtualNetworkResource>()
+            .FirstOrDefault();
+
+        if (vnetResource is null)
+        {
+            throw new InvalidOperationException(
+                $"Could not find an AzureVirtualNetworkResource in the app model. " +
+                $"Use WithApplicationGateway(subnet) to specify the AGC subnet explicitly.");
+        }
+
+        // Auto-create a dedicated subnet for AGC in the same VNet
+        var vnetBuilder = builder.ApplicationBuilder.CreateResourceBuilder(vnetResource);
+        var agcSubnet = vnetBuilder.AddSubnet("agc-subnet", "10.0.4.0/24");
+
+        return builder.WithApplicationGateway(agcSubnet);
+    }
+
+    /// <summary>
+    /// Provisions an Azure Application Gateway for Containers (AGC) instance in the specified
+    /// subnet and configures it as the ingress controller for this AKS environment.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="subnet">The dedicated subnet for the AGC instance. This subnet must not be shared with other resources.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// The AGC traffic controller, frontend, and subnet association are provisioned via Bicep.
+    /// The generated Kubernetes Ingress resources include the <c>alb.networking.azure.io/alb-id</c>
+    /// annotation pointing to the provisioned AGC instance.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+    /// var aksSubnet = vnet.AddSubnet("aks-subnet", "10.0.0.0/22");
+    /// var agcSubnet = vnet.AddSubnet("agc-subnet", "10.0.4.0/24");
+    ///
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks")
+    ///     .WithSubnet(aksSubnet)
+    ///     .WithApplicationGateway(agcSubnet);
+    /// </code>
+    /// </example>
+    [AspireExport("withApplicationGatewaySubnet", Description = "Provisions Azure Application Gateway for Containers with an explicit subnet")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithApplicationGateway(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        IResourceBuilder<AzureSubnetResource> subnet)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(subnet);
+
+        var name = builder.Resource.Name;
+
+        // Add service delegation to the subnet — AGC requires the subnet
+        // to be delegated to Microsoft.ServiceNetworking/TrafficControllers.
+        const string agcDelegationService = "Microsoft.ServiceNetworking/TrafficControllers";
+        subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
+            agcDelegationService, agcDelegationService));
+
+        // Provision AGC via inline Bicep
+        var agc = builder.ApplicationBuilder.AddBicepTemplateString($"{name}-agc", GenerateAgcBicep());
+        agc.Resource.Parameters["subnetId"] = subnet.Resource.Id;
+        agc.Resource.Parameters["aksClusterName"] = builder.Resource.NameOutputReference;
+
+        // Store the AGC outputs on the AKS resource
+        builder.Resource.AgcResourceId = new BicepOutputReference("agcId", agc.Resource);
+        builder.Resource.AgcFrontendFqdn = new BicepOutputReference("agcFrontendFqdn", agc.Resource);
+
+        return builder;
+    }
+
+    /// <summary>
     /// Enables or disables workload identity on the AKS environment, allowing pods to authenticate
     /// to Azure services using federated credentials.
     /// </summary>
@@ -371,6 +497,287 @@ public static class AzureKubernetesEnvironmentExtensions
         builder.Resource.OidcIssuerEnabled = enabled;
         builder.Resource.WorkloadIdentityEnabled = enabled;
         return builder;
+    }
+
+    /// <summary>
+    /// Installs cert-manager and configures a Let's Encrypt ClusterIssuer for automatic
+    /// TLS certificate management. Use with <see cref="KubernetesServiceExtensions.WithDomain{T}"/>
+    /// to enable HTTPS on individual resources.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    [AspireExport(Description = "Installs cert-manager for automatic TLS certificate management")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithCertManager(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder)
+    {
+        return builder.WithCertManager("noreply@aspire.azure.com");
+    }
+
+    /// <summary>
+    /// Installs cert-manager and configures a Let's Encrypt ClusterIssuer for automatic
+    /// TLS certificate management with the specified contact email.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="email">The email address for Let's Encrypt ACME registration (used for certificate expiry notifications).</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesEnvironmentResource}"/> for chaining.</returns>
+    [AspireExport("withCertManagerEmail", Description = "Installs cert-manager with a specific contact email")]
+    public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithCertManager(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        string email)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(email);
+
+        var k8sEnvBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.KubernetesEnvironment);
+
+        // Install cert-manager Helm chart with self-check workaround
+        // for hairpin NAT (pods can't reach external AGC FQDN from inside cluster)
+        k8sEnvBuilder.WithHelmChart("cert-manager", options =>
+        {
+            options.Chart = "oci://quay.io/jetstack/charts/cert-manager";
+            options.Version = "v1.17.2";
+            options.Namespace = "cert-manager";
+            options.Values["crds.enabled"] = "true";
+            options.Values["extraArgs"] = "{--acme-http01-solver-nameservers=8.8.8.8:53}";
+        });
+
+        // Store the issuer name for use by WithDomain
+        const string issuerName = "letsencrypt-aspire";
+        builder.Resource.CertManagerIssuerName = issuerName;
+
+        // Add a ClusterIssuer via KubernetesServiceCustomizationAnnotation.
+        // It gets added to the first compute resource's AdditionalResources
+        // so it's included in the Helm chart output.
+        // The ingressTemplate must include the alb-id annotation so AGC accepts
+        // the solver Ingress created during HTTP-01 challenges.
+        k8sEnvBuilder.Resource.Annotations.Add(new KubernetesServiceCustomizationAnnotation(kubeResource =>
+        {
+            var issuer = new Kubernetes.Resources.ClusterIssuer
+            {
+                Metadata = { Name = issuerName }
+            };
+            issuer.Spec.Acme.Email = email;
+
+            var solver = new Kubernetes.Resources.AcmeSolver
+            {
+                Http01 = new Kubernetes.Resources.Http01Solver
+                {
+                    Ingress = new Kubernetes.Resources.Http01IngressSolver
+                    {
+                        IngressClassName = "azure-alb-external"
+                    }
+                }
+            };
+            issuer.Spec.Acme.Solvers.Add(solver);
+            kubeResource.AdditionalResources.Add(issuer);
+        }));
+
+        return builder;
+    }
+
+    private static Task ConfigureAksDefaultIngress(KubernetesIngressContext ctx)
+    {
+        var serviceName = ctx.Resource.Name.ToServiceName();
+        var resourceName = ctx.Resource.Name;
+
+        // If the environment is owned by an AKS resource with AGC provisioned,
+        // use a Helm expression for the AGC resource ID annotation. The actual
+        // value will be resolved at deploy time from Bicep outputs via
+        // CapturedHelmValueProviders (wired in AzureKubernetesInfrastructure).
+        string? agcIdHelmExpression = null;
+        if (ctx.Environment.OwningComputeEnvironment is AzureKubernetesEnvironmentResource aksResource &&
+            aksResource.AgcResourceId is not null)
+        {
+            var helmKey = "agcId";
+            agcIdHelmExpression = $"{{{{ .Values.parameters.{resourceName}.{helmKey} }}}}";
+
+            // Add a placeholder parameter so values.yaml has the section structure.
+            ctx.KubernetesResource.Parameters[helmKey] = new KubernetesResource.HelmValue(
+                agcIdHelmExpression, string.Empty);
+        }
+
+        // Create a single Ingress per resource (not per endpoint).
+        // In Kubernetes, TLS is terminated at the ingress — the container runs HTTP only.
+        // Multiple external endpoints on the same resource share one AGC frontend/FQDN.
+        // Pick the first HTTP endpoint as the backend port.
+        var primaryEndpoint = ctx.ExternalHttpEndpoints[0];
+        var backendPortName = primaryEndpoint.Name;
+
+        // Check for a custom domain on this resource
+        string? customDomain = null;
+        string? certManagerIssuer = null;
+        if (ctx.Resource.TryGetLastAnnotation<KubernetesCustomDomainAnnotation>(out var domainAnnotation))
+        {
+            customDomain = domainAnnotation.Hostname;
+            if (ctx.Environment.OwningComputeEnvironment is AzureKubernetesEnvironmentResource aks)
+            {
+                certManagerIssuer = aks.CertManagerIssuerName;
+            }
+        }
+
+        var ingress = new Ingress
+        {
+            Metadata =
+            {
+                Name = $"{ctx.Resource.Name.ToKubernetesResourceName()}-ingress",
+                Labels = ctx.KubernetesResource.Labels.ToDictionary(),
+            },
+            Spec =
+            {
+                IngressClassName = "azure-alb-external",
+                Rules =
+                {
+                    new IngressRuleV1
+                    {
+                        Host = customDomain!,
+                        Http = new HttpIngressRuleValueV1
+                        {
+                            Paths =
+                            {
+                                new HttpIngressPathV1
+                                {
+                                    Path = "/",
+                                    PathType = "Prefix",
+                                    Backend = new IngressBackendV1
+                                    {
+                                        Service = new IngressServiceBackendV1
+                                        {
+                                            Name = serviceName,
+                                            Port = new ServiceBackendPortV1 { Name = backendPortName }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        // If a custom domain is configured with cert-manager, add TLS section
+        if (customDomain is not null && certManagerIssuer is not null)
+        {
+            ingress.Metadata.Annotations["cert-manager.io/cluster-issuer"] = certManagerIssuer;
+            ingress.Spec.Tls.Add(new IngressTLSV1
+            {
+                SecretName = $"{ctx.Resource.Name.ToKubernetesResourceName()}-tls",
+                Hosts = { customDomain }
+            });
+        }
+
+        // Wire the AGC resource ID as an annotation so the ALB controller
+        // knows which Application Gateway for Containers instance to use.
+        if (agcIdHelmExpression is not null)
+        {
+            ingress.Metadata.Annotations["alb.networking.azure.io/alb-id"] = agcIdHelmExpression;
+        }
+
+        ctx.KubernetesResource.AdditionalResources.Add(ingress);
+
+        return Task.CompletedTask;
+    }
+
+    private static string GenerateAgcBicep()
+    {
+        return """
+            @description('The Azure region for the Application Gateway for Containers resources.')
+            param location string = resourceGroup().location
+
+            @description('The resource ID of the dedicated subnet for AGC.')
+            param subnetId string
+
+            @description('The name of the AKS cluster.')
+            param aksClusterName string
+
+            // Enable the managed Gateway API and ALB controller on the AKS cluster.
+            resource aksAlbUpdate 'Microsoft.ContainerService/managedClusters@2026-02-02-preview' = {
+              name: aksClusterName
+              location: location
+              properties: {
+                ingressProfile: {
+                  gatewayApi: {
+                    installation: 'Standard'
+                  }
+                  applicationLoadBalancer: {
+                    enabled: true
+                  }
+                }
+              }
+              identity: {
+                type: 'SystemAssigned'
+              }
+              sku: {
+                name: 'Base'
+                tier: 'Free'
+              }
+            }
+
+            // Provision the AGC traffic controller, frontend, and subnet association.
+            var agcName = take('agc-${uniqueString(resourceGroup().id)}', 63)
+
+            // Grant the ALB controller's managed identity access to manage AGC resources
+            // in this resource group. The identity is created automatically by the addon.
+            var albPrincipalId = aksAlbUpdate.properties.ingressProfile.applicationLoadBalancer.identity.objectId
+
+            // AppGw for Containers Configuration Manager role
+            resource agcConfigManagerRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+              name: guid(resourceGroup().id, 'agc-config-manager')
+              properties: {
+                roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'fbc52c3f-28ad-4303-a892-8a056630b8f1')
+                principalId: albPrincipalId
+                principalType: 'ServicePrincipal'
+              }
+            }
+
+            // Reader role on the resource group
+            resource agcReaderRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+              name: guid(resourceGroup().id, 'agc-reader')
+              properties: {
+                roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'acdd72a7-3385-48ef-bd42-f606fba81ae7')
+                principalId: albPrincipalId
+                principalType: 'ServicePrincipal'
+              }
+            }
+
+            // Network Contributor on the AGC subnet
+            resource agcNetworkContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+              name: guid(subnetId, 'agc-network-contributor')
+              properties: {
+                roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7')
+                principalId: albPrincipalId
+                principalType: 'ServicePrincipal'
+              }
+            }
+
+            resource trafficController 'Microsoft.ServiceNetworking/trafficControllers@2025-01-01' = {
+              name: agcName
+              location: location
+              properties: {}
+              dependsOn: [aksAlbUpdate, agcConfigManagerRole, agcReaderRole, agcNetworkContributorRole]
+            }
+
+            resource frontend 'Microsoft.ServiceNetworking/trafficControllers/frontends@2025-01-01' = {
+              parent: trafficController
+              name: 'default'
+              location: location
+              properties: {}
+            }
+
+            resource association 'Microsoft.ServiceNetworking/trafficControllers/associations@2025-01-01' = {
+              parent: trafficController
+              name: 'default'
+              location: location
+              properties: {
+                associationType: 'subnets'
+                subnet: {
+                  id: subnetId
+                }
+              }
+            }
+
+            output agcId string = trafficController.id
+            output agcFrontendFqdn string = frontend.properties.fqdn
+            """;
     }
 
     private static void ConfigureAksInfrastructure(AzureResourceInfrastructure infrastructure)
@@ -642,3 +1049,4 @@ public static class AzureKubernetesEnvironmentExtensions
         }
     }
 }
+
