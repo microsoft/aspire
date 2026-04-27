@@ -1,6 +1,6 @@
 ---
 name: aspireify
-description: "One-time skill for completing Aspire initialization after `aspire init` has dropped the skeleton AppHost and aspire.config.json. This skill scans the repository, discovers projects, wires up the AppHost (TypeScript or C#), configures dependencies and OpenTelemetry, validates that `aspire start` works, and self-removes on success."
+description: "One-time skill for completing Aspire initialization in an existing app after `aspire init` has dropped the skeleton AppHost. Use this skill when an `aspire.config.json` exists but the AppHost has not yet been wired up."
 ---
 
 # Aspireify

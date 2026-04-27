@@ -2,7 +2,7 @@
 
 Use this reference when writing Step 5 (Wire up the AppHost) or when you need to look up Aspire APIs, integration packages, or wiring patterns.
 
-> **⚠️ Always look up APIs before writing code.** Do not guess builder method names or parameter shapes. Use `aspire docs search "<topic>"` and `aspire docs get "<slug>"` to confirm the correct API.
+> **⚠️ Always look up APIs before writing code.** Do not guess builder method names or parameter shapes. Use `aspire docs search "<topic>"` and `aspire docs get "<slug>"` for documented patterns, then `aspire docs api search "<query>" --language csharp|typescript` and `aspire docs api get "<id>"` to confirm the exact reference entry for the API you are about to call.
 
 ## Looking up APIs and integrations
 
@@ -49,12 +49,17 @@ aspire docs search "python uvicorn"
 aspire docs get "redis-integration"
 aspire docs get "go-integration"
 
+# Find the exact C# / TypeScript API reference entry for a builder method
+aspire docs api search "AddRedis" --language csharp
+aspire docs api search "AddViteApp" --language typescript
+aspire docs api get "<id-from-api-search>"
+
 # List ALL available integrations (first-party and community toolkit)
 # Note: requires the Aspire MCP server to be connected. If this fails, use aspire docs search instead.
 aspire list integrations
 ```
 
-Use `aspire docs search` to find the right builder methods, configuration options, and patterns. Use `aspire docs get <slug>` to read the full doc page. Use `aspire list integrations` to discover packages you might not have known about.
+Use `aspire docs search` / `aspire docs get` to find the right builder methods, configuration options, and patterns. Use `aspire docs api search` / `aspire docs api get` when you need the exact reference entry (parameter shapes, return types, overloads) for the API you are about to call. Use `aspire list integrations` to discover packages you might not have known about.
 
 **Don't invent APIs** — if docs search and integration list don't return it, it doesn't exist. Fall back to Tier 3 and note the limitation to the user. **API shapes differ between C# and TypeScript** — always check the correct language docs.
 

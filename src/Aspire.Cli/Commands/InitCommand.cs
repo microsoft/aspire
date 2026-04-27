@@ -169,9 +169,12 @@ internal sealed class InitCommand : BaseCommand
             return Task.FromResult(ExitCodeConstants.Success);
         }
 
-        // Drop bare single-file apphost
-        var appHostContent = """
-            #:sdk Aspire.AppHost.Sdk
+        // Drop bare single-file apphost. Pin the SDK version so later operations
+        // (project updating, version parsing in ProjectUpdater/FallbackProjectParser)
+        // can locate and update the directive — they expect the @<version> form.
+        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
+        var appHostContent = $$"""
+            #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
 
             var builder = DistributedApplication.CreateBuilder(args);
 
@@ -183,9 +186,9 @@ internal sealed class InitCommand : BaseCommand
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
 
         // Drop aspire.config.json
-        DropAspireConfig(workingDirectory, "apphost.cs", language: null);
+        var configResult = DropAspireConfig(workingDirectory, "apphost.cs", language: null);
 
-        return Task.FromResult(ExitCodeConstants.Success);
+        return Task.FromResult(configResult);
     }
 
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
@@ -303,12 +306,12 @@ internal sealed class InitCommand : BaseCommand
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostFileName}");
 
         // Drop aspire.config.json
-        DropAspireConfig(workingDirectory, appHostFileName, languageConfigValue);
+        var configResult = DropAspireConfig(workingDirectory, appHostFileName, languageConfigValue);
 
-        return Task.FromResult(ExitCodeConstants.Success);
+        return Task.FromResult(configResult);
     }
 
-    private void DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language)
+    private int DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language)
     {
         var configPath = Path.Combine(directory.FullName, AspireConfigFile.FileName);
 
@@ -318,9 +321,23 @@ internal sealed class InitCommand : BaseCommand
         {
             // Merge into existing file (e.g. language selection already wrote it)
             var existingContent = File.ReadAllText(configPath);
-            settings = string.IsNullOrWhiteSpace(existingContent)
-                ? new JsonObject()
-                : JsonNode.Parse(existingContent)?.AsObject() ?? new JsonObject();
+            if (string.IsNullOrWhiteSpace(existingContent))
+            {
+                settings = new JsonObject();
+            }
+            else
+            {
+                try
+                {
+                    settings = JsonNode.Parse(existingContent)?.AsObject() ?? new JsonObject();
+                }
+                catch (JsonException ex)
+                {
+                    InteractionService.DisplayError($"Failed to parse existing {AspireConfigFile.FileName} at '{configPath}': {ex.Message}");
+                    InteractionService.DisplayMessage(KnownEmojis.Warning, $"Fix or remove {AspireConfigFile.FileName} and re-run `aspire init`.");
+                    return ExitCodeConstants.FailedToCreateNewProject;
+                }
+            }
         }
         else
         {
@@ -384,6 +401,7 @@ internal sealed class InitCommand : BaseCommand
         File.WriteAllText(configPath, settings.ToJsonString(jsonOptions));
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
+        return ExitCodeConstants.Success;
     }
 
 }
