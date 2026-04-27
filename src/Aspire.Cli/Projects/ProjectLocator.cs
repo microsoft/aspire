@@ -492,7 +492,7 @@ internal sealed class ProjectLocator(
             return settingsFile;
         }
 
-        var legacySettingsRootDirectory = GetLegacySettingsRootDirectory(settingsFile);
+        var legacySettingsRootDirectory = ConfigurationHelper.GetLegacySettingsRootDirectory(settingsFile);
         if (legacySettingsRootDirectory is null)
         {
             var newConfigPath = Path.Combine(executionContext.WorkingDirectory.FullName, AspireConfigFile.FileName);
@@ -518,22 +518,6 @@ internal sealed class ProjectLocator(
         // LoadOrCreate handles the legacy fallback and migration internally,
         // including saving the migrated config to disk.
         _ = AspireConfigFile.LoadOrCreate(settingsRootDirectory.FullName);
-    }
-
-    private static DirectoryInfo? GetLegacySettingsRootDirectory(FileInfo settingsFile)
-    {
-        if (!string.Equals(settingsFile.Name, AspireJsonConfiguration.FileName, StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        var settingsDirectory = settingsFile.Directory;
-        if (settingsDirectory is null || !string.Equals(settingsDirectory.Name, AspireJsonConfiguration.SettingsFolder, StringComparison.OrdinalIgnoreCase))
-        {
-            return null;
-        }
-
-        return settingsDirectory.Parent;
     }
 
     private static FileInfo[] FindMatchingFiles(DirectoryInfo searchDirectory, string pattern, EnumerationOptions options, string? excludePath)

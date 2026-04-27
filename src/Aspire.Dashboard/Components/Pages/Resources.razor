@@ -188,7 +188,11 @@
                                                 }
                                                 else if (paramValue.IsUnresolved)
                                                 {
-                                                    <span class="cellText">@ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]</span>
+                                                    <span class="cellText" @onclick:stopPropagation="true">
+                                                        <ParameterValueDisplay Resource="context.Resource"
+                                                                               OnExecuteCommandAsync="ExecuteResourceCommandAsync"
+                                                                               IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
+                                                    </span>
                                                 }
                                                 else
                                                 {

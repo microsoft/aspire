@@ -100,7 +100,7 @@ namespace Aspire.Dashboard.Resources {
         
         /// <summary>
         ///   Looks up a localized string similar to Container runtime was found but appears to be unhealthy. Ensure that it is running.
-        ///For more information, see https://aka.ms/dotnet/aspire/container-runtime-unhealthy.
+        ///For more information, see https://aka.ms/aspire/container-runtime-unhealthy.
         /// </summary>
         public static string StateColumnResourceContainerRuntimeUnhealthy {
             get {

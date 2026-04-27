@@ -189,6 +189,33 @@ jobs:
             Write-Host "Merged $($nupkgs.Count) arch-specific nugets for RID=$env:RID into $dest"
           }
 
+      - name: Download CLI native archives
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-native-archives-${{ steps.compute_rid.outputs.rid }}
+          path: ${{ github.workspace }}/cli-archives
+
+      - name: Copy NuGet packages into CLI archives directory
+        if: ${{ fromJson(inputs.properties).requiresCliArchive == true && fromJson(inputs.properties).requiresNugets == true }}
+        shell: pwsh
+        run: |
+          $source = "${{ github.workspace }}/artifacts/packages/Debug/Shipping"
+          $dest = "${{ github.workspace }}/cli-archives"
+          if (Test-Path $source) {
+            $nupkgs = Get-ChildItem -Path $source -Filter *.nupkg -ErrorAction SilentlyContinue
+            if ($nupkgs -and $nupkgs.Count -gt 0) {
+              foreach ($pkg in $nupkgs) {
+                Copy-Item -Path $pkg.FullName -Destination $dest -Force
+              }
+              Write-Host "Copied $($nupkgs.Count) NuGet packages into cli-archives for LocalArchive mode"
+            } else {
+              Write-Host "No NuGet packages found in '$source' to copy"
+            }
+          } else {
+            Write-Host "NuGet package source '$source' does not exist — skipping copy"
+          }
+
       - name: Install sdk for nuget based testing
         if: ${{ fromJson(inputs.properties).requiresTestSdk == true }}
         run: >
@@ -315,10 +342,10 @@ jobs:
           TEST_LOG_PATH: ${{ github.workspace }}/artifacts/log/test-logs
           TestsRunningOutsideOfRepo: true
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
-          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
+          ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
@@ -355,10 +382,10 @@ jobs:
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
           # Prevent VBCSCompiler from starting during tests. See #15832
           UseSharedCompilation: false
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
-          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
+          ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
@@ -401,10 +428,10 @@ jobs:
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           PLAYWRIGHT_INSTALLED: ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && 'false' || 'true' }}
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
-          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
+          ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (60s interval to reduce log noise)
@@ -448,10 +475,10 @@ jobs:
           # so any rebuild triggered by DCP's "dotnet run" should be minimal.
           # See https://github.com/microsoft/aspire/issues/15832
           UseSharedCompilation: false
-          # PR metadata and token for CLI E2E tests that download artifacts from a PR
+          # PR metadata for CLI E2E tests that download artifacts from a PR
           GITHUB_PR_NUMBER: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.number || '' }}
           GITHUB_PR_HEAD_SHA: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.event.pull_request.head.sha || '' }}
-          ASPIRE_CLI_WORKFLOW_RUN_ID: ${{ fromJson(inputs.properties).requiresCliArchive == true && github.run_id || '' }}
+          ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
           # Start heartbeat monitor in background (output goes to console directly)
@@ -496,6 +523,14 @@ jobs:
           $trxFiles = Get-ChildItem -Path "${{ github.workspace }}/testresults" -Filter *.trx -Recurse -ErrorAction SilentlyContinue
 
           if ($trxFiles.Count -eq 0) {
+            # MTP does not produce .trx files when the test run is aborted (e.g., by --hangdump-timeout).
+            # Check for recordings or other test artifacts that prove tests actually ran before failing.
+            $hasRecordings = Test-Path "${{ github.workspace }}/testresults/recordings/*.cast"
+            $hasHangDumps = Get-ChildItem -Path "${{ github.workspace }}/testresults" -Filter *hangdump* -Recurse -ErrorAction SilentlyContinue
+            if ($hasRecordings -or $hasHangDumps) {
+              Write-Warning "No .trx files found, but test artifacts exist — test run likely aborted by timeout before trx was flushed."
+              exit 0
+            }
             Write-Error "No .trx files found. Tests may not have run due to infrastructure issues."
             exit 1
           }
@@ -607,5 +642,18 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "${{ github.workspace }}/testresults") {
-            & ${{ env.DOTNET_SCRIPT }} run --project "${{ github.workspace }}/tools/GenerateTestSummary/GenerateTestSummary.csproj" -- "${{ github.workspace }}/testresults" -u "${{ steps.upload-logs.outputs.artifact-url }}"
+            $summaryArgs = @(
+              "run",
+              "--project",
+              "${{ github.workspace }}/tools/GenerateTestSummary/GenerateTestSummary.csproj",
+              "--",
+              "${{ github.workspace }}/testresults"
+            )
+
+            $artifactUrl = "${{ steps.upload-logs.outputs.artifact-url }}"
+            if (-not [string]::IsNullOrWhiteSpace($artifactUrl)) {
+              $summaryArgs += @("-u", $artifactUrl)
+            }
+
+            & ${{ env.DOTNET_SCRIPT }} @summaryArgs
           }

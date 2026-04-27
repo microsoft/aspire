@@ -156,4 +156,69 @@
   <data name="ResourceMayFailToStart" xml:space="preserve">
     <value>Resource '{0}' may fail to start: {1}</value>
   </data>
+  <data name="BrowserLogsDefaultProfileName" xml:space="preserve">
+    <value>(default)</value>
+  </data>
+  <data name="BrowserLogsEmptyBrowserConfiguration" xml:space="preserve">
+    <value>Tracked browser configuration resolved an empty browser value.</value>
+  </data>
+  <data name="BrowserLogsEmptyProfileConfiguration" xml:space="preserve">
+    <value>Tracked browser configuration resolved an empty profile value.</value>
+  </data>
+  <data name="BrowserLogsProfileRequiresSharedUserDataMode" xml:space="preserve">
+    <value>Tracked browser configuration set '{0}' to '{1}' while '{2}' is '{3}'. Profiles can only be selected when '{2}' is '{4}'.</value>
+    <comment>{0} is the profile configuration key, {1} is the configured profile, {2} is the user data mode configuration key, {3} is Isolated, {4} is Shared.</comment>
+  </data>
+  <data name="BrowserLogsInvalidUserDataModeConfiguration" xml:space="preserve">
+    <value>Tracked browser configuration value '{0}' is not a valid '{1}'. Expected '{2}' or '{3}'.</value>
+    <comment>{0} is the configured value, {1} is the user data mode configuration key, {2} and {3} are valid enum values.</comment>
+  </data>
+  <data name="BrowserLogsUnableToLocateBrowser" xml:space="preserve">
+    <value>Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</value>
+    <comment>{0} is the requested browser name or path.</comment>
+  </data>
+  <data name="BrowserLogsAppHostPathShaNotAvailable" xml:space="preserve">
+    <value>Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use '{0}' user data mode or run from a configured AppHost.</value>
+    <comment>{0} is the Isolated user data mode value.</comment>
+  </data>
+  <data name="BrowserLogsUserDataDirectoryNotFound" xml:space="preserve">
+    <value>Browser user data directory '{0}' was not found.</value>
+    <comment>{0} is the user data directory.</comment>
+  </data>
+  <data name="BrowserLogsTrackedBrowserProfileConflict" xml:space="preserve">
+    <value>A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</value>
+    <comment>{0} is the user data directory, {1} is the existing profile, {2} is the requested profile.</comment>
+  </data>
+  <data name="BrowserLogsUnableToReadProfileMetadata" xml:space="preserve">
+    <value>Unable to read Chromium profile metadata from '{0}' while resolving browser profile '{1}'.</value>
+    <comment>{0} is the Local State file path, {1} is the requested profile.</comment>
+  </data>
+  <data name="BrowserLogsInvalidProfileMetadata" xml:space="preserve">
+    <value>Chromium profile metadata in '{0}' is invalid while resolving browser profile '{1}'.</value>
+    <comment>{0} is the Local State file path, {1} is the requested profile.</comment>
+  </data>
+  <data name="BrowserLogsProfileNotFound" xml:space="preserve">
+    <value>Browser profile '{0}' was not found under '{1}'. Specify the profile directory name (for example 'Default' or 'Profile 1') or a browser profile name from Chromium's profile metadata.</value>
+    <comment>{0} is the requested profile, {1} is the user data directory.</comment>
+  </data>
+  <data name="BrowserLogsAmbiguousProfile" xml:space="preserve">
+    <value>Browser profile '{0}' matched multiple Chromium profiles under '{1}'. Specify the profile directory name instead.</value>
+    <comment>{0} is the requested profile, {1} is the user data directory.</comment>
+  </data>
+  <data name="BrowserLogsResourceMissingHttpEndpoint" xml:space="preserve">
+    <value>Resource '{0}' does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to.</value>
+    <comment>{0} is the resource name.</comment>
+  </data>
+  <data name="BrowserLogsEndpointNotAllocated" xml:space="preserve">
+    <value>Endpoint '{0}' for resource '{1}' has not been allocated yet.</value>
+    <comment>{0} is the endpoint name, {1} is the resource name.</comment>
+  </data>
+  <data name="BrowserLogsProcessExitedBeforeProcessId" xml:space="preserve">
+    <value>Tracked browser process exited with code {0} before reporting its process id.</value>
+    <comment>{0} is the browser process exit code.</comment>
+  </data>
+  <data name="BrowserLogsProcessExitedBeforeDebugEndpoint" xml:space="preserve">
+    <value>Tracked browser process exited with code {0} before the debug endpoint metadata was written to '{1}'.</value>
+    <comment>{0} is the browser process exit code, {1} is the DevToolsActivePort file path.</comment>
+  </data>
 </root>

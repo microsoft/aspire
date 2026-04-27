@@ -117,6 +117,16 @@
         <target state="translated">Nepovedlo se vyhledat balíčky. Ukončovací kód: {0}</target>
         <note>{0} is a number</note>
       </trans-unit>
+      <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
+        <source>The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</source>
+        <target state="new">The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GlobalAppHostPathIgnored">
+        <source>Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</source>
+        <target state="new">Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</target>
+        <note>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
@@ -130,6 +140,11 @@
       <trans-unit id="InvalidSocketPath">
         <source>The provided extension socket path needs two valid parts.</source>
         <target state="translated">Zadaná cesta k soketu rozšíření potřebuje dvě platné části.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
+        <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
+        <target state="new">The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</target>
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">

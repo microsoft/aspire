@@ -192,7 +192,7 @@ public static class AzureFrontDoorExtensions
     [AspireExport(Description = "Adds an origin (backend) to the Azure Front Door resource")]
     public static IResourceBuilder<AzureFrontDoorResource> WithOrigin<T>(
         this IResourceBuilder<AzureFrontDoorResource> builder,
-        IResourceBuilder<T> resource) where T : IResourceWithEndpoints
+        IResourceBuilder<T> resource) where T : IComputeResource, IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(resource);

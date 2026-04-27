@@ -32,12 +32,6 @@ internal sealed class InitCommand : BaseCommand
     private readonly AgentInitCommand _agentInitCommand;
     private readonly IDotNetCliRunner _runner;
 
-    internal static readonly Option<bool?> s_suppressAgentInitOption = new("--suppress-agent-init")
-    {
-        Description = SharedCommandStrings.AgentInitOptionDescription,
-        Recursive = false
-    };
-
     private readonly Option<string?> _languageOption;
 
     public InitCommand(
@@ -63,7 +57,7 @@ internal sealed class InitCommand : BaseCommand
             Description = InitCommandStrings.LanguageOptionDescription
         };
         Options.Add(_languageOption);
-        Options.Add(s_suppressAgentInitOption);
+        Options.Add(NewCommand.s_suppressAgentInitOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -72,7 +66,8 @@ internal sealed class InitCommand : BaseCommand
 
         // Step 1: Get the language selection.
         var explicitLanguage = parseResult.GetValue(_languageOption);
-        var selectedProject = await _languageService.GetOrPromptForProjectAsync(explicitLanguage, saveSelection: true, cancellationToken);
+        var projectSelection = await _languageService.GetOrPromptForProjectSelectionAsync(explicitLanguage, saveLanguageSelection: false, cancellationToken);
+        var selectedProject = projectSelection.Project;
 
         var isCSharp = selectedProject.LanguageId == KnownLanguageId.CSharp;
         var workingDirectory = _executionContext.WorkingDirectory;
@@ -95,10 +90,16 @@ internal sealed class InitCommand : BaseCommand
             return dropResult;
         }
 
+        // Persist the prompted language selection now that the skeleton drop succeeded.
+        if (projectSelection.ShouldPersistSelection)
+        {
+            await _languageService.SetLanguageAsync(selectedProject, cancellationToken: cancellationToken);
+        }
+
         // Step 4: Chain to aspire agent init for MCP server + skill configuration.
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
-        var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
+        var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
         var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, ExitCodeConstants.Success, workspaceRoot, agentInitBinding, cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.

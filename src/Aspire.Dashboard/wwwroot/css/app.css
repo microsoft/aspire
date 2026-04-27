@@ -927,9 +927,18 @@ fluent-tooltip[anchor="dialog_close"] > div {
     margin-right: var(--inline-icon-margin);
 }
 
-.aspire-menu-container > fluent-menu > fluent-menu-item::part(content) {
+.aspire-menu-container {
+    --aspire-menu-max-width: 368px;
+}
+
+.aspire-menu-container fluent-menu-item::part(content) {
     width: 100%;
+    overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.aspire-menu-container fluent-menu fluent-menu {
+    max-width: var(--aspire-menu-max-width);
 }
 
 .overflow-fluent-menu-item::part(content) {

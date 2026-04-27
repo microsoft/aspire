@@ -33,13 +33,20 @@ internal static class DeploymentE2ETestHelpers
     }
 
     /// <summary>
-    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable.
+    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable,
+    /// falling back to GITHUB_SHA for non-PR CI runs (e.g., schedule-triggered workflows).
     /// When running locally (not in CI), returns "local0000".
     /// </summary>
     internal static string GetCommitSha()
     {
         var commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA");
-        return string.IsNullOrEmpty(commitSha) ? "local0000" : commitSha;
+        if (!string.IsNullOrEmpty(commitSha))
+        {
+            return commitSha;
+        }
+
+        var githubSha = Environment.GetEnvironmentVariable("GITHUB_SHA");
+        return string.IsNullOrEmpty(githubSha) ? "local0000" : githubSha;
     }
 
     /// <summary>

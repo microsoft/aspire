@@ -27,7 +27,7 @@ public sealed class OtelLogsTests(ITestOutputHelper output)
     private async Task OtelLogsReturnsStructuredLogsFromStarterAppCore(bool isolated)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         using var workspace = TemporaryWorkspace.Create(output);
 

@@ -799,6 +799,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Click to set parameter value.
+        /// </summary>
+        public static string ParameterSetValueAction {
+            get {
+                return ResourceManager.GetString("ParameterSetValueAction", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Resource actions.
         /// </summary>
         public static string ResourceActions {
@@ -840,6 +849,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceDetailsResourceHeader {
             get {
                 return ResourceManager.GetString("ResourceDetailsResourceHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to State details.
+        /// </summary>
+        public static string ResourceDetailsStateDescriptionHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsStateDescriptionHeader", resourceCulture);
             }
         }
         

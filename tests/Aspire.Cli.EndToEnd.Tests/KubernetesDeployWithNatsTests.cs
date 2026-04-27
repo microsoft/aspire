@@ -22,10 +22,9 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
     public async Task DeployK8sWithNats()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
         var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
         var k8sNamespace = $"test-{clusterName[..16]}";
 
@@ -41,13 +40,7 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (strategy.Mode == CliInstallMode.PullRequest)
-        {
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
-
-        // Assert CLI version has a prerelease suffix (runs in both CI and local)
-        await auto.AssertAspireVersionAsync(counter, output);
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         try
         {

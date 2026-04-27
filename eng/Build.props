@@ -44,7 +44,7 @@
     <ProjectToBuild Include="$(RepoRoot)eng\OuterPreBuild.proj" />
 
     <ProjectToBuild Include="$(RepoRoot)src\**\*.csproj" Exclude="$(RepoRoot)src\Aspire.ProjectTemplates\templates\**\*.csproj" />
-    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.*csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
+    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
     <ProjectToBuild Include="$(RepoRoot)eng\dcppack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />
     <ProjectToBuild Include="$(RepoRoot)eng\dashboardpack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />

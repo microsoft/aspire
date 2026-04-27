@@ -147,7 +147,17 @@ jobs:
       fail-fast: false
       matrix:
         tests: ${{ fromJson(needs.generate_tests_matrix.outputs.runsheet) }}
-    if: ${{ github.repository_owner == 'microsoft' && !cancelled() && !failure() }}
+    # Allow tests to run even if build_cli_archives partially fails (e.g., one RID
+    # like osx-arm64 has an infra issue but linux-x64 succeeded). Tests that need
+    # a failed RID's archive will fail at the download step.
+    # We still require generate_tests_matrix and build_packages to succeed.
+    if: >-
+      ${{
+        github.repository_owner == 'microsoft' &&
+        !cancelled() &&
+        needs.generate_tests_matrix.result == 'success' &&
+        (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped')
+      }}
     uses: ./.github/workflows/run-tests.yml
     with:
       testShortName: ${{ matrix.tests.project }}
@@ -223,8 +233,9 @@ jobs:
       - name: Fail if any dependency failed
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
         # For example, one of setup_* jobs failing and the Integration test jobs getting 'skipped'
-        # Note: build_packages/build_cli_archives being skipped is expected when requiresNugets is false,
-        # so we check them separately.
+        # Note: build_packages being skipped is expected when requiresNugets is false.
+        # Note: build_cli_archives partial failures (e.g. one RID) are tolerated — tests
+        # that need the failed RID will fail individually at the download step.
         if: >-
           ${{
             always() && (
@@ -234,9 +245,7 @@ jobs:
               needs.run_tests.result == 'cancelled' ||
               needs.run_tests.result == 'skipped' ||
               (needs.build_packages.result == 'failure') ||
-              (needs.build_packages.result == 'cancelled') ||
-              (needs.build_cli_archives.result == 'failure') ||
-              (needs.build_cli_archives.result == 'cancelled')
+              (needs.build_packages.result == 'cancelled')
             )
           }}
         run: |

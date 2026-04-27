@@ -21,9 +21,12 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
     private readonly string _sessionId = sessionId;
     private readonly ILogger _resourceLogger = resourceLogger;
+    // Network request information arrives as several independent CDP events. A live page can redirect, fail, or serve
+    // from cache/service worker before the terminal event arrives, so keep just enough per-request state to emit one
+    // resource-log line when the request is complete.
     private readonly Dictionary<string, BrowserNetworkRequestState> _networkRequests = new(StringComparer.Ordinal);
 
-    public void HandleEvent(BrowserLogsProtocolEvent protocolEvent)
+    public void HandleEvent(BrowserLogsCdpProtocolEvent protocolEvent)
     {
         switch (protocolEvent)
         {
@@ -134,6 +137,8 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
         if (parameters.Response is not null)
         {
+            // Cache and service-worker flags are only available on the response event, while the duration and encoded
+            // byte count arrive later on loadingFinished.
             UpdateResponse(request, parameters.Response);
         }
 
@@ -291,18 +296,18 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         _ => LogLevel.Information
     };
 
-    private static string FormatRemoteObject(BrowserLogsProtocolRemoteObject remoteObject)
+    private static string FormatRemoteObject(BrowserLogsCdpProtocolRemoteObject remoteObject)
     {
         // Console arguments can arrive either as pre-rendered descriptions or as structured values that need stable
         // formatting for logs and tests.
-        if (remoteObject.Value is BrowserLogsProtocolValue value)
+        if (remoteObject.Value is BrowserLogsCdpProtocolValue value)
         {
             return value switch
             {
-                BrowserLogsProtocolStringValue stringValue => stringValue.Value,
-                BrowserLogsProtocolNullValue => "null",
-                BrowserLogsProtocolBooleanValue booleanValue => booleanValue.Value ? bool.TrueString : bool.FalseString,
-                BrowserLogsProtocolNumberValue numberValue => numberValue.RawValue,
+                BrowserLogsCdpProtocolStringValue stringValue => stringValue.Value,
+                BrowserLogsCdpProtocolNullValue => "null",
+                BrowserLogsCdpProtocolBooleanValue booleanValue => booleanValue.Value ? bool.TrueString : bool.FalseString,
+                BrowserLogsCdpProtocolNumberValue numberValue => numberValue.RawValue,
                 _ => FormatStructuredValue(value)
             };
         }
@@ -315,7 +320,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         return remoteObject.Description ?? string.Empty;
     }
 
-    private static string FormatStructuredValue(BrowserLogsProtocolValue value)
+    private static string FormatStructuredValue(BrowserLogsCdpProtocolValue value)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, s_structuredValueWriterOptions);
@@ -324,11 +329,11 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    private static void WriteStructuredValue(Utf8JsonWriter writer, BrowserLogsProtocolValue value)
+    private static void WriteStructuredValue(Utf8JsonWriter writer, BrowserLogsCdpProtocolValue value)
     {
         switch (value)
         {
-            case BrowserLogsProtocolArrayValue arrayValue:
+            case BrowserLogsCdpProtocolArrayValue arrayValue:
                 writer.WriteStartArray();
                 foreach (var item in arrayValue.Items)
                 {
@@ -337,16 +342,16 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
                 writer.WriteEndArray();
                 break;
-            case BrowserLogsProtocolBooleanValue booleanValue:
+            case BrowserLogsCdpProtocolBooleanValue booleanValue:
                 writer.WriteBooleanValue(booleanValue.Value);
                 break;
-            case BrowserLogsProtocolNullValue:
+            case BrowserLogsCdpProtocolNullValue:
                 writer.WriteNullValue();
                 break;
-            case BrowserLogsProtocolNumberValue numberValue:
+            case BrowserLogsCdpProtocolNumberValue numberValue:
                 writer.WriteRawValue(numberValue.RawValue, skipInputValidation: false);
                 break;
-            case BrowserLogsProtocolObjectValue objectValue:
+            case BrowserLogsCdpProtocolObjectValue objectValue:
                 writer.WriteStartObject();
                 foreach (var (propertyName, propertyValue) in objectValue.Properties)
                 {
@@ -356,7 +361,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
                 writer.WriteEndObject();
                 break;
-            case BrowserLogsProtocolStringValue stringValue:
+            case BrowserLogsCdpProtocolStringValue stringValue:
                 writer.WriteStringValue(stringValue.Value);
                 break;
         }
@@ -398,51 +403,5 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         public string? StatusText { get; set; }
 
         public required string Url { get; set; }
-    }
-}
-
-// Keep message composition separate from the runtime so tests can pin the diagnostics without a live websocket failure.
-internal sealed class BrowserConnectionDiagnosticsLogger(string sessionId, ILogger resourceLogger)
-{
-    private readonly ILogger _resourceLogger = resourceLogger;
-    private readonly string _sessionId = sessionId;
-
-    public void LogSetupFailure(string stage, Exception exception)
-    {
-        _resourceLogger.LogError("[{SessionId}] {Stage} failed: {Reason}", _sessionId, stage, DescribeConnectionProblem(exception));
-    }
-
-    public void LogConnectionLost(Exception exception)
-    {
-        _resourceLogger.LogWarning("[{SessionId}] Tracked browser debug connection lost: {Reason}. Attempting to reconnect.", _sessionId, DescribeConnectionProblem(exception));
-    }
-
-    public void LogReconnectAttemptFailed(int attempt, Exception exception)
-    {
-        _resourceLogger.LogWarning("[{SessionId}] Reconnect attempt {Attempt} failed: {Reason}", _sessionId, attempt, DescribeConnectionProblem(exception));
-    }
-
-    public void LogReconnectFailed(Exception exception)
-    {
-        _resourceLogger.LogError("[{SessionId}] Unable to reconnect tracked browser debug connection. Closing the tracked browser session. Last error: {Reason}", _sessionId, DescribeConnectionProblem(exception));
-    }
-
-    internal static string DescribeConnectionProblem(Exception exception)
-    {
-        var messages = new List<string>();
-
-        for (var current = exception; current is not null; current = current.InnerException)
-        {
-            var message = string.IsNullOrWhiteSpace(current.Message)
-                ? current.GetType().Name
-                : $"{current.GetType().Name}: {current.Message}";
-
-            if (!messages.Contains(message, StringComparer.Ordinal))
-            {
-                messages.Add(message);
-            }
-        }
-
-        return string.Join(" --> ", messages);
     }
 }

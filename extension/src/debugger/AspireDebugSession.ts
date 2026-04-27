@@ -168,6 +168,11 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       }
     });
 
+    const configuredEnv = this.configuration.env;
+    const env = configuredEnv
+      ? Object.entries(configuredEnv).map(([name, value]) => ({ name, value: String(value) }))
+      : undefined;
+
     spawnCliProcess(
       this._terminalProvider,
       await this._terminalProvider.getAspireCliExecutablePath(),
@@ -194,7 +199,8 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         },
         workingDirectory: workingDirectory,
         debugSessionId: this.debugSessionId,
-        noDebug: noDebug
+        noDebug: noDebug,
+        env: env
       },
     );
 

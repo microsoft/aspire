@@ -201,6 +201,16 @@
   <data name="ConfigurationValueRequired" xml:space="preserve">
     <value>Configuration value is required.</value>
   </data>
+  <data name="GlobalAppHostPathCannotBeSetWithConfigCommand" xml:space="preserve">
+    <value>The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</value>
+  </data>
+  <data name="LegacyAppHostPathCannotBeSetWithConfigCommand" xml:space="preserve">
+    <value>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</value>
+  </data>
+  <data name="GlobalAppHostPathIgnored" xml:space="preserve">
+    <value>Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</value>
+    <comment>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</comment>
+  </data>
   <data name="ConfigurationKeyNotFound" xml:space="preserve">
     <value>Configuration key {0} not found.</value>
   </data>

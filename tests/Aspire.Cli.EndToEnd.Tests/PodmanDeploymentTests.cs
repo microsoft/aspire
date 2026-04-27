@@ -25,8 +25,7 @@ public sealed class PodmanDeploymentTests(ITestOutputHelper output)
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(output);
 
-        var strategy = CliInstallStrategy.Detect();
-        var commitSha = CliE2ETestHelpers.GetRequiredCommitSha();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var terminal = CliE2ETestHelpers.CreatePodmanDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
@@ -37,10 +36,7 @@ public sealed class PodmanDeploymentTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (strategy.Mode == CliInstallMode.PullRequest)
-        {
-            await auto.VerifyAspireCliVersionAsync(commitSha, counter);
-        }
+        await auto.VerifyPullRequestCliVersionAsync(counter);
 
         // Step 0: Verify Podman is available inside the helper container.
         await auto.TypeAsync("podman --version || echo 'PODMAN_NOT_FOUND'");

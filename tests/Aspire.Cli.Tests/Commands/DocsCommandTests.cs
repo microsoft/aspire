@@ -151,6 +151,88 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DocsGetCommand_WithRichMarkdown_PreservesReadableBlockOrder()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var document = new DocsContent
+        {
+            Title = "Docs Smoke Test",
+            Slug = "docs-smoke-test",
+            Summary = "Interactive rendering sample",
+            Content = """
+                # Docs Smoke Test
+                > Learn how to configure HTTPS endpoints with the [Aspire CLI](https://example.com/install) and `aspire run`.
+
+                ## Steps
+
+                1. First item
+
+                   Continued explanation.
+
+                   * Nested item
+
+                ## Commands
+
+                ```bash
+                aspire docs get docs-smoke-test
+                ```
+
+                ## Settings
+
+                | Setting | Environment variable | Purpose |
+                | :------ | :------------------- | ------: |
+                | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
+                """,
+            Sections = ["Steps", "Commands", "Settings"]
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.DocsIndexServiceFactory = _ => new TestDocsIndexService(new Dictionary<string, DocsContent>
+            {
+                [document.Slug] = document
+            });
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("docs get docs-smoke-test");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        var output = string.Join("\n", outputWriter.Logs);
+
+        Assert.Contains("Docs Smoke Test", output);
+        Assert.Contains("Aspire CLI (https://example.com/install)", output);
+        Assert.Contains("aspire run", output);
+        Assert.DoesNotContain("[Aspire CLI](", output);
+        Assert.DoesNotContain("`aspire run`", output);
+        Assert.Contains("1. First item", output);
+        Assert.Contains("Continued explanation.", output);
+        Assert.Contains("Nested item", output);
+        Assert.Contains("aspire docs get docs-smoke-test", output);
+        Assert.Contains("Setting", output);
+        Assert.Contains("Azure:SubscriptionId", output);
+        Assert.Contains("Azure__SubscriptionId", output);
+        Assert.Contains("Target Azure subscription", output);
+
+        var headingIndex = FindLogIndex(outputWriter.Logs, "Docs Smoke Test");
+        var listIndex = FindLogIndex(outputWriter.Logs, "1. First item");
+        var codeIndex = FindLogIndex(outputWriter.Logs, "aspire docs get docs-smoke-test");
+        var tableIndex = FindLogIndex(outputWriter.Logs, "Azure:SubscriptionId");
+
+        Assert.True(headingIndex < listIndex);
+        Assert.True(listIndex < codeIndex);
+        Assert.True(codeIndex < tableIndex);
+    }
+
+    [Fact]
     public void WrapMarkdownForConsole_PreservesMarkdownStructure()
     {
         var markdown = """
@@ -209,10 +291,44 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.NotEqual(0, exitCode);
     }
+
+    private static int FindLogIndex(IReadOnlyList<string> logs, string text)
+    {
+        var index = -1;
+
+        for (var i = 0; i < logs.Count; i++)
+        {
+            if (logs[i].Contains(text, StringComparison.Ordinal))
+            {
+                index = i;
+                break;
+            }
+        }
+
+        Assert.True(index >= 0, $"Could not find '{text}' in output.");
+        return index;
+    }
 }
 
 internal sealed class TestDocsIndexService : IDocsIndexService
 {
+    private readonly IReadOnlyDictionary<string, DocsContent> _documents;
+
+    public TestDocsIndexService(IReadOnlyDictionary<string, DocsContent>? documents = null)
+    {
+        _documents = documents ?? new Dictionary<string, DocsContent>
+        {
+            ["redis-integration"] = new()
+            {
+                Title = "Redis Integration",
+                Slug = "redis-integration",
+                Summary = "Learn how to use Redis",
+                Content = "# Redis Integration\n\nThis is the Redis integration documentation.",
+                Sections = ["Getting Started", "Hosting integration", "Client integration"]
+            }
+        };
+    }
+
     public bool IsIndexed => true;
 
     public ValueTask EnsureIndexedAsync(CancellationToken cancellationToken = default)
@@ -222,12 +338,13 @@ internal sealed class TestDocsIndexService : IDocsIndexService
 
     public ValueTask<IReadOnlyList<DocsListItem>> ListDocumentsAsync(CancellationToken cancellationToken = default)
     {
-        var docs = new List<DocsListItem>
-        {
-            new() { Title = "Redis Integration", Slug = "redis-integration", Summary = "Learn how to use Redis" },
-            new() { Title = "PostgreSQL Integration", Slug = "postgresql-integration", Summary = "Learn how to use PostgreSQL" },
-            new() { Title = "Getting Started", Slug = "getting-started", Summary = "Get started with Aspire" }
-        };
+        var docs = _documents.Values
+            .Select(doc => new DocsListItem { Title = doc.Title, Slug = doc.Slug, Summary = doc.Summary })
+            .ToList();
+
+        docs.Add(new DocsListItem { Title = "PostgreSQL Integration", Slug = "postgresql-integration", Summary = "Learn how to use PostgreSQL" });
+        docs.Add(new DocsListItem { Title = "Getting Started", Slug = "getting-started", Summary = "Get started with Aspire" });
+
         return ValueTask.FromResult<IReadOnlyList<DocsListItem>>(docs);
     }
 
@@ -243,16 +360,9 @@ internal sealed class TestDocsIndexService : IDocsIndexService
 
     public ValueTask<DocsContent?> GetDocumentAsync(string slug, string? section = null, CancellationToken cancellationToken = default)
     {
-        if (slug == "redis-integration")
+        if (_documents.TryGetValue(slug, out var document))
         {
-            return ValueTask.FromResult<DocsContent?>(new DocsContent
-            {
-                Title = "Redis Integration",
-                Slug = "redis-integration",
-                Summary = "Learn how to use Redis",
-                Content = "# Redis Integration\n\nThis is the Redis integration documentation.",
-                Sections = new[] { "Getting Started", "Hosting integration", "Client integration" }
-            });
+            return ValueTask.FromResult<DocsContent?>(document);
         }
 
         return ValueTask.FromResult<DocsContent?>(null);

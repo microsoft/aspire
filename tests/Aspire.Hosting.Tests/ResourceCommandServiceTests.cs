@@ -4,6 +4,7 @@
 using System.Threading.Channels;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
@@ -480,6 +481,33 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_RebuildCommand_ReturnsBuildOutput()
+    {
+        const string rebuildOutputMarker = "ASPIRE_REBUILD_OUTPUT_MARKER";
+
+        using var tempDirectory = new TestTempDirectory();
+        var projectPath = CreateBuildOutputTestProject(tempDirectory.Path, rebuildOutputMarker);
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true);
+        using var app = builder.Build();
+
+        await app.StartAsync().DefaultTimeout(TimeSpan.FromMinutes(2));
+
+        var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        await resourceNotificationService.WaitForResourceAsync(project.Resource.Name, e => KnownResourceStates.BuildableStates.Contains(e.Snapshot.State?.Text), cts.Token).DefaultTimeout(TimeSpan.FromMinutes(2));
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(project.Resource, KnownResourceCommands.RebuildCommand).DefaultTimeout(TimeSpan.FromMinutes(2));
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal(CommandResultFormat.Text, result.Data.Format);
+        Assert.Contains("[build] Building project...", result.Data.Value);
+        Assert.Contains(rebuildOutputMarker, result.Data.Value);
+    }
+
+    [Fact]
     public void CommandResults_SuccessWithResult_ProducesCorrectResult()
     {
         var result = CommandResults.Success("Success.", "{\"key\": \"value\"}", CommandResultFormat.Json);
@@ -499,6 +527,35 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.NotNull(result.Data);
         Assert.Equal("hello world", result.Data.Value);
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
+    }
+
+    private static string CreateBuildOutputTestProject(string directoryPath, string buildOutputMarker)
+    {
+        var projectPath = Path.Combine(directoryPath, "BuildOutputProject.csproj");
+        var programPath = Path.Combine(directoryPath, "Program.cs");
+
+        File.WriteAllText(projectPath,
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+
+              <Target Name="EmitAspireRebuildOutputMarker" AfterTargets="Build">
+                <Message Importance="High" Text="{{buildOutputMarker}}" />
+              </Target>
+            </Project>
+            """);
+
+        File.WriteAllText(programPath,
+            """
+            Console.WriteLine("Hello from rebuild test project.");
+            """);
+
+        return projectPath;
     }
 
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport

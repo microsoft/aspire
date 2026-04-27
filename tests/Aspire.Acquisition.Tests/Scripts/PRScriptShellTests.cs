@@ -44,6 +44,8 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("--run-id", result.Output);
+        Assert.Contains("--local-dir", result.Output);
+        Assert.Contains("--hive-label", result.Output);
         Assert.Contains("--install-path", result.Output);
         Assert.Contains("--os", result.Output);
         Assert.Contains("--arch", result.Output);
@@ -57,7 +59,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
-    public async Task MissingPRNumber_ReturnsError()
+    public async Task MissingPRNumberAndRunId_ReturnsError()
     {
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
@@ -65,6 +67,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("PR number", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--run-id", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -100,6 +103,100 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         using var cmd = await CreateCommandWithMockGhAsync(env);
 
         var result = await cmd.ExecuteAsync("12345", "--dry-run", "--skip-path", "--run-id", "987654321");
+
+        result.EnsureSuccessful();
+        Assert.Contains("987654321", result.Output);
+    }
+
+    [Fact]
+    public async Task LocalDir_DryRun_UsesLocalDirectoryWithoutGh()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "local artifacts");
+        Directory.CreateDirectory(localDir);
+        await FakeArchiveHelper.CreateFakeNupkgAsync(localDir, "Aspire.Cli", "13.3.0-preview.1.12345.1");
+
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--hive-label", "test-hive",
+            "--hive-only",
+            "--dry-run");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Installing from local directory", result.Output);
+        Assert.Contains(localDir, result.Output);
+        Assert.Contains("test-hive", result.Output);
+        Assert.DoesNotContain("Downloading CLI from GitHub", result.Output);
+    }
+
+    [Fact]
+    public async Task RunIdAsFirstArg_DryRun_Succeeds()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("--run-id", "987654321", "--dry-run", "--skip-path");
+
+        result.EnsureSuccessful();
+        Assert.Contains("987654321", result.Output);
+        Assert.Contains("[DRY RUN]", result.Output);
+    }
+
+    [Fact]
+    public async Task RunIdAsFirstArg_DryRun_UsesRunHiveLabel()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("--run-id", "987654321", "--dry-run", "--skip-path", "--verbose");
+
+        result.EnsureSuccessful();
+        Assert.Contains("run-987654321", result.Output);
+    }
+
+    [Fact]
+    public async Task RunIdWithPRNumber_DryRun_UsesPrHiveLabel()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("12345", "--run-id", "987654321", "--dry-run", "--skip-path", "--verbose");
+
+        result.EnsureSuccessful();
+        Assert.Contains("pr-12345", result.Output);
+    }
+
+    [Fact]
+    public async Task RunIdAsFirstArg_NonNumericValue_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("--run-id", "--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Run ID must be a number", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task RunIdAsFirstArg_NoValue_ReturnsError()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("--run-id");
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task ShortRunIdFlag_AsFirstArg_DryRun_Succeeds()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-r", "987654321", "--dry-run", "--skip-path");
 
         result.EnsureSuccessful();
         Assert.Contains("987654321", result.Output);
@@ -236,7 +333,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
-    public async Task InvalidPRNumber_OptionAsFirst_ReturnsError()
+    public async Task UnrecognizedOptionAsFirstArg_ReturnsError()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);

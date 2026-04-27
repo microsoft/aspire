@@ -127,6 +127,22 @@
               "step": {
                 "type": "string",
                 "description": "%extension.debug.step%"
+              },
+              "args": {
+                "type": "array",
+                "description": "%extension.debug.args%",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "env": {
+                "type": "object",
+                "description": "%extension.debug.env%",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "default": {}
               }
             }
           }
@@ -886,7 +902,9 @@
     "path-to-regexp": "8.4.2",
     "@sinonjs/fake-timers": "13.0.5",
     "picomatch": "2.3.2",
-    "underscore": "1.13.8"
+    "underscore": "1.13.8",
+    "postcss": "8.5.10",
+    "uuid": "14.0.0"
   },
   "overrides": {
     "serialize-javascript": "7.0.5",
@@ -896,6 +914,8 @@
     "path-to-regexp": "8.4.2",
     "@sinonjs/fake-timers": "13.0.5",
     "picomatch": "2.3.2",
-    "underscore": "1.13.8"
+    "underscore": "1.13.8",
+    "postcss": "8.5.10",
+    "uuid": "14.0.0"
   }
 }
