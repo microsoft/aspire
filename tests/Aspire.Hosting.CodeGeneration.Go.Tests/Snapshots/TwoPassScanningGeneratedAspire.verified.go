@@ -2034,7 +2034,6 @@ func (s *CSharpAppResource) WithMergeRouteMiddleware(path string, method string,
 // CommandLineArgsCallbackContext wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext.
 type CommandLineArgsCallbackContext struct {
 	HandleWrapperBase
-	args *AspireList[any]
 }
 
 // NewCommandLineArgsCallbackContext creates a new CommandLineArgsCallbackContext.
@@ -2044,27 +2043,43 @@ func NewCommandLineArgsCallbackContext(handle *Handle, client *AspireClient) *Co
 	}
 }
 
-// Args gets the Args property
-func (s *CommandLineArgsCallbackContext) Args() *AspireList[any] {
-	if s.args == nil {
-		s.args = NewAspireListWithGetter[any](s.Handle(), s.Client(), "Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.args")
-	}
-	return s.args
-}
-
-// CancellationToken gets the CancellationToken property
-func (s *CommandLineArgsCallbackContext) CancellationToken() (*CancellationToken, error) {
+// Args gets the command-line argument editor
+func (s *CommandLineArgsCallbackContext) Args() (*CommandLineArgsEditor, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.cancellationToken", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.args", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result.(*CancellationToken), nil
+	return result.(*CommandLineArgsEditor), nil
 }
 
-// ExecutionContext gets the ExecutionContext property
+// Log gets the callback logger facade
+func (s *CommandLineArgsCallbackContext) Log() (*LogFacade, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.log", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*LogFacade), nil
+}
+
+// Resource gets the resource associated with this callback
+func (s *CommandLineArgsCallbackContext) Resource() (*IResource, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.resource", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*IResource), nil
+}
+
+// ExecutionContext gets the execution context for this callback invocation
 func (s *CommandLineArgsCallbackContext) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
@@ -2076,54 +2091,26 @@ func (s *CommandLineArgsCallbackContext) ExecutionContext() (*DistributedApplica
 	return result.(*DistributedApplicationExecutionContext), nil
 }
 
-// SetExecutionContext sets the ExecutionContext property
-func (s *CommandLineArgsCallbackContext) SetExecutionContext(value *DistributedApplicationExecutionContext) (*CommandLineArgsCallbackContext, error) {
+// CommandLineArgsEditor wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor.
+type CommandLineArgsEditor struct {
+	HandleWrapperBase
+}
+
+// NewCommandLineArgsEditor creates a new CommandLineArgsEditor.
+func NewCommandLineArgsEditor(handle *Handle, client *AspireClient) *CommandLineArgsEditor {
+	return &CommandLineArgsEditor{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Add adds a command-line argument
+func (s *CommandLineArgsEditor) Add(value any) error {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
 	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.setExecutionContext", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*CommandLineArgsCallbackContext), nil
-}
-
-// Logger gets the Logger property
-func (s *CommandLineArgsCallbackContext) Logger() (*ILogger, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.logger", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*ILogger), nil
-}
-
-// SetLogger sets the Logger property
-func (s *CommandLineArgsCallbackContext) SetLogger(value *ILogger) (*CommandLineArgsCallbackContext, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.setLogger", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*CommandLineArgsCallbackContext), nil
-}
-
-// Resource gets the Resource property
-func (s *CommandLineArgsCallbackContext) Resource() (*IResource, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.resource", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResource), nil
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/add", reqArgs)
+	return err
 }
 
 // ConnectionStringAvailableEvent wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent.
@@ -7161,7 +7148,6 @@ func (s *EndpointUpdateContext) SetTlsEnabled(value bool) (*EndpointUpdateContex
 // EnvironmentCallbackContext wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext.
 type EnvironmentCallbackContext struct {
 	HandleWrapperBase
-	environmentVariables *AspireDict[string, any]
 }
 
 // NewEnvironmentCallbackContext creates a new EnvironmentCallbackContext.
@@ -7171,52 +7157,31 @@ func NewEnvironmentCallbackContext(handle *Handle, client *AspireClient) *Enviro
 	}
 }
 
-// EnvironmentVariables gets the EnvironmentVariables property
-func (s *EnvironmentCallbackContext) EnvironmentVariables() *AspireDict[string, any] {
-	if s.environmentVariables == nil {
-		s.environmentVariables = NewAspireDictWithGetter[string, any](s.Handle(), s.Client(), "Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environmentVariables")
-	}
-	return s.environmentVariables
-}
-
-// CancellationToken gets the CancellationToken property
-func (s *EnvironmentCallbackContext) CancellationToken() (*CancellationToken, error) {
+// Environment gets the environment variable editor
+func (s *EnvironmentCallbackContext) Environment() (*EnvironmentEditor, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.cancellationToken", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environment", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result.(*CancellationToken), nil
+	return result.(*EnvironmentEditor), nil
 }
 
-// Logger gets the Logger property
-func (s *EnvironmentCallbackContext) Logger() (*ILogger, error) {
+// Log gets the callback logger facade
+func (s *EnvironmentCallbackContext) Log() (*LogFacade, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.logger", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.log", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result.(*ILogger), nil
+	return result.(*LogFacade), nil
 }
 
-// SetLogger sets the Logger property
-func (s *EnvironmentCallbackContext) SetLogger(value *ILogger) (*EnvironmentCallbackContext, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.setLogger", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*EnvironmentCallbackContext), nil
-}
-
-// Resource gets the Resource property
+// Resource gets the resource associated with this callback
 func (s *EnvironmentCallbackContext) Resource() (*IResource, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
@@ -7228,7 +7193,7 @@ func (s *EnvironmentCallbackContext) Resource() (*IResource, error) {
 	return result.(*IResource), nil
 }
 
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext gets the execution context for this callback invocation
 func (s *EnvironmentCallbackContext) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
@@ -7238,6 +7203,29 @@ func (s *EnvironmentCallbackContext) ExecutionContext() (*DistributedApplication
 		return nil, err
 	}
 	return result.(*DistributedApplicationExecutionContext), nil
+}
+
+// EnvironmentEditor wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor.
+type EnvironmentEditor struct {
+	HandleWrapperBase
+}
+
+// NewEnvironmentEditor creates a new EnvironmentEditor.
+func NewEnvironmentEditor(handle *Handle, client *AspireClient) *EnvironmentEditor {
+	return &EnvironmentEditor{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Set sets an environment variable
+func (s *EnvironmentEditor) Set(name string, value any) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	reqArgs["value"] = SerializeValue(value)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/set", reqArgs)
+	return err
 }
 
 // EventingSubscriberRegistrationContext wraps a handle for Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext.
@@ -10957,6 +10945,58 @@ func (s *InitializeResourceEvent) Services() (*IServiceProvider, error) {
 	return result.(*IServiceProvider), nil
 }
 
+// LogFacade wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade.
+type LogFacade struct {
+	HandleWrapperBase
+}
+
+// NewLogFacade creates a new LogFacade.
+func NewLogFacade(handle *Handle, client *AspireClient) *LogFacade {
+	return &LogFacade{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Info writes an informational log message
+func (s *LogFacade) Info(message string) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/info", reqArgs)
+	return err
+}
+
+// Warning writes a warning log message
+func (s *LogFacade) Warning(message string) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/warning", reqArgs)
+	return err
+}
+
+// Error writes an error log message
+func (s *LogFacade) Error(message string) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/error", reqArgs)
+	return err
+}
+
+// Debug writes a debug log message
+func (s *LogFacade) Debug(message string) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["message"] = SerializeValue(message)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/debug", reqArgs)
+	return err
+}
+
 // ParameterResource wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource.
 type ParameterResource struct {
 	ResourceBuilderBase
@@ -11664,79 +11704,28 @@ func NewPipelineConfigurationContext(handle *Handle, client *AspireClient) *Pipe
 	}
 }
 
-// Services gets the Services property
-func (s *PipelineConfigurationContext) Services() (*IServiceProvider, error) {
+// Pipeline gets the pipeline editor
+func (s *PipelineConfigurationContext) Pipeline() (*PipelineEditor, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.services", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.pipeline", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result.(*IServiceProvider), nil
+	return result.(*PipelineEditor), nil
 }
 
-// SetServices sets the Services property
-func (s *PipelineConfigurationContext) SetServices(value *IServiceProvider) (*PipelineConfigurationContext, error) {
+// Log gets the callback logger facade
+func (s *PipelineConfigurationContext) Log() (*LogFacade, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.setServices", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.log", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result.(*PipelineConfigurationContext), nil
-}
-
-// Steps gets the Steps property
-func (s *PipelineConfigurationContext) Steps() (*[]*PipelineStep, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.steps", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*[]*PipelineStep), nil
-}
-
-// SetSteps sets the Steps property
-func (s *PipelineConfigurationContext) SetSteps(value []*PipelineStep) (*PipelineConfigurationContext, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.setSteps", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*PipelineConfigurationContext), nil
-}
-
-// Model gets the Model property
-func (s *PipelineConfigurationContext) Model() (*DistributedApplicationModel, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.model", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*DistributedApplicationModel), nil
-}
-
-// SetModel sets the Model property
-func (s *PipelineConfigurationContext) SetModel(value *DistributedApplicationModel) (*PipelineConfigurationContext, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.setModel", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*PipelineConfigurationContext), nil
+	return result.(*LogFacade), nil
 }
 
 // GetSteps gets pipeline steps with the specified tag
@@ -11851,12 +11840,46 @@ func (s *PipelineContext) Summary() (*PipelineSummary, error) {
 	return result.(*PipelineSummary), nil
 }
 
+// PipelineEditor wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineEditor.
+type PipelineEditor struct {
+	HandleWrapperBase
+}
+
+// NewPipelineEditor creates a new PipelineEditor.
+func NewPipelineEditor(handle *Handle, client *AspireClient) *PipelineEditor {
+	return &PipelineEditor{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// Steps gets all configured pipeline steps
+func (s *PipelineEditor) Steps() (*[]*PipelineStep, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/steps", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*[]*PipelineStep), nil
+}
+
+// StepsByTag gets pipeline steps with the specified tag
+func (s *PipelineEditor) StepsByTag(tag string) (*[]*PipelineStep, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["tag"] = SerializeValue(tag)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/stepsByTag", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*[]*PipelineStep), nil
+}
+
 // PipelineStep wraps a handle for Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep.
 type PipelineStep struct {
 	HandleWrapperBase
-	dependsOnSteps *AspireList[string]
-	requiredBySteps *AspireList[string]
-	tags *AspireList[string]
 }
 
 // NewPipelineStep creates a new PipelineStep.
@@ -11866,7 +11889,7 @@ func NewPipelineStep(handle *Handle, client *AspireClient) *PipelineStep {
 	}
 }
 
-// Name gets the Name property
+// Name gets the unique name of the step
 func (s *PipelineStep) Name() (*string, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
@@ -11878,20 +11901,7 @@ func (s *PipelineStep) Name() (*string, error) {
 	return result.(*string), nil
 }
 
-// SetName sets the Name property
-func (s *PipelineStep) SetName(value string) (*PipelineStep, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.setName", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*PipelineStep), nil
-}
-
-// Description gets the Description property
+// Description gets the human-readable description of the step
 func (s *PipelineStep) Description() (*string, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
@@ -11901,107 +11911,6 @@ func (s *PipelineStep) Description() (*string, error) {
 		return nil, err
 	}
 	return result.(*string), nil
-}
-
-// SetDescription sets the Description property
-func (s *PipelineStep) SetDescription(value string) (*PipelineStep, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.setDescription", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*PipelineStep), nil
-}
-
-// DependsOnSteps gets the DependsOnSteps property
-func (s *PipelineStep) DependsOnSteps() *AspireList[string] {
-	if s.dependsOnSteps == nil {
-		s.dependsOnSteps = NewAspireListWithGetter[string](s.Handle(), s.Client(), "Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps")
-	}
-	return s.dependsOnSteps
-}
-
-// SetDependsOnSteps sets the DependsOnSteps property
-func (s *PipelineStep) SetDependsOnSteps(value *AspireList[string]) (*PipelineStep, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.setDependsOnSteps", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*PipelineStep), nil
-}
-
-// RequiredBySteps gets the RequiredBySteps property
-func (s *PipelineStep) RequiredBySteps() *AspireList[string] {
-	if s.requiredBySteps == nil {
-		s.requiredBySteps = NewAspireListWithGetter[string](s.Handle(), s.Client(), "Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps")
-	}
-	return s.requiredBySteps
-}
-
-// SetRequiredBySteps sets the RequiredBySteps property
-func (s *PipelineStep) SetRequiredBySteps(value *AspireList[string]) (*PipelineStep, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.setRequiredBySteps", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*PipelineStep), nil
-}
-
-// Tags gets the Tags property
-func (s *PipelineStep) Tags() *AspireList[string] {
-	if s.tags == nil {
-		s.tags = NewAspireListWithGetter[string](s.Handle(), s.Client(), "Aspire.Hosting.Pipelines/PipelineStep.tags")
-	}
-	return s.tags
-}
-
-// SetTags sets the Tags property
-func (s *PipelineStep) SetTags(value *AspireList[string]) (*PipelineStep, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.setTags", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*PipelineStep), nil
-}
-
-// Resource gets the Resource property
-func (s *PipelineStep) Resource() (*IResource, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.resource", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResource), nil
-}
-
-// SetResource sets the Resource property
-func (s *PipelineStep) SetResource(value *IResource) (*PipelineStep, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/PipelineStep.setResource", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*PipelineStep), nil
 }
 
 // DependsOn adds a dependency on another step by name
@@ -12021,6 +11930,16 @@ func (s *PipelineStep) RequiredBy(stepName string) error {
 	}
 	reqArgs["stepName"] = SerializeValue(stepName)
 	_, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/requiredBy", reqArgs)
+	return err
+}
+
+// AddTag adds a tag to the step
+func (s *PipelineStep) AddTag(tag string) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["tag"] = SerializeValue(tag)
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.Pipelines/addTag", reqArgs)
 	return err
 }
 
@@ -14027,7 +13946,6 @@ func (s *ResourceStoppedEvent) Services() (*IServiceProvider, error) {
 // ResourceUrlsCallbackContext wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext.
 type ResourceUrlsCallbackContext struct {
 	HandleWrapperBase
-	urls *AspireList[*ResourceUrlAnnotation]
 }
 
 // NewResourceUrlsCallbackContext creates a new ResourceUrlsCallbackContext.
@@ -14037,7 +13955,7 @@ func NewResourceUrlsCallbackContext(handle *Handle, client *AspireClient) *Resou
 	}
 }
 
-// Resource gets the Resource property
+// Resource gets the resource associated with these URLs
 func (s *ResourceUrlsCallbackContext) Resource() (*IResource, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
@@ -14049,52 +13967,31 @@ func (s *ResourceUrlsCallbackContext) Resource() (*IResource, error) {
 	return result.(*IResource), nil
 }
 
-// Urls gets the Urls property
-func (s *ResourceUrlsCallbackContext) Urls() *AspireList[*ResourceUrlAnnotation] {
-	if s.urls == nil {
-		s.urls = NewAspireListWithGetter[*ResourceUrlAnnotation](s.Handle(), s.Client(), "Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.urls")
-	}
-	return s.urls
-}
-
-// CancellationToken gets the CancellationToken property
-func (s *ResourceUrlsCallbackContext) CancellationToken() (*CancellationToken, error) {
+// Urls gets the URL editor
+func (s *ResourceUrlsCallbackContext) Urls() (*ResourceUrlsEditor, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.cancellationToken", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.urls", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result.(*CancellationToken), nil
+	return result.(*ResourceUrlsEditor), nil
 }
 
-// Logger gets the Logger property
-func (s *ResourceUrlsCallbackContext) Logger() (*ILogger, error) {
+// Log gets the callback logger facade
+func (s *ResourceUrlsCallbackContext) Log() (*LogFacade, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
 	}
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.logger", reqArgs)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.log", reqArgs)
 	if err != nil {
 		return nil, err
 	}
-	return result.(*ILogger), nil
+	return result.(*LogFacade), nil
 }
 
-// SetLogger sets the Logger property
-func (s *ResourceUrlsCallbackContext) SetLogger(value *ILogger) (*ResourceUrlsCallbackContext, error) {
-	reqArgs := map[string]any{
-		"context": SerializeValue(s.Handle()),
-	}
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.setLogger", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*ResourceUrlsCallbackContext), nil
-}
-
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext gets the execution context for this callback invocation
 func (s *ResourceUrlsCallbackContext) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
 	reqArgs := map[string]any{
 		"context": SerializeValue(s.Handle()),
@@ -14104,6 +14001,70 @@ func (s *ResourceUrlsCallbackContext) ExecutionContext() (*DistributedApplicatio
 		return nil, err
 	}
 	return result.(*DistributedApplicationExecutionContext), nil
+}
+
+// GetEndpoint gets an endpoint reference from the associated resource
+func (s *ResourceUrlsCallbackContext) GetEndpoint(name string) (*EndpointReference, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["name"] = SerializeValue(name)
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/getEndpoint", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*EndpointReference), nil
+}
+
+// ResourceUrlsEditor wraps a handle for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor.
+type ResourceUrlsEditor struct {
+	HandleWrapperBase
+}
+
+// NewResourceUrlsEditor creates a new ResourceUrlsEditor.
+func NewResourceUrlsEditor(handle *Handle, client *AspireClient) *ResourceUrlsEditor {
+	return &ResourceUrlsEditor{
+		HandleWrapperBase: NewHandleWrapperBase(handle, client),
+	}
+}
+
+// ExecutionContext gets the execution context for this URL editor
+func (s *ResourceUrlsEditor) ExecutionContext() (*DistributedApplicationExecutionContext, error) {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	result, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext", reqArgs)
+	if err != nil {
+		return nil, err
+	}
+	return result.(*DistributedApplicationExecutionContext), nil
+}
+
+// Add adds a displayed URL
+func (s *ResourceUrlsEditor) Add(url any, displayText *string) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["url"] = SerializeValue(url)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.add", reqArgs)
+	return err
+}
+
+// AddForEndpoint adds a displayed URL for a specific endpoint
+func (s *ResourceUrlsEditor) AddForEndpoint(endpoint *EndpointReference, url any, displayText *string) error {
+	reqArgs := map[string]any{
+		"context": SerializeValue(s.Handle()),
+	}
+	reqArgs["endpoint"] = SerializeValue(endpoint)
+	reqArgs["url"] = SerializeValue(url)
+	if displayText != nil {
+		reqArgs["displayText"] = SerializeValue(displayText)
+	}
+	_, err := s.Client().InvokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint", reqArgs)
+	return err
 }
 
 // TestCallbackContext wraps a handle for Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext.
@@ -16469,20 +16430,6 @@ func (s *TestRedisResource) WithConnectionProperty(name string, value any) (*IRe
 	reqArgs["name"] = SerializeValue(name)
 	reqArgs["value"] = SerializeValue(value)
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/withConnectionProperty", reqArgs)
-	if err != nil {
-		return nil, err
-	}
-	return result.(*IResourceWithConnectionString), nil
-}
-
-// WithConnectionPropertyValue adds a connection property with a string value
-func (s *TestRedisResource) WithConnectionPropertyValue(name string, value string) (*IResourceWithConnectionString, error) {
-	reqArgs := map[string]any{
-		"builder": SerializeValue(s.Handle()),
-	}
-	reqArgs["name"] = SerializeValue(name)
-	reqArgs["value"] = SerializeValue(value)
-	result, err := s.Client().InvokeCapability("Aspire.Hosting/withConnectionPropertyValue", reqArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -19710,6 +19657,9 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", func(h *Handle, c *AspireClient) any {
 		return NewPipelineContext(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineEditor", func(h *Handle, c *AspireClient) any {
+		return NewPipelineEditor(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep", func(h *Handle, c *AspireClient) any {
 		return NewPipelineStep(h, c)
 	})
@@ -19749,6 +19699,9 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewCommandLineArgsCallbackContext(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor", func(h *Handle, c *AspireClient) any {
+		return NewCommandLineArgsEditor(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", func(h *Handle, c *AspireClient) any {
 		return NewConnectionStringAvailableEvent(h, c)
 	})
@@ -19773,11 +19726,17 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewEnvironmentCallbackContext(h, c)
 	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor", func(h *Handle, c *AspireClient) any {
+		return NewEnvironmentEditor(h, c)
+	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue", func(h *Handle, c *AspireClient) any {
 		return NewIExpressionValue(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", func(h *Handle, c *AspireClient) any {
 		return NewInitializeResourceEvent(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", func(h *Handle, c *AspireClient) any {
+		return NewLogFacade(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", func(h *Handle, c *AspireClient) any {
 		return NewReferenceExpressionBuilder(h, c)
@@ -19799,6 +19758,9 @@ func init() {
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", func(h *Handle, c *AspireClient) any {
 		return NewResourceUrlsCallbackContext(h, c)
+	})
+	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor", func(h *Handle, c *AspireClient) any {
+		return NewResourceUrlsEditor(h, c)
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder", func(h *Handle, c *AspireClient) any {
 		return NewDockerfileBuilder(h, c)
@@ -19854,19 +19816,13 @@ func init() {
 	RegisterHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource", func(h *Handle, c *AspireClient) any {
 		return NewIComputeResource(h, c)
 	})
-	RegisterHandleWrapper("Aspire.Hosting/List<string>", func(h *Handle, c *AspireClient) any {
-		return &AspireList[any]{HandleWrapperBase: NewHandleWrapperBase(h, c)}
-	})
 	RegisterHandleWrapper("Aspire.Hosting/Dict<string,any>", func(h *Handle, c *AspireClient) any {
 		return &AspireDict[any, any]{HandleWrapperBase: NewHandleWrapperBase(h, c)}
 	})
 	RegisterHandleWrapper("Aspire.Hosting/List<any>", func(h *Handle, c *AspireClient) any {
 		return &AspireList[any]{HandleWrapperBase: NewHandleWrapperBase(h, c)}
 	})
-	RegisterHandleWrapper("Aspire.Hosting/Dict<string,string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression>", func(h *Handle, c *AspireClient) any {
-		return &AspireDict[any, any]{HandleWrapperBase: NewHandleWrapperBase(h, c)}
-	})
-	RegisterHandleWrapper("Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation>", func(h *Handle, c *AspireClient) any {
+	RegisterHandleWrapper("Aspire.Hosting/List<string>", func(h *Handle, c *AspireClient) any {
 		return &AspireList[any]{HandleWrapperBase: NewHandleWrapperBase(h, c)}
 	})
 	RegisterHandleWrapper("Aspire.Hosting/Dict<string,string>", func(h *Handle, c *AspireClient) any {

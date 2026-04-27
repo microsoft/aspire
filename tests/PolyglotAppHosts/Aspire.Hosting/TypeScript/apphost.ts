@@ -148,7 +148,8 @@ await pipeline.addStep("custom-builder-step", async (stepContext) => {
 });
 
 await pipeline.configure(async (configContext) => {
-    const _allSteps = await configContext.steps.get();
+    const builderPipeline = await configContext.pipeline();
+    const _allSteps = await builderPipeline.steps();
     const _builderTaggedSteps = await configContext.getSteps("custom-build");
 });
 
@@ -192,7 +193,7 @@ await container.withArgsCallback(async (context) => {
     await args.add(expr);
 });
 
-await container.withUrlsCallback(async (context) => {
+await container.withUrls(async (context) => {
     const _urlsResource = await context.resource();
     const urlsLog = await context.log();
     const urlsExecutionContext = await context.executionContext();
@@ -345,8 +346,9 @@ await container.withPipelineConfiguration(async (configContext) => {
     const configLog = await configContext.log();
     await configLog.info("Pipeline configuration logger");
 
-    const allSteps = await configContext.steps.get();
-    const taggedSteps = await configContext.getSteps("custom-build");
+    const configPipeline = await configContext.pipeline();
+    const allSteps = await configPipeline.steps();
+    const taggedSteps = await configPipeline.stepsByTag("custom-build");
 
     const _stepName: string = await allSteps[0].name();
     const _description: string = await allSteps[0].description();
@@ -358,10 +360,9 @@ await container.withPipelineConfiguration(async (configContext) => {
 });
 
 await container.withPipelineConfiguration(async (configContext) => {
-    const _configServices = await configContext.services.get();
-    const _configModel = await configContext.model.get();
-    const _resourceSteps = await configContext.steps.get();
-    const _taggedSteps = await configContext.getSteps("custom-build");
+    const configPipeline = await configContext.pipeline();
+    const _resourceSteps = await configPipeline.steps();
+    const _taggedSteps = await configPipeline.stepsByTag("custom-build");
 });
 
 // ===================================================================

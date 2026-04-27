@@ -1872,34 +1872,6 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a URL to be displayed for the resource.
-    /// </summary>
-    /// <typeparam name="T">The resource type.</typeparam>
-    /// <param name="builder">The builder for the resource.</param>
-    /// <param name="url">The URL to display, specified as a string or reference expression.</param>
-    /// <param name="displayText">The display text to show when the link is displayed.</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withUrl", Description = "Adds or modifies displayed URLs")]
-    internal static IResourceBuilder<T> WithUrlExport<T>(
-        this IResourceBuilder<T> builder,
-        [AspireUnion(typeof(string), typeof(ReferenceExpression))] object url,
-        string? displayText = null)
-        where T : IResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(url);
-
-        return url switch
-        {
-            string stringUrl => builder.WithUrl(stringUrl, displayText),
-            ReferenceExpression referenceExpression => builder.WithUrl(referenceExpression, displayText),
-            _ => throw new ArgumentException(
-                $"Unsupported URL type '{url.GetType().Name}'. Expected string or ReferenceExpression.",
-                nameof(url))
-        };
-    }
-
-    /// <summary>
     /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
