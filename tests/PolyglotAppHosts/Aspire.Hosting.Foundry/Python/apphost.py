@@ -16,8 +16,12 @@ with create_builder() as builder:
     app_insights = builder.add_azure_application_insights("resource")
     cosmos = builder.add_azure_cosmos_db("resource")
     storage = builder.add_azure_storage("resource")
+<<<<<<< features/foundry-prompt-agents
     search = builder.add_azure_search("resource")
     project = foundry.add_project("resource", ".", "default")
+=======
+    project = foundry.add_project("resource", ".", launch_profile_name="default")
+>>>>>>> main
     project.with_container_registry()
     project.with_key_vault()
     project.with_app_insights()
@@ -63,7 +67,7 @@ with create_builder() as builder:
     _prompt_agent.with_tool(func_tool)
 
     builder_project_foundry = builder.add_foundry("resource")
-    builder_project = builder_project_foundry.add_project("resource", ".", "default")
+    builder_project = builder_project_foundry.add_project("resource", ".", launch_profile_name="default")
     _builder_project_model = builder_project.add_model_deployment("resource")
     _project_model = project.add_model_deployment("resource")
     hosted_agent = builder.add_executable("resource", "echo", ".", [])

@@ -534,7 +534,7 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the connection property to add.</param>
     /// <param name="value">The string value to assign to the connection property.</param>
     /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
-    [AspireExport("withConnectionPropertyValue", Description = "Adds a connection property with a string value")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the unified withConnectionProperty export.")]
     internal static IResourceBuilder<T> WithConnectionPropertyValueExport<T>(
         this IResourceBuilder<T> builder,
         string name,

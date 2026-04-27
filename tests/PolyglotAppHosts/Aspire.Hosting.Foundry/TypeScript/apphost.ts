@@ -132,7 +132,7 @@ const _deploymentName = await chat.deploymentName.get();
 const _modelName = await chat.modelName.get();
 const _format = await chat.format.get();
 const _version = await chat.modelVersion.get();
-const _connectionString = await chat.connectionStringExpression.get();
+const _connectionString = await chat.connectionStringExpression();
 const _deploymentParent = await chat.parent.get();
 
 await builder.build().run();

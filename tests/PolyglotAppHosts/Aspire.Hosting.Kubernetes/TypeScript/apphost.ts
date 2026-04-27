@@ -39,8 +39,8 @@ const _resolvedDefaultServiceType: string = await kubernetes.defaultServiceType.
 
 const serviceContainer = await builder.addContainer('kube-service', 'redis:alpine');
 await serviceContainer.publishAsKubernetesService(async (service) => {
-    const _serviceName: string = await service.name.get();
-    const serviceParent = await service.parent.get();
+    const _serviceName: string = await service.name();
+    const serviceParent = await service.parent();
     const _serviceParentChartName: string = await serviceParent.helmChartName.get();
 });
 

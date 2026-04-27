@@ -149,4 +149,5 @@ public static class ConnectionStringBuilderExtensions
         connectionStringBuilder(rb);
         return builder.AddConnectionString(name, rb.Build());
     }
+
 }

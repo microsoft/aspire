@@ -10,14 +10,14 @@ const consumer = await builder.addContainer('consumer', 'busybox');
 await consumer.withReference(qdrant, { connectionName: 'qdrant' });
 
 // ---- Property access on QdrantServerResource ----
-const _endpoint = await qdrant.primaryEndpoint.get();
-const _grpcHost = await qdrant.grpcHost.get();
-const _grpcPort = await qdrant.grpcPort.get();
-const _httpEndpoint = await qdrant.httpEndpoint.get();
-const _httpHost = await qdrant.httpHost.get();
-const _httpPort = await qdrant.httpPort.get();
-const _uri = await qdrant.uriExpression.get();
-const _httpUri = await qdrant.httpUriExpression.get();
+const _endpoint = await qdrant.primaryEndpoint();
+const _grpcHost = await qdrant.grpcHost();
+const _grpcPort = await qdrant.grpcPort();
+const _httpEndpoint = await qdrant.httpEndpoint();
+const _httpHost = await qdrant.httpHost();
+const _httpPort = await qdrant.httpPort();
+const _uri = await qdrant.uriExpression();
+const _httpUri = await qdrant.httpUriExpression();
 
-const _cstr = await qdrant.connectionStringExpression.get();
+const _cstr = await qdrant.connectionStringExpression();
 await builder.build().run();
