@@ -9,9 +9,20 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Provides a narrow logging surface for polyglot callback contexts.
 /// </summary>
 [AspireExport]
-internal sealed class LogFacade(ILogger logger)
+internal sealed class LogFacade
 {
-    private readonly ILogger _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    private readonly Func<ILogger> _loggerAccessor;
+
+    public LogFacade(ILogger logger)
+        : this(() => logger)
+    {
+        ArgumentNullException.ThrowIfNull(logger);
+    }
+
+    public LogFacade(Func<ILogger> loggerAccessor)
+    {
+        _loggerAccessor = loggerAccessor ?? throw new ArgumentNullException(nameof(loggerAccessor));
+    }
 
     /// <summary>
     /// Writes an informational log message.
@@ -21,7 +32,7 @@ internal sealed class LogFacade(ILogger logger)
     public void Info(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
-        _logger.LogInformation(message);
+        _loggerAccessor().LogInformation(message);
     }
 
     /// <summary>
@@ -32,7 +43,7 @@ internal sealed class LogFacade(ILogger logger)
     public void Warning(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
-        _logger.LogWarning(message);
+        _loggerAccessor().LogWarning(message);
     }
 
     /// <summary>
@@ -43,7 +54,7 @@ internal sealed class LogFacade(ILogger logger)
     public void Error(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
-        _logger.LogError(message);
+        _loggerAccessor().LogError(message);
     }
 
     /// <summary>
@@ -54,6 +65,6 @@ internal sealed class LogFacade(ILogger logger)
     public void Debug(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
-        _logger.LogDebug(message);
+        _loggerAccessor().LogDebug(message);
     }
 }

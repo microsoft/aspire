@@ -2882,7 +2882,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             valueType = MapTypeRefToTypeScript(getter.ReturnType.ValueType);
         }
 
-        var typeId = $"'{getter.CapabilityId.Replace(".get", "")}'";
+        var typeId = $"'{getter.CapabilityId}'";
         var getterCapabilityId = $"'{getter.CapabilityId}'";
 
         if (!string.IsNullOrEmpty(getter.Description))
@@ -2921,7 +2921,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             valueType = MapTypeRefToTypeScript(getter.ReturnType.ValueType);
         }
 
-        var typeId = $"'{getter.CapabilityId.Replace(".get", "")}'";
+        var typeId = $"'{getter.CapabilityId}'";
         var getterCapabilityId = $"'{getter.CapabilityId}'";
 
         WriteLine($"    private _{propertyName}?: AspireDict<{keyType}, {valueType}>;");
@@ -2956,7 +2956,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             elementType = MapTypeRefToTypeScript(getter.ReturnType.ElementType);
         }
 
-        var typeId = $"'{getter.CapabilityId.Replace(".get", "")}'";
+        var typeId = $"'{getter.CapabilityId}'";
         var getterCapabilityId = $"'{getter.CapabilityId}'";
 
         if (!string.IsNullOrEmpty(getter.Description))
@@ -2989,7 +2989,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             elementType = MapTypeRefToTypeScript(getter.ReturnType.ElementType);
         }
 
-        var typeId = $"'{getter.CapabilityId.Replace(".get", "")}'";
+        var typeId = $"'{getter.CapabilityId}'";
         var getterCapabilityId = $"'{getter.CapabilityId}'";
 
         WriteLine($"    private _{propertyName}?: AspireList<{elementType}>;");

@@ -73,7 +73,7 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
     [AspireExport(Description = "Gets the callback logger facade")]
-    internal LogFacade Log => new(Logger);
+    internal LogFacade Log => new(() => Logger);
 
     /// <summary>
     /// Gets the execution context associated with this invocation of the AppHost.

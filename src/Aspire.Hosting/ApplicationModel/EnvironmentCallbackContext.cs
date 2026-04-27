@@ -56,7 +56,7 @@ public class EnvironmentCallbackContext(DistributedApplicationExecutionContext e
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
     [AspireExport(Description = "Gets the callback logger facade")]
-    internal LogFacade Log => new(Logger);
+    internal LogFacade Log => new(() => Logger);
 
     /// <summary>
     /// The resource associated with this callback context.

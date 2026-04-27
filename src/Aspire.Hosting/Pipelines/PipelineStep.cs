@@ -25,6 +25,9 @@ public class PipelineStep
     /// <summary>
     /// Gets the exported name projection for polyglot SDKs.
     /// </summary>
+    /// <remarks>
+    /// This projection avoids exporting an ATS setter for the public init-only <see cref="Name"/> property.
+    /// </remarks>
     [AspireExport(MethodName = "name", Description = "Gets the unique name of the step")]
     internal string ExportedName => Name;
 
@@ -40,6 +43,9 @@ public class PipelineStep
     /// <summary>
     /// Gets the exported description projection for polyglot SDKs.
     /// </summary>
+    /// <remarks>
+    /// This projection avoids exporting an ATS setter for the public init-only <see cref="Description"/> property.
+    /// </remarks>
     [AspireExport(MethodName = "description", Description = "Gets the human-readable description of the step")]
     internal string? ExportedDescription => Description;
 
