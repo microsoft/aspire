@@ -5,6 +5,7 @@
     <ArchiveName>aspire-cli-$(CliRuntime)</ArchiveName>
     <ArchiveFormat Condition="$(CliRuntime.StartsWith('win-'))">zip</ArchiveFormat>
     <ArchiveFormat Condition="!$(CliRuntime.StartsWith('win-'))">tar.gz</ArchiveFormat>
+    <CliToolSupportedRids Condition="'$(CliToolSupportedRids)' == ''">win-x64;win-arm64;linux-x64;linux-arm64;linux-musl-x64;osx-x64;osx-arm64</CliToolSupportedRids>
 
     <!-- PublishNativeAot is explicitly set to false in the projects for cases where we don't want to AOT at all.
          For the rest, publish native AOT if running on the target platfrom -->
@@ -18,8 +19,10 @@
     <!-- Read the PE Machine field from the binary and compare against PEExpectedMachine (hex) — Windows only -->
     <_CheckPEMachine Condition="'$(PublishNativeAot)' == 'true' and $([System.OperatingSystem]::IsWindows())">true</_CheckPEMachine>
 
-    <_NativeBinaryPath>$([MSBuild]::NormalizePath($(OutputPath), 'aspire'))</_NativeBinaryPath>
-    <_NativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_NativeBinaryPath).exe</_NativeBinaryPath>
+    <_NativeBinaryName>aspire</_NativeBinaryName>
+    <_NativeBinaryName Condition="$(CliRuntime.StartsWith('win-'))">aspire.exe</_NativeBinaryName>
+    <_NativeBinaryPath>$([MSBuild]::NormalizePath($(OutputPath), '$(_NativeBinaryName)'))</_NativeBinaryPath>
+    <CliToolPreBuiltBinaryPath Condition="'$(CliToolPreBuiltBinaryPath)' == ''">$(_NativeBinaryPath)</CliToolPreBuiltBinaryPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -126,6 +129,65 @@
 
     <Error Condition="'$(_PEMachineHex)' != '$(PEExpectedMachine)'"
            Text="PE Machine type mismatch for $(CliRuntime). Expected: $(PEExpectedMachine), Got: $(_PEMachineHex)" />
+  </Target>
+
+  <Target Name="_PackCliTool">
+    <Error Condition="'$(CliRuntime)' == ''" Text="CliRuntime must be set before packing the CLI tool." />
+    <Error Condition="'$(CliToolPreBuiltBinaryPath)' == ''" Text="CliToolPreBuiltBinaryPath must be set to the signed NativeAOT CLI binary before packing the CLI tool." />
+    <Error Condition="!Exists('$(CliToolPreBuiltBinaryPath)')" Text="CliToolPreBuiltBinaryPath does not exist: '$(CliToolPreBuiltBinaryPath)'." />
+
+    <PropertyGroup>
+      <_CliToolPublishDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish', '$(CliRuntime)'))</_CliToolPublishDir>
+      <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish', 'pointer'))</_CliToolPointerPublishDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
+      <_PackToolProperties Include="CreateRidSpecificToolPackages=true" />
+      <_PackToolProperties Include="ToolPackageRuntimeIdentifiers=$(CliToolSupportedRids)" />
+      <_PackToolProperties Include="PreBuiltCliBinaryPath=$(CliToolPreBuiltBinaryPath)" />
+      <_PackToolProperties Include="PublishDir=$(_CliToolPublishDir)" />
+      <_PackToolProperties Include="PublishAot=true" />
+      <_PackToolProperties Include="BundlePayloadPath=" />
+      <_PackToolProperties Include="Configuration=$(Configuration)" />
+      <_PackToolProperties Include="ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)" />
+      <_PackToolProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_PackToolProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+    </ItemGroup>
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackToolProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <ItemGroup>
+      <_PackPointerProperties Include="CreateRidSpecificToolPackages=true" />
+      <_PackPointerProperties Include="ToolPackageRuntimeIdentifiers=$(CliToolSupportedRids)" />
+      <_PackPointerProperties Include="PreBuiltCliBinaryPath=$(CliToolPreBuiltBinaryPath)" />
+      <_PackPointerProperties Include="PublishDir=$(_CliToolPointerPublishDir)" />
+      <_PackPointerProperties Include="PublishAot=true" />
+      <_PackPointerProperties Include="BundlePayloadPath=" />
+      <_PackPointerProperties Include="NoBuild=true" />
+      <_PackPointerProperties Include="Configuration=$(Configuration)" />
+      <_PackPointerProperties Include="ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)" />
+      <_PackPointerProperties Condition="'$(VersionSuffix)' != ''" Include="VersionSuffix=$(VersionSuffix)" />
+      <_PackPointerProperties Condition="'$(OfficialBuildId)' != ''" Include="OfficialBuildId=$(OfficialBuildId)" />
+    </ItemGroup>
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Restore"
+             Properties="@(_PackPointerProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
+
+    <MSBuild Projects="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj"
+             Targets="Pack"
+             Properties="@(_PackPointerProperties)"
+             RemoveProperties="OutputPath;TargetFramework" />
   </Target>
 
 </Project>

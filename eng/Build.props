@@ -44,6 +44,8 @@
     <ProjectToBuild Include="$(RepoRoot)eng\OuterPreBuild.proj" />
 
     <ProjectToBuild Include="$(RepoRoot)src\**\*.csproj" Exclude="$(RepoRoot)src\Aspire.ProjectTemplates\templates\**\*.csproj" />
+    <!-- Aspire.Cli.Tool.csproj packages prebuilt NativeAOT binaries via eng/clipack, not the managed project build. -->
+    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj" />
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Dashboard\Aspire.Dashboard.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
     <ProjectToBuild Include="$(RepoRoot)eng\dcppack\**\*.csproj" Condition="'$(SkipBundleDeps)' != 'true'" />
@@ -61,6 +63,10 @@
         just building the packages, and don't need to build the test projects. -->
   <ItemGroup Condition="'$(SkipManagedBuild)' != 'true' and '$(SkipTestProjects)' != 'true' and '$(BuildBundleDepsOnly)' != 'true'">
     <ProjectToBuild Include="$(RepoRoot)tests\**\*.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(SkipNativeBuild)' == 'true'">
+    <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj" />
   </ItemGroup>
 
   <!-- Extension build project -->

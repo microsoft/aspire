@@ -71,17 +71,6 @@ jobs:
           /p:BuildBundleDepsOnly=true
           ${{ inputs.versionOverrideArg }}
 
-      # Upload DCP + Dashboard NuGets so test/polyglot jobs can download them
-      - name: Upload RID-specific NuGets
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: built-nugets-for-${{ matrix.targets.rids }}
-          path: |
-            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
-            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
-          if-no-files-found: error
-          retention-days: 15
-
       - name: Build bundle payload archive (Windows)
         if: ${{ runner.os == 'Windows' }}
         shell: pwsh
@@ -145,6 +134,53 @@ jobs:
           /p:TargetRids=${{ matrix.targets.rids }}
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
           ${{ inputs.versionOverrideArg }}
+
+      - name: Pack CLI tool nupkg (Windows)
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: >
+          .\dotnet.cmd
+          msbuild
+          eng/clipack/Aspire.Cli.${{ matrix.targets.rids }}.csproj
+          -t:_PackCliTool
+          /p:Configuration=${{ inputs.configuration }}
+          /p:CliToolPreBuiltBinaryPath=${{ github.workspace }}/artifacts/bin/Aspire.Cli.${{ matrix.targets.rids }}/${{ inputs.configuration }}/net10.0/aspire.exe
+          /p:ContinuousIntegrationBuild=true
+          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/PackCliTool.binlog
+          ${{ inputs.versionOverrideArg }}
+
+      - name: Pack CLI tool nupkg (Unix)
+        if: ${{ runner.os != 'Windows' }}
+        shell: bash
+        run: >
+          ./dotnet.sh
+          msbuild
+          eng/clipack/Aspire.Cli.${{ matrix.targets.rids }}.csproj
+          -t:_PackCliTool
+          /p:Configuration=${{ inputs.configuration }}
+          /p:CliToolPreBuiltBinaryPath=${{ github.workspace }}/artifacts/bin/Aspire.Cli.${{ matrix.targets.rids }}/${{ inputs.configuration }}/net10.0/aspire
+          /p:ContinuousIntegrationBuild=true
+          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/PackCliTool.binlog
+          ${{ inputs.versionOverrideArg }}
+
+      - name: Verify CLI tool nupkg
+        shell: pwsh
+        run: >
+          eng/scripts/verify-cli-tool-nupkg.ps1
+          -PackagesDir artifacts/packages/${{ inputs.configuration }}
+          -Rid ${{ matrix.targets.rids }}
+
+      # Upload DCP, Dashboard, and CLI tool NuGets so test/polyglot jobs can download them
+      - name: Upload RID-specific NuGets
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: built-nugets-for-${{ matrix.targets.rids }}
+          path: |
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
+          if-no-files-found: error
+          retention-days: 15
 
       - name: Upload CLI archives
         if: success()

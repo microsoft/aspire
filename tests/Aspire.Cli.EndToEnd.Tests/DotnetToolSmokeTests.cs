@@ -16,7 +16,7 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// <para>
 /// The strategy is resolved from (in priority order):
 /// <list type="number">
-///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> + <c>ASPIRE_E2E_VERSION</c> — install from local nupkg directory</item>
+///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> — install from local nupkg directory</item>
 ///   <item><c>ASPIRE_E2E_DOTNET_TOOL=true</c> — install from published NuGet feed (optionally with <c>ASPIRE_E2E_VERSION</c>)</item>
 ///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs directory</item>
 /// </list>
@@ -31,7 +31,7 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
         var strategy = GetDotnetToolStrategy();
 
         Assert.True(strategy is not null,
-            "DotnetToolSmokeTests requires one of: ASPIRE_E2E_DOTNET_TOOL_SOURCE + ASPIRE_E2E_VERSION, " +
+            "DotnetToolSmokeTests requires one of: ASPIRE_E2E_DOTNET_TOOL_SOURCE, " +
             "ASPIRE_E2E_DOTNET_TOOL=true, or BUILT_NUGETS_PATH containing Aspire.Cli nupkg.");
 
         output.WriteLine($"DotnetTool strategy resolved: {strategy}");
@@ -111,7 +111,7 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
     /// Explicitly constructs a DotnetTool strategy from env vars, bypassing <see cref="CliInstallStrategy.Detect"/>.
     /// Checks (in order):
     /// <list type="number">
-    ///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> + <c>ASPIRE_E2E_VERSION</c> — explicit local nupkg directory</item>
+    ///   <item><c>ASPIRE_E2E_DOTNET_TOOL_SOURCE</c> — explicit local nupkg directory</item>
     ///   <item><c>ASPIRE_E2E_DOTNET_TOOL=true</c> — install from published NuGet feed</item>
     ///   <item><c>BUILT_NUGETS_PATH</c> — auto-discover from CI-built nupkgs directory</item>
     /// </list>
@@ -127,13 +127,9 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
         {
             var version = Environment.GetEnvironmentVariable("ASPIRE_E2E_VERSION");
 
-            if (string.IsNullOrEmpty(version))
-            {
-                throw new InvalidOperationException(
-                    "ASPIRE_E2E_DOTNET_TOOL_SOURCE requires ASPIRE_E2E_VERSION to specify which version to install.");
-            }
-
-            return CliInstallStrategy.FromDotnetToolLocalSource(source, version);
+            return string.IsNullOrEmpty(version)
+                ? CliInstallStrategy.FromDotnetToolLocalSource(source)
+                : CliInstallStrategy.FromDotnetToolLocalSource(source, version);
         }
 
         // 2. Published NuGet feed
@@ -152,44 +148,9 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
 
         if (!string.IsNullOrEmpty(builtNugetsPath) && Directory.Exists(builtNugetsPath))
         {
-            var nupkgs = Directory.GetFiles(builtNugetsPath, "Aspire.Cli.*.nupkg")
-                .Where(f => !f.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase)
-                         && !f.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-
-            if (nupkgs.Length == 1)
-            {
-                var version = ExtractVersionFromNupkgFilename(nupkgs[0]);
-                return CliInstallStrategy.FromDotnetToolLocalSource(builtNugetsPath, version);
-            }
-
-            if (nupkgs.Length > 1)
-            {
-                throw new InvalidOperationException(
-                    $"Found multiple Aspire.Cli nupkgs in '{builtNugetsPath}': {string.Join(", ", nupkgs.Select(Path.GetFileName))}. Expected exactly one.");
-            }
+            return CliInstallStrategy.FromDotnetToolLocalSource(builtNugetsPath);
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Extracts the NuGet package version from a filename like <c>Aspire.Cli.10.0.0-dev.26223.1.nupkg</c>.
-    /// </summary>
-    private static string ExtractVersionFromNupkgFilename(string nupkgPath)
-    {
-        const string prefix = "Aspire.Cli.";
-        const string suffix = ".nupkg";
-
-        var filename = Path.GetFileName(nupkgPath);
-
-        if (filename.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
-            filename.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-        {
-            return filename[prefix.Length..^suffix.Length];
-        }
-
-        throw new InvalidOperationException(
-            $"Cannot extract version from nupkg filename: {filename}. Expected format: Aspire.Cli.{{version}}.nupkg");
     }
 }

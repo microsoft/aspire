@@ -106,16 +106,7 @@ internal sealed class UpdateCommand : BaseCommand
 
     private static bool IsRunningAsDotNetTool()
     {
-        // When running as a dotnet tool, the process path points to "dotnet" or "dotnet.exe"
-        // When running as a native binary, it points to "aspire" or "aspire.exe"
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return false;
-        }
-
-        var fileName = Path.GetFileNameWithoutExtension(processPath);
-        return string.Equals(fileName, "dotnet", StringComparison.OrdinalIgnoreCase);
+        return DotNetToolDetection.IsRunningAsDotNetTool();
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)

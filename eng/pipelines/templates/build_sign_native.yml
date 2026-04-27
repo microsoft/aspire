@@ -149,6 +149,41 @@ jobs:
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
 
+          - ${{ if eq(parameters.agentOs, 'windows') }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/eng/clipack/Aspire.Cli.${{ targetRid }}.csproj
+                -t:_PackCliTool
+                /p:Configuration=$(_BuildConfig)
+                /p:CliToolPreBuiltBinaryPath=$(Build.SourcesDirectory)/artifacts/bin/Aspire.Cli.${{ targetRid }}/$(_BuildConfig)/net10.0/aspire.exe
+                /p:ContinuousIntegrationBuild=true
+                /bl:$(Build.Arcade.LogsPath)PackCliTool.binlog
+                ${{ parameters.extraBuildArgs }}
+              displayName: 🟣Pack CLI tool nupkg
+
+          - ${{ if ne(parameters.agentOs, 'windows') }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(dotnetScript)
+                msbuild
+                $(Build.SourcesDirectory)/eng/clipack/Aspire.Cli.${{ targetRid }}.csproj
+                -t:_PackCliTool
+                /p:Configuration=$(_BuildConfig)
+                /p:CliToolPreBuiltBinaryPath=$(Build.SourcesDirectory)/artifacts/bin/Aspire.Cli.${{ targetRid }}/$(_BuildConfig)/net10.0/aspire
+                /p:ContinuousIntegrationBuild=true
+                /bl:$(Build.Arcade.LogsPath)PackCliTool.binlog
+                ${{ parameters.extraBuildArgs }}
+              displayName: 🟣Pack CLI tool nupkg
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $verifyParams = @{
+                PackagesDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
+                Rid = "${{ targetRid }}"
+              }
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @verifyParams
+            displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
+
           # Verify the signed CLI archive can execute and create a project.
           # Only runs when the target RID architecture matches the build agent
           # (i.e. the binary can execute natively without emulation).

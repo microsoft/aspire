@@ -32,14 +32,39 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>aspire</ToolCommandName>
     <PackageId>Aspire.Cli</PackageId>
-    <RollForward>Major</RollForward>
     <PackageTags>aspire cli</PackageTags>
     <Description>Command line tool for Aspire developers.</Description>
-    <!-- For 9.5 we want to keep the tool platform-independent, framework-dependent.
-         To do this we make sure it doesn't PublishAOT, and ensure that it doesn't publish for any RIDs at all. -->
-    <PublishAot>false</PublishAot>
+    <!-- The tool packages contain prebuilt NativeAOT binaries. NativeAOT must be built on the target platform,
+         so clipack passes a single RuntimeIdentifier and PreBuiltCliBinaryPath when packing. -->
     <RuntimeIdentifiers></RuntimeIdentifiers>
   </PropertyGroup>
+
+  <PropertyGroup Condition="'$(PreBuiltCliBinaryPath)' != '' and '$(IsCliToolProject)' == 'true'">
+    <IsPublishable>false</IsPublishable>
+    <PublishDepsFilePath></PublishDepsFilePath>
+    <PublishRuntimeConfigFilePath></PublishRuntimeConfigFilePath>
+  </PropertyGroup>
+
+  <Target Name="_ValidateToolPackRequirements"
+          BeforeTargets="PackTool"
+          Condition="'$(IsCliToolProject)' == 'true' and '$(PreBuiltCliBinaryPath)' == ''">
+    <Error Text="Aspire.Cli.Tool.csproj requires PreBuiltCliBinaryPath to pack NativeAOT tool packages. Use eng/clipack to build tool packages." />
+  </Target>
+
+  <Target Name="_CleanPublishDirForPackTool"
+          BeforeTargets="PackTool"
+          Condition="'$(IsCliToolProject)' == 'true' and '$(PreBuiltCliBinaryPath)' != '' and '$(RuntimeIdentifier)' != ''">
+    <RemoveDir Directories="$(PublishDir)" />
+    <MakeDir Directories="$(PublishDir)" />
+  </Target>
+
+  <Target Name="_CopyPreBuiltCliBinaryForPackTool"
+          BeforeTargets="PackTool"
+          AfterTargets="_CleanPublishDirForPackTool"
+          Condition="'$(IsCliToolProject)' == 'true' and '$(PreBuiltCliBinaryPath)' != '' and '$(RuntimeIdentifier)' != ''">
+    <Error Condition="!Exists('$(PreBuiltCliBinaryPath)')" Text="PreBuiltCliBinaryPath '$(PreBuiltCliBinaryPath)' does not exist." />
+    <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+  </Target>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
     <LinkerArg Condition="'$(RuntimeIdentifier)' == 'linux-musl-x64'" Include="--target=x86_64-alpine-linux-musl" />
