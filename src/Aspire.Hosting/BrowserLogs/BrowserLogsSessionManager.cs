@@ -220,13 +220,27 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             content: screenshotBytes,
             cancellationToken).ConfigureAwait(false);
 
+        var processDescription = FormatProcessId(activeSession.ProcessId);
         _resourceLoggerService.GetLogger(resourceName).LogInformation(
-            "[{SessionId}] Captured browser screenshot artifact '{ArtifactPath}' ({SizeBytes} bytes).",
+            "[{SessionId}] Captured browser screenshot artifact '{ArtifactPath}' ({SizeBytes} bytes) from target '{TargetId}' at '{TargetUrl}' using '{Browser}' ({BrowserHostOwnership}, {ProcessDescription}).",
             activeSession.SessionId,
             artifact.FilePath,
-            artifact.SizeBytes);
+            artifact.SizeBytes,
+            activeSession.TargetId,
+            activeSession.TargetUrl,
+            activeSession.Browser,
+            activeSession.BrowserHostOwnership,
+            processDescription);
 
-        return new BrowserLogsScreenshotCaptureResult(activeSession.SessionId, activeSession.TargetUrl, artifact);
+        return new BrowserLogsScreenshotCaptureResult(
+            activeSession.SessionId,
+            activeSession.Browser,
+            activeSession.BrowserExecutable,
+            activeSession.BrowserHostOwnership,
+            activeSession.ProcessId,
+            activeSession.TargetId,
+            activeSession.TargetUrl,
+            artifact);
 
         void ThrowIfDisposing()
         {

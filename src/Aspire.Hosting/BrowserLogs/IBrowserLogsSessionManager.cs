@@ -12,5 +12,10 @@ internal interface IBrowserLogsSessionManager
 
 internal sealed record BrowserLogsScreenshotCaptureResult(
     string SessionId,
+    string Browser,
+    string BrowserExecutable,
+    string BrowserHostOwnership,
+    int? ProcessId,
+    string TargetId,
     Uri TargetUrl,
     ApplicationModel.ResourceCommandArtifact Artifact);

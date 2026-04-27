@@ -337,6 +337,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         {
             ScreenshotResult = new BrowserLogsScreenshotCaptureResult(
                 "session-0002",
+                "msedge",
+                @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                BrowserHostOwnership.Adopted.ToString(),
+                4242,
+                "target-0002",
                 new Uri("https://localhost:8443/"),
                 new ResourceCommandArtifact(
                     "web-browser-logs",
@@ -376,6 +381,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var document = JsonDocument.Parse(result.Data.Value);
         Assert.Equal("web-browser-logs", document.RootElement.GetProperty("resourceName").GetString());
         Assert.Equal("session-0002", document.RootElement.GetProperty("sessionId").GetString());
+        Assert.Equal("msedge", document.RootElement.GetProperty("browser").GetString());
+        Assert.Equal(@"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", document.RootElement.GetProperty("browserExecutable").GetString());
+        Assert.Equal("Adopted", document.RootElement.GetProperty("browserHostOwnership").GetString());
+        Assert.Equal(4242, document.RootElement.GetProperty("processId").GetInt32());
+        Assert.Equal("target-0002", document.RootElement.GetProperty("targetId").GetString());
         Assert.Equal("https://localhost:8443/", document.RootElement.GetProperty("targetUrl").GetString());
         Assert.EndsWith("screenshot.png", document.RootElement.GetProperty("path").GetString(), StringComparison.Ordinal);
         Assert.Equal("image/png", document.RootElement.GetProperty("mimeType").GetString());
@@ -437,9 +447,16 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             Assert.StartsWith(artifactDirectory.FullName, path, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(session.ScreenshotBytes, await File.ReadAllBytesAsync(path));
             Assert.Equal("session-0001", document.RootElement.GetProperty("sessionId").GetString());
+            Assert.Equal("chrome", document.RootElement.GetProperty("browser").GetString());
+            Assert.Equal("/fake/browser-1", document.RootElement.GetProperty("browserExecutable").GetString());
+            Assert.Equal("Owned", document.RootElement.GetProperty("browserHostOwnership").GetString());
+            Assert.Equal(1001, document.RootElement.GetProperty("processId").GetInt32());
+            Assert.Equal("target-1", document.RootElement.GetProperty("targetId").GetString());
             Assert.Equal("http://localhost:8080/", document.RootElement.GetProperty("targetUrl").GetString());
             Assert.Equal(session.ScreenshotBytes.Length, document.RootElement.GetProperty("sizeBytes").GetInt32());
-            Assert.Contains(logs, log => log.Content.Contains(path, StringComparison.Ordinal) && log.Content.Contains("4 bytes", StringComparison.Ordinal));
+            Assert.Contains(logs, log => log.Content.Contains(path, StringComparison.Ordinal) &&
+                log.Content.Contains("4 bytes", StringComparison.Ordinal) &&
+                log.Content.Contains("target-1", StringComparison.Ordinal));
         }
         finally
         {
@@ -1296,6 +1313,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public BrowserLogsScreenshotCaptureResult ScreenshotResult { get; set; } = new(
             "session-0001",
+            "chrome",
+            "/fake/browser",
+            BrowserHostOwnership.Owned.ToString(),
+            1001,
+            "target-1",
             new Uri("https://localhost:5001/"),
             new ResourceCommandArtifact(
                 "web-browser-logs",

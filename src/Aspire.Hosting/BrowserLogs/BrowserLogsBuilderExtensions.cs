@@ -204,6 +204,11 @@ public static class BrowserLogsBuilderExtensions
                             new BrowserLogsScreenshotCommandResult(
                                 result.Artifact.ResourceName,
                                 result.SessionId,
+                                result.Browser,
+                                result.BrowserExecutable,
+                                result.BrowserHostOwnership,
+                                result.ProcessId,
+                                result.TargetId,
                                 result.TargetUrl.ToString(),
                                 result.Artifact.FilePath,
                                 result.Artifact.MimeType,
@@ -308,6 +313,11 @@ public static class BrowserLogsBuilderExtensions
     private sealed record BrowserLogsScreenshotCommandResult(
         string ResourceName,
         string SessionId,
+        string Browser,
+        string BrowserExecutable,
+        string BrowserHostOwnership,
+        int? ProcessId,
+        string TargetId,
         string TargetUrl,
         string Path,
         string MimeType,
