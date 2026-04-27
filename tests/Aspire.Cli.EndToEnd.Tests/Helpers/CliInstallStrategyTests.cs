@@ -188,6 +188,7 @@ public class CliInstallStrategyTests
 
         Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
         Assert.Equal("9.5.0", strategy.Version);
+        Assert.Equal("9.5.0", strategy.ExpectedVersion);
         Assert.Null(strategy.NupkgSourcePath);
     }
 
@@ -198,6 +199,8 @@ public class CliInstallStrategyTests
 
         try
         {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0-preview.1.25175.1.nupkg"), "");
+
             using var environment = new EnvironmentVariableScope(
                 ("ASPIRE_E2E_ARCHIVE", null),
                 ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", tempDir.FullName),
@@ -214,6 +217,7 @@ public class CliInstallStrategyTests
 
             Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
             Assert.Equal("13.3.0-preview.1.25175.1", strategy.Version);
+            Assert.Equal("13.3.0-preview.1.25175.1", strategy.ExpectedVersion);
             Assert.Equal(tempDir.FullName, strategy.NupkgSourcePath);
         }
         finally
@@ -223,12 +227,15 @@ public class CliInstallStrategyTests
     }
 
     [Fact]
-    public void Detect_DotnetToolLocalSource_ThrowsWithoutVersion()
+    public void Detect_DotnetToolLocalSource_InfersVersionWithoutExplicitVersion()
     {
         var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
 
         try
         {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0-preview.1.12345.1.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.linux-x64.13.3.0-preview.1.12345.1.nupkg"), "");
+
             using var environment = new EnvironmentVariableScope(
                 ("ASPIRE_E2E_ARCHIVE", null),
                 ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", tempDir.FullName),
@@ -241,7 +248,12 @@ public class CliInstallStrategyTests
                 ("CI", null),
                 ("GITHUB_ACTIONS", null));
 
-            Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.Detect());
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+            Assert.Equal("13.3.0-preview.1.12345.1", strategy.Version);
+            Assert.Equal("13.3.0-preview.1.12345.1", strategy.ExpectedVersion);
+            Assert.Equal(tempDir.FullName, strategy.NupkgSourcePath);
         }
         finally
         {
@@ -420,7 +432,7 @@ public class CliInstallStrategyTests
 
             var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
 
-            Assert.Contains("Found 2 Aspire.Cli nupkg files", exception.Message);
+            Assert.Contains("Found 2 Aspire.Cli pointer nupkg files", exception.Message);
         }
         finally
         {
@@ -453,6 +465,7 @@ public class CliInstallStrategyTests
             Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
             Assert.Equal(nupkgDir.FullName, strategy.NupkgSourcePath);
             Assert.Equal("10.0.0-dev.12345.1", strategy.Version);
+            Assert.Equal("10.0.0-dev.12345.1", strategy.ExpectedVersion);
         }
         finally
         {

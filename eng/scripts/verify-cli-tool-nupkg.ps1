@@ -14,7 +14,6 @@
        (PE Machine type on Windows, ELF e_machine on Linux, Mach-O cputype on macOS)
     6. Checks the primary pointer package (Aspire.Cli.*.nupkg) exists and validates
        its contents (no binary, small size, DotnetToolSettings.xml references all RIDs)
-    7. (Optional) Installs the tool locally and runs aspire --version + aspire new
 
 .PARAMETER PackagesDir
     Path to the directory containing nupkg files
@@ -22,18 +21,12 @@
 .PARAMETER Rid
     Runtime identifier (e.g., win-x64, win-arm64)
 
-.PARAMETER RunFunctionalTests
-    When set, installs the tool from the local packages and runs functional checks
-    (aspire --version, aspire new). Only use for RIDs that can execute on the agent.
-
 .PARAMETER VerifySignature
     When set, verifies that both the RID-specific nupkg and the pointer package
     contain a .signature.p7s entry (NuGet package signature smoke test).
 
 .EXAMPLE
     .\verify-cli-tool-nupkg.ps1 -PackagesDir "artifacts\packages\Release" -Rid "win-x64"
-.EXAMPLE
-    .\verify-cli-tool-nupkg.ps1 -PackagesDir "artifacts\packages\Release" -Rid "linux-x64" -RunFunctionalTests
 #>
 
 param(
@@ -42,8 +35,6 @@ param(
 
     [Parameter(Mandatory = $true)]
     [string]$Rid,
-
-    [switch]$RunFunctionalTests,
 
     [switch]$VerifySignature
 )
@@ -75,7 +66,6 @@ function Test-NupkgSignature {
 $MinNupkgSize = 5MB
 
 $extractDir = $null
-$toolInstallDir = $null
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 
@@ -86,7 +76,6 @@ try {
     Write-Host "=========================================="
     Write-Host "  Packages dir:     $PackagesDir"
     Write-Host "  RID:              $Rid"
-    Write-Host "  Functional tests: $RunFunctionalTests"
     Write-Host "  Verify signature: $VerifySignature"
     Write-Host "=========================================="
     Write-Host ""
@@ -361,124 +350,6 @@ try {
         Write-Ok "Pointer package is signed"
     }
 
-    # Step 6: Functional tests — install tool and exercise CLI
-    if ($RunFunctionalTests) {
-        Write-Host ""
-        Write-Host "--- Functional Tests ---" -ForegroundColor Magenta
-
-        # Derive the package version from the RID-specific nupkg filename
-        # Filename pattern: Aspire.Cli.<rid>.<version>.nupkg
-        $versionMatch = $ridNupkg.Name -replace "^Aspire\.Cli\.$([regex]::Escape($Rid))\.", '' -replace '\.nupkg$', ''
-        Write-Step "Detected package version: $versionMatch"
-
-        # Install as a local tool-path tool from the packages directory
-        $toolInstallDir = Join-Path ([System.IO.Path]::GetTempPath()) "aspire-tool-install-$([System.IO.Path]::GetRandomFileName())"
-        New-Item -ItemType Directory -Path $toolInstallDir -Force | Out-Null
-
-        Write-Step "Installing Aspire.Cli tool (version $versionMatch) from $effectiveDir ..."
-        $installArgs = @(
-            'tool', 'install', 'Aspire.Cli',
-            '--tool-path', $toolInstallDir,
-            '--add-source', $effectiveDir,
-            '--version', $versionMatch
-        )
-        $installOutput = & dotnet @installArgs 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "'dotnet tool install' failed (exit code $LASTEXITCODE)"
-            Write-Host ($installOutput -join "`n")
-            exit 1
-        }
-        Write-Ok "Tool installed to $toolInstallDir"
-
-        # Determine the shim path
-        $shimName = if ($Rid -like 'win-*') { "aspire.exe" } else { "aspire" }
-        $shimPath = Join-Path $toolInstallDir $shimName
-        if (-not (Test-Path $shimPath)) {
-            # On Windows, NativeAOT tools get a .cmd shim
-            $shimPath = Join-Path $toolInstallDir "aspire.cmd"
-        }
-        if (-not (Test-Path $shimPath)) {
-            Write-Err "Could not find aspire shim in $toolInstallDir"
-            Write-Host "Contents:"
-            Get-ChildItem $toolInstallDir | ForEach-Object { Write-Host "  $($_.Name)" }
-            exit 1
-        }
-
-        # Step 7: aspire --version
-        Write-Step "Running 'aspire --version' ..."
-        $env:ASPIRE_CLI_TELEMETRY_OPTOUT = 'true'
-        $env:DOTNET_CLI_TELEMETRY_OPTOUT = 'true'
-        $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = 'true'
-        $env:DOTNET_GENERATE_ASPNET_CERTIFICATE = 'false'
-        $versionOutput = & $shimPath --version 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "'aspire --version' failed (exit code $LASTEXITCODE)"
-            Write-Host ($versionOutput -join "`n")
-            exit 1
-        }
-        Write-Ok "'aspire --version' returned: $($versionOutput -join ' ')"
-
-        # Step 8: aspire new aspire-starter — exercises bundle self-extraction + template scaffolding
-        $starterDir = Join-Path ([System.IO.Path]::GetTempPath()) "aspire-verify-starter-$([System.IO.Path]::GetRandomFileName())"
-        New-Item -ItemType Directory -Path $starterDir -Force | Out-Null
-
-        Write-Step "Running 'aspire new aspire-starter' ..."
-        $newOutput = & $shimPath new aspire-starter --name VerifyStarter --output $starterDir --non-interactive --nologo 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "'aspire new aspire-starter' failed (exit code $LASTEXITCODE)"
-            Write-Host ($newOutput -join "`n")
-            exit 1
-        }
-
-        $starterAppHost = Join-Path $starterDir "VerifyStarter.AppHost"
-        $starterDefaults = Join-Path $starterDir "VerifyStarter.ServiceDefaults"
-        $starterWeb = Join-Path $starterDir "VerifyStarter.Web"
-        $starterApi = Join-Path $starterDir "VerifyStarter.ApiService"
-        if ((Test-Path $starterAppHost) -and (Test-Path $starterDefaults) -and
-            (Test-Path $starterWeb) -and (Test-Path $starterApi)) {
-            Write-Ok "'aspire new aspire-starter' created all expected projects"
-        } else {
-            Write-Err "'aspire new aspire-starter' did not create expected project structure"
-            Write-Host "Expected: VerifyStarter.AppHost, VerifyStarter.ServiceDefaults, VerifyStarter.Web, VerifyStarter.ApiService"
-            Write-Host "Found:"
-            Get-ChildItem $starterDir -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
-            exit 1
-        }
-
-        if (Test-Path $starterDir) {
-            Remove-Item -Recurse -Force $starterDir -ErrorAction SilentlyContinue
-        }
-
-        # Step 9: aspire new aspire-empty — Empty AppHost template (validates both templates work)
-        # aspire-empty creates a flat C# AppHost structure (apphost.cs, aspire.config.json)
-        $aspireDir = Join-Path ([System.IO.Path]::GetTempPath()) "aspire-verify-empty-$([System.IO.Path]::GetRandomFileName())"
-        New-Item -ItemType Directory -Path $aspireDir -Force | Out-Null
-
-        Write-Step "Running 'aspire new aspire-empty' ..."
-        $newAspireOutput = & $shimPath new aspire-empty --name VerifyEmpty --output $aspireDir --non-interactive --nologo 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Err "'aspire new aspire-empty' failed (exit code $LASTEXITCODE)"
-            Write-Host ($newAspireOutput -join "`n")
-            exit 1
-        }
-
-        $appHostCs = Join-Path $aspireDir "apphost.cs"
-        $aspireConfig = Join-Path $aspireDir "aspire.config.json"
-        if ((Test-Path $appHostCs) -and (Test-Path $aspireConfig)) {
-            Write-Ok "'aspire new aspire-empty' created AppHost structure (apphost.cs + aspire.config.json)"
-        } else {
-            Write-Err "'aspire new aspire-empty' did not create expected AppHost structure"
-            Write-Host "Expected: apphost.cs, aspire.config.json"
-            Write-Host "Found:"
-            Get-ChildItem $aspireDir -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
-            exit 1
-        }
-
-        if (Test-Path $aspireDir) {
-            Remove-Item -Recurse -Force $aspireDir -ErrorAction SilentlyContinue
-        }
-    }
-
     Write-Host ""
     Write-Host "=========================================="
     Write-Host "  All tool nupkg checks passed!" -ForegroundColor Green
@@ -493,9 +364,6 @@ catch {
 finally {
     if ($extractDir -and (Test-Path $extractDir)) {
         Remove-Item -Recurse -Force $extractDir -ErrorAction SilentlyContinue
-    }
-    if ($toolInstallDir -and (Test-Path $toolInstallDir)) {
-        Remove-Item -Recurse -Force $toolInstallDir -ErrorAction SilentlyContinue
     }
 }
 

@@ -124,13 +124,11 @@ steps:
     - ${{ each targetRid in parameters.targetRids }}:
       - pwsh: |
           $ErrorActionPreference = 'Stop'
-          $runFunctional = '${{ targetRid }}' -eq 'win-x64'
           # Use hashtable splatting — array splatting doesn't work with advanced scripts
           $verifyParams = @{
             PackagesDir = "${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}"
             Rid = '${{ targetRid }}'
           }
-          if ($runFunctional) { $verifyParams['RunFunctionalTests'] = $true }
           if ('$(_SignType)' -eq 'real') { $verifyParams['VerifySignature'] = $true }
           & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @verifyParams
           if ($LASTEXITCODE -ne 0) {

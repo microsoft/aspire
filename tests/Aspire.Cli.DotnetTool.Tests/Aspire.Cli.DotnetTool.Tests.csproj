@@ -27,6 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(TestsSharedDir)CliPackageDiscovery.cs" Link="shared\CliPackageDiscovery.cs" />
     <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ToolCommand.cs" Link="Common\ToolCommand.cs" />
     <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\CommandResult.cs" Link="Common\CommandResult.cs" />
     <Compile Include="$(RepoRoot)tests\Shared\TemplatesTesting\ToolCommandException.cs" Link="Common\ToolCommandException.cs" />

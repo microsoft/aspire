@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using Aspire.Tests.Shared;
 using Aspire.Templates.Tests;
 using Xunit;
 
@@ -18,7 +19,7 @@ public sealed class DotnetToolInstallTests(ITestOutputHelper output) : IAsyncLif
     public async ValueTask InitializeAsync()
     {
         var nugetDir = FindNugetPackagesDirectory();
-        var (packageId, version) = FindToolPackage(nugetDir);
+        var package = CliPackageDiscovery.FindAspireCliPointerPackage(nugetDir);
 
         _toolPath = Directory.CreateTempSubdirectory(".aspire-tool-test").FullName;
 
@@ -55,7 +56,7 @@ public sealed class DotnetToolInstallTests(ITestOutputHelper output) : IAsyncLif
             </configuration>
             """);
 
-        var installArgs = $"tool install {packageId} --tool-path \"{_toolPath}\" --configfile \"{nugetConfigPath}\" --version {version} --no-cache";
+        var installArgs = $"tool install {package.PackageId} --tool-path \"{_toolPath}\" --configfile \"{nugetConfigPath}\" --version {package.Version} --no-cache";
         var result = await new ToolCommand("dotnet", output, label: "install")
             .WithTimeout(TimeSpan.FromMinutes(5))
             .ExecuteAsync(installArgs);
@@ -98,6 +99,26 @@ public sealed class DotnetToolInstallTests(ITestOutputHelper output) : IAsyncLif
     }
 
     [Fact]
+    public async Task AspireNewEmpty_CreatesAppHostFiles()
+    {
+        var outputDir = Directory.CreateTempSubdirectory("aspire-empty-tool-test");
+        try
+        {
+            var result = await new ToolCommand(_aspirePath!, output, label: "new-empty")
+                .WithTimeout(TimeSpan.FromMinutes(2))
+                .ExecuteAsync($"new aspire-empty --name VerifyEmpty --output \"{outputDir.FullName}\" --non-interactive --nologo");
+
+            result.EnsureSuccessful("aspire new aspire-empty failed");
+            Assert.True(File.Exists(Path.Combine(outputDir.FullName, "apphost.cs")), "apphost.cs was not created.");
+            Assert.True(File.Exists(Path.Combine(outputDir.FullName, "aspire.config.json")), "aspire.config.json was not created.");
+        }
+        finally
+        {
+            outputDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task AspireHelp_ReturnsSuccessAndUsageText()
     {
         var result = await new ToolCommand(_aspirePath!, output, label: "help")
@@ -131,37 +152,6 @@ public sealed class DotnetToolInstallTests(ITestOutputHelper output) : IAsyncLif
 
         throw new InvalidOperationException(
             "Cannot find built NuGet packages. Set BUILT_NUGETS_PATH or build the Aspire.Cli.Tool.csproj package first.");
-    }
-
-    private static (string PackageId, string Version) FindToolPackage(string nugetDir)
-    {
-        // Find `Aspire.Cli.<version>.nupkg` but NOT `Aspire.Cli.<rid>.<version>.nupkg`
-        // The tool package has PackageId=Aspire.Cli, so the filename is Aspire.Cli.<semver>.nupkg
-        // RID-specific packages are Aspire.Cli.linux-x64.<semver>.nupkg etc.
-        var nupkgs = Directory.GetFiles(nugetDir, "Aspire.Cli.*.nupkg")
-            .Where(f =>
-            {
-                var name = Path.GetFileNameWithoutExtension(f);
-                // After removing "Aspire.Cli." prefix, the version should start with a digit
-                var remainder = name["Aspire.Cli.".Length..];
-                return remainder.Length > 0 && char.IsDigit(remainder[0]);
-            })
-            .Where(f => !f.EndsWith(".snupkg", StringComparison.OrdinalIgnoreCase))
-            .ToArray();
-
-        if (nupkgs.Length == 0)
-        {
-            throw new InvalidOperationException(
-                $"No Aspire.Cli tool nupkg found in {nugetDir}. Available files: " +
-                string.Join(", ", Directory.GetFiles(nugetDir, "Aspire.Cli.*").Select(Path.GetFileName)));
-        }
-
-        // Take the first match and extract version from filename
-        var nupkgPath = nupkgs[0];
-        var fileName = Path.GetFileNameWithoutExtension(nupkgPath);
-        var version = fileName["Aspire.Cli.".Length..];
-
-        return ("Aspire.Cli", version);
     }
 
     private static string FindRepoRoot()

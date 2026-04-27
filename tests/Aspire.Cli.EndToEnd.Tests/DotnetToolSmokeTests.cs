@@ -59,19 +59,6 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync(".dotnet/tools/aspire", timeout: TimeSpan.FromSeconds(10));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Verify the installed version matches expectations
-        await auto.TypeAsync("aspire --version");
-        await auto.EnterAsync();
-
-        if (strategy.Version is not null)
-        {
-            // When a specific version was requested, verify it was actually installed
-            output.WriteLine($"Verifying installed version matches expected: {strategy.Version}");
-            await auto.WaitUntilTextAsync(strategy.Version, timeout: TimeSpan.FromSeconds(10));
-        }
-
-        await auto.WaitForSuccessPromptAsync(counter);
-
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireToolApp", counter);
 
