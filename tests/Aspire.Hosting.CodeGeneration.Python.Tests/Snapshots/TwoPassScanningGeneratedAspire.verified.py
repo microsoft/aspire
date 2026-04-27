@@ -1494,6 +1494,8 @@ def _validate_dict_types(args: typing.Any, arg_types: typing.Any) -> bool:
 # Enum Types
 # ============================================================================
 
+BrowserUserDataMode = typing.Literal["Shared", "Isolated"]
+
 CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
 CommandResultFormat = typing.Literal["Text", "Json", "Markdown"]
@@ -1580,6 +1582,7 @@ class MergeRouteParameters(typing.TypedDict, total=False):
 class BrowserLogsParameters(typing.TypedDict, total=False):
     browser: str
     profile: str
+    user_data_mode: BrowserUserDataMode
 
 
 class BindMountParameters(typing.TypedDict, total=False):
@@ -5835,7 +5838,7 @@ class AbstractResourceWithEndpoints(AbstractResource):
     """Abstract base class for AbstractResourceWithEndpoints interface."""
 
     @abc.abstractmethod
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None) -> typing.Self:
+    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
         """Adds a child browser logs resource that opens tracked browser sessions and captures browser logs."""
 
     @abc.abstractmethod
@@ -7223,13 +7226,15 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def __repr__(self) -> str:
         return "ContainerResource(handle={self._handle.handle_id})"
 
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None) -> typing.Self:
+    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
         """Adds a child browser logs resource that opens tracked browser sessions and captures browser logs."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if browser is not None:
             rpc_args['browser'] = browser
         if profile is not None:
             rpc_args['profile'] = profile
+        if user_data_mode is not None:
+            rpc_args['userDataMode'] = user_data_mode
         result = self._client.invoke_capability(
             'Aspire.Hosting/withBrowserLogs',
             rpc_args,
@@ -8024,6 +8029,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
                 rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
+                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
             elif _browser_logs is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8646,13 +8652,15 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def __repr__(self) -> str:
         return "ProjectResource(handle={self._handle.handle_id})"
 
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None) -> typing.Self:
+    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
         """Adds a child browser logs resource that opens tracked browser sessions and captures browser logs."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if browser is not None:
             rpc_args['browser'] = browser
         if profile is not None:
             rpc_args['profile'] = profile
+        if user_data_mode is not None:
+            rpc_args['userDataMode'] = user_data_mode
         result = self._client.invoke_capability(
             'Aspire.Hosting/withBrowserLogs',
             rpc_args,
@@ -9251,6 +9259,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
                 rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
+                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
             elif _browser_logs is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9741,13 +9750,15 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def __repr__(self) -> str:
         return "ExecutableResource(handle={self._handle.handle_id})"
 
-    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None) -> typing.Self:
+    def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
         """Adds a child browser logs resource that opens tracked browser sessions and captures browser logs."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if browser is not None:
             rpc_args['browser'] = browser
         if profile is not None:
             rpc_args['profile'] = profile
+        if user_data_mode is not None:
+            rpc_args['userDataMode'] = user_data_mode
         result = self._client.invoke_capability(
             'Aspire.Hosting/withBrowserLogs',
             rpc_args,
@@ -10336,6 +10347,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["browser"] = typing.cast(BrowserLogsParameters, _browser_logs).get("browser")
                 rpc_args["profile"] = typing.cast(BrowserLogsParameters, _browser_logs).get("profile")
+                rpc_args["userDataMode"] = typing.cast(BrowserLogsParameters, _browser_logs).get("user_data_mode")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBrowserLogs', rpc_args))
             elif _browser_logs is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

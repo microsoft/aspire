@@ -21,7 +21,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
     public async Task AspireUpdateRemovesAppHostPackageVersionFromDirectoryPackagesProps()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -124,7 +124,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
     public async Task AspireAddPackageVersionToDirectoryPackagesProps()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);

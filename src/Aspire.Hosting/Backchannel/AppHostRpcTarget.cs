@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Exec;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -44,8 +45,9 @@ internal class AppHostRpcTarget(
                 yield return entry;
             }
 
-            // Stream live entries
-            await foreach (var entry in channel.Reader.ReadAllAsync(linkedToken).ConfigureAwait(false))
+            // Stream live entries — uses a helper that swallows OperationCanceledException on cancellation
+            // instead of propagating it, since yield return cannot appear in a try/catch block.
+            await foreach (var entry in AsyncEnumerableUtils.ReadUntilCancelledAsync(channel.Reader.ReadAllAsync(linkedToken), linkedToken).ConfigureAwait(false))
             {
                 yield return entry;
             }
@@ -70,10 +72,10 @@ internal class AppHostRpcTarget(
             {
                 publishingActivity = await activityReporter.ActivityItemUpdated.Reader.ReadAsync(linkedToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (_shutdownCts.Token.IsCancellationRequested)
+            catch (OperationCanceledException) when (linkedToken.IsCancellationRequested)
             {
-                // Gracefully handle cancellation due to shutdown
-                logger.LogDebug("Publishing activities stream cancelled due to AppHost shutdown");
+                // Expected when the stream is cancelled due to shutdown or client disconnect.
+                logger.LogDebug("Publishing activities stream cancelled.");
                 yield break;
             }
 
@@ -95,7 +97,9 @@ internal class AppHostRpcTarget(
 
         var resourceEvents = resourceNotificationService.WatchAsync(linkedToken);
 
-        await foreach (var resourceEvent in resourceEvents.WithCancellation(linkedToken).ConfigureAwait(false))
+        // Use a helper that swallows OperationCanceledException on cancellation instead of propagating it,
+        // since yield return cannot appear in a try/catch block.
+        await foreach (var resourceEvent in AsyncEnumerableUtils.ReadUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
         {
             if (resourceEvent.Resource.Name == "aspire-dashboard")
             {

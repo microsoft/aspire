@@ -15,7 +15,7 @@ public sealed class DocsCommandE2ETests(ITestOutputHelper output)
     public async Task DocsCommand_RendersInteractiveMarkdownFromLocalSource()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
         var docsFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "llms-small.txt");
 

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
@@ -156,13 +157,9 @@ internal static class CommandsConfigurationExtensions
             {
                 lock (rebuildLock)
                 {
-                    if (activeRebuildTask is null || activeRebuildTask.IsCompleted)
-                    {
-                        activeRebuildTask = ExecuteRebuildAsync(context, projectResource);
-                    }
+                    activeRebuildTask ??= ExecuteRebuildAndResetAsync(context);
+                    return activeRebuildTask;
                 }
-
-                return activeRebuildTask;
             },
             updateState: context =>
             {
@@ -177,6 +174,21 @@ internal static class CommandsConfigurationExtensions
             iconName: "ArrowSync",
             iconVariant: IconVariant.Regular,
             isHighlighted: false));
+
+        async Task<ExecuteCommandResult> ExecuteRebuildAndResetAsync(ExecuteCommandContext context)
+        {
+            try
+            {
+                return await ExecuteRebuildAsync(context, projectResource).ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (rebuildLock)
+                {
+                    activeRebuildTask = null;
+                }
+            }
+        }
     }
 
     private static async Task<ExecuteCommandResult> ExecuteRebuildAsync(ExecuteCommandContext context, ProjectResource projectResource)
@@ -194,6 +206,7 @@ internal static class CommandsConfigurationExtensions
 
         var mainLogger = loggerService.GetLogger(projectResource);
         var replicaNames = projectResource.GetResolvedResourceNames();
+        using var buildOutput = new BuildOutputCollector();
 
         // Capture each replica's state before rebuild so we can restore inactive replicas.
         var preRebuildStates = new Dictionary<string, string?>(StringComparer.Ordinal);
@@ -212,7 +225,7 @@ internal static class CommandsConfigurationExtensions
             !preRebuildStates.TryGetValue(name, out var state)
             || state != KnownResourceStates.Waiting);
 
-        mainLogger.LogInformation(BuildLogPrefix + "Stopping resource for rebuild...");
+        LogBuildInformation(mainLogger, buildOutput, "Stopping resource for rebuild...");
         await Task.WhenAll(replicasToStop.Select(name => orchestrator.StopResourceAsync(name, context.CancellationToken))).ConfigureAwait(false);
 
         // Set state to Building after replicas are stopped. Leave Waiting replicas in their
@@ -227,12 +240,24 @@ internal static class CommandsConfigurationExtensions
         // Start forwarding logs from the rebuilder to the main resource's console.
         using var logCts = CancellationTokenSource.CreateLinkedTokenSource(context.CancellationToken);
         var rebuilderInstanceName = rebuilderResource.GetResolvedResourceNames()[0];
-        var logForwardTask = ForwardLogsAsync(loggerService, rebuilderInstanceName, mainLogger, logCts.Token);
+        var logForwardTask = ForwardLogsAsync(loggerService, rebuilderInstanceName, mainLogger, buildOutput, logCts.Token);
+        var logForwardingStopped = false;
+
+        async Task<ExecuteCommandResult> FinishAsync(ExecuteCommandResult result)
+        {
+            if (!logForwardingStopped)
+            {
+                await StopLogForwardingAsync(logCts, logForwardTask).ConfigureAwait(false);
+                logForwardingStopped = true;
+            }
+
+            return AttachBuildOutput(result, buildOutput.GetOutput());
+        }
 
         try
         {
             // Start the rebuilder resource (runs dotnet build).
-            mainLogger.LogInformation(BuildLogPrefix + "Building project...");
+            LogBuildInformation(mainLogger, buildOutput, "Building project...");
             await orchestrator.StartResourceAsync(rebuilderInstanceName, context.CancellationToken).ConfigureAwait(false);
 
             // Wait for the rebuilder to reach a terminal state, with a timeout.
@@ -255,13 +280,13 @@ internal static class CommandsConfigurationExtensions
             catch (OperationCanceledException) when (!context.CancellationToken.IsCancellationRequested)
             {
                 // Build timed out.
-                mainLogger.LogError(BuildLogPrefix + "Build timed out.");
+                LogBuildError(mainLogger, buildOutput, "Build timed out.");
 
                 await resourceNotificationService.PublishUpdateAsync(projectResource, s => s with
                 {
                     State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
                 }).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = false, Message = "Build timed out." };
+                return await FinishAsync(new ExecuteCommandResult { Success = false, Message = "Build timed out." }).ConfigureAwait(false);
             }
 
             if (exitCode == 0)
@@ -269,7 +294,7 @@ internal static class CommandsConfigurationExtensions
                 // Restart replicas that were Running before the rebuild.
                 // Waiting replicas are already in the startup pipeline — when their deps become
                 // ready, CreateExecutableAsync will launch the freshly-built binary automatically.
-                mainLogger.LogInformation(BuildLogPrefix + "Build succeeded. Restarting resource...");
+                LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Restarting resource...");
                 var anyRestarted = false;
                 foreach (var name in replicaNames)
                 {
@@ -284,7 +309,7 @@ internal static class CommandsConfigurationExtensions
                         // The resource is still waiting for dependencies. The build output on disk
                         // has been updated, so when dependencies become ready the new binary will
                         // be launched. Log a message so the user knows the build succeeded.
-                        mainLogger.LogInformation(BuildLogPrefix + "Build succeeded. Resource will start with the updated binary when dependencies are ready.");
+                        LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Resource will start with the updated binary when dependencies are ready.");
                         anyRestarted = true;
                     }
                     else if (wasActive)
@@ -316,33 +341,58 @@ internal static class CommandsConfigurationExtensions
                     }
                 }
 
-                return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRebuilt, projectResource.Name) };
+                return await FinishAsync(new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceRebuilt, projectResource.Name) }).ConfigureAwait(false);
             }
             else
             {
+                var failureMessage = $"Build failed with exit code {exitCode}.";
+                buildOutput.Append(failureMessage);
                 mainLogger.LogError(BuildLogPrefix + "Build failed with exit code {ExitCode}.", exitCode);
                 await resourceNotificationService.PublishUpdateAsync(projectResource, s => s with
                 {
                     State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
                 }).ConfigureAwait(false);
-                return new ExecuteCommandResult { Success = false, Message = $"Build failed with exit code {exitCode}." };
+                return await FinishAsync(new ExecuteCommandResult { Success = false, Message = failureMessage }).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
             // The command was cancelled (e.g. user navigated away or the dashboard closed).
             // The replicas were already stopped for the rebuild, so set them to Exited.
-            mainLogger.LogWarning(BuildLogPrefix + "Rebuild was cancelled.");
+            LogBuildWarning(mainLogger, buildOutput, "Rebuild was cancelled.");
             await resourceNotificationService.PublishUpdateAsync(projectResource, s => s with
             {
                 State = new ResourceStateSnapshot(KnownResourceStates.Finished, KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
-            return new ExecuteCommandResult { Success = false, Message = "Rebuild was cancelled." };
+            return await FinishAsync(new ExecuteCommandResult { Success = false, Message = "Rebuild was cancelled." }).ConfigureAwait(false);
         }
         finally
         {
-            await StopLogForwardingAsync(logCts, logForwardTask).ConfigureAwait(false);
+            if (!logForwardingStopped)
+            {
+                await StopLogForwardingAsync(logCts, logForwardTask).ConfigureAwait(false);
+            }
         }
+    }
+
+    private static ExecuteCommandResult AttachBuildOutput(ExecuteCommandResult result, string output)
+    {
+        if (result.Data is not null || string.IsNullOrWhiteSpace(output))
+        {
+            return result;
+        }
+
+        return new ExecuteCommandResult
+        {
+            Success = result.Success,
+            Canceled = result.Canceled,
+            Message = result.Message,
+            Data = new CommandResultData
+            {
+                Value = output,
+                Format = CommandResultFormat.Text
+            }
+        };
     }
 
     private static async Task StopLogForwardingAsync(CancellationTokenSource logCts, Task logForwardTask)
@@ -359,7 +409,25 @@ internal static class CommandsConfigurationExtensions
         }
     }
 
-    private static async Task ForwardLogsAsync(ResourceLoggerService loggerService, string sourceResourceName, ILogger targetLogger, CancellationToken cancellationToken)
+    private static void LogBuildInformation(ILogger logger, BuildOutputCollector buildOutput, string message)
+    {
+        buildOutput.Append(message);
+        logger.LogInformation(BuildLogPrefix + "{Message}", message);
+    }
+
+    private static void LogBuildWarning(ILogger logger, BuildOutputCollector buildOutput, string message)
+    {
+        buildOutput.Append(message);
+        logger.LogWarning(BuildLogPrefix + "{Message}", message);
+    }
+
+    private static void LogBuildError(ILogger logger, BuildOutputCollector buildOutput, string message)
+    {
+        buildOutput.Append(message);
+        logger.LogError(BuildLogPrefix + "{Message}", message);
+    }
+
+    private static async Task ForwardLogsAsync(ResourceLoggerService loggerService, string sourceResourceName, ILogger targetLogger, BuildOutputCollector buildOutput, CancellationToken cancellationToken)
     {
         try
         {
@@ -367,6 +435,8 @@ internal static class CommandsConfigurationExtensions
             {
                 foreach (var line in batch)
                 {
+                    buildOutput.Append(line.Content);
+
                     if (line.IsErrorMessage)
                     {
                         targetLogger.LogWarning(BuildLogPrefix + "{Content}", line.Content);
@@ -381,6 +451,76 @@ internal static class CommandsConfigurationExtensions
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Expected when the log forwarding is cancelled.
+        }
+    }
+
+    private sealed class BuildOutputCollector : IDisposable
+    {
+        private const int MaxBuildOutputLineCount = 10_000;
+
+        private readonly object _lock = new();
+        private readonly Queue<string> _lines = new();
+        private int _droppedLineCount;
+
+        public void Append(string content)
+        {
+            var lines = content
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Split('\n');
+
+            lock (_lock)
+            {
+                foreach (var line in lines)
+                {
+                    AppendLine(line);
+                }
+            }
+        }
+
+        private void AppendLine(string content)
+        {
+            if (_lines.Count == MaxBuildOutputLineCount)
+            {
+                _lines.Dequeue();
+                _droppedLineCount++;
+            }
+
+            _lines.Enqueue(BuildLogPrefix + content);
+        }
+
+        public string GetOutput()
+        {
+            lock (_lock)
+            {
+                var builder = new StringBuilder();
+                if (_droppedLineCount > 0)
+                {
+                    builder
+                        .Append(BuildLogPrefix)
+                        .Append("Output truncated to last ")
+                        .Append(MaxBuildOutputLineCount)
+                        .Append(" lines. ")
+                        .Append(_droppedLineCount)
+                        .AppendLine(" earlier lines omitted.");
+                }
+
+                foreach (var line in _lines)
+                {
+                    builder.AppendLine(line);
+                }
+
+                return builder.ToString().TrimEnd();
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_lock)
+            {
+                _lines.Clear();
+                _droppedLineCount = 0;
+            }
         }
     }
 }

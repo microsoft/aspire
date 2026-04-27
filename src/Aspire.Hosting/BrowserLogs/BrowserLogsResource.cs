@@ -6,26 +6,19 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
 
-internal readonly record struct BrowserLogsSettings(string Browser, string? Profile);
-
 internal sealed class BrowserLogsResource(
     string name,
     IResourceWithEndpoints parentResource,
-    BrowserLogsSettings initialSettings,
-    string? browserOverride,
-    string? profileOverride)
+    BrowserConfiguration initialConfiguration,
+    BrowserConfigurationOverrides configurationOverrides)
     : Resource(name)
 {
     public IResourceWithEndpoints ParentResource { get; } = parentResource;
 
-    public string Browser { get; } = initialSettings.Browser;
+    public BrowserConfiguration InitialConfiguration { get; } = initialConfiguration;
 
-    public string? Profile { get; } = initialSettings.Profile;
+    public BrowserConfigurationOverrides ConfigurationOverrides { get; } = configurationOverrides;
 
-    public string? BrowserOverride { get; } = browserOverride;
-
-    public string? ProfileOverride { get; } = profileOverride;
-
-    public BrowserLogsSettings ResolveCurrentSettings(IConfiguration configuration) =>
-        BrowserLogsBuilderExtensions.ResolveSettings(configuration, ParentResource.Name, BrowserOverride, ProfileOverride);
+    public BrowserConfiguration ResolveCurrentConfiguration(IConfiguration configuration) =>
+        BrowserConfiguration.Resolve(configuration, ParentResource.Name, ConfigurationOverrides);
 }

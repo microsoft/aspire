@@ -217,7 +217,7 @@ internal sealed class AddCommand : BaseCommand
             // WITHOUT package source mapping restrictions, so that transitive deps
             // (including RID-specific and stable-versioned packages) can still resolve
             // from NuGet.org via the normal NuGet source hierarchy.
-            if (string.IsNullOrEmpty(source) && VersionHelper.IsPrChannel(selectedNuGetPackage.Channel.Name))
+            if (string.IsNullOrEmpty(source) && VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name))
             {
                 var mappings = selectedNuGetPackage.Channel.Mappings;
                 if (mappings is { Length: > 0 })
@@ -375,7 +375,7 @@ internal sealed class AddCommand : BaseCommand
         // When PR hives are present, prefer the package that exactly matches the installed
         // CLI/SDK version so template- and add-generated projects stay on the same build.
         var prChannelPackageVersions = packageVersions
-            .Where(p => VersionHelper.IsPrChannel(p.Channel.Name))
+            .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
             .ToArray();
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(

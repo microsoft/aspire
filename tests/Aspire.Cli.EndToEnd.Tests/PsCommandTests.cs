@@ -19,7 +19,7 @@ public sealed class PsCommandTests(ITestOutputHelper output)
     public async Task PsCommandListsRunningAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
@@ -89,7 +89,7 @@ public sealed class PsCommandTests(ITestOutputHelper output)
     public async Task PsFormatJsonOutputsOnlyJsonToStdout()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

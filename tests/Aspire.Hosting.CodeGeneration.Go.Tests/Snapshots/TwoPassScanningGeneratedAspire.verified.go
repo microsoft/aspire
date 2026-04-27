@@ -23,6 +23,14 @@ var _ = time.Second
 // Enums
 // ============================================================================
 
+// BrowserUserDataMode represents BrowserUserDataMode.
+type BrowserUserDataMode string
+
+const (
+	BrowserUserDataModeShared BrowserUserDataMode = "Shared"
+	BrowserUserDataModeIsolated BrowserUserDataMode = "Isolated"
+)
+
 // ContainerLifetime represents ContainerLifetime.
 type ContainerLifetime string
 

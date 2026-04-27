@@ -289,6 +289,7 @@ builder.Build().Run();
                 {
                     CliInstallMode.LocalHive or CliInstallMode.Preinstalled => "aspire update --channel local",
                     CliInstallMode.PullRequest => $"aspire update --channel pr-{DeploymentE2ETestHelpers.GetPrNumber()}",
+                    CliInstallMode.LocalArchive => "aspire update --channel run-local",
                     _ => "aspire update",
                 };
             }

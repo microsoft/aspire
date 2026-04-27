@@ -25,7 +25,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
     public async Task DoctorCommand_WithoutSslCertDir_ShowsPartiallyTrusted()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -64,7 +64,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
     public async Task DoctorCommand_WithSslCertDir_ShowsTrusted()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -119,7 +119,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
     public async Task DoctorCommand_TypeScriptAppHostReportsMissingConfiguredToolchain(string toolchain)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
