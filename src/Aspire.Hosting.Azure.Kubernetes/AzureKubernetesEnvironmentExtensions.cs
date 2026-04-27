@@ -280,7 +280,7 @@ public static class AzureKubernetesEnvironmentExtensions
     ///     .WithSubnet(gpuSubnet);
     /// </code>
     /// </example>
-    [AspireExport("withAksNodePoolSubnet", Description = "Configures an AKS node pool to use a specific VNet subnet")]
+    [AspireExport(Description = "Configures an AKS node pool to use a specific VNet subnet")]
     public static IResourceBuilder<AksNodePoolResource> WithSubnet(
         this IResourceBuilder<AksNodePoolResource> builder,
         IResourceBuilder<AzureSubnetResource> subnet)

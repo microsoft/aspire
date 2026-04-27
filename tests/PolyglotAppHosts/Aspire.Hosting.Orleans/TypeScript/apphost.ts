@@ -2,7 +2,7 @@ import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
-const provider = await builder.addConnectionString("provider", { environmentVariableName: "ORLEANS_PROVIDER_CONNECTION_STRING" });
+const provider = await builder.addConnectionString("provider");
 
 const orleans = await builder.addOrleans("orleans")
     .withClusterId("cluster-id")
@@ -21,9 +21,9 @@ const orleans = await builder.addOrleans("orleans")
 const orleansClient = await orleans.asClient();
 
 const silo = await builder.addContainer("silo", "redis");
-await silo.withOrleansReference(orleans);
+await silo.withReference(orleansClient);
 
 const client = await builder.addContainer("client", "redis");
-await client.withOrleansClientReference(orleansClient);
+await client.withReference(orleansClient);
 
 await builder.build().run();

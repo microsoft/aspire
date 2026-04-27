@@ -56,6 +56,7 @@ with create_builder() as builder:
     backend = builder.add_container("backend", "nginx").with_http_endpoint(name="http", target_port=80)
     backend_service = builder.add_project("backend-service", "./src/BackendService", "http")
     external_backend = builder.add_external_service("external-backend", "https://example.com")
+    external_backend.with_http_health_check()
     proxy = builder.add_yarp("proxy")
     proxy.with_host_port(port=8080)
     proxy.with_host_https_port(port=8443)

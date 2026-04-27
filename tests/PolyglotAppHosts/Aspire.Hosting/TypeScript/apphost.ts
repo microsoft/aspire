@@ -60,8 +60,8 @@ await dockerContainer.withDockerfileBuilder("./app", configureDockerfileBuilder,
 const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
 
 // addProject (pre-existing)
-const project = await builder.addProject("myproject", "./src/MyProject", "https");
-const projectWithoutLaunchProfile = await builder.addProjectWithoutLaunchProfile("myproject-noprofile", "./src/MyProject");
+const project = await builder.addProject("myproject", "./src/MyProject", { launchProfileOrOptions: "https" });
+const projectWithoutLaunchProfile = await builder.addProject("myproject-noprofile", "./src/MyProject");
 // ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
 const referenceEnvironmentOptions = {
     connectionString: true,
@@ -123,19 +123,12 @@ await dockerContainer.withHttpEndpointCallback(async (updateContext) => {
 const endpoint = await dockerContainer.getEndpoint("http");
 const expr = refExpr`Host=${endpoint}`;
 
-const builtConnectionString = await builder.addConnectionStringBuilder("customcs", async (connectionStringBuilder) => {
-    const _isEmpty: boolean = await connectionStringBuilder.isEmpty.get();
-
-    await connectionStringBuilder.appendLiteral("Host=");
-    await connectionStringBuilder.appendValueProvider(endpoint);
-    await connectionStringBuilder.appendLiteral(";Key=");
-    await connectionStringBuilder.appendValueProvider(secretParam);
-
-    const _builtExpression = await connectionStringBuilder.build();
-});
+const builtConnectionString = await builder.addConnectionString("customcs", { environmentVariableNameOrExpression: expr });
 
 await builtConnectionString.withConnectionProperty("Host", expr);
 await builtConnectionString.withConnectionProperty("Mode", "Development");
+await container.withReference(endpoint);
+await container.withReference("https://example.com/", { name: "external-uri" });
 
 const envConnectionString = await builder.addConnectionString("envcs");
 
@@ -155,7 +148,7 @@ await pipeline.addStep("custom-builder-step", async (stepContext) => {
 
 await pipeline.configure(async (configContext) => {
     const _allSteps = await configContext.steps.get();
-    const _builderTaggedSteps = await configContext.getStepsByTag("custom-build");
+    const _builderTaggedSteps = await configContext.getSteps("custom-build");
 });
 
 // ===================================================================
@@ -257,7 +250,8 @@ await tool.withToolSource("https://api.nuget.org/v3/index.json");
 await tool.withToolVersion("8.0.0");
 
 // publishAsDockerFile
-await tool.publishAsDockerFile();
+await tool.publishAsDockerFile(async (_container) => {
+});
 
 // PipelineStepFactoryExtensions.cs — NEW exports
 // ===================================================================
@@ -321,7 +315,7 @@ await container.withPipelineConfiguration(async (configContext) => {
     await configLogger.logInformation("Pipeline configuration logger");
 
     const allSteps = await configContext.steps.get();
-    const taggedSteps = await configContext.getStepsByTag("custom-build");
+    const taggedSteps = await configContext.getSteps("custom-build");
 
     const _stepName: string = await allSteps[0].name.get();
     const _description: string = await allSteps[0].description.get();
@@ -337,7 +331,7 @@ await container.withPipelineConfiguration(async (configContext) => {
     const _configServices = await configContext.services.get();
     const _configModel = await configContext.model.get();
     const _resourceSteps = await configContext.steps.get();
-    const _taggedSteps = await configContext.getStepsByTag("custom-build");
+    const _taggedSteps = await configContext.getSteps("custom-build");
 });
 
 // ===================================================================
@@ -580,11 +574,11 @@ await container.withExplicitStart();
 // withUrl
 await container.withUrl("http://localhost:8080");
 
-// withUrlExpression
-await container.withUrlExpression(refExpr`http://${endpoint}`);
+// withUrl - ReferenceExpression
+await container.withUrl(refExpr`http://${endpoint}`);
 
-// withHttpHealthCheck
-await container.withHttpHealthCheck();
+// withHealthCheck
+await container.withHealthCheck("http");
 
 // withCommand
 await container.withCommand("restart", "Restart", async (_ctx) => {

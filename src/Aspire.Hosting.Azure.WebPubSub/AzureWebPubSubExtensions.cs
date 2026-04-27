@@ -329,7 +329,7 @@ public static class AzureWebPubSubExtensions
     /// <param name="roles">The Web PubSub roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureWebPubSubRole"/> value.</exception>
-    [AspireExport("withWebPubSubRoleAssignments", Description = "Assigns Azure Web PubSub roles to a resource")]
+    [AspireExport("withWebPubSubRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Azure Web PubSub roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureWebPubSubResource> target,

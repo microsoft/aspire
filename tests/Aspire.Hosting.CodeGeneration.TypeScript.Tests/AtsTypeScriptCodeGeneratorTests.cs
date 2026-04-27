@@ -1104,7 +1104,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var capabilities = ScanCapabilitiesFromHostingAssembly();
 
         var getValueAsync = capabilities.FirstOrDefault(c =>
-            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValue" &&
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValueAsync" &&
             c.TargetTypeId == AtsConstants.ReferenceExpressionTypeId);
 
         Assert.NotNull(getValueAsync);
@@ -1407,6 +1407,16 @@ public class AtsTypeScriptCodeGeneratorTests
         // Should NOT contain the old pattern for items
         Assert.DoesNotContain("items = {", code);
         Assert.DoesNotContain("items = {\n        get: async", code);
+    }
+
+    [Fact]
+    public void Generate_OptionalOptionsProperty_UsesDistinctOptionsBagParameter()
+    {
+        var code = GenerateTwoPassCode();
+
+        Assert.DoesNotContain("= options?.options;", code);
+        Assert.Contains("addProject(name: string, projectPath: string, options?: AddProjectOptions)", code);
+        Assert.Contains("let launchProfileOrOptions = options?.launchProfileOrOptions;", code);
     }
 
     [Fact]

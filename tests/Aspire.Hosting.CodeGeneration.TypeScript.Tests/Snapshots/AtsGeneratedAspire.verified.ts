@@ -3521,8 +3521,8 @@ export async function createBuilder(options?: CreateBuilderOptions): Promise<Dis
     delete effectiveOptions.throwOnPendingRejections;
 
     const handle = await client.invokeCapability<IDistributedApplicationBuilderHandle>(
-        'Aspire.Hosting/createBuilderWithOptions',
-        { options: effectiveOptions }
+        'Aspire.Hosting/createBuilder',
+        { argsOrOptions: effectiveOptions }
     );
     return new DistributedApplicationBuilderImpl(handle, client);
 }

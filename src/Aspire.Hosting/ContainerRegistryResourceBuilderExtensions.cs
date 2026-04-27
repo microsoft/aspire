@@ -35,7 +35,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Adds a container registry resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainerRegistry dispatcher export.")]
     public static IResourceBuilder<ContainerRegistryResource> AddContainerRegistry(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -88,7 +88,7 @@ public static class ContainerRegistryResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addContainerRegistryFromString", Description = "Adds a container registry with string endpoint")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainerRegistry dispatcher export.")]
     public static IResourceBuilder<ContainerRegistryResource> AddContainerRegistry(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -113,6 +113,31 @@ public static class ContainerRegistryResourceBuilderExtensions
         SubscribeToAddRegistryTargetAnnotations(builder, resource);
 
         return resourceBuilder;
+    }
+
+    [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("addContainerRegistry", Description = "Adds a container registry resource")]
+    internal static IResourceBuilder<ContainerRegistryResource> AddContainerRegistryForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object endpoint,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object? repository = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(endpoint);
+
+        return (endpoint, repository) switch
+        {
+            (string endpointValue, null) => builder.AddContainerRegistry(name, endpointValue),
+            (string endpointValue, string repositoryValue) => builder.AddContainerRegistry(name, endpointValue, repositoryValue),
+            (IResourceBuilder<ParameterResource> endpointParameter, null) => builder.AddContainerRegistry(name, endpointParameter),
+            (IResourceBuilder<ParameterResource> endpointParameter, IResourceBuilder<ParameterResource> repositoryParameter)
+                => builder.AddContainerRegistry(name, endpointParameter, repositoryParameter),
+            _ => throw new ArgumentException(
+                "Endpoint and repository must both be strings or parameter resource builders.",
+                nameof(repository))
+        };
     }
 
     /// <summary>

@@ -47,7 +47,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UseOrFindAppHostProjectFileUsesAppHostSpecifiedInSettings()
+    public async Task UseOrFindAppHostProjectFileUsesCachedSettingsWhenStillValidAmongMultipleAppHosts()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -57,6 +57,35 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var otherAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("OtherAppHost");
         var otherAppHostProjectFile = new FileInfo(Path.Combine(otherAppHostDirectory.FullName, "OtherAppHost.csproj"));
+        await File.WriteAllTextAsync(otherAppHostProjectFile.FullName, "Not a real apphost");
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+
+        using var writer = aspireSettingsFile.OpenWrite();
+        await JsonSerializer.SerializeAsync(writer, new
+        {
+            appHostPath = Path.GetRelativePath(aspireSettingsFile.Directory!.FullName, targetAppHostProjectFile.FullName)
+        });
+        writer.Close();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        // With multiple apphosts and a valid cached selection, should use the cached one
+        // without prompting.
+        var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
+
+        Assert.Equal(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileUsesAppHostSpecifiedInSettings()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var targetAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("TargetAppHost");
+        var targetAppHostProjectFile = new FileInfo(Path.Combine(targetAppHostDirectory.FullName, "TargetAppHost.csproj"));
         await File.WriteAllTextAsync(targetAppHostProjectFile.FullName, "Not a real apphost");
 
         var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
@@ -72,6 +101,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext);
 
+        // With a single apphost, the settings file should be used
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
 
         Assert.Equal(targetAppHostProjectFile.FullName, foundAppHost?.FullName);
@@ -85,12 +115,8 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var dir1 = workspace.WorkspaceRoot.CreateSubdirectory("dir1");
         var dir2 = dir1.CreateSubdirectory("dir2");
 
-        var targetAppHostDirectory = dir2.CreateSubdirectory("TargetAppHost");
+        var targetAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("TargetAppHost");
         var targetAppHostProjectFile = new FileInfo(Path.Combine(targetAppHostDirectory.FullName, "TargetAppHost.csproj"));
-        await File.WriteAllTextAsync(targetAppHostProjectFile.FullName, "Not a real apphost");
-
-        var otherAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("OtherAppHost");
-        var otherAppHostProjectFile = new FileInfo(Path.Combine(otherAppHostDirectory.FullName, "OtherAppHost.csproj"));
         await File.WriteAllTextAsync(targetAppHostProjectFile.FullName, "Not a real apphost");
 
         var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
@@ -103,7 +129,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         });
         writer.Close();
 
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var executionContext = CreateExecutionContext(dir2);
         var projectLocator = CreateProjectLocator(executionContext);
 
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
@@ -148,6 +174,49 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         // This should fallback to scanning and find the real apphost project
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true).DefaultTimeout();
+
+        Assert.Equal(realAppHostProjectFile.FullName, foundAppHost?.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileFallsBackWhenSettingsFileSpecifiesExistingNonAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var staleProjectDirectory = workspace.WorkspaceRoot.CreateSubdirectory("StaleProject");
+        var staleProjectFile = new FileInfo(Path.Combine(staleProjectDirectory.FullName, "StaleProject.csproj"));
+        await File.WriteAllTextAsync(staleProjectFile.FullName, "Not a real apphost project");
+
+        var realAppHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "RealAppHost.csproj"));
+        await File.WriteAllTextAsync(realAppHostProjectFile.FullName, "Not a real apphost project");
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+
+        using var writer = aspireSettingsFile.OpenWrite();
+        await JsonSerializer.SerializeAsync(writer, new
+        {
+            appHostPath = Path.GetRelativePath(aspireSettingsFile.Directory!.FullName, staleProjectFile.FullName)
+        });
+        writer.Close();
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = projectFile =>
+            {
+                if (projectFile.FullName == realAppHostProjectFile.FullName)
+                {
+                    return new AppHostValidationResult(IsValid: true);
+                }
+
+                return new AppHostValidationResult(IsValid: false);
+            }
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: false).DefaultTimeout();
 
         Assert.Equal(realAppHostProjectFile.FullName, foundAppHost?.FullName);
     }
@@ -326,11 +395,6 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var appHostProjectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "MyAppHost.csproj"));
         await File.WriteAllTextAsync(appHostProjectFile.FullName, "Not a real apphost");
 
-        // Add a decoy project so that a directory scan fallback would have another candidate
-        var decoyAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("DecoyAppHost");
-        var decoyAppHostProjectFile = new FileInfo(Path.Combine(decoyAppHostDirectory.FullName, "DecoyAppHost.csproj"));
-        await File.WriteAllTextAsync(decoyAppHostProjectFile.FullName, "Not a real apphost");
-
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
 
         // Write legacy .aspire/settings.json with a valid appHostPath
@@ -353,7 +417,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         // Act
         var foundAppHost = await locator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, CancellationToken.None).DefaultTimeout();
 
-        // Assert: correct AppHost was found (not the decoy, proving legacy settings were used)
+        // Assert: correct AppHost was found via legacy settings migration
         Assert.NotNull(foundAppHost);
         Assert.Equal(appHostProjectFile.FullName, foundAppHost.FullName);
 
@@ -1196,6 +1260,230 @@ builder.Build().Run();");
         // Should find the sibling project but not the one inside the cache
         Assert.Single(foundFiles);
         Assert.Equal(siblingProject.FullName, foundFiles[0].FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_SingleAspireConfigJson_FindsAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create one apphost project
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("MyAppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "MyAppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "Not a real apphost");
+
+        // Create aspire.config.json pointing to it
+        var config = new AspireConfigFile { AppHost = new AspireConfigAppHost { Path = "MyAppHost/MyAppHost.csproj" } };
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.Throw, createSettingsFile: false, CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(appHostFile.FullName, result.SelectedProjectFile!.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_MultipleAspireConfigJsonFiles_FallsThroughToScan()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create two apphost projects, each with its own aspire.config.json
+        var appHost1Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost1");
+        var appHost1File = new FileInfo(Path.Combine(appHost1Dir.FullName, "AppHost1.csproj"));
+        await File.WriteAllTextAsync(appHost1File.FullName, "Not a real apphost");
+        var config1 = new AspireConfigFile { AppHost = new AspireConfigAppHost { Path = "AppHost1.csproj" } };
+        config1.Save(appHost1Dir.FullName);
+
+        var appHost2Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost2");
+        var appHost2File = new FileInfo(Path.Combine(appHost2Dir.FullName, "AppHost2.csproj"));
+        await File.WriteAllTextAsync(appHost2File.FullName, "Not a real apphost");
+        var config2 = new AspireConfigFile { AppHost = new AspireConfigAppHost { Path = "AppHost2.csproj" } };
+        config2.Save(appHost2Dir.FullName);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        // Multiple config files → falls through to scan → finds 2 apphosts → Throw
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.Throw, createSettingsFile: false, CancellationToken.None).DefaultTimeout();
+        });
+
+        Assert.Equal(ProjectLocatorFailureReason.MultipleProjectFilesFound, ex.FailureReason);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_AspireConfigJsonPointsToNonexistentFile_FallsThroughToScan()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create one real apphost project
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("RealAppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "RealAppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "Not a real apphost");
+
+        // Create aspire.config.json pointing to a nonexistent apphost
+        var config = new AspireConfigFile { AppHost = new AspireConfigAppHost { Path = "NonexistentAppHost/NonexistentAppHost.csproj" } };
+        config.Save(workspace.WorkspaceRoot.FullName);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        // Should fall through to scan and find the real apphost
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.Throw, createSettingsFile: false, CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(appHostFile.FullName, result.SelectedProjectFile!.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_MultipleAppHosts_NoConfig_ThrowBehavior_Throws()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create two apphost projects with no config files at all
+        var appHost1Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost1");
+        await File.WriteAllTextAsync(Path.Combine(appHost1Dir.FullName, "AppHost1.csproj"), "Not a real apphost");
+
+        var appHost2Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost2");
+        await File.WriteAllTextAsync(Path.Combine(appHost2Dir.FullName, "AppHost2.csproj"), "Not a real apphost");
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.Throw, createSettingsFile: false, CancellationToken.None).DefaultTimeout();
+        });
+
+        Assert.Equal(ProjectLocatorFailureReason.MultipleProjectFilesFound, ex.FailureReason);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_MultipleAppHosts_NoConfig_ThrowBehavior_CancelsRemainingValidationEarly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHost1File = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost1.csproj"));
+        await File.WriteAllTextAsync(appHost1File.FullName, "Not a real apphost");
+
+        var appHost2File = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost2.csproj"));
+        await File.WriteAllTextAsync(appHost2File.FullName, "Not a real apphost");
+
+        var slowValidationFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "SlowValidation.csproj"));
+        await File.WriteAllTextAsync(slowValidationFile.FullName, "Not a real apphost");
+
+        var slowValidationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var slowValidationCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostAsyncCallback = async (projectFile, cancellationToken) =>
+            {
+                if (string.Equals(projectFile.FullName, slowValidationFile.FullName, StringComparison.Ordinal))
+                {
+                    slowValidationStarted.TrySetResult();
+
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        slowValidationCanceled.TrySetResult();
+                        throw;
+                    }
+                }
+
+                if (string.Equals(projectFile.FullName, appHost2File.FullName, StringComparison.Ordinal))
+                {
+                    await slowValidationStarted.Task.DefaultTimeout();
+                }
+
+                return new AppHostValidationResult(IsValid: true);
+            }
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var ex = await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.Throw, createSettingsFile: false, CancellationToken.None).DefaultTimeout();
+        });
+
+        Assert.Equal(ProjectLocatorFailureReason.MultipleProjectFilesFound, ex.FailureReason);
+        await slowValidationCanceled.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_WithSettingsAndMultipleAppHosts_ThrowBehavior_UsesCachedSelection()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create two apphost projects
+        var appHost1Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost1");
+        var appHost1File = new FileInfo(Path.Combine(appHost1Dir.FullName, "AppHost1.csproj"));
+        await File.WriteAllTextAsync(appHost1File.FullName, "Not a real apphost");
+
+        var appHost2Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost2");
+        var appHost2File = new FileInfo(Path.Combine(appHost2Dir.FullName, "AppHost2.csproj"));
+        await File.WriteAllTextAsync(appHost2File.FullName, "Not a real apphost");
+
+        // Create settings file that caches AppHost1
+        var aspireSettingsDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire"));
+        aspireSettingsDir.Create();
+        var aspireSettingsFile = new FileInfo(Path.Combine(aspireSettingsDir.FullName, "settings.json"));
+        var relativeAppHostPath = Path
+            .GetRelativePath(aspireSettingsDir.FullName, appHost1File.FullName)
+            .Replace(Path.DirectorySeparatorChar, '/');
+        await File.WriteAllTextAsync(aspireSettingsFile.FullName, JsonSerializer.Serialize(new { appHostPath = relativeAppHostPath }));
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        // With Throw behavior, should use the cached selection rather than throwing
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.Throw, createSettingsFile: false, CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(appHost1File.FullName, result.SelectedProjectFile!.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_WithSettingsAndMultipleAppHosts_PromptBehavior_UsesCachedSelection()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create two apphost projects
+        var appHost1Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost1");
+        var appHost1File = new FileInfo(Path.Combine(appHost1Dir.FullName, "AppHost1.csproj"));
+        await File.WriteAllTextAsync(appHost1File.FullName, "Not a real apphost");
+
+        var appHost2Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost2");
+        var appHost2File = new FileInfo(Path.Combine(appHost2Dir.FullName, "AppHost2.csproj"));
+        await File.WriteAllTextAsync(appHost2File.FullName, "Not a real apphost");
+
+        // Create settings file that caches AppHost1
+        var aspireSettingsDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire"));
+        aspireSettingsDir.Create();
+        var aspireSettingsFile = new FileInfo(Path.Combine(aspireSettingsDir.FullName, "settings.json"));
+        var relativeAppHostPath = Path
+            .GetRelativePath(aspireSettingsDir.FullName, appHost1File.FullName)
+            .Replace(Path.DirectorySeparatorChar, '/');
+        await File.WriteAllTextAsync(aspireSettingsFile.FullName, JsonSerializer.Serialize(new { appHostPath = relativeAppHostPath }));
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        // With Prompt behavior and a valid cached selection, should use the cached one
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: false, CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(appHost1File.FullName, result.SelectedProjectFile!.FullName);
+        Assert.Equal(2, result.AllProjectFileCandidates.Count);
     }
 
     private static ProjectLocator CreateProjectLocator(

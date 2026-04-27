@@ -1849,7 +1849,7 @@ func CreateBuilder(options *CreateBuilderOptions) (*IDistributedApplicationBuild
 			resolvedOptions["ProjectDirectory"] = pwd
 		}
 	}
-	result, err := client.InvokeCapability("Aspire.Hosting/createBuilderWithOptions", map[string]any{"options": resolvedOptions})
+	result, err := client.InvokeCapability("Aspire.Hosting/createBuilder", map[string]any{"argsOrOptions": resolvedOptions})
 	if err != nil {
 		return nil, err
 	}

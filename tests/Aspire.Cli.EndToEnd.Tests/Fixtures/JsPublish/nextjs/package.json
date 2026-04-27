@@ -15,5 +15,8 @@
     "@types/node": "25.5.0",
     "@types/react": "19.2.14",
     "typescript": "6.0.2"
+  },
+  "overrides": {
+    "postcss": "8.5.10"
   }
 }

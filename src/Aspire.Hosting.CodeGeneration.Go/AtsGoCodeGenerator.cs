@@ -523,7 +523,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         WriteLine("\t\t\tresolvedOptions[\"ProjectDirectory\"] = pwd");
         WriteLine("\t\t}");
         WriteLine("\t}");
-        WriteLine("\tresult, err := client.InvokeCapability(\"Aspire.Hosting/createBuilderWithOptions\", map[string]any{\"options\": resolvedOptions})");
+        WriteLine("\tresult, err := client.InvokeCapability(\"Aspire.Hosting/createBuilder\", map[string]any{\"argsOrOptions\": resolvedOptions})");
         WriteLine("\tif err != nil {");
         WriteLine("\t\treturn nil, err");
         WriteLine("\t}");

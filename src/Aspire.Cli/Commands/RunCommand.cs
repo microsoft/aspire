@@ -67,6 +67,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly AppHostLauncher _appHostLauncher;
     private readonly FileLoggerProvider _fileLoggerProvider;
+    private readonly ICliHostEnvironment _hostEnvironment;
     private bool _isDetachMode;
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
@@ -95,7 +96,8 @@ internal sealed class RunCommand : BaseCommand
         ILogger<RunCommand> logger,
         IAppHostProjectFactory projectFactory,
         AppHostLauncher appHostLauncher,
-        FileLoggerProvider fileLoggerProvider)
+        FileLoggerProvider fileLoggerProvider,
+        ICliHostEnvironment hostEnvironment)
         : base("run", RunCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _runner = runner;
@@ -109,6 +111,7 @@ internal sealed class RunCommand : BaseCommand
         _projectFactory = projectFactory;
         _appHostLauncher = appHostLauncher;
         _fileLoggerProvider = fileLoggerProvider;
+        _hostEnvironment = hostEnvironment;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
@@ -191,7 +194,15 @@ internal sealed class RunCommand : BaseCommand
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
-            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: true, cancellationToken);
+            var multipleAppHostBehavior = _hostEnvironment.SupportsInteractiveInput
+                ? MultipleAppHostProjectsFoundBehavior.Prompt
+                : MultipleAppHostProjectsFoundBehavior.Throw;
+
+            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
+                passedAppHostProjectFile,
+                multipleAppHostBehavior,
+                createSettingsFile: true,
+                cancellationToken);
             var effectiveAppHostFile = searchResult.SelectedProjectFile;
 
             if (effectiveAppHostFile is null)

@@ -1668,8 +1668,8 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
         }
     }
     let mut args: HashMap<String, Value> = HashMap::new();
-    args.insert("options".to_string(), serde_json::to_value(resolved_options).unwrap_or(Value::Null));
-    let result = client.invoke_capability("Aspire.Hosting/createBuilderWithOptions", args)?;
+    args.insert("argsOrOptions".to_string(), serde_json::to_value(resolved_options).unwrap_or(Value::Null));
+    let result = client.invoke_capability("Aspire.Hosting/createBuilder", args)?;
     let handle: Handle = serde_json::from_value(result)?;
     Ok(IDistributedApplicationBuilder::new(handle, client))
 }
