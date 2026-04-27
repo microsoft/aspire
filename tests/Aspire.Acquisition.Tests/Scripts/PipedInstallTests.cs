@@ -122,8 +122,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
     {
         // Tests the pipe mechanism without requiring curl/wget — uses cat to
         // simulate reading from stdin, which is the same codepath as curl | bash
-        var repoRoot = TestUtils.FindRepoRoot()?.FullName
-            ?? throw new InvalidOperationException("Could not find repository root");
+        var repoRoot = TestUtils.RepoRoot;
         var scriptPath = Path.Combine(repoRoot, ScriptPaths.ReleaseShell);
 
         using var env = new TestEnvironment();
@@ -144,8 +143,7 @@ public class PipedInstallTests : IClassFixture<ScriptHostFixture>
     [SkipOnPlatform(TestPlatforms.Windows, "Bash piped install tests require bash")]
     public async Task CatPipeToBash_PRScript_HelpWorks()
     {
-        var repoRoot = TestUtils.FindRepoRoot()?.FullName
-            ?? throw new InvalidOperationException("Could not find repository root");
+        var repoRoot = TestUtils.RepoRoot;
         var scriptPath = Path.Combine(repoRoot, ScriptPaths.PRShell);
 
         using var env = new TestEnvironment();

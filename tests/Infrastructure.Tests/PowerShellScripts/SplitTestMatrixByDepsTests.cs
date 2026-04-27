@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Templates.Tests;
 using Aspire.TestUtilities;
 using Xunit;
 
@@ -20,7 +21,7 @@ public class SplitTestMatrixByDepsTests : IDisposable
     public SplitTestMatrixByDepsTests(ITestOutputHelper output)
     {
         _output = output;
-        _scriptPath = Path.Combine(FindRepoRoot(), "eng", "scripts", "split-test-matrix-by-deps.ps1");
+        _scriptPath = Path.Combine(TestUtils.RepoRoot, "eng", "scripts", "split-test-matrix-by-deps.ps1");
         _githubOutputFile = Path.Combine(_tempDir.Path, "github_output.txt");
         File.WriteAllText(_githubOutputFile, "");
     }
@@ -348,17 +349,4 @@ public class SplitTestMatrixByDepsTests : IDisposable
         return new GitHubActionsMatrix { Include = entries };
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
-    }
 }
