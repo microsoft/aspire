@@ -33,6 +33,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" VersionOverride="$(MicrosoftExtensionsLoggingAbstractionsPreviewVersion)" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
   </ItemGroup>
 
