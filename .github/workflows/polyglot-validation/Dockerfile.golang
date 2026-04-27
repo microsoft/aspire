@@ -10,7 +10,7 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM mcr.microsoft.com/devcontainers/go:1-trixie
+FROM mcr.microsoft.com/devcontainers/go:1.26-trixie
 
 # Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
