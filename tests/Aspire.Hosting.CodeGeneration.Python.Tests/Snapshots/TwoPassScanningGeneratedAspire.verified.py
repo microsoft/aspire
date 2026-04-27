@@ -5839,7 +5839,7 @@ class AbstractResourceWithEndpoints(AbstractResource):
 
     @abc.abstractmethod
     def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions and captures browser logs."""
+        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
 
     @abc.abstractmethod
     def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
@@ -7227,7 +7227,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         return "ContainerResource(handle={self._handle.handle_id})"
 
     def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions and captures browser logs."""
+        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if browser is not None:
             rpc_args['browser'] = browser
@@ -8653,7 +8653,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         return "ProjectResource(handle={self._handle.handle_id})"
 
     def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions and captures browser logs."""
+        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if browser is not None:
             rpc_args['browser'] = browser
@@ -9751,7 +9751,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         return "ExecutableResource(handle={self._handle.handle_id})"
 
     def with_browser_logs(self, *, browser: str | None = None, profile: str | None = None, user_data_mode: BrowserUserDataMode | None = None) -> typing.Self:
-        """Adds a child browser logs resource that opens tracked browser sessions and captures browser logs."""
+        """Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if browser is not None:
             rpc_args['browser'] = browser

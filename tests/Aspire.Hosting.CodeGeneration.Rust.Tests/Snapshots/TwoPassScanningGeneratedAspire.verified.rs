@@ -1089,7 +1089,7 @@ impl CSharpAppResource {
         &self.client
     }
 
-    /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+    /// Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
     pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3869,7 +3869,7 @@ impl ContainerResource {
         &self.client
     }
 
-    /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+    /// Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
     pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5798,7 +5798,7 @@ impl DotnetToolResource {
         &self.client
     }
 
-    /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+    /// Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
     pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7631,7 +7631,7 @@ impl ExecutableResource {
         &self.client
     }
 
-    /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+    /// Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
     pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12400,7 +12400,7 @@ impl ProjectResource {
         &self.client
     }
 
-    /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+    /// Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
     pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14208,7 +14208,7 @@ impl TestDatabaseResource {
         &self.client
     }
 
-    /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+    /// Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
     pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15669,7 +15669,7 @@ impl TestRedisResource {
         &self.client
     }
 
-    /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+    /// Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
     pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -17303,7 +17303,7 @@ impl TestVaultResource {
         &self.client
     }
 
-    /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+    /// Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
     pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());

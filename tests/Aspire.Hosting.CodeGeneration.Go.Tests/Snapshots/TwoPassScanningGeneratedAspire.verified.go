@@ -663,7 +663,7 @@ func NewCSharpAppResource(handle *Handle, client *AspireClient) *CSharpAppResour
 	}
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *CSharpAppResource) WithBrowserLogs(browser *string, profile *string, userDataMode *BrowserUserDataMode) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -4007,7 +4007,7 @@ func NewContainerResource(handle *Handle, client *AspireClient) *ContainerResour
 	}
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *ContainerResource) WithBrowserLogs(browser *string, profile *string, userDataMode *BrowserUserDataMode) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -6243,7 +6243,7 @@ func NewDotnetToolResource(handle *Handle, client *AspireClient) *DotnetToolReso
 	}
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *DotnetToolResource) WithBrowserLogs(browser *string, profile *string, userDataMode *BrowserUserDataMode) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -8505,7 +8505,7 @@ func NewExecutableResource(handle *Handle, client *AspireClient) *ExecutableReso
 	}
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *ExecutableResource) WithBrowserLogs(browser *string, profile *string, userDataMode *BrowserUserDataMode) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -13730,7 +13730,7 @@ func NewProjectResource(handle *Handle, client *AspireClient) *ProjectResource {
 	}
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *ProjectResource) WithBrowserLogs(browser *string, profile *string, userDataMode *BrowserUserDataMode) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -15805,7 +15805,7 @@ func NewTestDatabaseResource(handle *Handle, client *AspireClient) *TestDatabase
 	}
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *TestDatabaseResource) WithBrowserLogs(browser *string, profile *string, userDataMode *BrowserUserDataMode) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -17617,7 +17617,7 @@ func NewTestRedisResource(handle *Handle, client *AspireClient) *TestRedisResour
 	}
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *TestRedisResource) WithBrowserLogs(browser *string, profile *string, userDataMode *BrowserUserDataMode) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
@@ -19654,7 +19654,7 @@ func NewTestVaultResource(handle *Handle, client *AspireClient) *TestVaultResour
 	}
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *TestVaultResource) WithBrowserLogs(browser *string, profile *string, userDataMode *BrowserUserDataMode) (*IResourceWithEndpoints, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
