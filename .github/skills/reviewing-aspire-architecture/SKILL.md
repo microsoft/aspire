@@ -11,7 +11,7 @@ Aspire-specific architectural review via the `reviewing-aspire-architecture` age
 
 **Use**: "deep review," "architectural review," "pattern review," PRs touching hosting core, Azure integrations, dashboard, CLI, components, new resource types, app model changes, deployment behavior.
 
-**Don't use**: doc/config-only PRs → `code-review` · generic PR review → `code-review` · CI failures → `ci-analysis` · flaky tests → `fix-flaky-test` · API surface → `api-review`
+**Don't use**: doc/config-only PRs → `code-review` · generic PR review → `code-review` · CI failures → `ci-test-failures` · flaky tests → `fix-flaky-test` · API surface → `api-review`
 
 ## Relationship to code-review
 
@@ -21,11 +21,11 @@ Aspire-specific architectural review via the `reviewing-aspire-architecture` age
 
 | Folder | Dimensions |
 |---|---|
-| `src/Aspire.Hosting/**` | Resource Model, API Design, Patterns, Containers |
-| `src/Aspire.Hosting.Azure*/**` | Azure Provisioning, Resource Model, Security |
+| `src/Aspire.Hosting/**` | Resource Model, API Design, Pattern Conformance, Containers |
+| `src/Aspire.Hosting.Azure*/**` | Azure Provisioning, Resource Model, API Design, Security |
 | `src/Aspire.Dashboard/**` | Dashboard UI/UX, Security, Performance |
 | `src/Aspire.Cli/**` | CLI Behavior, Error Handling, Platform Compatibility |
-| `src/Components/**` | Patterns, API Design, Build & Contributor Workflow |
+| `src/Components/**` | Pattern Conformance, API Design, Build & Contributor Workflow |
 | `tests/**` | Test Quality + mirror dimensions of code under test |
 | `eng/**`, `.github/**` | Build & Contributor Workflow, Documentation & Naming |
 

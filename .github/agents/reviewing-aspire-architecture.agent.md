@@ -38,7 +38,7 @@ You review PRs for **Aspire domain-specific correctness** — patterns, conventi
 ## Resource Model
 
 - Resources referenced by other resources must be in the deployment manifest.
-- Use `EndpointReference` over `AllocatedEndpointAnnotation`; define named primary endpoints for type-safe references.
+- Use `EndpointReference` over `AllocatedEndpoint`; define named primary endpoints for type-safe references.
 - Centralize endpoint URL construction in `EndpointReference`; callers must not reconstruct URLs from individual endpoint properties.
 - Use canonical API for querying endpoints — consistent across Run and Publish contexts.
 - Lifecycle hooks must branch by Run vs Publish mode.
