@@ -30,6 +30,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private IDisposable? _aiDisplayChangedSubscription;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
+    private const string NotificationsDialogId = "NotificationsDialog";
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -186,7 +187,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private bool ShouldShowUnsecuredApiMessage()
     {
         // Only show warning if API is enabled and unsecured
-        return Options.CurrentValue.Api.Enabled.GetValueOrDefault() &&
+        return !Options.CurrentValue.Api.Disabled.GetValueOrDefault() &&
                Options.CurrentValue.Api.AuthMode == ApiAuthMode.Unsecured;
     }
 
@@ -282,6 +283,42 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         else
         {
             _openPageDialog = await DialogService.ShowDialogAsync<SettingsDialog>(parameters).ConfigureAwait(true);
+        }
+    }
+
+    public async Task LaunchNotificationsAsync()
+    {
+        var parameters = new DialogParameters
+        {
+            Title = Loc[nameof(Resources.Layout.MainLayoutNotificationCenterTitle)],
+            PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)].Value,
+            SecondaryAction = null,
+            TrapFocus = true,
+            Modal = true,
+            Alignment = HorizontalAlignment.Right,
+            Width = "350px",
+            Height = "auto",
+            Id = NotificationsDialogId,
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, HandleDialogClose)
+        };
+
+        if (_openPageDialog is not null)
+        {
+            if (Equals(_openPageDialog.Id, NotificationsDialogId) && !_openPageDialog.Result.IsCompleted)
+            {
+                return;
+            }
+
+            await _openPageDialog.CloseAsync();
+        }
+
+        if (ViewportInformation.IsDesktop)
+        {
+            _openPageDialog = await DialogService.ShowPanelAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
+        }
+        else
+        {
+            _openPageDialog = await DialogService.ShowDialogAsync<NotificationsDialog>(parameters).ConfigureAwait(true);
         }
     }
 

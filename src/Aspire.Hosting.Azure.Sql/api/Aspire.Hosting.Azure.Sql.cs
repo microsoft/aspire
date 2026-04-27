@@ -10,8 +10,10 @@ namespace Aspire.Hosting
 {
     public static partial class AzureSqlExtensions
     {
+        [AspireExport("addAzureSqlServer", Description = "Adds an Azure SQL Database server resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> AddAzureSqlServer(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport("addDatabase", Description = "Adds an Azure SQL database resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, string name, string? databaseName = null) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureSqlServer instead to add an Azure SQL server resource.")]
@@ -20,18 +22,31 @@ namespace Aspire.Hosting
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureSqlServer instead to add an Azure SQL server resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> PublishAsAzureSqlDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> builder) { throw null; }
 
+        [AspireExport("runAsContainer", Description = "Configures the Azure SQL server to run locally in a SQL Server container", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource>>? configureContainer = null) { throw null; }
 
+        [AspireExport("withAdminDeploymentScriptStorage", Description = "Configures the Azure SQL server to use a specific storage account for deployment scripts")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> WithAdminDeploymentScriptStorage(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> storage) { throw null; }
+
+        [AspireExport("withAdminDeploymentScriptSubnet", Description = "Configures the Azure SQL server to use a specific subnet for deployment scripts")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> WithAdminDeploymentScriptSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> subnet) { throw null; }
+
+        [AspireExport("withDefaultAzureSku", Description = "Configures the Azure SQL database to use the default Azure SKU")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlDatabaseResource> WithDefaultAzureSku(this ApplicationModel.IResourceBuilder<Azure.AzureSqlDatabaseResource> builder) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.Azure
 {
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
+    [AspireExport(ExposeProperties = true)]
     public partial class AzureSqlDatabaseResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<AzureSqlServerResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
     {
         public AzureSqlDatabaseResource(string name, string databaseName, AzureSqlServerResource parent) : base(default!) { }
 
+        [AspireExportIgnore]
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
@@ -50,13 +65,15 @@ namespace Aspire.Hosting.Azure
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class AzureSqlServerResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class AzureSqlServerResource : AzureProvisioningResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, IAzurePrivateEndpointTarget, IAzurePrivateEndpointTargetNotification
     {
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use AddAzureSqlServer instead to add an Azure SQL server resource.")]
         public AzureSqlServerResource(ApplicationModel.SqlServerServerResource innerResource, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
         public AzureSqlServerResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
+        [AspireExportIgnore]
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
 
         public System.Collections.Generic.IReadOnlyDictionary<string, AzureSqlDatabaseResource> AzureSqlDatabases { get { throw null; } }
@@ -68,6 +85,8 @@ namespace Aspire.Hosting.Azure
         public BicepOutputReference FullyQualifiedDomainName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression HostName { get { throw null; } }
+
+        public BicepOutputReference Id { get { throw null; } }
 
         [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "InnerResource")]
         public bool IsContainer { get { throw null; } }
@@ -85,5 +104,11 @@ namespace Aspire.Hosting.Azure
         public override void AddRoleAssignments(IAddRoleAssignmentsContext roleAssignmentContext) { }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
+
+        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
+
+        void IAzurePrivateEndpointTargetNotification.OnPrivateEndpointCreated(ApplicationModel.IResourceBuilder<AzurePrivateEndpointResource> privateEndpoint) { }
     }
 }

@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.AppService;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
 using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.ApplicationInsights;
@@ -24,14 +26,48 @@ public static partial class AzureAppServiceEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddAzureAppServiceInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        // ensure AzureProvisioning is added first so the AzureResourcePreparer lifecycle hook runs before AzureAppServiceInfrastructure
         builder.AddAzureProvisioning();
 
         builder.Services.Configure<AzureProvisioningOptions>(options => options.SupportsTargetedRoleAssignments = true);
 
-        builder.Services.TryAddEventingSubscriber<AzureAppServiceInfrastructure>();
+        // Register the pipeline step idempotently. AddAzureAppServiceInfrastructureCore can be
+        // called more than once (e.g. when AddAzureAppServiceEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating App Service resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on AzureAppServiceEnvironmentResource.
+        // This global step only validates that no resource has a PublishAs* annotation when there are
+        // no AzureAppServiceEnvironmentResource instances in the model.
+        if (builder.Services.All(d => d.ServiceType != typeof(AppServicePipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<AppServicePipelineStepMarker>();
+
+            builder.Pipeline.AddStep(
+                name: AppServicePipelineStepMarker.StepName,
+                action: ctx =>
+                {
+                    if (!ctx.Model.Resources.OfType<AzureAppServiceEnvironmentResource>().Any())
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<AzureAppServiceWebsiteCustomizationAnnotation>())
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as an Azure AppService Website, but there are no '{nameof(AzureAppServiceEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddAzureAppServiceEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+        }
 
         return builder;
+    }
+
+    private sealed class AppServicePipelineStepMarker
+    {
+        public const string StepName = "validate-azure-app-service";
     }
 
     /// <summary>
@@ -227,6 +263,32 @@ public static partial class AzureAppServiceEnvironmentExtensions
     }
 
     /// <summary>
+    /// Configures whether HTTP endpoints should be automatically upgraded to HTTPS for the Azure App Service environment.
+    /// By default, HTTP endpoints are upgraded to HTTPS for security and WebSocket compatibility.
+    /// </summary>
+    /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
+    /// <param name="upgrade">Whether to upgrade HTTP endpoints to HTTPS. Default is true.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <remarks>
+    /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure App Service.
+    /// Note that Azure App Service forces HTTP to HTTPS redirects at the platform level,
+    /// so disabling upgrade primarily affects connection strings generated for dependent resources.
+    /// </remarks>
+    /// <example>
+    /// Preserve HTTP endpoints instead of automatically upgrading them to HTTPS:
+    /// <code>
+    /// var appService = builder.AddAzureAppServiceEnvironment("appservice")
+    ///     .WithHttpsUpgrade(false);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service")]
+    public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool upgrade = true)
+    {
+        builder.Resource.PreserveHttpEndpoints = !upgrade;
+        return builder;
+    }
+
+    /// <summary>
     /// Configures whether the Aspire dashboard should be included in the Azure App Service environment.
     /// </summary>
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
@@ -328,27 +390,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
     private static AzureContainerRegistryResource CreateDefaultAzureContainerRegistry(IDistributedApplicationBuilder builder, string name)
     {
-        var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
-        {
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, resourceName) =>
-                {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = resourceName;
-                    return resource;
-                },
-                (infra) => new ContainerRegistryService(infra.AspireResource.GetBicepIdentifier())
-                {
-                    Sku = new ContainerRegistrySku { Name = ContainerRegistrySkuName.Basic },
-                    Tags = { { "aspire-resource-name", infra.AspireResource.Name } }
-                });
-
-            infrastructure.Add(registry);
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer });
-        };
-
-        var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
+        var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
         if (builder.ExecutionContext.IsPublishMode)
         {
             builder.AddResource(resource);

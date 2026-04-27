@@ -1751,6 +1751,30 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// </summary>
     private static List<BuilderModel> TopologicalSortBuilders(List<BuilderModel> builders)
     {
+        builders = builders
+            .GroupBy(b => b.TypeId, StringComparer.Ordinal)
+            .Select(g =>
+            {
+                if (g.Count() == 1)
+                {
+                    return g.First();
+                }
+
+                var first = g.First();
+                return new BuilderModel
+                {
+                    TypeId = g.Key,
+                    BuilderClassName = first.BuilderClassName,
+                    Capabilities = g.SelectMany(b => b.Capabilities)
+                        .GroupBy(c => c.CapabilityId, StringComparer.Ordinal)
+                        .Select(cg => cg.First())
+                        .ToList(),
+                    IsInterface = first.IsInterface,
+                    TargetType = g.Select(b => b.TargetType).FirstOrDefault(t => t is not null)
+                };
+            })
+            .ToList();
+
         var buildersByTypeId = builders.ToDictionary(b => b.TypeId, StringComparer.Ordinal);
         var result = new List<BuilderModel>();
         var visited = new HashSet<string>(StringComparer.Ordinal);

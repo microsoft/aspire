@@ -106,6 +106,24 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Open the app in a tracked browser session and stream browser logs to this resource..
+        /// </summary>
+        internal static string OpenTrackedBrowserDescription {
+            get {
+                return ResourceManager.GetString("OpenTrackedBrowserDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Open tracked browser.
+        /// </summary>
+        internal static string OpenTrackedBrowserName {
+            get {
+                return ResourceManager.GetString("OpenTrackedBrowserName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes..
         /// </summary>
         internal static string RebuildDescription {
@@ -129,6 +147,60 @@ namespace Aspire.Hosting.Resources {
         internal static string RebuilderResourceNotFound {
             get {
                 return ResourceManager.GetString("RebuilderResourceNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully deleted parameter &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceDeletedParameter {
+            get {
+                return ResourceManager.GetString("ResourceDeletedParameter", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully rebuilt &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceRebuilt {
+            get {
+                return ResourceManager.GetString("ResourceRebuilt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully restarted &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceRestarted {
+            get {
+                return ResourceManager.GetString("ResourceRestarted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully set parameter &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceSetParameter {
+            get {
+                return ResourceManager.GetString("ResourceSetParameter", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully started &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceStarted {
+            get {
+                return ResourceManager.GetString("ResourceStarted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Successfully stopped &apos;{0}&apos;..
+        /// </summary>
+        internal static string ResourceStopped {
+            get {
+                return ResourceManager.GetString("ResourceStopped", resourceCulture);
             }
         }
 

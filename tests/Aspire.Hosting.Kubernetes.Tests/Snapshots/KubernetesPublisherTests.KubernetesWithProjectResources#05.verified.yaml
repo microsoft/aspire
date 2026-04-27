@@ -1,36 +1,36 @@
----
-apiVersion: "apps/v1"
-kind: "Deployment"
+﻿---
+apiVersion: "v1"
+kind: "Service"
 metadata:
-  name: "api-deployment"
+  name: "project1-service"
   labels:
     app.kubernetes.io/name: "aspire-hosting-tests"
-    app.kubernetes.io/component: "api"
+    app.kubernetes.io/component: "project1"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 spec:
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: "aspire-hosting-tests"
-        app.kubernetes.io/component: "api"
-        app.kubernetes.io/instance: "{{ .Release.Name }}"
-    spec:
-      containers:
-        - image: "reg:api"
-          name: "api"
-          envFrom:
-            - configMapRef:
-                name: "api-config"
-          imagePullPolicy: "IfNotPresent"
+  type: "ClusterIP"
   selector:
-    matchLabels:
-      app.kubernetes.io/name: "aspire-hosting-tests"
-      app.kubernetes.io/component: "api"
-      app.kubernetes.io/instance: "{{ .Release.Name }}"
-  replicas: 1
-  revisionHistoryLimit: 3
-  strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
-    type: "RollingUpdate"
+    app.kubernetes.io/name: "aspire-hosting-tests"
+    app.kubernetes.io/component: "project1"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+  ports:
+    - name: "http"
+      protocol: "TCP"
+      port: {{ .Values.parameters.project1.port_http | int }}
+      targetPort: {{ .Values.parameters.project1.port_http | int }}
+    - name: "custom1"
+      protocol: "TCP"
+      port: 8000
+      targetPort: 8000
+    - name: "custom2"
+      protocol: "TCP"
+      port: 7001
+      targetPort: 8001
+    - name: "custom3"
+      protocol: "TCP"
+      port: 7002
+      targetPort: 7002
+    - name: "custom4"
+      protocol: "TCP"
+      port: 7003
+      targetPort: 7004

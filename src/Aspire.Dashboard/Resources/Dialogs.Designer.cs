@@ -1060,11 +1060,20 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Format JSON.
+        ///   Looks up a localized string similar to JSON.
         /// </summary>
         public static string TextVisualizerDialogJsonFormat {
             get {
                 return ResourceManager.GetString("TextVisualizerDialogJsonFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Markdown.
+        /// </summary>
+        public static string TextVisualizerDialogMarkdownFormat {
+            get {
+                return ResourceManager.GetString("TextVisualizerDialogMarkdownFormat", resourceCulture);
             }
         }
         
@@ -1078,7 +1087,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Format XML.
+        ///   Looks up a localized string similar to XML.
         /// </summary>
         public static string TextVisualizerDialogXmlFormat {
             get {
@@ -1155,6 +1164,33 @@ namespace Aspire.Dashboard.Resources {
         public static string SettingsDialogTimeFormatTwentyFourHour {
             get {
                 return ResourceManager.GetString("SettingsDialogTimeFormatTwentyFourHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dismiss all.
+        /// </summary>
+        public static string NotificationCenterDismissAll {
+            get {
+                return ResourceManager.GetString("NotificationCenterDismissAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No notifications.
+        /// </summary>
+        public static string NotificationCenterEmpty {
+            get {
+                return ResourceManager.GetString("NotificationCenterEmpty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dismiss notification.
+        /// </summary>
+        public static string NotificationEntryDismiss {
+            get {
+                return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
             }
         }
     }

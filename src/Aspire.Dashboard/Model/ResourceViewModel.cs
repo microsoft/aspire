@@ -228,6 +228,7 @@ public sealed class CommandViewModel
     public const string StartCommand = "start";
     public const string StopCommand = "stop";
     public const string RestartCommand = "restart";
+    public const string SetParameterCommand = "parameter-set";
     private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand];
 
     public string Name { get; }
@@ -259,7 +260,7 @@ public sealed class CommandViewModel
 
     public static bool IsKnownCommand(string command)
     {
-        return s_knownResourceCommands.Contains(command);
+        return s_knownResourceCommands.Contains(command, StringComparers.CommandName);
     }
 
     public string GetDisplayName()

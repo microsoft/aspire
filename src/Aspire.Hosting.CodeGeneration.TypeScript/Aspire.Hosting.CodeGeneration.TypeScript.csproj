@@ -24,7 +24,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="NpmVersionHelper.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
+    <PackageReference Include="Semver" />
   </ItemGroup>
 
 </Project>

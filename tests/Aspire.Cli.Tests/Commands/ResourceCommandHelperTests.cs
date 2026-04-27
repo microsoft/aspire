@@ -20,8 +20,11 @@ public class ResourceCommandHelperTests
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
             {
                 Success = true,
-                Result = "{\"items\": [\"a\", \"b\"]}",
-                ResultFormat = "json"
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "{\"items\": [\"a\", \"b\"]}",
+                    Format = CommandResultFormat.Json
+                }
             }
         };
 
@@ -79,9 +82,12 @@ public class ResourceCommandHelperTests
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
             {
                 Success = false,
-                ErrorMessage = "Validation failed",
-                Result = "{\"errors\": [\"invalid host\"]}",
-                ResultFormat = "json"
+                Message = "Validation failed",
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "{\"errors\": [\"invalid host\"]}",
+                    Format = CommandResultFormat.Json
+                }
             }
         };
 
@@ -112,8 +118,11 @@ public class ResourceCommandHelperTests
             ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
             {
                 Success = true,
-                Result = "some output",
-                ResultFormat = "text"
+                Value = new ExecuteResourceCommandResult
+                {
+                    Value = "some output",
+                    Format = CommandResultFormat.Text
+                }
             }
         };
 

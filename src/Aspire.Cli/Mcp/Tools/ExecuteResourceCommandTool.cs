@@ -79,9 +79,9 @@ internal sealed class ExecuteResourceCommandTool(
                     new() { Text = $"Command '{commandName}' executed successfully on resource '{resourceName}'." }
                 };
 
-                if (response.Result is not null)
+                if (response.Value is not null)
                 {
-                    content.Add(new TextContentBlock { Text = response.Result });
+                    content.Add(new TextContentBlock { Text = response.Value.Value });
                 }
 
                 return new CallToolResult
@@ -95,16 +95,18 @@ internal sealed class ExecuteResourceCommandTool(
             }
             else
             {
-                var message = response.ErrorMessage is { Length: > 0 } ? response.ErrorMessage : "Unknown error. See logs for details.";
+#pragma warning disable CS0618 // Type or member is obsolete
+                var message = (response.Message ?? response.ErrorMessage) is { Length: > 0 } errorMsg ? errorMsg : "Unknown error. See logs for details.";
+#pragma warning restore CS0618 // Type or member is obsolete
 
                 var content = new List<TextContentBlock>
                 {
                     new() { Text = $"Command '{commandName}' failed for resource '{resourceName}': {message}" }
                 };
 
-                if (response.Result is not null)
+                if (response.Value is not null)
                 {
-                    content.Add(new TextContentBlock { Text = response.Result });
+                    content.Add(new TextContentBlock { Text = response.Value.Value });
                 }
 
                 return new CallToolResult

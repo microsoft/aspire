@@ -91,7 +91,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -102,18 +102,18 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         {
             if (!string.IsNullOrEmpty(traceId))
             {
-                return await FetchSingleTraceAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, traceId, format, cancellationToken);
+                return await FetchSingleTraceAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, traceId, format, dashboardApi.DashboardUrl!, cancellationToken);
             }
             else
             {
-                return await FetchTracesAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, hasError, limit, format, cancellationToken);
+                return await FetchTracesAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, hasError, limit, format, dashboardApi.DashboardUrl!, cancellationToken);
             }
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch traces from Dashboard API");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
             return ExitCodeConstants.DashboardFailure;
         }
     }
@@ -123,6 +123,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         string apiToken,
         string traceId,
         OutputFormat format,
+        string dashboardUrl,
         CancellationToken cancellationToken)
     {
         using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
@@ -157,7 +158,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
         else
         {
-            DisplayTraceDetails(json, traceId, allOtlpResources);
+            DisplayTraceDetails(json, traceId, allOtlpResources, dashboardUrl);
         }
 
         return ExitCodeConstants.Success;
@@ -170,6 +171,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         bool? hasError,
         int? limit,
         OutputFormat format,
+        string dashboardUrl,
         CancellationToken cancellationToken)
     {
         using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
@@ -189,18 +191,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         // Pre-resolve colors so assignment is deterministic regardless of data order
         TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
 
-        // Build query string with multiple resource parameters
-        var additionalParams = new List<(string key, string? value)>();
-        if (hasError.HasValue)
-        {
-            additionalParams.Add(("hasError", hasError.Value.ToString().ToLowerInvariant()));
-        }
-        if (limit.HasValue)
-        {
-            additionalParams.Add(("limit", limit.Value.ToString(CultureInfo.InvariantCulture)));
-        }
-
-        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, [.. additionalParams]);
+        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit);
 
         _logger.LogDebug("Fetching traces from {Url}", url);
 
@@ -216,13 +207,13 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
         else
         {
-            DisplayTracesTable(json, allOtlpResources);
+            DisplayTracesTable(json, allOtlpResources, dashboardUrl);
         }
 
         return ExitCodeConstants.Success;
     }
 
-    private void DisplayTracesTable(string json, IReadOnlyList<IOtlpResource> allResources)
+    private void DisplayTracesTable(string json, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)
     {
         var response = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         var resourceSpans = response?.Data?.ResourceSpans;
@@ -287,15 +278,16 @@ internal sealed class TelemetryTracesCommand : BaseCommand
                 ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(info.StartTimeNano.Value))
                 : "";
             var shortTraceId = OtlpHelpers.ToShortenedId(info.TraceId);
-            var nameMarkup = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} [grey]{shortTraceId}[/]";
-            table.AddRow(timestamp, nameMarkup, info.SpanCount.ToString(CultureInfo.InvariantCulture), durationStr, statusText);
+            var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, info.TraceId, $"[grey]{shortTraceId}[/]");
+            var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} {traceLink}";
+            table.AddRow(timestamp, nameColumn, info.SpanCount.ToString(CultureInfo.InvariantCulture), durationStr, statusText);
         }
 
         _interactionService.DisplayRenderable(table);
         _interactionService.DisplayMarkupLine($"[grey]Showing {traceInfos.Count} of {response?.TotalCount ?? traceInfos.Count} traces[/]");
     }
 
-    private void DisplayTraceDetails(string json, string traceId, IReadOnlyList<IOtlpResource> allResources)
+    private void DisplayTraceDetails(string json, string traceId, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)
     {
         var response = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         var resourceSpans = response?.Data?.ResourceSpans;
@@ -323,9 +315,12 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             }
         }
 
+        var shortTraceId = OtlpHelpers.ToShortenedId(traceId);
+        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, shortTraceId);
+
         if (spans.Count == 0)
         {
-            _interactionService.DisplayMarkupLine($"[bold]Trace: {traceId}[/]");
+            _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
             _interactionService.DisplayMarkupLine("[dim]No spans found[/]");
             return;
         }
@@ -335,15 +330,15 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var totalDuration = rootSpans.Count > 0 ? rootSpans.Max(s => s.Duration) : spans.Max(s => s.Duration);
 
         // Header
-        _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceId}");
+        _interactionService.DisplayMarkupLine($"[bold]Trace:[/] {traceLink}");
         _interactionService.DisplayMarkupLine($"[bold]Duration:[/] {TelemetryCommandHelpers.FormatDuration(totalDuration)}  [bold]Spans:[/] {spans.Count}");
         _interactionService.DisplayEmptyLine();
 
         // Build tree and display
-        DisplaySpanTree(spans);
+        DisplaySpanTree(spans, dashboardUrl, traceId);
     }
 
-    private void DisplaySpanTree(List<SpanInfo> spans)
+    private void DisplaySpanTree(List<SpanInfo> spans, string dashboardUrl, string traceId)
     {
         // Build a lookup of children by parent ID
         var childrenByParent = spans
@@ -363,7 +358,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
 
         foreach (var root in rootSpans)
         {
-            DisplaySpanNode(root, childrenByParent, "", true, ref lastResource);
+            DisplaySpanNode(root, childrenByParent, "", true, dashboardUrl, traceId, ref lastResource);
         }
     }
 
@@ -372,6 +367,8 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         Dictionary<string, List<SpanInfo>> childrenByParent,
         string indent,
         bool isLast,
+        string dashboardUrl,
+        string traceId,
         ref string? lastResource)
     {
         // Show resource name when it changes (indicates cross-service call)
@@ -395,6 +392,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var statusText = span.HasError ? "ERR" : "OK";
         var durationStr = TelemetryCommandHelpers.FormatDuration(span.Duration).PadLeft(8);
         var shortenedSpanId = OtlpHelpers.ToShortenedId(span.SpanId);
+        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, $"[dim]{shortenedSpanId}[/]", spanId: span.SpanId);
         var escapedName = span.Name.EscapeMarkup();
 
         // Truncate long names
@@ -403,14 +401,14 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             ? escapedName[..(maxNameLength - 3)] + "..."
             : escapedName;
 
-        _interactionService.DisplayMarkupLine($"{indent}{connector} [dim]{shortenedSpanId}[/] {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
+        _interactionService.DisplayMarkupLine($"{indent}{connector} {spanIdLink} {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
 
         // Render children
         if (childrenByParent.TryGetValue(span.SpanId, out var children))
         {
             for (var i = 0; i < children.Count; i++)
             {
-                DisplaySpanNode(children[i], childrenByParent, childIndent, i == children.Count - 1, ref lastResource);
+                DisplaySpanNode(children[i], childrenByParent, childIndent, i == children.Count - 1, dashboardUrl, traceId, ref lastResource);
             }
         }
     }

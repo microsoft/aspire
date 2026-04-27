@@ -1,4 +1,4 @@
-﻿parameters:
+parameters:
   project1:
     port_http: 8080
     project1_image: "project1:latest"
@@ -7,12 +7,19 @@ config:
   project1:
     OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"
     ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+    HTTP_PORTS: ""
+    OTEL_EXPORTER_OTLP_ENDPOINT: "http://env-dashboard-service:18889"
+    OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
+    OTEL_SERVICE_NAME: "project1"
   api:
+    PROJECT1_HTTP: ""
+    services__project1__http__0: ""
+    PROJECT1_HTTPS: ""
     PROJECT1_CUSTOM1: "http://project1-service:8000"
-    services__project1__http__1: "http://project1-service:8000"
+    services__project1__custom1__0: "http://project1-service:8000"
     PROJECT1_CUSTOM2: "http://project1-service:8001"
-    services__project1__http__2: "http://project1-service:8001"
+    services__project1__custom2__0: "http://project1-service:8001"
     PROJECT1_CUSTOM3: "http://project1-service:7002"
-    services__project1__http__3: "http://project1-service:7002"
+    services__project1__custom3__0: "http://project1-service:7002"
     PROJECT1_CUSTOM4: "http://project1-service:7004"
-    services__project1__http__4: "http://project1-service:7004"
+    services__project1__custom4__0: "http://project1-service:7004"

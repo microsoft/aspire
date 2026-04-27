@@ -42,6 +42,11 @@
         <target state="needs-review-translation">Nom du projet à créer.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NonInteractiveTemplateRequired">
+        <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
+        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
         <target state="needs-review-translation">Le chemin de sortie du projet.</target>

@@ -65,10 +65,13 @@ public static class AzurePrivateEndpointExtensions
             return builder.CreateResourceBuilder(resource);
         }
 
-        // Get or create the shared Private DNS Zone for this zone name
-        var zoneName = target.Resource.GetPrivateDnsZoneName();
-        var dnsZone = GetOrCreatePrivateDnsZone(builder, zoneName, vnet);
-        resource.DnsZone = dnsZone;
+        // Get or create the shared Private DNS Zones for this resource type
+        var zoneNames = target.Resource.GetPrivateDnsZoneNames();
+        foreach (var zoneName in zoneNames)
+        {
+            var dnsZone = GetOrCreatePrivateDnsZone(builder, zoneName, vnet);
+            resource.DnsZones.Add(dnsZone);
+        }
 
         // Add annotation to the target's root parent (e.g., storage account) to signal
         // that it should deny public network access and to associate the private endpoint
@@ -95,12 +98,16 @@ public static class AzurePrivateEndpointExtensions
         {
             var azureResource = (AzurePrivateEndpointResource)infra.AspireResource;
 
-            // Get the shared DNS Zone as an existing resource
-            var dnsZone = azureResource.DnsZone!;
-            var dnsZoneIdentifier = dnsZone.GetBicepIdentifier();
-            var privateDnsZone = PrivateDnsZone.FromExisting(dnsZoneIdentifier);
-            privateDnsZone.Name = dnsZone.NameOutput.AsProvisioningParameter(infra);
-            infra.Add(privateDnsZone);
+            // Get the shared DNS Zones as existing resources
+            var privateDnsZones = new List<(string Identifier, PrivateDnsZone Zone)>();
+            foreach (var dnsZone in azureResource.DnsZones)
+            {
+                var dnsZoneIdentifier = dnsZone.GetBicepIdentifier();
+                var privateDnsZone = PrivateDnsZone.FromExisting(dnsZoneIdentifier);
+                privateDnsZone.Name = dnsZone.NameOutputReference.AsProvisioningParameter(infra);
+                infra.Add(privateDnsZone);
+                privateDnsZones.Add((dnsZoneIdentifier, privateDnsZone));
+            }
 
             // Create the Private Endpoint
             var endpoint = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infra,
@@ -138,15 +145,17 @@ public static class AzurePrivateEndpointExtensions
             {
                 Name = "default",
                 Parent = endpoint,
-                PrivateDnsZoneConfigs =
-                {
-                    new PrivateDnsZoneConfig
-                    {
-                        Name = dnsZoneIdentifier,
-                        PrivateDnsZoneId = privateDnsZone.Id
-                    }
-                }
             };
+
+            foreach (var (identifier, zone) in privateDnsZones)
+            {
+                dnsZoneGroup.PrivateDnsZoneConfigs.Add(new PrivateDnsZoneConfig
+                {
+                    Name = identifier,
+                    PrivateDnsZoneId = zone.Id
+                });
+            }
+
             infra.Add(dnsZoneGroup);
 
             // Output the Private Endpoint ID for references

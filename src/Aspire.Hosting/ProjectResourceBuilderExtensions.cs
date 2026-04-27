@@ -97,9 +97,12 @@ public static class ProjectResourceBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// <remarks>This method is not available in polyglot app hosts. Use the overload with projectPath and launchProfileName instead.</remarks>
+    /// <para>
+    /// This overload is also exported to polyglot app hosts as <c>addProjectWithoutLaunchProfile</c> for the common case
+    /// where no launch profile is needed.
+    /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Use the overload with launchProfileName for full control.")]
+    [AspireExport("addProjectWithoutLaunchProfile", Description = "Adds a .NET project resource without a launch profile")]
     public static IResourceBuilder<ProjectResource> AddProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -921,6 +924,7 @@ public static class ProjectResourceBuilderExtensions
 
         var rebuilderName = $"{projectResource.Name}-rebuilder";
         var rebuilder = new ProjectRebuilderResource(rebuilderName, projectResource, projectMetadata.ProjectPath);
+        rebuilder.Annotations.Add(NameValidationPolicyAnnotation.None);
         var rebuilderBuilder = builder.ApplicationBuilder.AddResource(rebuilder);
 
         rebuilderBuilder

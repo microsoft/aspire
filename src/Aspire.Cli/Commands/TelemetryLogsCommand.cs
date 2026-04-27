@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -10,6 +9,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
@@ -24,6 +24,7 @@ namespace Aspire.Cli.Commands;
 internal sealed class TelemetryLogsCommand : BaseCommand
 {
     private readonly IInteractionService _interactionService;
+    private readonly ICliHostEnvironment _hostEnvironment;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<TelemetryLogsCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -52,6 +53,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry,
+        ICliHostEnvironment hostEnvironment,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
         TimeProvider timeProvider,
@@ -59,6 +61,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         : base("logs", TelemetryCommandStrings.LogsDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
+        _hostEnvironment = hostEnvironment;
         _httpClientFactory = httpClientFactory;
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
@@ -98,7 +101,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -120,41 +123,29 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         bool dashboardOnly,
         CancellationToken cancellationToken)
     {
-        using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
-
-        // Resolve resource name to specific instances (handles replicas)
-        var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
-        var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
-
-        // Pre-resolve colors so assignment is deterministic regardless of data order
-        TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
-
-        // If a resource was specified but not found, return error
-        if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
-        {
-            _interactionService.DisplayError($"Resource '{resource}' not found.");
-            return ExitCodeConstants.InvalidCommand;
-        }
-
-        // Build query string with multiple resource parameters
-        var additionalParams = new List<(string key, string? value)>
-        {
-            ("traceId", traceId),
-            ("severity", severity)
-        };
-        if (limit.HasValue && !follow)
-        {
-            additionalParams.Add(("limit", limit.Value.ToString(CultureInfo.InvariantCulture)));
-        }
-        if (follow)
-        {
-            additionalParams.Add(("follow", "true"));
-        }
-
-        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, [.. additionalParams]);
-
         try
         {
+            using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
+
+            // Resolve resource name to specific instances (handles replicas)
+            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
+            var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
+
+            // Pre-resolve colors so assignment is deterministic regardless of data order
+            TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
+
+            // If a resource was specified but not found, return error
+            if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
+            {
+                _interactionService.DisplayError($"Resource '{resource}' not found.");
+                return ExitCodeConstants.InvalidCommand;
+            }
+
+            // Build URL with query parameters
+            int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
+
+            var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, traceId: traceId, severity: severity, limit: effectiveLimit, follow: follow ? true : null);
+
             if (follow)
             {
                 return await StreamLogsAsync(client, url, format, allOtlpResources, cancellationToken);
@@ -167,8 +158,8 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch logs from Dashboard API");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
             return ExitCodeConstants.DashboardFailure;
         }
     }
@@ -262,12 +253,13 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             : "";
         var severity = TelemetryCommandHelpers.GetSeverityText(log.SeverityNumber);
         var body = log.Body?.StringValue ?? "";
+        var displayBody = _hostEnvironment.SupportsAnsi ? body : AnsiParser.StripControlSequences(body);
 
         // Use severity number for color mapping (more reliable than text)
         var severityColor = TelemetryCommandHelpers.GetSeverityColor(log.SeverityNumber);
         var resourceColor = _resourceColorMap.GetColor(resourceName);
 
-        var escapedBody = body.EscapeMarkup();
+        var escapedBody = displayBody.EscapeMarkup();
         _interactionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{severityColor}]{severity,-4}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/] {escapedBody}");
     }
 }

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -94,14 +93,14 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
 
         if (!dashboardApi.Success)
         {
             return dashboardApi.ExitCode;
         }
 
-        return await FetchSpansAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, hasError, limit, follow, format, dashboardOnly: dashboardUrl is not null, cancellationToken);
+        return await FetchSpansAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, hasError, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, cancellationToken);
     }
 
     private async Task<int> FetchSpansAsync(
@@ -114,67 +113,53 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         bool follow,
         OutputFormat format,
         bool dashboardOnly,
+        string dashboardUrl,
         CancellationToken cancellationToken)
     {
-        using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
-
-        // Resolve resource name to specific instances (handles replicas)
-        var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
-        var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
-
-        // Pre-resolve colors so assignment is deterministic regardless of data order
-        TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
-
-        // If a resource was specified but not found, return error
-        if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
-        {
-            _interactionService.DisplayError($"Resource '{resource}' not found.");
-            return ExitCodeConstants.InvalidCommand;
-        }
-
-        // Build query string with multiple resource parameters
-        var additionalParams = new List<(string key, string? value)>
-        {
-            ("traceId", traceId)
-        };
-        if (hasError.HasValue)
-        {
-            additionalParams.Add(("hasError", hasError.Value.ToString().ToLowerInvariant()));
-        }
-        if (limit.HasValue && !follow)
-        {
-            additionalParams.Add(("limit", limit.Value.ToString(CultureInfo.InvariantCulture)));
-        }
-        if (follow)
-        {
-            additionalParams.Add(("follow", "true"));
-        }
-
-        var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, [.. additionalParams]);
-
-        _logger.LogDebug("Fetching spans from {Url}", url);
-
         try
         {
+            using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
+
+            // Resolve resource name to specific instances (handles replicas)
+            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
+            var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
+
+            // Pre-resolve colors so assignment is deterministic regardless of data order
+            TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
+
+            // If a resource was specified but not found, return error
+            if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
+            {
+                _interactionService.DisplayError($"Resource '{resource}' not found.");
+                return ExitCodeConstants.InvalidCommand;
+            }
+
+            // Build URL with query parameters
+            int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
+
+            var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, traceId: traceId, hasError: hasError, limit: effectiveLimit, follow: follow ? true : null);
+
+            _logger.LogDebug("Fetching spans from {Url}", url);
+
             if (follow)
             {
-                return await StreamSpansAsync(client, url, format, allOtlpResources, cancellationToken);
+                return await StreamSpansAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
             }
             else
             {
-                return await GetSpansSnapshotAsync(client, url, format, allOtlpResources, cancellationToken);
+                return await GetSpansSnapshotAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
             }
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch spans from Dashboard API");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
             return ExitCodeConstants.DashboardFailure;
         }
     }
 
-    private async Task<int> GetSpansSnapshotAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, CancellationToken cancellationToken)
+    private async Task<int> GetSpansSnapshotAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
     {
         var response = await client.GetAsync(url, cancellationToken);
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -188,13 +173,13 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         }
         else
         {
-            DisplaySpansSnapshot(json, allResources);
+            DisplaySpansSnapshot(json, allResources, dashboardUrl);
         }
 
         return ExitCodeConstants.Success;
     }
 
-    private async Task<int> StreamSpansAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, CancellationToken cancellationToken)
+    private async Task<int> StreamSpansAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -211,14 +196,14 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             }
             else
             {
-                DisplaySpansStreamLine(line, allResources);
+                DisplaySpansStreamLine(line, allResources, dashboardUrl);
             }
         }
 
         return ExitCodeConstants.Success;
     }
 
-    private void DisplaySpansSnapshot(string json, IReadOnlyList<IOtlpResource> allResources)
+    private void DisplaySpansSnapshot(string json, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)
     {
         var response = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         var resourceSpans = response?.Data?.ResourceSpans;
@@ -229,16 +214,16 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             return;
         }
 
-        DisplayResourceSpans(resourceSpans, allResources);
+        DisplayResourceSpans(resourceSpans, allResources, dashboardUrl);
     }
 
-    private void DisplaySpansStreamLine(string json, IReadOnlyList<IOtlpResource> allResources)
+    private void DisplaySpansStreamLine(string json, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)
     {
         var request = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.OtlpExportTraceServiceRequestJson);
-        DisplayResourceSpans(request?.ResourceSpans ?? [], allResources);
+        DisplayResourceSpans(request?.ResourceSpans ?? [], allResources, dashboardUrl);
     }
 
-    private void DisplayResourceSpans(IEnumerable<OtlpResourceSpansJson> resourceSpans, IReadOnlyList<IOtlpResource> allResources)
+    private void DisplayResourceSpans(IEnumerable<OtlpResourceSpansJson> resourceSpans, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)
     {
         var allSpans = new List<(string ResourceName, OtlpSpanJson Span)>();
 
@@ -257,16 +242,17 @@ internal sealed class TelemetrySpansCommand : BaseCommand
 
         foreach (var (resourceName, span) in allSpans.OrderBy(s => s.Span.StartTimeUnixNano ?? 0))
         {
-            DisplaySpanEntry(resourceName, span);
+            DisplaySpanEntry(resourceName, span, dashboardUrl);
         }
     }
 
     // Using simple text lines instead of Spectre.Console Table for streaming support.
     // Tables require knowing all data upfront, but streaming mode displays spans as they arrive.
-    private void DisplaySpanEntry(string resourceName, OtlpSpanJson span)
+    private void DisplaySpanEntry(string resourceName, OtlpSpanJson span, string dashboardUrl)
     {
         var name = span.Name ?? "";
         var spanId = span.SpanId ?? "";
+        var traceId = span.TraceId ?? "";
         var duration = OtlpHelpers.CalculateDuration(span.StartTimeUnixNano, span.EndTimeUnixNano);
         var hasError = span.Status?.Code == 2; // ERROR status
 
@@ -277,10 +263,11 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(span.StartTimeUnixNano.Value))
             : "";
         var shortSpanId = OtlpHelpers.ToShortenedId(spanId);
+        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, $"[grey]{shortSpanId}[/]", spanId: spanId);
         var durationStr = TelemetryCommandHelpers.FormatDuration(duration);
         var resourceColor = _resourceColorMap.GetColor(resourceName);
 
         var escapedName = name.EscapeMarkup();
-        _interactionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{statusColor}]{statusText}[/] [white]{durationStr,8}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/]: {escapedName} [grey]{shortSpanId}[/]");
+        _interactionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{statusColor}]{statusText}[/] [white]{durationStr,8}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/]: {escapedName} {spanIdLink}");
     }
 }

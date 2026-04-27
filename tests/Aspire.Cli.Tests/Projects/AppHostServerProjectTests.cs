@@ -6,14 +6,12 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -33,7 +31,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         appPath ??= _workspace.WorkspaceRoot.FullName;
         var runner = new TestDotNetCliRunner();
-        var packagingService = new MockPackagingService();
+        var packagingService = MockPackagingServiceFactory.Create();
         var configurationService = new TestConfigurationService();
         var logger = NullLogger<DotNetBasedAppHostServerProject>.Instance;
 
@@ -237,12 +235,12 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     /// <summary>
     /// Regression test for channel switching bug.
-    /// When a project has a channel configured in .aspire/settings.json (project-local),
+    /// When a project has a channel configured in aspire.config.json (project-local),
     /// the NuGet.config should use that channel's hive path, NOT the global config channel.
     /// 
     /// Bug scenario:
     /// 1. User runs `aspire update` and selects "pr-new" channel
-    /// 2. UpdatePackagesAsync saves channel="pr-new" to project-local .aspire/settings.json
+    /// 2. UpdatePackagesAsync saves channel="pr-new" to project-local aspire.config.json
     /// 3. BuildAndGenerateSdkAsync calls CreateProjectFilesAsync
     /// 4. BUG: CreateProjectFilesAsync reads channel from GLOBAL config (returns "pr-old")
     /// 5. NuGet.config is generated with pr-old hive path instead of pr-new
@@ -259,14 +257,15 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var prOldHive = hivesDir.CreateSubdirectory("pr-old");
         var prNewHive = hivesDir.CreateSubdirectory("pr-new");
 
-        // Create project-local .aspire/settings.json with channel="pr-new"
+        // Create project-local aspire.config.json with channel="pr-new"
         // This simulates what happens after `aspire update` saves the selected channel
-        var aspireDir = _workspace.WorkspaceRoot.CreateSubdirectory(".aspire");
-        var settingsJson = Path.Combine(aspireDir.FullName, "settings.json");
-        await File.WriteAllTextAsync(settingsJson, """
+        var aspireConfigPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
             {
                 "channel": "pr-new",
-                "sdkVersion": "13.1.0"
+                "sdk": {
+                    "version": "13.1.0"
+                }
             }
             """);
 
@@ -278,9 +277,31 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
 
         // Create a packaging service that returns explicit channels for both PR hives
-        var packagingService = new MockPackagingServiceWithExplicitChannels(
-            prOldHive.FullName,
-            prNewHive.FullName);
+        var prOldHivePath = prOldHive.FullName;
+        var prNewHivePath = prNewHive.FullName;
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var nugetCache = new FakeNuGetPackageCache();
+
+                var prOldChannel = PackageChannel.CreateExplicitChannel("pr-old", PackageChannelQuality.Prerelease, new[]
+                {
+                    new PackageMapping("Aspire*", prOldHivePath),
+                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+                }, nugetCache);
+
+                var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
+                {
+                    new PackageMapping("Aspire*", prNewHivePath),
+                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+                }, nugetCache);
+
+                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache);
+
+                return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
+            }
+        };
 
         var runner = new TestDotNetCliRunner();
         
@@ -336,59 +357,6 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.NotNull(restoreSources);
         Assert.Contains(prNewHive.FullName, restoreSources);
         Assert.DoesNotContain(prOldHive.FullName, restoreSources);
-    }
-
-    /// <summary>
-    /// Mock packaging service that returns explicit PR channels with specific hive paths.
-    /// Used to test that the correct channel is selected based on project-local settings.
-    /// </summary>
-    private sealed class MockPackagingServiceWithExplicitChannels : IPackagingService
-    {
-        private readonly string _prOldHivePath;
-        private readonly string _prNewHivePath;
-
-        public MockPackagingServiceWithExplicitChannels(string prOldHivePath, string prNewHivePath)
-        {
-            _prOldHivePath = prOldHivePath;
-            _prNewHivePath = prNewHivePath;
-        }
-
-        public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
-        {
-            var nugetCache = new FakeNuGetPackageCache();
-
-            // Create explicit channels for both PR hives
-            var prOldChannel = PackageChannel.CreateExplicitChannel("pr-old", PackageChannelQuality.Prerelease, new[]
-            {
-                new PackageMapping("Aspire*", _prOldHivePath),
-                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-            }, nugetCache);
-
-            var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
-            {
-                new PackageMapping("Aspire*", _prNewHivePath),
-                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-            }, nugetCache);
-
-            var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache);
-
-            return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
-        }
-    }
-
-    private sealed class FakeNuGetPackageCache : INuGetPackageCache
-    {
-        public Task<IEnumerable<NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
-
-        public Task<IEnumerable<NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
-
-        public Task<IEnumerable<NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
-
-        public Task<IEnumerable<NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
     }
 
     private static void DumpDirectoryTree(string path, ITestOutputHelper output, string indent = "")

@@ -1,6 +1,8 @@
 id: scheduledSearch.markNoRecentActivity
 name: No Recent Activity Monitor
-description: Adds no-recent-activity label to issues and PRs that have not been updated in a while
+description: Adds no-recent-activity label to issues and PRs that have not been updated in a while.
+
+# Trigger re-sync of GitHub Policy Service after repo transfer from dotnet/aspire to microsoft/aspire
 owner:
 resource: repository
 disabled: false

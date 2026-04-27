@@ -24,7 +24,7 @@
             <div class="flex-filler"></div>
             <FluentAnchor Class="header-button"
                           Appearance="Appearance.Stealth"
-                          Href="https://aka.ms/dotnet/aspire/repo" Target="_blank" Rel="noreferrer noopener"
+                          Href="https://aka.ms/aspire/repo" Target="_blank" Rel="noreferrer noopener"
                           Title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
                 <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Neutral"/>
             </FluentAnchor>
@@ -41,6 +41,7 @@
                     <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Color="Color.Neutral" />
                 </FluentButton>
             }
+            <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
                           Appearance="Appearance.Stealth" OnClick="@LaunchSettingsAsync"
                           Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
@@ -79,6 +80,7 @@
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
             LaunchAIAssistantAsync="@LaunchAssistantAsync"
+            LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
     }
 

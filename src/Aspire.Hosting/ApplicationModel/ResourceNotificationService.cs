@@ -224,7 +224,7 @@ public class ResourceNotificationService : IDisposable
         _logger.LogDebug("Waiting for resource '{ResourceName}' to enter the '{State}' state.", resourceName, HealthStatus.Healthy);
         var resourceEvent = await WaitForResourceCoreAsync(
             resourceName,
-            re => ShouldYield(waitBehavior, re.Snapshot),
+            re => ShouldYieldHealthyWait(waitBehavior, re.Snapshot),
             $"Resource '{resourceName}' failed to become healthy before the operation was cancelled.",
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -248,20 +248,19 @@ public class ResourceNotificationService : IDisposable
         _logger.LogDebug("Finished waiting for resource '{ResourceName}'.", resourceName);
 
         return resourceEvent;
-
-        // Determine if we should yield based on the wait behavior and the snapshot of the resource.
-        static bool ShouldYield(WaitBehavior waitBehavior, CustomResourceSnapshot snapshot) =>
-            waitBehavior switch
-            {
-                WaitBehavior.WaitOnResourceUnavailable => snapshot.HealthStatus == HealthStatus.Healthy,
-                WaitBehavior.StopOnResourceUnavailable => snapshot.HealthStatus == HealthStatus.Healthy ||
-                                                      snapshot.State?.Text == KnownResourceStates.Finished ||
-                                                      snapshot.State?.Text == KnownResourceStates.Exited ||
-                                                      snapshot.State?.Text == KnownResourceStates.FailedToStart ||
-                                                      snapshot.State?.Text == KnownResourceStates.RuntimeUnhealthy,
-                _ => throw new DistributedApplicationException($"Unexpected wait behavior: {waitBehavior}")
-            };
     }
+
+    internal static bool ShouldYieldHealthyWait(WaitBehavior waitBehavior, CustomResourceSnapshot snapshot) =>
+        waitBehavior switch
+        {
+            WaitBehavior.WaitOnResourceUnavailable => snapshot.HealthStatus == HealthStatus.Healthy,
+            WaitBehavior.StopOnResourceUnavailable => snapshot.HealthStatus == HealthStatus.Healthy ||
+                                                  snapshot.State?.Text == KnownResourceStates.Finished ||
+                                                  snapshot.State?.Text == KnownResourceStates.Exited ||
+                                                  snapshot.State?.Text == KnownResourceStates.FailedToStart ||
+                                                  snapshot.State?.Text == KnownResourceStates.RuntimeUnhealthy,
+            _ => throw new DistributedApplicationException($"Unexpected wait behavior: {waitBehavior}")
+        };
 
     private async Task WaitUntilCompletionAsync(IResource resource, IResource dependency, int exitCode, CancellationToken cancellationToken)
     {
@@ -306,7 +305,7 @@ public class ResourceNotificationService : IDisposable
                     displayName
                     );
 
-                throw new DistributedApplicationException($"Dependency resource '{displayName}' failed to start.");
+                throw new DistributedApplicationException($"Resource '{resource.Name}' stopped waiting for dependency resource '{displayName}' because it failed to start.");
             }
             else if ((snapshot.State!.Text == KnownResourceStates.Finished || snapshot.State!.Text == KnownResourceStates.Exited) && snapshot.ExitCode is not null && snapshot.ExitCode != exitCode)
             {
@@ -319,7 +318,7 @@ public class ResourceNotificationService : IDisposable
                     );
 
                 throw new DistributedApplicationException(
-                    $"Resource '{displayName}' has entered the '{snapshot.State.Text}' state with exit code '{snapshot.ExitCode}', expected '{exitCode}'."
+                    $"Resource '{resource.Name}' stopped waiting for dependency resource '{displayName}' because it entered the '{snapshot.State.Text}' state with exit code '{snapshot.ExitCode}', expected '{exitCode}'."
                     );
             }
 
@@ -331,7 +330,7 @@ public class ResourceNotificationService : IDisposable
         }
     }
 
-    private async Task WaitUntilStateAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, 
+    private async Task WaitUntilStateAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior,
         Func<ILogger, string, string, ResourceEvent, Task> postRunningAction, CancellationToken cancellationToken)
     {
         var resourceLogger = _resourceLoggerService.GetLogger(resource);
@@ -377,7 +376,7 @@ public class ResourceNotificationService : IDisposable
                         displayName
                         );
 
-                    throw new DistributedApplicationException($"Dependency resource '{displayName}' failed to start.");
+                    throw new DistributedApplicationException($"Resource '{resource.Name}' stopped waiting for dependency resource '{displayName}' because it failed to start.");
                 }
                 else if (snapshot.State!.Text == KnownResourceStates.Finished ||
                          snapshot.State.Text == KnownResourceStates.Exited ||
@@ -390,7 +389,7 @@ public class ResourceNotificationService : IDisposable
                         );
 
                     throw new DistributedApplicationException(
-                        $"Resource '{displayName}' has entered the '{snapshot.State.Text}' state prematurely."
+                        $"Resource '{resource.Name}' stopped waiting for dependency resource '{displayName}' because it entered the '{snapshot.State.Text}' state prematurely."
                         );
                 }
             }
@@ -557,7 +556,7 @@ public class ResourceNotificationService : IDisposable
                 break;
             }
         }
-        
+
         if (nameMatch is { } m && m.Value.LastSnapshot != null)
         {
             resourceEvent = new ResourceEvent(m.Value.Resource, m.Key, m.Value.LastSnapshot);
@@ -827,8 +826,8 @@ public class ResourceNotificationService : IDisposable
             return previousState;
         }
 
-        return previousState with 
-        { 
+        return previousState with
+        {
             IconName = newIconName,
             IconVariant = newIconVariant
         };

@@ -1,4 +1,4 @@
-@description('The location for the resource(s) to be deployed.')
+﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
 param env_outputs_azure_container_registry_endpoint string
@@ -54,11 +54,11 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
         }
         {
           name: 'PROJECT1_HTTP'
-          value: 'http://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+          value: 'https://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
         }
         {
           name: 'services__project1__http__0'
-          value: 'http://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
+          value: 'https://${take('${toLower('project1')}-${uniqueString(resourceGroup().id)}', 60)}.azurewebsites.net'
         }
         {
           name: 'ASPIRE_ENVIRONMENT_NAME'

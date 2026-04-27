@@ -26,9 +26,9 @@ public static class DashboardEndpointsBuilder
         IEndpointConventionBuilder builder;
         if (dashboardOptions.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
         {
-            builder = endpoints.MapPost("/api/validatetoken", async (string token, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions) =>
+            builder = endpoints.MapPost("/api/validatetoken", async ([FromBody] ValidateTokenRequest request, HttpContext httpContext, IOptionsMonitor<DashboardOptions> dashboardOptions) =>
             {
-                return await ValidateTokenMiddleware.TryAuthenticateAsync(token, httpContext, dashboardOptions).ConfigureAwait(false);
+                return await ValidateTokenMiddleware.TryAuthenticateAsync(request.Token, httpContext, dashboardOptions).ConfigureAwait(false);
             });
 
 #if DEBUG
@@ -89,20 +89,49 @@ public static class DashboardEndpointsBuilder
 
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();
+
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
     {
-        // Check if API is enabled (defaults to disabled if not specified)
-        if (!dashboardOptions.Api.Enabled.GetValueOrDefault())
+        // Check if API is disabled
+        if (dashboardOptions.Api.Disabled.GetValueOrDefault())
         {
             endpoints.MapGetNotFound("/api/telemetry/{*path}").SkipStatusCodePages();
+            endpoints.MapPostNotFound("/api/telemetry/{*path}").SkipStatusCodePages();
             return;
         }
 
         var group = endpoints.MapGroup("/api/telemetry")
             .RequireAuthorization(ApiAuthenticationHandler.PolicyName)
             .SkipStatusCodePages();
+
+        // POST /api/telemetry/validateToken - Exchange a browser token for the telemetry API key.
+        // Returns the API key if the token is valid and the API uses key-based auth, or null if unsecured.
+        // Returns 401 if the token is invalid, 404 if the telemetry API is not enabled.
+        group.MapPost("/validateToken", ([FromBody] TelemetryValidateTokenRequest request, IOptionsMonitor<DashboardOptions> optionsMonitor) =>
+        {
+            var currentOptions = optionsMonitor.CurrentValue;
+
+            // Validate the browser token
+            if (currentOptions.Frontend.AuthMode != FrontendAuthMode.BrowserToken)
+            {
+                return Results.Unauthorized();
+            }
+
+            var expectedBrowserTokenBytes = currentOptions.Frontend.GetBrowserTokenBytes();
+            if (expectedBrowserTokenBytes is null || !CompareHelpers.CompareKey(expectedBrowserTokenBytes, request.Token))
+            {
+                return Results.Unauthorized();
+            }
+
+            // Token is valid — return the API key (null if unsecured)
+            var apiKey = currentOptions.Api.AuthMode == ApiAuthMode.ApiKey
+                ? currentOptions.Api.PrimaryApiKey
+                : null;
+
+            return Results.Json(new TelemetryValidateTokenResponse(apiKey), OtlpJsonSerializerContext.Default.TelemetryValidateTokenResponse);
+        }).AllowAnonymous();
 
         // GET /api/telemetry/resources - List resources that have telemetry data
         group.MapGet("/resources", (TelemetryApiService service) =>
@@ -238,3 +267,6 @@ public static class DashboardEndpointsBuilder
         }
     }
 }
+
+/// <param name="Token">The browser token to validate.</param>
+internal sealed record ValidateTokenRequest(string Token);

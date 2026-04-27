@@ -18,7 +18,7 @@ internal static class AzureKustoHealthCheckBuilderExtensions
     /// <param name="connectionStringFactory">The Kusto connection string builder.</param>
     /// <returns>The updated health check builder.</returns>
     /// <remarks>This method is not available in polyglot app hosts.</remarks>
-    [AspireExportIgnore(Reason = "IHealthChecksBuilder extensions and IServiceProvider callbacks are not ATS-compatible.")]
+    [AspireExportIgnore(Reason = "IHealthChecksBuilder extensions and callbacks returning KustoConnectionStringBuilder are not ATS-compatible.")]
     public static IHealthChecksBuilder AddAzureKustoHealthCheck(this IHealthChecksBuilder builder, string name, bool isCluster, Func<IServiceProvider, KustoConnectionStringBuilder> connectionStringFactory)
     {
         ArgumentNullException.ThrowIfNull(builder);

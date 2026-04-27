@@ -130,10 +130,7 @@ public static class DistributedApplicationHostingTestingExtensions
         ThrowIfNotStarted(app);
         var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var resources = applicationModel.Resources;
-        var resource = resources.SingleOrDefault(r => string.Equals(r.Name, resourceName, StringComparison.OrdinalIgnoreCase));
-
-        if (resource is null)
+        if (!applicationModel.Resources.TryGetByName(resourceName, out var resource))
         {
             throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, Properties.Resources.ResourceNotFoundExceptionMessage, resourceName), nameof(resourceName));
         }

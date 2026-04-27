@@ -30,11 +30,17 @@ const keyVault = await builder.addAzureKeyVault('vault');
 const appInsights = await builder.addAzureApplicationInsights('insights');
 const cosmos = await builder.addAzureCosmosDB('cosmos');
 const storage = await builder.addAzureStorage('storage');
+const search = await builder.addAzureSearch('search');
 
 const project = await foundry.addProject('project');
 await project.withContainerRegistry(registry);
 await project.withKeyVault(keyVault);
 await project.withAppInsights(appInsights);
+await project.addCapabilityHost('cap-host');
+await project.withCapabilityHost(cosmos);
+await project.withCapabilityHost(storage);
+await project.withCapabilityHost(search);
+await project.withCapabilityHost(foundry);
 
 const _cosmosConnection = await project.addCosmosConnection(cosmos);
 const _storageConnection = await project.addStorageConnection(storage);
@@ -44,8 +50,7 @@ const _keyVaultConnection = await project.addKeyVaultConnection(keyVault);
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');
 const _builderProjectModel = await builderProject.addModelDeployment('builder-project-model', 'Phi-4-mini', '1', 'Microsoft');
-const projectModel = await project.addModelDeploymentFromModel('project-model', model);
-const _promptAgent = await project.addAndPublishPromptAgent(projectModel, 'writer-agent', 'Write concise answers.');
+const _projectModel = await project.addModelDeploymentFromModel('project-model', model);
 const hostedAgent = await builder.addExecutable(
     'hosted-agent',
     'node',
@@ -95,5 +100,6 @@ const _modelName = await chat.modelName.get();
 const _format = await chat.format.get();
 const _version = await chat.modelVersion.get();
 const _connectionString = await chat.connectionStringExpression.get();
+const _deploymentParent = await chat.parent.get();
 
 await builder.build().run();

@@ -1052,6 +1052,956 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Contains(result.Events, e => e.Type == "raw" && e.Text == "PR #15110 comment");
     }
 
+    // --- Test retry pattern config validation tests ---
+
+    [Fact]
+    public async Task TestRetryPatternsJsonIsValidAndWellFormed()
+    {
+        string configJson = await ReadRepoFileAsync("eng/test-retry-patterns.json");
+
+        using JsonDocument doc = JsonDocument.Parse(configJson);
+        JsonElement root = doc.RootElement;
+
+        Assert.Equal(JsonValueKind.Object, root.ValueKind);
+        Assert.True(root.TryGetProperty("version", out JsonElement version));
+        Assert.Equal(1, version.GetInt32());
+        Assert.True(root.TryGetProperty("testFailurePatterns", out JsonElement testPatterns));
+        Assert.Equal(JsonValueKind.Array, testPatterns.ValueKind);
+        Assert.True(root.TryGetProperty("jobFailurePatterns", out JsonElement jobPatterns));
+        Assert.Equal(JsonValueKind.Array, jobPatterns.ValueKind);
+
+        // Validate no unknown top-level properties
+        HashSet<string> allowedTopLevel = ["version", "testFailurePatterns", "jobFailurePatterns"];
+        foreach (JsonProperty prop in root.EnumerateObject())
+        {
+            Assert.Contains(prop.Name, allowedTopLevel);
+        }
+    }
+
+    [Fact]
+    public async Task TestRetryPatternsJsonHasValidRuleStructure()
+    {
+        string configJson = await ReadRepoFileAsync("eng/test-retry-patterns.json");
+
+        using JsonDocument doc = JsonDocument.Parse(configJson);
+        JsonElement root = doc.RootElement;
+
+        HashSet<string> testPatternAllowedFields = ["testName", "testProject", "output", "reason", "enabled"];
+        HashSet<string> jobPatternAllowedFields = ["jobName", "output", "reason", "enabled"];
+        HashSet<string> testPatternMatcherFields = ["testName", "testProject", "output"];
+        HashSet<string> jobPatternMatcherFields = ["jobName", "output"];
+
+        foreach (JsonElement rule in root.GetProperty("testFailurePatterns").EnumerateArray())
+        {
+            ValidatePatternRule(rule, testPatternAllowedFields, testPatternMatcherFields);
+        }
+
+        foreach (JsonElement rule in root.GetProperty("jobFailurePatterns").EnumerateArray())
+        {
+            ValidatePatternRule(rule, jobPatternAllowedFields, jobPatternMatcherFields);
+        }
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task TestRetryPatternsJsonPassesJavaScriptValidation()
+    {
+        string configPath = Path.Combine(_repoRoot, "eng", "test-retry-patterns.json");
+
+        LoadRetryPatternsConfigResult result = await InvokeHarnessAsync<LoadRetryPatternsConfigResult>(
+            "validateRetryPatternsConfigFromFile",
+            new { configPath });
+
+        Assert.NotNull(result.Config);
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task TestRetryPatternsJsonRegexesCompileInJavaScript()
+    {
+        string configJson = await ReadRepoFileAsync("eng/test-retry-patterns.json");
+        using JsonDocument doc = JsonDocument.Parse(configJson);
+        JsonElement root = doc.RootElement;
+
+        List<string> regexPatterns = [];
+        ExtractRegexPatterns(root.GetProperty("testFailurePatterns"), regexPatterns);
+        ExtractRegexPatterns(root.GetProperty("jobFailurePatterns"), regexPatterns);
+
+        foreach (string pattern in regexPatterns)
+        {
+            bool matches = await InvokeHarnessAsync<bool>(
+                "matchesRetryPattern",
+                new { text = "test-input", patternValue = new { regex = pattern } });
+
+            // We don't care about the result, just that it didn't throw.
+            // The harness would fail if the regex was invalid.
+            Assert.IsType<bool>(matches);
+        }
+    }
+
+    // --- Pattern matching function tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchesRetryPatternMatchesSubstringCaseInsensitively()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "matchesRetryPattern",
+            new { text = "Error: ECONNRESET detected", patternValue = "econnreset" });
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchesRetryPatternReturnsFalseWhenSubstringNotPresent()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "matchesRetryPattern",
+            new { text = "Some other error", patternValue = "ECONNRESET" });
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchesRetryPatternMatchesRegexCaseInsensitively()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "matchesRetryPattern",
+            new { text = "Aspire.Hosting.Redis.Tests.ConnectionTest", patternValue = new { regex = ".*redis.*" } });
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchesRetryPatternReturnsFalseForNonMatchingRegex()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "matchesRetryPattern",
+            new { text = "Aspire.Hosting.Kafka.Tests", patternValue = new { regex = "^Redis" } });
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchesRetryPatternHandlesInvalidRegexGracefully()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "matchesRetryPattern",
+            new { text = "some text", patternValue = new { regex = "[invalid" } });
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchTestFailurePatternsReturnsShouldRetryWhenOutputMatches()
+    {
+        var failedTests = new[]
+        {
+            new { testName = "Aspire.Redis.Tests.ConnectAsync", output = "Error: ECONNRESET: connection reset" }
+        };
+        var patterns = new[]
+        {
+            new { output = "ECONNRESET", reason = "Transient network reset", enabled = true }
+        };
+
+        MatchTestFailurePatternsResult result = await InvokeHarnessAsync<MatchTestFailurePatternsResult>(
+            "matchTestFailurePatterns",
+            new { failedTests, testProject = "Aspire.Redis.Tests", patterns });
+
+        Assert.True(result.ShouldRetry);
+        Assert.Single(result.MatchedTests);
+        Assert.Equal("Transient network reset", result.MatchedTests[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchTestFailurePatternsReturnsFalseWhenNoPatternMatches()
+    {
+        var failedTests = new[]
+        {
+            new { testName = "Aspire.Tests.SomeTest", output = "Assertion failed: expected true" }
+        };
+        var patterns = new[]
+        {
+            new { output = "ECONNRESET", reason = "Transient network reset", enabled = true }
+        };
+
+        MatchTestFailurePatternsResult result = await InvokeHarnessAsync<MatchTestFailurePatternsResult>(
+            "matchTestFailurePatterns",
+            new { failedTests, testProject = "Aspire.Tests", patterns });
+
+        Assert.False(result.ShouldRetry);
+        Assert.Empty(result.MatchedTests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchTestFailurePatternsSkipsDisabledPatterns()
+    {
+        var failedTests = new[]
+        {
+            new { testName = "Aspire.Tests.Flaky", output = "ECONNRESET" }
+        };
+        var patterns = new object[]
+        {
+            new { output = "ECONNRESET", reason = "Disabled pattern", enabled = false },
+            new { output = "ECONNREFUSED", reason = "Enabled pattern", enabled = true }
+        };
+
+        MatchTestFailurePatternsResult result = await InvokeHarnessAsync<MatchTestFailurePatternsResult>(
+            "matchTestFailurePatterns",
+            new { failedTests, testProject = "Aspire.Tests", patterns });
+
+        Assert.False(result.ShouldRetry);
+        Assert.Empty(result.MatchedTests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchTestFailurePatternsUsesAndLogicWithinRules()
+    {
+        var failedTests = new[]
+        {
+            new { testName = "Aspire.Kafka.Tests.ProducerTest", output = "ECONNRESET" }
+        };
+        var patterns = new object[]
+        {
+            new { testName = new { regex = ".*Redis.*" }, output = "ECONNRESET", reason = "Redis ECONNRESET" }
+        };
+
+        MatchTestFailurePatternsResult result = await InvokeHarnessAsync<MatchTestFailurePatternsResult>(
+            "matchTestFailurePatterns",
+            new { failedTests, testProject = "Aspire.Kafka.Tests", patterns });
+
+        // testName doesn't match (Kafka, not Redis), so AND fails
+        Assert.False(result.ShouldRetry);
+        Assert.Empty(result.MatchedTests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchTestFailurePatternsUsesOrLogicAcrossRules()
+    {
+        var failedTests = new[]
+        {
+            new { testName = "Aspire.Tests.Timeout", output = "Operation timed out" }
+        };
+        var patterns = new object[]
+        {
+            new { output = "ECONNRESET", reason = "Network reset" },
+            new { output = "timed out", reason = "Timeout" }
+        };
+
+        MatchTestFailurePatternsResult result = await InvokeHarnessAsync<MatchTestFailurePatternsResult>(
+            "matchTestFailurePatterns",
+            new { failedTests, testProject = "Aspire.Tests", patterns });
+
+        Assert.True(result.ShouldRetry);
+        Assert.Single(result.MatchedTests);
+        Assert.Equal("Timeout", result.MatchedTests[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchTestFailurePatternsReturnsEmptyForNullInputs()
+    {
+        MatchTestFailurePatternsResult result = await InvokeHarnessAsync<MatchTestFailurePatternsResult>(
+            "matchTestFailurePatterns",
+            new { failedTests = Array.Empty<object>(), testProject = "", patterns = Array.Empty<object>() });
+
+        Assert.False(result.ShouldRetry);
+        Assert.Empty(result.MatchedTests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchJobLogPatternMatchesJobNameAndOutput()
+    {
+        var patterns = new object[]
+        {
+            new { jobName = new { regex = ".*windows.*" }, output = "0xC0000142", reason = "Windows init failure" }
+        };
+
+        MatchJobLogPatternResult? result = await InvokeHarnessAsync<MatchJobLogPatternResult?>(
+            "matchJobLogPattern",
+            new { jobName = "Tests / Build (windows-latest)", jobLogText = "Process failed with 0xC0000142", patterns });
+
+        Assert.NotNull(result);
+        Assert.True(result.Matched);
+        Assert.Equal("Windows init failure", result.Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchJobLogPatternReturnsNullWhenJobNameDoesNotMatch()
+    {
+        var patterns = new object[]
+        {
+            new { jobName = new { regex = ".*windows.*" }, output = "0xC0000142", reason = "Windows init failure" }
+        };
+
+        MatchJobLogPatternResult? result = await InvokeHarnessAsync<MatchJobLogPatternResult?>(
+            "matchJobLogPattern",
+            new { jobName = "Tests / Build (ubuntu-latest)", jobLogText = "Process failed with 0xC0000142", patterns });
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task MatchJobLogPatternMatchesOutputOnlyPatterns()
+    {
+        var patterns = new object[]
+        {
+            new { output = "Could not resolve host", reason = "DNS failure" }
+        };
+
+        MatchJobLogPatternResult? result = await InvokeHarnessAsync<MatchJobLogPatternResult?>(
+            "matchJobLogPattern",
+            new { jobName = "Tests / Any", jobLogText = "Error: Could not resolve host github.com", patterns });
+
+        Assert.NotNull(result);
+        Assert.True(result.Matched);
+        Assert.Equal("DNS failure", result.Reason);
+    }
+
+    // --- analyzeFailedJobs with retryPatternsConfig tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithConfigRetriesTestExecFailureViaJobLogPattern()
+    {
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "Process failed with 0xC0000142" },
+            retryPatternsConfig: new
+            {
+                version = 1,
+                testFailurePatterns = Array.Empty<object>(),
+                jobFailurePatterns = new object[]
+                {
+                    new { jobName = new { regex = ".*" }, output = "0xC0000142", reason = "Windows init failure" }
+                }
+            });
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("configurable test-retry pattern", result.RetryableJobs[0].Reason);
+        Assert.Contains("Windows init failure", result.RetryableJobs[0].Reason);
+        Assert.Empty(result.SkippedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithConfigSkipsWhenJobLogDoesNotMatchPattern()
+    {
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "Some unrelated failure" },
+            retryPatternsConfig: new
+            {
+                version = 1,
+                testFailurePatterns = Array.Empty<object>(),
+                jobFailurePatterns = new object[]
+                {
+                    new { output = "0xC0000142", reason = "Windows init failure" }
+                }
+            });
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithConfigDoesNotApplyJobLogPatternToNonTestExecFailures()
+    {
+        // A job that fails on a non-test step should NOT use jobFailurePatterns
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Compile project"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "0xC0000142" },
+            retryPatternsConfig: new
+            {
+                version = 1,
+                testFailurePatterns = Array.Empty<object>(),
+                jobFailurePatterns = new object[]
+                {
+                    new { output = "0xC0000142", reason = "Windows init failure" }
+                }
+            });
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+    }
+
+    // --- analyzeTrxFiles tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeTrxFilesFindsMatchedTests()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.FailingTest", "Failed", ErrorMessage: "ECONNRESET: connection reset"),
+            new TrxTestResult("Aspire.Tests.PassingTest", "Passed"));
+
+        var patterns = new object[]
+        {
+            new { output = "ECONNRESET", reason = "Network reset" }
+        };
+
+        AnalyzeTrxFilesResult result = await InvokeHarnessAsync<AnalyzeTrxFilesResult>(
+            "analyzeTrxFiles",
+            new
+            {
+                trxFileContents = new[] { new { fileName = "Aspire.Tests.trx", content = trxContent } },
+                testFailurePatterns = patterns
+            });
+
+        Assert.Single(result.AllMatchedTests);
+        Assert.Equal("Aspire.Tests.FailingTest", result.AllMatchedTests[0].TestName);
+        Assert.Equal("Network reset", result.AllMatchedTests[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeTrxFilesDedupesByTestName()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.Flaky", "Failed", ErrorMessage: "ECONNRESET"));
+
+        var patterns = new object[]
+        {
+            new { output = "ECONNRESET", reason = "Network reset" }
+        };
+
+        // Same test in two TRX files
+        AnalyzeTrxFilesResult result = await InvokeHarnessAsync<AnalyzeTrxFilesResult>(
+            "analyzeTrxFiles",
+            new
+            {
+                trxFileContents = new[]
+                {
+                    new { fileName = "Aspire.Tests.trx", content = trxContent },
+                    new { fileName = "Aspire.Tests.retry.trx", content = trxContent }
+                },
+                testFailurePatterns = patterns
+            });
+
+        Assert.Single(result.AllMatchedTests);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeTrxFilesReturnsEmptyWhenNoMatches()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.LogicError", "Failed", ErrorMessage: "Assert.True() Failure"));
+
+        var patterns = new object[]
+        {
+            new { output = "ECONNRESET", reason = "Network reset" }
+        };
+
+        AnalyzeTrxFilesResult result = await InvokeHarnessAsync<AnalyzeTrxFilesResult>(
+            "analyzeTrxFiles",
+            new
+            {
+                trxFileContents = new[] { new { fileName = "Aspire.Tests.trx", content = trxContent } },
+                testFailurePatterns = patterns
+            });
+
+        Assert.Empty(result.AllMatchedTests);
+    }
+
+    // --- promoteTestExecutionFailureJobs tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PromoteTestExecutionFailureJobsMovesTestExecJobsToRetryable()
+    {
+        var skippedJobs = new[]
+        {
+            new { id = 1, name = "Tests / Build (ubuntu-latest)", htmlUrl = (string?)null, failedSteps = new[] { "Run tests" }, reason = "Not retryable." },
+            new { id = 2, name = "Build / Compile", htmlUrl = (string?)null, failedSteps = new[] { "Compile project" }, reason = "Not retryable." }
+        };
+        var allMatchedTests = new[]
+        {
+            new { testName = "Aspire.Tests.Flaky", reason = "Network reset", testProject = "Aspire.Tests" }
+        };
+
+        PromoteTestExecutionFailureJobsResult result = await InvokeHarnessAsync<PromoteTestExecutionFailureJobsResult>(
+            "promoteTestExecutionFailureJobs",
+            new { retryableJobs = Array.Empty<object>(), skippedJobs, allMatchedTests });
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal("Tests / Build (ubuntu-latest)", result.RetryableJobs[0].Name);
+        Assert.Contains("transient test failure patterns", result.RetryableJobs[0].Reason);
+
+        // Non-test-exec job stays skipped
+        Assert.Single(result.SkippedJobs);
+        Assert.Equal("Build / Compile", result.SkippedJobs[0].Name);
+
+        Assert.Single(result.PromotedJobs);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PromoteTestExecutionFailureJobsDoesNothingWhenNoMatchedTests()
+    {
+        var skippedJobs = new[]
+        {
+            new { id = 1, name = "Tests / Build (ubuntu-latest)", htmlUrl = (string?)null, failedSteps = new[] { "Run tests" }, reason = "Not retryable." }
+        };
+
+        PromoteTestExecutionFailureJobsResult result = await InvokeHarnessAsync<PromoteTestExecutionFailureJobsResult>(
+            "promoteTestExecutionFailureJobs",
+            new { retryableJobs = Array.Empty<object>(), skippedJobs, allMatchedTests = Array.Empty<object>() });
+
+        Assert.Empty(result.RetryableJobs);
+        Assert.Single(result.SkippedJobs);
+        Assert.Empty(result.PromotedJobs);
+    }
+
+    // --- selectTestResultsArtifact tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SelectTestResultsArtifactReturnsNewestNonExpired()
+    {
+        var artifacts = new object[]
+        {
+            new { name = "All-TestResults", size_in_bytes = 1000, expired = false, created_at = "2024-01-01T00:00:00Z", id = 1 },
+            new { name = "All-TestResults", size_in_bytes = 2000, expired = false, created_at = "2024-01-02T00:00:00Z", id = 2 },
+            new { name = "Other-Artifact", size_in_bytes = 500, expired = false, created_at = "2024-01-03T00:00:00Z", id = 3 }
+        };
+
+        SelectTestResultsArtifactResult? result = await InvokeHarnessAsync<SelectTestResultsArtifactResult?>(
+            "selectTestResultsArtifact",
+            new { artifacts });
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.Id);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SelectTestResultsArtifactReturnsNullForExpired()
+    {
+        var artifacts = new object[]
+        {
+            new { name = "All-TestResults", size_in_bytes = 1000, expired = true, created_at = "2024-01-01T00:00:00Z", id = 1 }
+        };
+
+        SelectTestResultsArtifactResult? result = await InvokeHarnessAsync<SelectTestResultsArtifactResult?>(
+            "selectTestResultsArtifact",
+            new { artifacts });
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task SelectTestResultsArtifactReturnsNullForOversized()
+    {
+        var artifacts = new object[]
+        {
+            new { name = "All-TestResults", size_in_bytes = 200 * 1024 * 1024, expired = false, created_at = "2024-01-01T00:00:00Z", id = 1 }
+        };
+
+        SelectTestResultsArtifactResult? result = await InvokeHarnessAsync<SelectTestResultsArtifactResult?>(
+            "selectTestResultsArtifact",
+            new { artifacts });
+
+        Assert.Null(result);
+    }
+
+    // --- hasTestExecutionFailureStep tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task HasTestExecutionFailureStepReturnsTrueForRunTests()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "hasTestExecutionFailureStep",
+            new { failedSteps = new[] { "Run tests (ubuntu-latest)" } });
+
+        Assert.True(result);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task HasTestExecutionFailureStepReturnsFalseForNonTestSteps()
+    {
+        bool result = await InvokeHarnessAsync<bool>(
+            "hasTestExecutionFailureStep",
+            new { failedSteps = new[] { "Checkout code" } });
+
+        Assert.False(result);
+    }
+
+    // --- TRX parsing tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractFailedTestsFromTrxExtractsFailedTests()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.PassingTest", "Passed"),
+            new TrxTestResult("Aspire.Tests.FailingTest", "Failed", ErrorMessage: "ECONNRESET", StackTrace: "at Line 42"));
+
+        ExtractFailedTestsFromTrxResult[] results = await InvokeHarnessAsync<ExtractFailedTestsFromTrxResult[]>(
+            "extractFailedTestsFromTrx",
+            new { trxContent });
+
+        Assert.Single(results);
+        Assert.Equal("Aspire.Tests.FailingTest", results[0].TestName);
+        Assert.Contains("ECONNRESET", results[0].Output);
+        Assert.Contains("at Line 42", results[0].Output);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractFailedTestsFromTrxReturnsEmptyForNoFailures()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.PassingTest", "Passed"));
+
+        ExtractFailedTestsFromTrxResult[] results = await InvokeHarnessAsync<ExtractFailedTestsFromTrxResult[]>(
+            "extractFailedTestsFromTrx",
+            new { trxContent });
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractFailedTestsFromTrxReturnsEmptyForEmptyInput()
+    {
+        ExtractFailedTestsFromTrxResult[] results = await InvokeHarnessAsync<ExtractFailedTestsFromTrxResult[]>(
+            "extractFailedTestsFromTrx",
+            new { trxContent = "" });
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractFailedTestsFromTrxHandlesMalformedXml()
+    {
+        ExtractFailedTestsFromTrxResult[] results = await InvokeHarnessAsync<ExtractFailedTestsFromTrxResult[]>(
+            "extractFailedTestsFromTrx",
+            new { trxContent = "<not valid xml" });
+
+        Assert.Empty(results);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractFailedTestsFromTrxCapsOutputAt10KB()
+    {
+        string longMessage = new('x', 12_000);
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.BigOutput", "Failed", ErrorMessage: longMessage));
+
+        ExtractFailedTestsFromTrxResult[] results = await InvokeHarnessAsync<ExtractFailedTestsFromTrxResult[]>(
+            "extractFailedTestsFromTrx",
+            new { trxContent });
+
+        Assert.Single(results);
+        Assert.True(results[0].Output.Length <= 10 * 1024, $"Output length {results[0].Output.Length} exceeds 10KB cap");
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractFailedTestsFromTrxDecodesXmlEntities()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.EntityTest", "Failed", ErrorMessage: "Expected &lt;value&gt; but got &amp;null"));
+
+        ExtractFailedTestsFromTrxResult[] results = await InvokeHarnessAsync<ExtractFailedTestsFromTrxResult[]>(
+            "extractFailedTestsFromTrx",
+            new { trxContent });
+
+        Assert.Single(results);
+        Assert.Contains("<value>", results[0].Output);
+        Assert.Contains("&null", results[0].Output);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ExtractFailedTestsFromTrxDecodesDoubleEncodedXmlEntities()
+    {
+        string trxContent = BuildTrxContent(
+            new TrxTestResult("Aspire.Tests.QuoteTest", "Failed", ErrorMessage: "Expected &amp;quot;hello&amp;quot; but got &amp;apos;world&amp;apos;"));
+
+        ExtractFailedTestsFromTrxResult[] results = await InvokeHarnessAsync<ExtractFailedTestsFromTrxResult[]>(
+            "extractFailedTestsFromTrx",
+            new { trxContent });
+
+        Assert.Single(results);
+        Assert.Contains("&quot;hello&quot;", results[0].Output);
+        Assert.Contains("&apos;world&apos;", results[0].Output);
+    }
+
+    // --- Config validation edge case tests ---
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ValidateRetryPatternsConfigRejectsUnknownTopLevelProperties()
+    {
+        var config = new
+        {
+            version = 1,
+            testFailurePatterns = Array.Empty<object>(),
+            jobFailurePatterns = Array.Empty<object>(),
+            unknownProp = "bad"
+        };
+
+        ValidationResult result = await InvokeHarnessAsync<ValidationResult>(
+            "validateRetryPatternsConfig",
+            new { config });
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Errors, e => e.Contains("unknownProp"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ValidateRetryPatternsConfigRejectsWrongVersion()
+    {
+        var config = new
+        {
+            version = 2,
+            testFailurePatterns = Array.Empty<object>(),
+            jobFailurePatterns = Array.Empty<object>()
+        };
+
+        ValidationResult result = await InvokeHarnessAsync<ValidationResult>(
+            "validateRetryPatternsConfig",
+            new { config });
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Errors, e => e.Contains("version"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ValidateRetryPatternsConfigRejectsMissingReason()
+    {
+        var config = new
+        {
+            version = 1,
+            testFailurePatterns = new object[]
+            {
+                new { output = "ECONNRESET" }
+            },
+            jobFailurePatterns = Array.Empty<object>()
+        };
+
+        ValidationResult result = await InvokeHarnessAsync<ValidationResult>(
+            "validateRetryPatternsConfig",
+            new { config });
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Errors, e => e.Contains("reason"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ValidateRetryPatternsConfigRejectsRuleWithNoMatcherFields()
+    {
+        var config = new
+        {
+            version = 1,
+            testFailurePatterns = new object[]
+            {
+                new { reason = "No matchers here" }
+            },
+            jobFailurePatterns = Array.Empty<object>()
+        };
+
+        ValidationResult result = await InvokeHarnessAsync<ValidationResult>(
+            "validateRetryPatternsConfig",
+            new { config });
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Errors, e => e.Contains("matcher field"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ValidateRetryPatternsConfigRejectsInvalidRegex()
+    {
+        var config = new
+        {
+            version = 1,
+            testFailurePatterns = new object[]
+            {
+                new { testName = new { regex = "[invalid" }, reason = "Bad regex" }
+            },
+            jobFailurePatterns = Array.Empty<object>()
+        };
+
+        ValidationResult result = await InvokeHarnessAsync<ValidationResult>(
+            "validateRetryPatternsConfig",
+            new { config });
+
+        Assert.False(result.Valid);
+        Assert.Contains(result.Errors, e => e.Contains("invalid regex") || e.Contains("Invalid"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ValidateRetryPatternsConfigAcceptsValidConfig()
+    {
+        var config = new
+        {
+            version = 1,
+            testFailurePatterns = new object[]
+            {
+                new { output = "ECONNRESET", reason = "Network reset" },
+                new { testName = new { regex = ".*Redis.*" }, output = "refused", reason = "Redis race" }
+            },
+            jobFailurePatterns = new object[]
+            {
+                new { jobName = new { regex = ".*windows.*" }, output = "0xC0000142", reason = "Win init" }
+            }
+        };
+
+        ValidationResult result = await InvokeHarnessAsync<ValidationResult>(
+            "validateRetryPatternsConfig",
+            new { config });
+
+        Assert.True(result.Valid);
+        Assert.Empty(result.Errors);
+    }
+
+    private static void ValidatePatternRule(JsonElement rule, HashSet<string> allowedFields, HashSet<string> matcherFields)
+    {
+        Assert.Equal(JsonValueKind.Object, rule.ValueKind);
+
+        foreach (JsonProperty prop in rule.EnumerateObject())
+        {
+            Assert.Contains(prop.Name, allowedFields);
+        }
+
+        Assert.True(
+            rule.TryGetProperty("reason", out JsonElement reason) && reason.ValueKind == JsonValueKind.String && reason.GetString()!.Length > 0,
+            "Each rule must have a non-empty 'reason' string.");
+
+        if (rule.TryGetProperty("enabled", out JsonElement enabled))
+        {
+            Assert.True(
+                enabled.ValueKind is JsonValueKind.True or JsonValueKind.False,
+                "'enabled' must be a boolean.");
+        }
+
+        bool hasMatcherField = false;
+        foreach (string field in matcherFields)
+        {
+            if (rule.TryGetProperty(field, out JsonElement fieldValue))
+            {
+                hasMatcherField = true;
+                ValidatePatternValue(fieldValue, $"{field}");
+            }
+        }
+
+        Assert.True(hasMatcherField, $"Rule must contain at least one matcher field ({string.Join(", ", matcherFields)}).");
+    }
+
+    private static void ValidatePatternValue(JsonElement value, string fieldName)
+    {
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            Assert.True(value.GetString()!.Length > 0, $"{fieldName}: string pattern must be non-empty.");
+            return;
+        }
+
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            Assert.True(
+                value.TryGetProperty("regex", out JsonElement regex) && regex.ValueKind == JsonValueKind.String && regex.GetString()!.Length > 0,
+                $"{fieldName}: regex pattern must have a non-empty 'regex' string.");
+            return;
+        }
+
+        Assert.Fail($"{fieldName}: must be a string or {{ \"regex\": \"...\" }} object.");
+    }
+
+    private static void ExtractRegexPatterns(JsonElement patternsArray, List<string> regexPatterns)
+    {
+        foreach (JsonElement rule in patternsArray.EnumerateArray())
+        {
+            foreach (JsonProperty prop in rule.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.Object &&
+                    prop.Value.TryGetProperty("regex", out JsonElement regex) &&
+                    regex.ValueKind == JsonValueKind.String)
+                {
+                    regexPatterns.Add(regex.GetString()!);
+                }
+            }
+        }
+    }
+
+    private static string BuildTrxContent(params TrxTestResult[] results)
+    {
+        List<string> resultElements = [];
+
+        foreach (TrxTestResult test in results)
+        {
+            string outputElement = "";
+
+            if (!string.IsNullOrEmpty(test.ErrorMessage) || !string.IsNullOrEmpty(test.StackTrace) || !string.IsNullOrEmpty(test.StdOut))
+            {
+                string errorInfo = "";
+                if (!string.IsNullOrEmpty(test.ErrorMessage) || !string.IsNullOrEmpty(test.StackTrace))
+                {
+                    errorInfo = "<ErrorInfo>" +
+                        (string.IsNullOrEmpty(test.ErrorMessage) ? "" : $"<Message>{test.ErrorMessage}</Message>") +
+                        (string.IsNullOrEmpty(test.StackTrace) ? "" : $"<StackTrace>{test.StackTrace}</StackTrace>") +
+                        "</ErrorInfo>";
+                }
+
+                string stdOut = string.IsNullOrEmpty(test.StdOut) ? "" : $"<StdOut>{test.StdOut}</StdOut>";
+                outputElement = $"<Output>{errorInfo}{stdOut}</Output>";
+            }
+
+            resultElements.Add(
+                $"""<UnitTestResult testName="{test.TestName}" outcome="{test.Outcome}">{outputElement}</UnitTestResult>""");
+        }
+
+        return $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <TestRun>
+              <Results>
+                {string.Join("\n    ", resultElements)}
+              </Results>
+            </TestRun>
+            """;
+    }
+
+    private sealed record TrxTestResult(
+        string TestName,
+        string Outcome,
+        string ErrorMessage = "",
+        string StackTrace = "",
+        string StdOut = "");
+
     private async Task<AnalyzeFailedJobsResult> AnalyzeSingleJobAsync(WorkflowJob job, string annotationsOrText, string jobLogText = "")
     {
         Dictionary<string, string>? jobLogTextByJobId = string.IsNullOrEmpty(jobLogText)
@@ -1068,7 +2018,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         WorkflowJob[] jobs,
         Dictionary<string, string> annotationTextByJobId,
         Dictionary<string, string>? jobLogTextByJobId = null,
-        int? maxRetryableJobs = null)
+        int? maxRetryableJobs = null,
+        object? retryPatternsConfig = null)
         => InvokeHarnessAsync<AnalyzeFailedJobsResult>(
             "analyzeFailedJobs",
             new AnalyzeFailedJobsRequest
@@ -1076,7 +2027,8 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
                 Jobs = jobs,
                 AnnotationTextByJobId = annotationTextByJobId,
                 JobLogTextByJobId = jobLogTextByJobId,
-                MaxRetryableJobs = maxRetryableJobs
+                MaxRetryableJobs = maxRetryableJobs,
+                RetryPatternsConfig = retryPatternsConfig
             });
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
@@ -1152,6 +2104,7 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         public Dictionary<string, string> AnnotationTextByJobId { get; init; } = [];
         public Dictionary<string, string>? JobLogTextByJobId { get; init; }
         public int? MaxRetryableJobs { get; init; }
+        public object? RetryPatternsConfig { get; init; }
     }
 
     private sealed class AnalyzeFailedJobsResult
@@ -1234,5 +2187,71 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
     {
         public string Route { get; init; } = string.Empty;
         public JsonElement Payload { get; init; }
+    }
+
+    private sealed class LoadRetryPatternsConfigResult
+    {
+        public JsonElement? Config { get; init; }
+        public string[] Errors { get; init; } = [];
+    }
+
+    private sealed class ValidationResult
+    {
+        public bool Valid { get; init; }
+        public string[] Errors { get; init; } = [];
+    }
+
+    private sealed class MatchTestFailurePatternsResult
+    {
+        public bool ShouldRetry { get; init; }
+        public MatchedTest[] MatchedTests { get; init; } = [];
+    }
+
+    private sealed class MatchedTest
+    {
+        public string TestName { get; init; } = string.Empty;
+        public string Reason { get; init; } = string.Empty;
+        public string? MatchedSnippet { get; init; }
+    }
+
+    private sealed class MatchJobLogPatternResult
+    {
+        public bool Matched { get; init; }
+        public string Reason { get; init; } = string.Empty;
+    }
+
+    private sealed class ExtractFailedTestsFromTrxResult
+    {
+        public string TestName { get; init; } = string.Empty;
+        public string Output { get; init; } = string.Empty;
+    }
+
+    private sealed class AnalyzeTrxFilesResult
+    {
+        public AnalyzedTrxMatch[] AllMatchedTests { get; init; } = [];
+    }
+
+    private sealed class AnalyzedTrxMatch
+    {
+        public string TestName { get; init; } = string.Empty;
+        public string Reason { get; init; } = string.Empty;
+        public string? MatchedSnippet { get; init; }
+        public string TestProject { get; init; } = string.Empty;
+    }
+
+    private sealed class PromoteTestExecutionFailureJobsResult
+    {
+        public AnalyzedJob[] RetryableJobs { get; init; } = [];
+        public AnalyzedJob[] SkippedJobs { get; init; } = [];
+        public AnalyzedJob[] PromotedJobs { get; init; } = [];
+    }
+
+    private sealed class SelectTestResultsArtifactResult
+    {
+        public int Id { get; init; }
+        public string Name { get; init; } = string.Empty;
+
+        [JsonPropertyName("size_in_bytes")]
+        public long SizeInBytes { get; init; }
     }
 }

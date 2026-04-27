@@ -147,23 +147,25 @@ kill <pid>
 * Copy existing style in nearby files for test method names and capitalization.
 * Do not leave newly-added tests commented out. All added tests should be building and passing.
 * Do not use Directory.SetCurrentDirectory in tests as it can cause side effects when tests execute concurrently.
+* Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
+* MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.props` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
 
 ## Running tests
 
 (1) Build from the root with `./build.sh` (~3-5 minutes).
 (2) If that produces errors, fix those errors and build again. Repeat until the build is successful.
-(3) To run tests for a specific project: `dotnet test tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
+(3) To run tests for a specific project: `dotnet test --project tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
 
 Note that tests for a project can be executed without first building from the root.
 
 (4) To run specific tests, include the filter after `--`:
 ```bash
-dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
 (5) To apply a timeout for a specific test run use `--hangdump` and `--hangdump-timeout` options after `--`, for example:
 ```bash
-dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
 ```
 You need both options (`--hangdump-timeout` does not work without `--hangdump`). Timeout can be expressed in minutes (e.g. `3m` for 3-minute timeout), or seconds (e.g. `30s` for 30-seconds timeout).
 
@@ -175,11 +177,11 @@ This repo uses **Microsoft.Testing.Platform (MTP)** as the test runner, not VSTe
 
 ```bash
 # WRONG - VSTest-style filter, will hang with MTP
-dotnet test tests/Project.Tests/Project.Tests.csproj --filter "FullyQualifiedName~ClassName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --filter "FullyQualifiedName~ClassName"
 
 # CORRECT - MTP-native filters go after the -- separator
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-class "*.ClassName"
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-method "*.MethodName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-class "*.ClassName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "*.MethodName"
 ```
 
 All test filtering must use MTP-native switches placed **after `--`**. See the filter switches listed below for the full set of options.
@@ -190,10 +192,10 @@ When running tests in automated environments (including Copilot agent), **always
 
 ```bash
 # Correct - excludes quarantined and outerloop tests (use this in automation)
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 
 # For specific test filters, combine with quarantine and outerloop exclusion
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
 Never run all tests without the quarantine and outerloop filters in automated environments, as this will include flaky tests that are known to fail intermittently and long-running tests that slow down CI.
@@ -237,6 +239,7 @@ These switches can be repeated to run tests on multiple classes or methods at on
 - **`ci.yml`**: Main CI workflow triggered on PRs and pushes to main/release branches
 - **Build validation**: Includes package generation, API compatibility checks, template validation
 - **Workflow matcher maintenance**: When changing CI workflow job or step names that are referenced by automation or tests, update the corresponding workflow helpers, behavior tests, and docs together. For the transient rerun workflow, keep `.github/workflows/auto-rerun-transient-ci-failures.js`, `tests/Infrastructure.Tests/WorkflowScripts/AutoRerunTransientCiFailuresTests.cs`, and `docs/ci/auto-rerun-transient-ci-failures.md` aligned with the live workflow YAML.
+- **⚠️ Quarantine and outerloop tests are easily broken** because they primarily run on schedule, not on most PRs. Changes to `tests-quarantine.yml`, `tests-outerloop.yml`, `specialized-test-runner.yml`, or `run-tests.yml` will automatically trigger the affected workflow(s) on the PR via `paths:` filters. Verify the triggered runs pass before merging.
 
 #### Azure DevOps (secondary, does NOT run tests on PRs)
 - **`eng/pipelines/azure-pipelines-public.yml`**: Weekly scheduled pipeline (Monday midnight UTC) that builds and runs tests on Helix
@@ -395,6 +398,7 @@ For most development tasks, following these instructions should be sufficient to
 The following specialized skills are available in `.github/skills/`:
 
 - **cli-e2e-testing**: Guide for writing Aspire CLI end-to-end tests using Hex1b terminal automation
+- **ci-test-failures**: Diagnoses GitHub Actions test failures, extracts failed tests from runs, and creates or updates failing-test issues
 - **code-review**: Reviews a GitHub pull request for problems (bugs, security, correctness, convention violations). Use this when asked to review a PR or do a code review.
 - **fix-flaky-test**: Reproduces and fixes flaky/quarantined tests using the CI reproduce workflow (`reproduce-flaky-tests.yml`). Use this when investigating, reproducing, or fixing a flaky or quarantined test.
 - **dashboard-testing**: Guide for writing tests for the Aspire Dashboard using xUnit and bUnit
@@ -415,3 +419,4 @@ Additional instructions are automatically applied when editing files matching sp
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
 | `tests/**/*.cs` | `.github/instructions/test-review-guidelines.instructions.md` - Flaky test patterns and test review guidelines |
+| `eng/scripts/get-aspire-cli*.sh`, `eng/scripts/get-aspire-cli*.ps1` | `.github/instructions/acquisition-tests.instructions.md` - CLI acquisition script tests |

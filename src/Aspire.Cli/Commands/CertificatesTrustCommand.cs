@@ -9,7 +9,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Commands;
 
@@ -18,37 +17,36 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class CertificatesTrustCommand : BaseCommand
 {
-    private readonly ICertificateToolRunner _certificateToolRunner;
+    private readonly ICertificateService _certificateService;
 
-    public CertificatesTrustCommand(ICertificateToolRunner certificateToolRunner, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
+    public CertificatesTrustCommand(ICertificateService certificateService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
         : base("trust", CertificatesCommandStrings.TrustDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        _certificateToolRunner = certificateToolRunner;
+        _certificateService = certificateService;
     }
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         InteractionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.TrustProgress);
 
-        var result = _certificateToolRunner.TrustHttpCertificate();
+        var result = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
-        if (CertificateHelpers.IsSuccessfulTrustResult(result))
+        if (result.Success)
         {
             InteractionService.DisplaySuccess(CertificatesCommandStrings.TrustSuccess);
-            return Task.FromResult(ExitCodeConstants.Success);
+            return ExitCodeConstants.Success;
         }
 
-        if (result == EnsureCertificateResult.UserCancelledTrustStep)
+        if (result.WasCancelled)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustCancelled);
-            return Task.FromResult(ExitCodeConstants.FailedToTrustCertificates);
+            return ExitCodeConstants.FailedToTrustCertificates;
         }
 
-        var details = string.Format(CultureInfo.CurrentCulture, CertificatesCommandStrings.TrustFailureDetailsFormat, result);
+        var details = string.Format(CultureInfo.CurrentCulture, CertificatesCommandStrings.TrustFailureDetailsFormat, result.ResultCode);
         InteractionService.DisplayError(details);
         InteractionService.DisplayError(CertificatesCommandStrings.TrustFailure);
-        return Task.FromResult(ExitCodeConstants.FailedToTrustCertificates);
+        return ExitCodeConstants.FailedToTrustCertificates;
     }
 }

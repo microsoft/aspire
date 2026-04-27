@@ -1,0 +1,131 @@
+# Runs CLI E2E smoke tests against the daily build to catch regressions early.
+#
+# This workflow installs the latest daily Aspire CLI (not from source) and runs
+# a minimal set of E2E tests to verify core scenarios still work.
+#
+name: Daily CLI Smoke Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      quality:
+        description: 'Install quality (dev, staging, release)'
+        required: false
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - release
+
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+
+jobs:
+  smoke-test:
+    name: CLI Smoke Test (${{ inputs.quality || 'dev' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: ./restore.sh
+
+      - name: Build E2E test project
+        run: dotnet build tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj
+
+      - name: Run smoke tests against daily build
+        env:
+          ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'dev' }}
+        run: |
+          dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+            --no-build \
+            -- \
+            --filter-class "*.SmokeTests" \
+            --filter-not-trait "quarantined=true" \
+            --filter-not-trait "outerloop=true" \
+            --hangdump --hangdump-type none --hangdump-timeout 15m
+
+      - name: Upload test recordings
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: smoke-test-recordings-${{ inputs.quality || 'dev' }}
+          path: |
+            testresults/recordings/*.cast
+            **/TestResults/**/*.log
+          if-no-files-found: ignore
+
+  create-issue-on-failure:
+    name: Create Issue on Failure
+    needs: [smoke-test]
+    runs-on: ubuntu-latest
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    permissions:
+      issues: write
+    steps:
+      - name: Create GitHub Issue
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const date = new Date().toISOString().split('T')[0];
+
+            const issueTitle = `[Daily Smoke] CLI smoke test failure - ${date}`;
+            const issueBody = `## Daily CLI Smoke Test Failure
+
+            The daily CLI smoke tests failed on ${date}.
+
+            **Workflow Run:** ${runUrl}
+            **Quality:** dev (daily build)
+
+            ### Next Steps
+            1. Check the workflow run for detailed error logs
+            2. Download test recordings from artifacts
+            3. Compare with the latest daily build changes
+            4. Investigate and fix the regression
+
+            This issue was automatically created by the daily CLI smoke test workflow.
+            `;
+
+            // Check if a similar issue already exists (created today)
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'area-cli,failing-test',
+              per_page: 10
+            });
+
+            const todayIssue = existingIssues.data.find(issue =>
+              issue.title.includes(date) && issue.title.includes('[Daily Smoke]')
+            );
+
+            if (todayIssue) {
+              console.log(`Issue already exists for today: ${todayIssue.html_url}`);
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: todayIssue.number,
+                body: `Another failure occurred. See: ${runUrl}`
+              });
+            } else {
+              const issue = await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: issueTitle,
+                body: issueBody,
+                labels: ['area-cli', 'failing-test']
+              });
+              console.log(`Created issue: ${issue.data.html_url}`);
+            }

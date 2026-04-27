@@ -10,11 +10,21 @@ namespace Aspire.Hosting
 {
     public static partial class AzureContainerRegistryExtensions
     {
+        [AspireExport("addAzureContainerRegistry", Description = "Adds an Azure Container Registry resource to the distributed application model.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> AddAzureContainerRegistry(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport("getAzureContainerRegistry", Description = "Gets the Azure Container Registry associated with a compute environment resource.")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> GetAzureContainerRegistry<T>(this ApplicationModel.IResourceBuilder<T> builder)
+            where T : ApplicationModel.IResource, Azure.IAzureComputeEnvironmentResource { throw null; }
+
+        [AspireExport("withContainerRegistryAzureContainerRegistry", MethodName = "withAzureContainerRegistry", Description = "Configures a compute environment resource to use an Azure Container Registry.")]
         public static ApplicationModel.IResourceBuilder<T> WithAzureContainerRegistry<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> registryBuilder)
             where T : ApplicationModel.IResource, ApplicationModel.IComputeEnvironmentResource { throw null; }
 
+        [AspireExport("withPurgeTask", Description = "Configures a purge task for the Azure Container Registry resource.")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> WithPurgeTask(this ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> builder, string schedule, string? filter = null, System.TimeSpan? ago = null, int keep = 3, string? taskName = null) { throw null; }
+
+        [AspireExportIgnore(Reason = "ContainerRegistryBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureContainerRegistryRole-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureContainerRegistryResource> target, params global::Azure.Provisioning.ContainerRegistry.ContainerRegistryBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
     }
@@ -22,7 +32,7 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureContainerRegistryResource : AzureProvisioningResource, ApplicationModel.IContainerRegistry
+    public partial class AzureContainerRegistryResource : AzureProvisioningResource, IAzureContainerRegistryResource, ApplicationModel.IContainerRegistry, ApplicationModel.IAzureResource, ApplicationModel.IResource
     {
         public AzureContainerRegistryResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 

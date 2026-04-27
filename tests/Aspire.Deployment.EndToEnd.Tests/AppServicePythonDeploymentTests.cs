@@ -18,6 +18,7 @@ public sealed class AppServicePythonDeploymentTests(ITestOutputHelper output)
     private static readonly TimeSpan s_testTimeout = TimeSpan.FromMinutes(40);
 
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/16229")]
     public async Task DeployPythonFastApiTemplateToAzureAppService()
     {
         using var cts = new CancellationTokenSource(s_testTimeout);
@@ -75,12 +76,10 @@ public sealed class AppServicePythonDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            // Step 2: Set up CLI environment
+            // Python apphosts need the full bundle because
+            // the prebuilt AppHost server is required for aspire new with Python templates.
+            await auto.InstallCurrentBuildAspireBundleAsync(counter, output);
 
             // Step 3: Create Python FastAPI project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating Python FastAPI project...");
@@ -97,38 +96,39 @@ public sealed class AppServicePythonDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppService");
             await auto.EnterAsync();
 
-            // In CI, aspire add shows a version selection prompt
+            // aspire add may or may not show a version selection prompt depending on
+            // whether packages are available from the local hive (bundle install).
             if (DeploymentE2ETestHelpers.IsRunningInCI)
             {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync(); // select first version (PR build)
+                await auto.WaitForAspireAddCompletionAsync(counter);
+            }
+            else
+            {
+                await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
-
-            // Step 6: Modify apphost.cs to add Azure App Service Environment
-            // Note: Python template uses single-file AppHost (apphost.cs in project root)
+            // Step 6: Modify apphost.ts to add Azure App Service Environment
+            // Note: Python template uses TypeScript AppHost (apphost.ts in project root)
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-            // Single-file AppHost is in the project root, not a subdirectory
-            var appHostFilePath = Path.Combine(projectDir, "apphost.cs");
+            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
 
-            output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
-            // Insert the Azure App Service Environment before builder.Build().Run();
-            var buildRunPattern = "builder.Build().Run();";
-            var replacement = """
+            // Add Azure App Service Environment before build().run()
+            content = content.Replace(
+                "await builder.build().run();",
+                """
 // Add Azure App Service Environment for deployment
-builder.AddAzureAppServiceEnvironment("infra");
+await builder.addAzureAppServiceEnvironment("infra");
 
-builder.Build().Run();
-""";
+await builder.build().run();
+""");
 
-            content = content.Replace(buildRunPattern, replacement);
             File.WriteAllText(appHostFilePath, content);
 
-            output.WriteLine($"Modified apphost.cs at: {appHostFilePath}");
+            output.WriteLine($"Modified apphost.ts at: {appHostFilePath}");
 
             // Step 7: Set environment for deployment
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts
@@ -143,7 +143,7 @@ builder.Build().Run();
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             // Wait for pipeline to complete successfully (App Service can take longer)
-            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 9: Extract deployment URLs and verify endpoints with retry

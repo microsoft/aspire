@@ -13,7 +13,9 @@ using Azure.Provisioning;
 using Azure.Provisioning.AppService;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Primitives;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure;
 
@@ -40,6 +42,20 @@ public class AzureAppServiceEnvironmentResource :
         {
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
+
+            // Add prepare-azure-app-service-{name} step that materializes deployment targets
+            // for compute resources targeted to this environment. Runs during BeforeStart so that
+            // BeforeStartEvent subscribers (and downstream code) can observe the deployment targets.
+            var prepareStep = new PipelineStep
+            {
+                Name = $"prepare-azure-app-service-{name}",
+                Description = $"Prepares Azure App Service deployment targets for {name}.",
+                Action = ctx => PrepareDeploymentTargetsAsync(ctx),
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+
+            steps.Add(prepareStep);
 
             // Add validation step that checks for environment variable name issues
             // This runs early and provides user-friendly error messages through the activity reporter
@@ -139,6 +155,72 @@ public class AzureAppServiceEnvironmentResource :
             var provisionSteps = context.GetSteps(this, WellKnownPipelineTags.ProvisionInfrastructure);
             printSummarySteps.DependsOn(provisionSteps);
         }));
+    }
+
+    /// <summary>
+    /// Materializes Azure App Service deployment targets for compute resources targeted to this
+    /// environment. Invoked by the per-environment <c>prepare-azure-app-service-{name}</c>
+    /// pipeline step, which runs after <c>azure-prepare-resources</c> so role-assignment resources
+    /// are present in the model and can be referenced by the generated
+    /// <see cref="DeploymentTargetAnnotation"/> instances.
+    /// </summary>
+    private async Task PrepareDeploymentTargetsAsync(PipelineStepContext context)
+    {
+        var appModel = context.Model;
+        var executionContext = context.ExecutionContext;
+        var services = context.Services;
+        var cancellationToken = context.CancellationToken;
+
+        if (!executionContext.IsPublishMode)
+        {
+            return;
+        }
+
+        // Remove the default container registry from the model if an explicit registry is configured
+        if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
+            DefaultContainerRegistry is not null)
+        {
+            appModel.Resources.Remove(DefaultContainerRegistry);
+        }
+
+        var logger = services.GetRequiredService<ILogger<AzureAppServiceEnvironmentResource>>();
+        var provisioningOptions = services.GetRequiredService<IOptions<AzureProvisioningOptions>>();
+
+        var appServiceEnvironmentContext = new AzureAppServiceEnvironmentContext(
+            logger,
+            executionContext,
+            this,
+            services);
+
+        // Annotate the environment with its context
+        Annotations.Add(new AzureAppServiceEnvironmentContextAnnotation(appServiceEnvironmentContext));
+
+        foreach (var resource in appModel.GetComputeResources())
+        {
+            // Support project resources and containers with Dockerfile
+            if (resource is not ProjectResource && !(resource.IsContainer() && resource.TryGetAnnotationsOfType<DockerfileBuildAnnotation>(out _)))
+            {
+                continue;
+            }
+
+            // Skip resources that are explicitly targeted to a different compute environment
+            var resourceComputeEnvironment = resource.GetComputeEnvironment();
+            if (resourceComputeEnvironment is not null && resourceComputeEnvironment != this)
+            {
+                continue;
+            }
+
+            var website = await appServiceEnvironmentContext.CreateAppServiceAsync(resource, provisioningOptions.Value, cancellationToken).ConfigureAwait(false);
+
+            resource.Annotations.Add(new DeploymentTargetAnnotation(website)
+            {
+                ContainerRegistry = this,
+                ComputeEnvironment = this
+            });
+        }
+
+        // Log once about all HTTP endpoints upgraded to HTTPS
+        appServiceEnvironmentContext.LogHttpsUpgradeIfNeeded();
     }
 
     private async Task PrintDashboardUrlAsync(PipelineStepContext context)
@@ -273,6 +355,11 @@ public class AzureAppServiceEnvironmentResource :
     /// Gets the suffix added to each web app created in this App Service Environment.
     /// </summary>
     internal BicepOutputReference WebSiteSuffix => new("webSiteSuffix", this);
+
+    /// <summary>
+    /// When true, HTTP endpoints are not upgraded to HTTPS. Default is false (HTTP→HTTPS upgrade is enabled).
+    /// </summary>
+    internal bool PreserveHttpEndpoints { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.

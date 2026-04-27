@@ -198,12 +198,41 @@ internal sealed class BundleService(ILayoutDiscovery layoutDiscovery, ILogger<Bu
     }
 
     /// <summary>
-    /// Gets the assembly informational version of the current CLI binary.
+    /// Gets a fingerprint for the current CLI bundle.
     /// Used as the version marker to detect when re-extraction is needed.
     /// </summary>
-    internal static string GetCurrentVersion()
+    internal static string GetCurrentVersion(string? processPath = null)
     {
-        return VersionHelper.GetDefaultTemplateVersion();
+        var version = VersionHelper.GetDefaultTemplateVersion();
+        processPath ??= Environment.ProcessPath;
+
+        if (string.IsNullOrEmpty(processPath))
+        {
+            return version;
+        }
+
+        try
+        {
+            var fileInfo = new FileInfo(processPath);
+            if (!fileInfo.Exists)
+            {
+                return version;
+            }
+
+            return $"{version}|{fileInfo.Length}|{fileInfo.LastWriteTimeUtc.Ticks}";
+        }
+        catch (IOException)
+        {
+            return version;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return version;
+        }
+        catch (NotSupportedException)
+        {
+            return version;
+        }
     }
 
     /// <summary>

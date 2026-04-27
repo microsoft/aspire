@@ -51,6 +51,7 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" />
+    <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
     <PackageReference Include="Humanizer.Core" />
     <PackageReference Include="Microsoft.Extensions.AI" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
@@ -326,6 +327,7 @@
     <Compile Include="$(SharedDir)Otlp\Serialization\OtlpJsonSerializerContext.cs" Link="Otlp\Model\Serialization\OtlpJsonSerializerContext.Shared.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\TelemetryApiResponse.cs" Link="Otlp\Model\Serialization\TelemetryApiResponse.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\ResourceInfoJson.cs" Link="Otlp\Model\Serialization\ResourceInfoJson.cs" />
+    <Compile Include="$(SharedDir)Model\Serialization\TelemetryValidateTokenJson.cs" Link="Otlp\Model\Serialization\TelemetryValidateTokenJson.cs" />
     <Compile Include="$(SharedDir)Export\ExportArchive.cs" Link="Export\ExportArchive.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntrySerializer.cs" Link="ConsoleLogs\LogEntrySerializer.cs" />
   </ItemGroup>

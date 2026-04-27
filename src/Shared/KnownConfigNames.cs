@@ -18,6 +18,7 @@ internal static class KnownConfigNames
     public const string DashboardFileConfigDirectory = "ASPIRE_DASHBOARD_FILE_CONFIG_DIRECTORY";
     public const string DashboardAIDisabled = "ASPIRE_DASHBOARD_AI_DISABLED";
     public const string DashboardApiEnabled = "ASPIRE_DASHBOARD_API_ENABLED";
+    public const string DashboardApiDisabled = "ASPIRE_DASHBOARD_API_DISABLED";
     public const string DashboardForwardedHeadersEnabled = "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED";
 
     public const string ShowDashboardResources = "ASPIRE_SHOW_DASHBOARD_RESOURCES";
@@ -32,6 +33,7 @@ internal static class KnownConfigNames
     public const string RemoteAppHostToken = "ASPIRE_REMOTE_APPHOST_TOKEN";
     public const string CliProcessId = "ASPIRE_CLI_PID";
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
+    public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";
     public const string TestingDisableHttpClient = "ASPIRE_TESTING_DISABLE_HTTP_CLIENT";
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";
@@ -47,6 +49,8 @@ internal static class KnownConfigNames
     public const string ExtensionToken = "ASPIRE_EXTENSION_TOKEN";
     public const string ExtensionCert = "ASPIRE_EXTENSION_CERT";
     public const string ExtensionDebugSessionId = "ASPIRE_EXTENSION_DEBUG_SESSION_ID";
+    public const string ExtensionDebugRunMode = "ASPIRE_EXTENSION_DEBUG_RUN_MODE";
+    public const string ExtensionCapabilities = "ASPIRE_EXTENSION_CAPABILITIES";
 
     public const string DeveloperCertificateDefaultTrust = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_TRUST";
     public const string DeveloperCertificateDefaultHttpsTermination = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_HTTPS_TERMINATION";
@@ -54,6 +58,10 @@ internal static class KnownConfigNames
 
     public const string DebugSessionInfo = "DEBUG_SESSION_INFO";
     public const string DebugSessionRunMode = "DEBUG_SESSION_RUN_MODE";
+    public const string DebugSessionPort = "DEBUG_SESSION_PORT";
+    public const string DebugSessionToken = "DEBUG_SESSION_TOKEN";
+    public const string DebugSessionServerCertificate = "DEBUG_SESSION_SERVER_CERTIFICATE";
+    public const string DcpInstanceIdPrefix = "DCP_INSTANCE_ID_PREFIX";
 
     public static class Legacy
     {

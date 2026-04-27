@@ -74,4 +74,29 @@ public class BundleServiceTests
         Assert.NotNull(version);
         Assert.NotEqual("unknown", version);
     }
+
+    [Fact]
+    public void GetCurrentVersion_ChangesWhenCliBinaryChanges()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test");
+        try
+        {
+            var processPath = Path.Combine(tempDir.FullName, "aspire");
+            File.WriteAllText(processPath, "old");
+            File.SetLastWriteTimeUtc(processPath, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+
+            var firstVersion = BundleService.GetCurrentVersion(processPath);
+
+            File.WriteAllText(processPath, "new-content");
+            File.SetLastWriteTimeUtc(processPath, new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc));
+
+            var secondVersion = BundleService.GetCurrentVersion(processPath);
+
+            Assert.NotEqual(firstVersion, secondVersion);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
 }

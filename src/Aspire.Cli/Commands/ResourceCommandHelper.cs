@@ -77,13 +77,15 @@ internal static class ResourceCommandHelper
         }
         else
         {
-            var errorMessage = GetFriendlyErrorMessage(response.ErrorMessage);
+#pragma warning disable CS0618 // Type or member is obsolete
+            var errorMessage = GetFriendlyErrorMessage(response.Message ?? response.ErrorMessage);
+#pragma warning restore CS0618 // Type or member is obsolete
             interactionService.DisplayError($"Failed to execute command '{commandName}' on resource '{resourceName}': {errorMessage}");
         }
 
-        if (response.Result is not null)
+        if (response.Value is not null)
         {
-            interactionService.DisplayRawText(response.Result, ConsoleOutput.Standard);
+            DisplayCommandResult(interactionService, response.Value);
         }
 
         return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
@@ -108,16 +110,30 @@ internal static class ResourceCommandHelper
         }
         else
         {
-            var errorMessage = GetFriendlyErrorMessage(response.ErrorMessage);
+#pragma warning disable CS0618 // Type or member is obsolete
+            var errorMessage = GetFriendlyErrorMessage(response.Message ?? response.ErrorMessage);
+#pragma warning restore CS0618 // Type or member is obsolete
             interactionService.DisplayError($"Failed to {baseVerb} resource '{resourceName}': {errorMessage}");
         }
 
-        if (response.Result is not null)
+        if (response.Value is not null)
         {
-            interactionService.DisplayRawText(response.Result, ConsoleOutput.Standard);
+            DisplayCommandResult(interactionService, response.Value);
         }
 
         return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
+    }
+
+    private static void DisplayCommandResult(IInteractionService interactionService, ExecuteResourceCommandResult result)
+    {
+        if (result.Format is CommandResultFormat.Markdown)
+        {
+            interactionService.DisplayMarkdown(result.Value, ConsoleOutput.Standard);
+        }
+        else
+        {
+            interactionService.DisplayRawText(result.Value, ConsoleOutput.Standard);
+        }
     }
 
     private static string GetFriendlyErrorMessage(string? errorMessage)

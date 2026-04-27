@@ -7,6 +7,9 @@ on:
       versionOverrideArg:
         required: false
         type: string
+      extensionVersionOverride:
+        required: false
+        type: string
 
 jobs:
   setup_for_tests:
@@ -618,6 +621,13 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "ubuntu-latest", "runner": "8-core-ubuntu-latest", "rids": "linux-x64"}]'
 
+  build_cli_archive_linux_arm64:
+    name: Build native CLI archive (Linux ARM64)
+    uses: ./.github/workflows/build-cli-native-archives.yml
+    with:
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      targets: '[{"os": "ubuntu-latest", "runner": "ubuntu-24.04-arm", "rids": "linux-arm64"}]'
+
   # Per-OS CLI archive builds produce RID-specific DCP and Dashboard NuGets.
   # Split by OS so that test jobs can depend on just their platform's archive,
   # allowing Linux tests to start as soon as the Linux archive completes
@@ -629,13 +639,12 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"}]'
 
-  build_cli_archive_windows_arm:
-    if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
+  build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      targets: '[{"os": "windows-11-arm", "runner": "windows-11-arm", "rids": "win-arm64"}]'
+      targets: '[{"os": "windows-latest", "runner": "windows-11-arm", "rids": "win-arm64"}]'
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
@@ -656,13 +665,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
-      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+      properties: ${{ toJson(matrix.properties) }}
       conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
       directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
@@ -678,13 +684,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
-      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+      properties: ${{ toJson(matrix.properties) }}
       conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
       directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
@@ -702,13 +705,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
-      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+      properties: ${{ toJson(matrix.properties) }}
       conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
       directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
@@ -724,13 +724,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
-      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+      properties: ${{ toJson(matrix.properties) }}
       conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
       directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
@@ -746,13 +743,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
-      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+      properties: ${{ toJson(matrix.properties) }}
       conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
       directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
@@ -768,14 +762,10 @@ jobs:
       testShortName: ${{ matrix.shortname }}
       os: ${{ matrix.runs-on }}
       testProjectPath: ${{ matrix.testProjectPath }}
-      testSessionTimeout: ${{ matrix.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.mtpBaseArgs }}
       extraTestArgs: "--filter-not-trait \"quarantined=true\" --filter-not-trait \"outerloop=true\" ${{ matrix.extraTestArgs }}"
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
-      requiresNugets: ${{ matrix.requiresNugets }}
-      requiresTestSdk: ${{ matrix.requiresTestSdk }}
-      requiresCliArchive: true
-      enablePlaywrightInstall: ${{ matrix.enablePlaywrightInstall }}
+      properties: ${{ toJson(matrix.properties) }}
       conditionalSelectionRunAll: ${{ needs.setup_for_tests.outputs.run_all }}
       directlyAffectedTestProjects: ${{ join(fromJson(needs.setup_for_tests.outputs.affected_test_projects), ';') }}
 
@@ -793,7 +783,7 @@ jobs:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 15
-    needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm]
+    needs: [build_packages, build_cli_archive_windows, build_cli_archive_windows_arm64]
     if: ${{ github.event_name == 'pull_request' && github.repository_owner == 'microsoft' }}
     strategy:
       fail-fast: false
@@ -890,6 +880,11 @@ jobs:
         run: npm install
       - name: Run tests
         run: npm test
+      - name: Override extension version for PR builds
+        if: ${{ inputs.extensionVersionOverride != '' }}
+        env:
+          EXTENSION_VERSION: ${{ inputs.extensionVersionOverride }}
+        run: npm version "$EXTENSION_VERSION" --no-git-tag-version
       - name: Package VSIX
         run: npm exec @vscode/vsce -- package --pre-release -o out/aspire-extension.vsix
       - name: Upload VSIX
@@ -902,14 +897,6 @@ jobs:
     name: TypeScript SDK Unit Tests
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
-  java_sdk_tests:
-    name: Java SDK Unit Tests
-    uses: ./.github/workflows/run-tests.yml
-    with:
-      testShortName: Java SDK
-      testProjectPath: tests/Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.Java.Tests.csproj
-      extraTestArgs: --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
-
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
@@ -918,12 +905,13 @@ jobs:
       setup_for_tests,
       build_packages,
       build_cli_archive_linux,
+      build_cli_archive_linux_arm64,
       build_cli_archive_windows,
+      build_cli_archive_windows_arm64,
       build_cli_archive_macos,
       extension_tests_win,
       cli_starter_validation_windows,
       typescript_sdk_tests,
-      java_sdk_tests,
       tests_no_nugets,
       tests_no_nugets_overflow,
       tests_requires_nugets_linux,
@@ -1083,10 +1071,12 @@ jobs:
           ${{ always() &&
               (contains(needs.*.result, 'failure') ||
                contains(needs.*.result, 'cancelled') ||
-               ((fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null &&
-                 needs.tests_no_nugets.result == 'skipped') ||
-                (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null &&
-                 needs.tests_requires_nugets_linux.result == 'skipped') ||
+                ((fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null &&
+                  needs.tests_no_nugets.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets_overflow).include[0] != null &&
+                  needs.tests_no_nugets_overflow.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null &&
+                  needs.tests_requires_nugets_linux.result == 'skipped') ||
                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_windows).include[0] != null &&
                  needs.tests_requires_nugets_windows.result == 'skipped') ||
                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
@@ -1101,8 +1091,7 @@ jobs:
                  needs.polyglot_validation.result == 'skipped') ||
                 (github.event_name == 'pull_request' &&
                  needs.cli_starter_validation_windows.result == 'skipped') ||
-                needs.typescript_sdk_tests.result == 'skipped' ||
-                needs.java_sdk_tests.result == 'skipped')) }}
+                needs.typescript_sdk_tests.result == 'skipped')) }}
         run: |
           echo "One or more test jobs failed, were cancelled, or were unexpectedly skipped."
           exit 1

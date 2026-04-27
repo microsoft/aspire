@@ -127,7 +127,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         return await InteractionService.ShowStatusAsync(
             "Scanning capabilities...",
             async () => await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken),
-            emoji: KnownEmojis.MagnifyingGlassTiltedRight);
+            emoji: KnownEmojis.MagnifyingGlassTiltedLeft);
     }
 
     private async Task<int> DumpCapabilitiesAsync(

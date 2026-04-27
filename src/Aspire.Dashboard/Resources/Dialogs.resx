@@ -246,10 +246,13 @@
     <value>Unformatted</value>
   </data>
   <data name="TextVisualizerDialogJsonFormat" xml:space="preserve">
-    <value>Format JSON</value>
+    <value>JSON</value>
   </data>
   <data name="TextVisualizerDialogXmlFormat" xml:space="preserve">
-    <value>Format XML</value>
+    <value>XML</value>
+  </data>
+  <data name="TextVisualizerDialogMarkdownFormat" xml:space="preserve">
+    <value>Markdown</value>
   </data>
   <data name="TextVisualizerSelectFormatType" xml:space="preserve">
     <value>Select format</value>
@@ -491,5 +494,14 @@
   </data>
   <data name="SettingsDialogTimeFormatTwentyFourHour" xml:space="preserve">
     <value>24-hour</value>
+  </data>
+  <data name="NotificationCenterDismissAll" xml:space="preserve">
+    <value>Dismiss all</value>
+  </data>
+  <data name="NotificationCenterEmpty" xml:space="preserve">
+    <value>No notifications</value>
+  </data>
+  <data name="NotificationEntryDismiss" xml:space="preserve">
+    <value>Dismiss notification</value>
   </data>
 </root>

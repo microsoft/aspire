@@ -16,9 +16,6 @@ parameters:
     type: string
   - name: dotnetScript
     type: string
-  - name: targetRids
-    type: object
-    default: ''
   - name: runHelixTests
     type: boolean
     default: false
@@ -40,21 +37,10 @@ parameters:
 
 steps:
   # Internal pipeline: Build with pack+sign
+  # Native archives are produced by the build_sign_native stage for all platforms
+  # (macOS, Linux, Windows). This job builds all managed packages, signs them,
+  # and publishes.
   - ${{ if ne(parameters.runAsPublic, 'true') }}:
-    # Build bundle payload (aspire-managed) for each target RID before the main build
-    - ${{ each targetRid in parameters.targetRids }}:
-      - script: ${{ parameters.dotnetScript }}
-                msbuild
-                $(Build.SourcesDirectory)/eng/Bundle.proj
-                /restore
-                /p:Configuration=${{ parameters.buildConfig }}
-                /p:TargetRid=${{ targetRid }}
-                /p:BundleVersion=ci-bundlepayload
-                /p:SkipNativeBuild=true
-                /p:ContinuousIntegrationBuild=true
-                /bl:${{ parameters.repoLogPath }}/BundlePayload-${{ targetRid }}.binlog
-        displayName: 🟣Build bundle payload (${{ targetRid }})
-
     - script: ${{ parameters.buildScript }}
               -restore -build
               -pack
@@ -64,7 +50,7 @@ steps:
               /bl:${{ parameters.repoLogPath }}/build.binlog
               $(_OfficialBuildIdArgs)
               $(_InternalBuildArgs)
-              /p:TargetRids=${{ join(':', parameters.targetRids) }}
+              /p:SkipNativeBuild=true
               /p:SkipTestProjects=true
               /p:BuildExtension=true
       displayName: 🟣Build
@@ -119,7 +105,7 @@ steps:
           $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
           $manifestPath = Join-Path $vsixDir "$baseName.manifest"
           $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
-          
+
           if (-not (Test-Path $manifestPath)) {
             Write-Host "##[error]Manifest file not found: $manifestPath"
             exit 1
@@ -128,7 +114,7 @@ steps:
             Write-Host "##[error]Signature file not found: $signaturePath"
             exit 1
           }
-          
+
           # First verify the .signature.p7s is in PKCS#7 format (binary)
           $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
           if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
@@ -136,7 +122,7 @@ steps:
             Write-Host "##[error]$baseName.signature.p7s does NOT appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)"
             exit 1
           }
-          
+
           Write-Host "Verifying signature for $($vsix.Name)..."
           npx vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
           if ($LASTEXITCODE -ne 0) {
@@ -178,7 +164,7 @@ steps:
             $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.FullName)
             $manifestPath = Join-Path $vsixDir "$baseName.manifest"
             $signaturePath = Join-Path $vsixDir "$baseName.signature.p7s"
-            
+
             $publishArgs = @("vsce", "publish", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
             if ($preRelease -eq 'True') {
               $publishArgs += "--pre-release"
@@ -186,7 +172,7 @@ steps:
             } else {
               Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
             }
-            
+
             & npx @publishArgs
             if ($LASTEXITCODE -ne 0) {
               Write-Host "##[error]Failed to publish $($vsix.Name)"

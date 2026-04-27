@@ -25,22 +25,9 @@ public abstract class Resource : IResource
     /// Initializes a new instance of the <see cref="Resource"/> class.
     /// </summary>
     /// <param name="name">The name of the resource.</param>
-    protected Resource(string name) : this(name, skipValidation: false)
+    protected Resource(string name)
     {
-    }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="Resource"/> class without name validation.
-    /// Used for internal resources that are never deployed and don't need to follow naming rules.
-    /// </summary>
-    /// <param name="name">The name of the resource.</param>
-    /// <param name="skipValidation">When <c>true</c>, skips name validation.</param>
-    internal Resource(string name, bool skipValidation)
-    {
-        if (!skipValidation)
-        {
-            ModelName.ValidateName(nameof(Resource), name);
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         Name = name;
     }

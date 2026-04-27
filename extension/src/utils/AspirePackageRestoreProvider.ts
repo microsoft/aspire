@@ -64,10 +64,14 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
     async retryRestore(): Promise<void> {
         this._failedDirs.clear();
         this._showProgress();
-        await this._restoreAll();
+        await this._restoreAll(true);
     }
 
-    private async _restoreAll(): Promise<void> {
+    private async _restoreAll(force = false): Promise<void> {
+        if (!force && !getEnableAutoRestore()) {
+            extensionLogOutputChannel.info('Auto-restore is disabled, skipping restore');
+            return;
+        }
         const allConfigs = await findAspireSettingsFiles();
         const configs = allConfigs.filter(uri => uri.fsPath.endsWith(aspireConfigFileName));
         if (configs.length === 0) {
@@ -122,6 +126,10 @@ export class AspirePackageRestoreProvider implements vscode.Disposable {
     }
 
     private async _restoreIfChanged(uri: vscode.Uri, isInitial: boolean): Promise<void> {
+        if (!getEnableAutoRestore()) {
+            return;
+        }
+
         let content: string;
         try {
             content = (await vscode.workspace.fs.readFile(uri)).toString();

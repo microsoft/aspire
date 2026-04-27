@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections;
 using System.Reflection;
 using System.Reflection.Emit;
 using Aspire.Hosting.ApplicationModel;
@@ -127,6 +128,22 @@ public class AtsCapabilityScannerTests
 
         // System.Object maps to 'any'
         Assert.Equal("any", result);
+    }
+
+    [Fact]
+    public void MapToAtsTypeId_NonGenericIDictionary_ReturnsStringAnyDict()
+    {
+        var result = AtsCapabilityScanner.MapToAtsTypeId(typeof(IDictionary));
+
+        Assert.Equal("Aspire.Hosting/Dict<string,any>", result);
+    }
+
+    [Fact]
+    public void MapToAtsTypeId_NonGenericIList_ReturnsAnyList()
+    {
+        var result = AtsCapabilityScanner.MapToAtsTypeId(typeof(IList));
+
+        Assert.Equal("Aspire.Hosting/List<any>", result);
     }
 
     [Fact]
@@ -294,6 +311,40 @@ public class AtsCapabilityScannerTests
         Assert.Contains(result.Capabilities, capability => capability.CapabilityId.EndsWith("/IUserSecretsManager.trySetSecret", StringComparison.Ordinal));
         Assert.Contains(result.Capabilities, capability => capability.CapabilityId.EndsWith("/PipelineStepContext.reportingStep", StringComparison.Ordinal));
         Assert.Contains(result.Capabilities, capability => capability.CapabilityId.EndsWith("/PipelineSummary.add", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ScanAssembly_HostingAssembly_ExportsWithHttpCommandCapabilityWithAtsFriendlyOptions()
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting/withHttpCommand");
+
+        Assert.Equal("withHttpCommand", capability.MethodName);
+        Assert.Equal(3, capability.Parameters.Count);
+        Assert.DoesNotContain(capability.Parameters, p => p.Name == "endpointName");
+        Assert.DoesNotContain(capability.Parameters, p => p.Name == "commandName");
+
+        var optionsParameter = Assert.Single(capability.Parameters, p => p.Name == "options");
+        Assert.Equal("options", optionsParameter.Name);
+        Assert.NotNull(optionsParameter.Type);
+        Assert.Equal(AtsTypeCategory.Dto, optionsParameter.Type.Category);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandExportOptions)), optionsParameter.Type.TypeId);
+
+        var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandExportOptions)));
+        Assert.Equal(nameof(HttpCommandExportOptions), dto.Name);
+        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandName));
+        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.EndpointName));
+        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.MethodName));
+        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.ResultMode));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(CommandOptions.Parameter));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.HttpClientName));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.PrepareRequest));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.Method));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.EndpointSelector));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.GetCommandResult));
     }
 
     #endregion

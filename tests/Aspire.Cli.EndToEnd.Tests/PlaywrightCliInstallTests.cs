@@ -29,10 +29,10 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     public async Task AgentInit_InstallsPlaywrightCli_AndGeneratesSkillFiles()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -41,7 +41,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 1: Verify playwright-cli is not installed.
         await auto.TypeAsync("playwright-cli --version 2>&1 || true");
@@ -73,10 +73,12 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.TypeAsync(" "); // Toggle on Claude Code location
         await auto.EnterAsync();
 
-        // Third prompt: skills. Accept defaults (Aspire, Playwright CLI, dotnet-inspect).
+        // Third prompt: skills. Aspire is pre-selected; toggle on Playwright CLI too.
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
+        await auto.DownAsync();
+        await auto.TypeAsync(" "); // Toggle on Playwright CLI
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -113,10 +115,10 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
     public async Task AgentInit_WhenCwdDiffersFromWorkspaceRoot_PlacesSkillFilesInWorkspaceRoot()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -125,7 +127,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 1: Create an Aspire project.
         await auto.AspireNewAsync("TestProject", counter);
@@ -158,10 +160,12 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.TypeAsync(" "); // Toggle on Claude Code location
         await auto.EnterAsync();
 
-        // Accept default skills, which include Playwright CLI.
+        // Select skills. Aspire is pre-selected; toggle on Playwright CLI too.
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
+        await auto.DownAsync();
+        await auto.TypeAsync(" "); // Toggle on Playwright CLI
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));

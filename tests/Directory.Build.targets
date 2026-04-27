@@ -101,7 +101,7 @@
         (($([MSBuild]::IsOSPlatform('Windows')) and'$(RunOnAzdoHelixWindows)' == 'true')
         or ($([MSBuild]::IsOSPlatform('Linux')) and '$(RunOnAzdoHelixLinux)' == 'true'))">true</_ShouldArchiveForHelixRun>
 
-    <_ShouldArchiveForGithubActionsRun Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(RequiredNuGetsForTesting)' == 'true'">true</_ShouldArchiveForGithubActionsRun>
+    <_ShouldArchiveForGithubActionsRun Condition="'$(IsGitHubActionsRunner)' == 'true' and '$(RequiresNugets)' == 'true'">true</_ShouldArchiveForGithubActionsRun>
 
     <_ShouldArchiveTests
       Condition=" '$(IsTestProject)' == 'true' and '$(ArchiveTests)' == 'true' and

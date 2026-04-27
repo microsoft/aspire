@@ -61,7 +61,7 @@ internal sealed class ConfigCommand : BaseCommand
                 Debug.Assert(cmd.Description is not null);
                 return cmd.Description.TrimEnd('.');
             },
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return await subcommand.InteractiveExecuteAsync(cancellationToken);
     }

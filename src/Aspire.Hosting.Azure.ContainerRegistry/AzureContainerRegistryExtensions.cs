@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Globalization;
 using System.Text;
@@ -35,28 +36,7 @@ public static class AzureContainerRegistryExtensions
 
         builder.AddAzureProvisioning();
 
-        var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
-        {
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, name) =>
-                {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = name;
-                    return resource;
-                },
-                (infrastructure) => new ContainerRegistryService(infrastructure.AspireResource.GetBicepIdentifier())
-                {
-                    Sku = new() { Name = ContainerRegistrySkuName.Basic },
-                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
-                });
-
-            infrastructure.Add(registry);
-
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name.ToBicepExpression() });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer.ToBicepExpression() });
-        };
-
-        var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
+        var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
 
         IResourceBuilder<AzureContainerRegistryResource> resourceBuilder;
 

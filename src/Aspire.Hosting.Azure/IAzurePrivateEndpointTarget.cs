@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure resource that can be connected to via a private endpoint.
 /// </summary>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public interface IAzurePrivateEndpointTarget : IResource
 {
     /// <summary>
@@ -24,8 +24,8 @@ public interface IAzurePrivateEndpointTarget : IResource
     IEnumerable<string> GetPrivateLinkGroupIds();
 
     /// <summary>
-    /// Gets the private DNS zone name for this resource type (e.g., "privatelink.blob.core.windows.net" for blob storage).
+    /// Gets the private DNS zone names for this resource type (e.g., "privatelink.blob.core.windows.net" for blob storage).
     /// </summary>
-    /// <returns>The private DNS zone name for the private endpoint.</returns>
-    string GetPrivateDnsZoneName();
+    /// <returns>A collection of private DNS zone names for the private endpoint.</returns>
+    IEnumerable<string> GetPrivateDnsZoneNames();
 }

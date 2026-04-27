@@ -1,8 +1,9 @@
 # Executes quarantined tests
 #
 # COPILOT INSTRUCTIONS:
-# - Keep the 'paths:' list in sync across tests-outerloop.yml and
-#   tests-quarantine.yml
+# - Keep the shared 'paths:' entries (specialized-test-runner.yml,
+#   run-tests.yml) in sync across tests-outerloop.yml and
+#   tests-quarantine.yml.  Each workflow also lists itself.
 # - Validate that each path exists in the repository before adding or
 #   updating the list
 # - No external YAML file is used—only the workflow YAMLs themselves
@@ -17,15 +18,17 @@ on:
     # Run every 2 hours. Quarantined tests are run frequently to catch flaky tests with a low failure rate.
     - cron: '0 */2 * * *'
 
-  # TEMPORARILY DISABLED pull_request trigger due to #12143 (disk space issues): https://github.com/microsoft/aspire/issues/12143
-  # pull_request:
-  #   paths:
-  #     - '.github/actions/**'
-  #     - '.github/workflows/**'
-  #     - 'eng/**'
-  #     - '!eng/pipelines/**'
-  #     - '!eng/scripts/**'
-  #     - '!eng/*pack/**'
+  # Re-enabled with narrow paths filter scoped to key workflow files that
+  # orchestrate this pipeline. Changes to downstream workflows (e.g.
+  # build-packages.yml) are validated by the regular CI and don't need to
+  # re-trigger the full quarantine/outerloop run.
+  # Previously disabled (#12143) due to broad paths filter causing disk
+  # space issues on every CI/eng change.
+  pull_request:
+    paths:
+      - '.github/workflows/tests-quarantine.yml'
+      - '.github/workflows/specialized-test-runner.yml'
+      - '.github/workflows/run-tests.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -8,7 +8,13 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 internal static class ModelName
 {
-    internal static bool IsValidName(string target, string name) => TryValidateName(target, name, out _);
+    public const int DefaultMaxLength = 64;
+    public const bool DefaultValidateStartsWithLetter = true;
+    public const bool DefaultValidateAllowedCharacters = true;
+    public const bool DefaultValidateNoConsecutiveHyphens = true;
+    public const bool DefaultValidateNoTrailingHyphen = true;
+
+    internal static bool IsValidName(string target, string name) => TryValidateName(target, name, DefaultMaxLength, DefaultValidateStartsWithLetter, DefaultValidateAllowedCharacters, DefaultValidateNoConsecutiveHyphens, DefaultValidateNoTrailingHyphen, out _);
 
     internal static void ValidateName(string target, string name)
     {
@@ -24,60 +30,86 @@ internal static class ModelName
         }
 #pragma warning restore CA1510
 
-        if (!TryValidateName(target, name, out var validationMessage))
+        if (!TryValidateName(target, name, DefaultMaxLength, DefaultValidateStartsWithLetter, DefaultValidateAllowedCharacters, DefaultValidateNoConsecutiveHyphens, DefaultValidateNoTrailingHyphen, out var validationMessage))
+        {
+            throw new ArgumentException(validationMessage, nameof(name));
+        }
+    }
+
+    internal static void ValidateName(string target, string name, int? maxLength, bool validateStartsWithLetter, bool validateAllowedCharacters, bool validateNoConsecutiveHyphens, bool validateNoTrailingHyphen)
+    {
+#pragma warning disable CA1510 // Use ArgumentNullException throw helper
+        // This file is included in projects targeting netstandard2.0
+        if (target is null)
+        {
+            throw new ArgumentNullException(nameof(target));
+        }
+        if (name is null)
+        {
+            throw new ArgumentNullException(nameof(name));
+        }
+#pragma warning restore CA1510
+
+        if (!TryValidateName(target, name, maxLength, validateStartsWithLetter, validateAllowedCharacters, validateNoConsecutiveHyphens, validateNoTrailingHyphen, out var validationMessage))
         {
             throw new ArgumentException(validationMessage, nameof(name));
         }
     }
 
     /// <summary>
-    /// Validate that a model name is valid.
-    /// - Must start with an ASCII letter.
-    /// - Must contain only ASCII letters, digits, and hyphens.
-    /// - Must not end with a hyphen.
-    /// - Must not contain consecutive hyphens.
-    /// - Must be between 1 and 64 characters long.
+    /// Validate that a model name is valid using the default validation rules.
     /// </summary>
     internal static bool TryValidateName(string target, string name, out string? validationMessage)
     {
+        return TryValidateName(target, name, DefaultMaxLength, DefaultValidateStartsWithLetter, DefaultValidateAllowedCharacters, DefaultValidateNoConsecutiveHyphens, DefaultValidateNoTrailingHyphen, out validationMessage);
+    }
+
+    /// <summary>
+    /// Validate that a model name is valid using the specified validation rules.
+    /// </summary>
+    internal static bool TryValidateName(string target, string name, int? maxLength, bool validateStartsWithLetter, bool validateAllowedCharacters, bool validateNoConsecutiveHyphens, bool validateNoTrailingHyphen, out string? validationMessage)
+    {
         validationMessage = null;
 
-        if (name.Length < 1 || name.Length > 64)
+        if (maxLength is not null && (name.Length < 1 || name.Length > maxLength.Value))
         {
-            validationMessage = $"{target} name '{name}' is invalid. Name must be between 1 and 64 characters long.";
+            validationMessage = $"{target} name '{name}' is invalid. Name must be between 1 and {maxLength.Value} characters long.";
             return false;
         }
 
-        var lastCharacterHyphen = false;
-        for (var i = 0; i < name.Length; i++)
+        if (validateAllowedCharacters || validateNoConsecutiveHyphens)
         {
-            if (name[i] == '-')
+            var lastCharacterHyphen = false;
+            for (var i = 0; i < name.Length; i++)
             {
-                if (lastCharacterHyphen)
+                if (name[i] == '-')
                 {
-                    validationMessage = $"{target} name '{name}' is invalid. Name cannot contain consecutive hyphens.";
+                    if (validateNoConsecutiveHyphens && lastCharacterHyphen)
+                    {
+                        validationMessage = $"{target} name '{name}' is invalid. Name cannot contain consecutive hyphens.";
+                        return false;
+                    }
+                    lastCharacterHyphen = true;
+                }
+                else if (validateAllowedCharacters && !IsAsciiLetterOrDigit(name[i]))
+                {
+                    validationMessage = $"{target} name '{name}' is invalid. Name must contain only ASCII letters, digits, and hyphens.";
                     return false;
                 }
-                lastCharacterHyphen = true;
-            }
-            else if (!IsAsciiLetterOrDigit(name[i]))
-            {
-                validationMessage = $"{target} name '{name}' is invalid. Name must contain only ASCII letters, digits, and hyphens.";
-                return false;
-            }
-            else
-            {
-                lastCharacterHyphen = false;
+                else
+                {
+                    lastCharacterHyphen = false;
+                }
             }
         }
 
-        if (!IsAsciiLetter(name[0]))
+        if (validateStartsWithLetter && name.Length > 0 && !IsAsciiLetter(name[0]))
         {
             validationMessage = $"{target} name '{name}' is invalid. Name must start with an ASCII letter.";
             return false;
         }
 
-        if (name[name.Length - 1] == '-')
+        if (validateNoTrailingHyphen && name.Length > 0 && name[name.Length - 1] == '-')
         {
             validationMessage = $"{target} name '{name}' is invalid. Name cannot end with a hyphen.";
             return false;

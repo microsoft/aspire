@@ -17,7 +17,7 @@ internal static partial class DetachedProcessLauncher
     /// PROC_THREAD_ATTRIBUTE_HANDLE_LIST to prevent handle inheritance to grandchildren.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static Process StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory)
+    private static Process StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables)
     {
         // Open NUL device for stdout/stderr — child writes go nowhere
         using var nulHandle = CreateFileW(
@@ -77,45 +77,65 @@ internal static partial class DetachedProcessLauncher
 
                     var si = new STARTUPINFOEX();
                     si.cb = Marshal.SizeOf<STARTUPINFOEX>();
-                    si.dwFlags = StartfUseStdHandles;
+                    si.dwFlags = StartfUseStdHandles | StartfUseShowWindow;
                     si.hStdInput = nint.Zero;
                     si.hStdOutput = nulRawHandle;
                     si.hStdError = nulRawHandle;
                     si.lpAttributeList = attrList;
+                    si.wShowWindow = ShowWindowHide;
 
                     // Build the command line string: "fileName" arg1 arg2 ...
                     var commandLine = BuildCommandLine(fileName, arguments);
 
-                    var flags = CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNoWindow;
+                    var flags = CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewProcessGroup;
 
-                    if (!CreateProcessW(
-                        null,
-                        commandLine,
-                        nint.Zero,
-                        nint.Zero,
-                        bInheritHandles: true, // TRUE but HANDLE_LIST restricts what's actually inherited
-                        flags,
-                        nint.Zero,
-                        workingDirectory,
-                        ref si,
-                        out var pi))
-                    {
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create detached process");
-                    }
-
-                    Process detachedProcess;
+                    // Build a custom environment block if variables need to be removed or added.
+                    // CreateProcessW with lpEnvironment=nint.Zero inherits the parent's
+                    // environment, so we only build a custom block when customization is needed.
+                    var envBlockHandle = nint.Zero;
                     try
                     {
-                        detachedProcess = Process.GetProcessById(pi.dwProcessId);
+                        if (shouldRemoveEnvironmentVariable is not null || additionalEnvironmentVariables is not null)
+                        {
+                            envBlockHandle = BuildCustomEnvironmentBlock(shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
+                        }
+
+                        if (!CreateProcessW(
+                            null,
+                            commandLine,
+                            nint.Zero,
+                            nint.Zero,
+                            bInheritHandles: true, // TRUE but HANDLE_LIST restricts what's actually inherited
+                            flags,
+                            envBlockHandle,
+                            workingDirectory,
+                            ref si,
+                            out var pi))
+                        {
+                            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to create detached process");
+                        }
+
+                        Process detachedProcess;
+                        try
+                        {
+                            detachedProcess = Process.GetProcessById(pi.dwProcessId);
+                        }
+                        finally
+                        {
+                            // Close the process and thread handles returned by CreateProcess.
+                            CloseHandle(pi.hProcess);
+                            CloseHandle(pi.hThread);
+                        }
+
+                        return detachedProcess;
                     }
                     finally
                     {
-                        // Close the process and thread handles returned by CreateProcess.
-                        CloseHandle(pi.hProcess);
-                        CloseHandle(pi.hThread);
+                        if (envBlockHandle != nint.Zero)
+                        {
+                            Marshal.FreeHGlobal(envBlockHandle);
+                        }
                     }
-
-                    return detachedProcess;
                 }
                 finally
                 {
@@ -217,15 +237,78 @@ internal static partial class DetachedProcessLauncher
         sb.Append('"');
     }
 
+    /// <summary>
+    /// Builds a Unicode environment block for CreateProcessW with specified variables
+    /// removed and/or added. The block is sorted by variable name (case-insensitive,
+    /// as required by Windows) and double-null-terminated. The caller must free the
+    /// returned pointer with Marshal.FreeHGlobal.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    private static nint BuildCustomEnvironmentBlock(Func<string, bool>? shouldRemove, IReadOnlyDictionary<string, string>? additionalVariables)
+    {
+        // Collect current environment variables, excluding the ones to remove.
+        var envVars = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
+        {
+            var key = (string)entry.Key;
+            if (shouldRemove is null || !shouldRemove(key))
+            {
+                envVars[key] = (string?)entry.Value ?? string.Empty;
+            }
+        }
+
+        // Add additional variables (overwrites any existing keys with the same name).
+        if (additionalVariables is not null)
+        {
+            foreach (var (key, value) in additionalVariables)
+            {
+                envVars[key] = value;
+            }
+        }
+
+        // Build the double-null-terminated Unicode environment block:
+        // KEY1=VALUE1\0KEY2=VALUE2\0...\0\0
+        var blockBuilder = new StringBuilder();
+        foreach (var kvp in envVars)
+        {
+            blockBuilder.Append(kvp.Key);
+            blockBuilder.Append('=');
+            blockBuilder.Append(kvp.Value);
+            blockBuilder.Append('\0');
+        }
+
+        if (envVars.Count == 0)
+        {
+            blockBuilder.Append('\0');
+        }
+
+        blockBuilder.Append('\0'); // Final terminator
+
+        var blockString = blockBuilder.ToString();
+        var byteCount = Encoding.Unicode.GetByteCount(blockString);
+        var ptr = Marshal.AllocHGlobal(byteCount);
+        unsafe
+        {
+            fixed (char* pStr = blockString)
+            {
+                Encoding.Unicode.GetBytes(pStr, blockString.Length, (byte*)ptr, byteCount);
+            }
+        }
+
+        return ptr;
+    }
+
     // --- Constants ---
     private const uint GenericWrite = 0x40000000;
     private const uint FileShareWrite = 0x00000002;
     private const uint OpenExisting = 3;
     private const uint HandleFlagInherit = 0x00000001;
     private const uint StartfUseStdHandles = 0x00000100;
+    private const uint StartfUseShowWindow = 0x00000001;
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint ExtendedStartupInfoPresent = 0x00080000;
-    private const uint CreateNoWindow = 0x08000000;
+    private const uint CreateNewProcessGroup = 0x00000200;
+    private const ushort ShowWindowHide = 0x0000;
     private static readonly nint s_procThreadAttributeHandleList = (nint)0x00020002;
 
     // --- Structs ---

@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Python;
 /// <param name="parent">The parent Python application resource.</param>
 /// <param name="venvPath">The path where the virtual environment should be created.</param>
 internal sealed class PythonVenvCreatorResource(string name, PythonAppResource parent, string venvPath)
-    : ExecutableResource(name, "python", parent.WorkingDirectory, skipValidation: true) // Validation is skipped because appending "-venv-creator" to the parent name can exceed the 64-char limit.
+    : ExecutableResource(name, "python", parent.WorkingDirectory)
 {
     /// <summary>
     /// Gets the path where the virtual environment will be created.

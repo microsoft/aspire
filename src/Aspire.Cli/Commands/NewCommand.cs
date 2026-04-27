@@ -33,12 +33,12 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
 
-    private static readonly Option<string> s_nameOption = new("--name", "-n")
+    internal static readonly Option<string?> s_nameOption = new("--name", "-n")
     {
         Description = NewCommandStrings.NameArgumentDescription,
         Recursive = true
     };
-    private static readonly Option<string?> s_outputOption = new("--output", "-o")
+    internal static readonly Option<string?> s_outputOption = new("--output", "-o")
     {
         Description = NewCommandStrings.OutputArgumentDescription,
         Recursive = true
@@ -51,6 +51,12 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private static readonly Option<string?> s_versionOption = new("--version")
     {
         Description = NewCommandStrings.VersionArgumentDescription,
+        Recursive = true
+    };
+
+    internal static readonly Option<bool?> s_suppressAgentInitOption = new("--suppress-agent-init")
+    {
+        Description = SharedCommandStrings.AgentInitOptionDescription,
         Recursive = true
     };
 
@@ -94,6 +100,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_outputOption);
         Options.Add(s_sourceOption);
         Options.Add(s_versionOption);
+        Options.Add(s_suppressAgentInitOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration);
@@ -161,7 +168,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             "Which language would you like to use?",
             choices,
             choice => choice.DisplayName.EscapeMarkup(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return selected.LanguageId;
     }
@@ -267,6 +274,14 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return null;
         }
 
+        if (!_hostEnvironment.SupportsInteractiveInput)
+        {
+            InteractionService.DisplayError(NewCommandStrings.NonInteractiveTemplateRequired);
+            var templateNames = string.Join(", ", templatesForPrompt.Select(t => t.Name));
+            InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, templateNames));
+            throw new NonInteractiveException("template");
+        }
+
         var result = await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken);
 
         // The prompt is cleared after selection.
@@ -318,9 +333,21 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
 
-                var packages = await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken);
-                var package = packages
+                var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
                     .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
+                    .ToArray();
+                var hasPrHives = ExecutionContext.GetPrHiveCount() > 0;
+
+                NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
+                    packages,
+                    p => p.Version,
+                    out var cliVersionPackage,
+                    channelName: selectedChannel.Name,
+                    hasPrHives: hasPrHives)
+                    ? cliVersionPackage
+                    : null;
+
+                package ??= packages
                     .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
                     .FirstOrDefault();
 
@@ -387,7 +414,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
-        var exitCode = await _agentInitCommand.PromptAndChainAsync(_hostEnvironment, InteractionService, templateResult.ExitCode, workspaceRoot, cancellationToken);
+        var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
+        var exitCode = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
@@ -407,8 +435,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 internal interface INewCommandPrompter
 {
     Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
-    Task<string> PromptForProjectNameAsync(string defaultName, CancellationToken cancellationToken);
-    Task<string> PromptForOutputPath(string v, CancellationToken cancellationToken);
+    Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
+    Task<string> PromptForOutputPath(string v, ParseResult parseResult, CancellationToken cancellationToken);
 }
 
 internal interface ITemplateVersionPrompter
@@ -472,7 +500,7 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
                 NewCommandStrings.SelectATemplateVersion,
                 packageChoices,
                 c => c.Label,
-                ct);
+                cancellationToken: ct);
 
             return selection.Result;
         }
@@ -516,30 +544,26 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
             NewCommandStrings.SelectATemplateVersion,
             rootChoices,
             c => c.Label,
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return await topSelection.Action(cancellationToken);
     }
 
-    public virtual async Task<string> PromptForOutputPath(string path, CancellationToken cancellationToken)
+    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        // Escape markup characters in the path to prevent Spectre.Console from trying to parse them as markup
-        // when displaying it as the default value in the prompt
         return await interactionService.PromptForFilePathAsync(
             NewCommandStrings.EnterTheOutputPath,
-            defaultValue: path.EscapeMarkup(),
+            binding: PromptBinding.Create(parseResult, NewCommand.s_outputOption, path),
             directory: true,
             cancellationToken: cancellationToken
             );
     }
 
-    public virtual async Task<string> PromptForProjectNameAsync(string defaultName, CancellationToken cancellationToken)
+    public virtual async Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        // Escape markup characters in the default name to prevent Spectre.Console from trying to parse them as markup
-        // when displaying it as the default value in the prompt
         return await interactionService.PromptForStringAsync(
             NewCommandStrings.EnterTheProjectName,
-            defaultValue: defaultName.EscapeMarkup(),
+            binding: PromptBinding.Create(parseResult, NewCommand.s_nameOption, defaultName),
             validator: name => ProjectNameValidator.IsProjectNameValid(name)
                 ? ValidationResult.Success()
                 : ValidationResult.Error(NewCommandStrings.InvalidProjectName),
@@ -552,7 +576,7 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
             NewCommandStrings.SelectAProjectTemplate,
             validTemplates,
             t => t.Description.EscapeMarkup(),
-            cancellationToken
+            cancellationToken: cancellationToken
         );
     }
 }

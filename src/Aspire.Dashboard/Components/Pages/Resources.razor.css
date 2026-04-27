@@ -3,6 +3,21 @@
     --unread-logs-badge-color: #ffffff;
 }
 
+::deep .value-not-set-link {
+    display: inline;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent-fill-rest);
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+}
+
+::deep .value-not-set-link:hover {
+    color: var(--accent-fill-hover);
+}
+
 ::deep .unread-logs-errors-link::part(control) {
     margin-left: 5px;
     padding: 0;

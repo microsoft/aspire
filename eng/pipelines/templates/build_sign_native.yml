@@ -17,17 +17,18 @@ jobs:
       enableTelemetry: true
       # Publish build logs
       enablePublishBuildArtifacts: true
-      container: ${{ replace(targetRid, '-', '_') }}
+      ${{ if eq(parameters.agentOs, 'linux') }}:
+        container: ${{ replace(targetRid, '-', '_') }}
 
       jobs:
       - job: BuildNative_${{ replace(targetRid, '-', '_') }}
         displayName: ${{ replace(targetRid, '-', '_') }}
-        timeoutInMinutes: 40
+        timeoutInMinutes: 60
 
         variables:
         - TeamName: ${{ parameters.teamName }}
         - ${{ if eq(parameters.codeSign, true) }}:
-          - _buildArgs: '--sign'
+          - _buildArgs: '-sign'
         - ${{ else }}:
           - _buildArgs: ''
 
@@ -37,6 +38,14 @@ jobs:
         - ${{ else }}:
           - scriptName: build.sh
           - dotnetScript: dotnet.sh
+        # Map target RID architecture to Agent.OSArchitecture so the verify
+        # step only runs when the binary can execute natively on the agent.
+        - ${{ if contains(targetRid, 'arm64') }}:
+          - name: _ridAgentArch
+            value: ARM64
+        - ${{ if contains(targetRid, 'x64') }}:
+          - name: _ridAgentArch
+            value: X64
 
         pool:
           ${{ if eq(parameters.agentOs, 'windows') }}:
@@ -63,24 +72,73 @@ jobs:
             displayName: 🟣Restore
 
         steps:
+          # Build, publish, and sign aspire-managed before creating the bundle layout.
+          # This ensures aspire-managed is signed before CreateLayout packs it into the bundle archive.
+          # Step 1: dotnet publish produces the self-contained single-file binary.
+          # Step 2: build.sh -sign runs Arcade's signing (only when codeSign is enabled).
+          # Step 3: Bundle.proj creates the bundle layout and archive using the signed binary.
+          - script: >-
+              $(Build.SourcesDirectory)/$(dotnetScript)
+              publish
+              $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
+              -c $(_BuildConfig)
+              -r ${{ targetRid }}
+              --self-contained
+              /p:GenerateDocumentationFile=false
+              /p:EnforceCodeStyleInBuild=false
+              ${{ parameters.extraBuildArgs }}
+              /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
+            displayName: 🟣Prepare aspire-managed
+
+          # On macOS, ad-hoc codesign aspire-managed with JIT entitlements BEFORE Arcade signing.
+          # MicroBuild (MacDeveloperHardenWithNotarization) preserves entitlements from the prior
+          # ad-hoc signature when re-signing with the real certificate. Without this step,
+          # hardened runtime blocks CoreCLR JIT (W^X memory mapping) causing HRESULT: 0x80070008.
+          # This follows the same pattern used by dotnet/sdk for managed binaries (roslyn-entitlements.plist).
+          - ${{ if eq(parameters.agentOs, 'macos') }}:
+            - script: >-
+                codesign --sign - --force
+                --entitlements $(Build.SourcesDirectory)/eng/aspire-managed-entitlements.plist
+                $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
+              displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
+
+          - ${{ if eq(parameters.codeSign, true) }}:
+            - script: >-
+                $(Build.SourcesDirectory)/$(scriptName)
+                -restore -sign
+                ${{ parameters.extraBuildArgs }}
+                -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
+                /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
+              displayName: 🟣Sign aspire-managed
+              env:
+                SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+          # On macOS/Linux, restore the execute bit after Arcade signing.
+          # MicroBuild rewrites the binary file during signing, which resets permissions
+          # to the default umask (typically 644). The execute bit must be restored before
+          # CreateLayout packs the binary into the bundle archive.
+          - ${{ if and(eq(parameters.codeSign, true), ne(parameters.agentOs, 'windows')) }}:
+            - script: >-
+                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
+              displayName: 🟣Restore execute permission on aspire-managed
+
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
               msbuild
               $(Build.SourcesDirectory)/eng/Bundle.proj
-              /restore
+              "/t:_RestoreDcpPackage;_RunCreateLayout"
               /p:Configuration=$(_BuildConfig)
               /p:TargetRid=${{ targetRid }}
               /p:BundleVersion=ci-bundlepayload
-              /p:SkipNativeBuild=true
               /p:ContinuousIntegrationBuild=true
-              /bl:$(Build.Arcade.LogsPath)BundlePayload.binlog
-            displayName: 🟣Build bundle payload
+              /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
+            displayName: 🟣Create bundle layout
 
           - script: >-
               $(Build.SourcesDirectory)/$(scriptName)
-              --ci
-              --build
-              --restore
+              -ci
+              -build
+              -restore
               /p:SkipManagedBuild=true
               /p:TargetRids=${{ targetRid }}
               /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
@@ -90,6 +148,49 @@ jobs:
             displayName: 🟣Build native packages
             env:
               SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
+
+          # Verify the signed CLI archive can execute and create a project.
+          # Only runs when the target RID architecture matches the build agent
+          # (i.e. the binary can execute natively without emulation).
+          - ${{ if eq(parameters.agentOs, 'windows') }}:
+            - pwsh: |
+                $ErrorActionPreference = 'Stop'
+                Write-Host "Finding CLI archive for ${{ targetRid }}..."
+                $archiveDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
+                $archive = Get-ChildItem -Path $archiveDir -Filter "aspire-cli-${{ targetRid }}-*.zip" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                if (-not $archive) {
+                  Write-Host "##[error]No CLI archive found for ${{ targetRid }}"
+                  exit 1
+                }
+                Write-Host "Found archive: $($archive.FullName)"
+                & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.ps1" -ArchivePath $archive.FullName
+                if ($LASTEXITCODE -ne 0) {
+                  Write-Host "##[error]CLI archive verification failed"
+                  exit 1
+                }
+              displayName: 🟣Verify CLI archive (${{ targetRid }})
+              condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']))
+              env:
+                ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
+                DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+
+          - ${{ if and(ne(parameters.agentOs, 'windows'), not(contains(targetRid, 'musl'))) }}:
+            - script: |
+                set -euo pipefail
+                echo "Finding CLI archive for ${{ targetRid }}..."
+                ARCHIVE=$(find "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)" -name "aspire-cli-${{ targetRid }}-*.tar.gz" -type f | head -1)
+                if [ -z "$ARCHIVE" ]; then
+                  echo "##[error]No CLI archive found for ${{ targetRid }}"
+                  exit 1
+                fi
+                echo "Found archive: $ARCHIVE"
+                chmod +x "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.sh"
+                "$(Build.SourcesDirectory)/eng/scripts/verify-cli-archive.sh" "$ARCHIVE"
+              displayName: 🟣Verify CLI archive (${{ targetRid }})
+              condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']))
+              env:
+                ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
+                DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
           - task: 1ES.PublishBuildArtifacts@1
             displayName: 🟣Publish Artifacts

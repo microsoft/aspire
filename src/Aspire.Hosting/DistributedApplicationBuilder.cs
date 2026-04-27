@@ -185,6 +185,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // so they're used to initialize some types created immediately, e.g. IHostEnvironment.
         innerBuilderOptions.Args = options.Args;
 
+        // Pre-seed the configuration with ASPIRE_-prefixed environment variables.
+        // HostApplicationBuilder will then add DOTNET_-prefixed env vars and command line args on top.
+        // This gives us the priority order: --environment > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default.
+        var configuration = new ConfigurationManager();
+        configuration.AddEnvironmentVariables(prefix: "ASPIRE_");
+        innerBuilderOptions.Configuration = configuration;
+
         LogBuilderConstructing(options, innerBuilderOptions);
         _innerBuilder = new HostApplicationBuilder(innerBuilderOptions);
 
@@ -473,13 +480,13 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<DevcontainersOptions>, ConfigureDevcontainersOptions>());
             _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<SshRemoteOptions>, ConfigureSshRemoteOptions>());
             _innerBuilder.Services.AddSingleton<DevcontainerSettingsWriter>();
-            _innerBuilder.Services.TryAddEventingSubscriber<DevcontainerPortForwardingLifecycleHook>();
+            _innerBuilder.Services.TryAddEventingSubscriber<DevcontainerPortForwardingEventingSubscriber>();
 
             // Required command validation for resources
 #pragma warning disable ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
 #pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-            _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationLifecycleHook>();
+            _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
         }
 
         if (ExecutionContext.IsRunMode)
@@ -511,15 +518,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>("docker");
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>("podman");
-        _innerBuilder.Services.AddSingleton(sp =>
-        {
-            var dcpOptions = sp.GetRequiredService<IOptions<DcpOptions>>();
-            return dcpOptions.Value.ContainerRuntime switch
-            {
-                string rt => sp.GetRequiredKeyedService<IContainerRuntime>(rt),
-                null => sp.GetRequiredKeyedService<IContainerRuntime>("docker")
-            };
-        });
+        _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());
@@ -655,6 +654,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // TODO: Rename this to something related to deployment state
             { "--clear-cache", "Pipeline:ClearCache" },
 
+            { "--yes", "Pipeline:SkipConfirmation" },
+
             // DCP Publisher options, we should only process these in run mode
             { "--dcp-cli-path", "DcpPublisher:CliPath" },
             { "--dcp-container-runtime", "DcpPublisher:ContainerRuntime" },
@@ -730,13 +731,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             LogAppBuilding(this);
 
-            // AddResource(resource) validates that a name is unique but it's possible to add resources directly to the resource collection.
-            // Validate names for duplicates while building the application.
+            // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
+            // could have a different implementation that doesn't. Validate as a safety net.
             foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
                 .Where(g => g.Count() > 1)
                 .Select(g => g.Key))
             {
                 throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
+            }
+
+            // Validate resource names. Resources added directly to the collection bypass AddResource validation.
+            foreach (var resource in Resources)
+            {
+                ValidateResourceName(resource);
             }
 
             var application = new DistributedApplication(_innerBuilder.Build());
@@ -757,10 +764,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        if (Resources.FirstOrDefault(r => string.Equals(r.Name, resource.Name, StringComparisons.ResourceName)) is { } existingResource)
-        {
-            throw new DistributedApplicationException($"Cannot add resource of type '{resource.GetType()}' with name '{resource.Name}' because resource of type '{existingResource.GetType()}' with that name already exists. Resource names are case-insensitive.");
-        }
+        ValidateResourceName(resource);
 
         Resources.Add(resource);
         return CreateResourceBuilder(resource);
@@ -832,6 +836,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 configuration.Sources.RemoveAt(i);
             }
         }
+    }
+
+    private static void ValidateResourceName(IResource resource)
+    {
+        if (!resource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy))
+        {
+            policy = NameValidationPolicyAnnotation.Default;
+        }
+
+        ModelName.ValidateName(nameof(Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
     }
 
     private static bool PathsEqual(string left, string right) =>
