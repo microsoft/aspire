@@ -117,9 +117,7 @@ func parseAspireRedisConnString(s string) *redis.Options {
 			opts.Password = strings.TrimSpace(v)
 		case "ssl":
 			if strings.EqualFold(strings.TrimSpace(v), "true") {
-				// Aspire's local Redis uses a self-signed cert; skip verify
-				// for the starter dev experience.
-				opts.TLSConfig = &tls.Config{InsecureSkipVerify: true}
+				opts.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 			}
 		}
 	}
