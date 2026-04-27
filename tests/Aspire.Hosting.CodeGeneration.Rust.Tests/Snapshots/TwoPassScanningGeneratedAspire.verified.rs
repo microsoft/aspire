@@ -20,6 +20,25 @@ use crate::base::{
 // Enums
 // ============================================================================
 
+/// BrowserUserDataMode
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BrowserUserDataMode {
+    #[default]
+    #[serde(rename = "Shared")]
+    Shared,
+    #[serde(rename = "Isolated")]
+    Isolated,
+}
+
+impl std::fmt::Display for BrowserUserDataMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Shared => write!(f, "Shared"),
+            Self::Isolated => write!(f, "Isolated"),
+        }
+    }
+}
+
 /// ContainerLifetime
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContainerLifetime {
@@ -1071,7 +1090,7 @@ impl CSharpAppResource {
     }
 
     /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = browser {
@@ -1079,6 +1098,9 @@ impl CSharpAppResource {
         }
         if let Some(ref v) = profile {
             args.insert("profile".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = user_data_mode {
+            args.insert("userDataMode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withBrowserLogs", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -3848,7 +3870,7 @@ impl ContainerResource {
     }
 
     /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = browser {
@@ -3856,6 +3878,9 @@ impl ContainerResource {
         }
         if let Some(ref v) = profile {
             args.insert("profile".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = user_data_mode {
+            args.insert("userDataMode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withBrowserLogs", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -5774,7 +5799,7 @@ impl DotnetToolResource {
     }
 
     /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = browser {
@@ -5782,6 +5807,9 @@ impl DotnetToolResource {
         }
         if let Some(ref v) = profile {
             args.insert("profile".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = user_data_mode {
+            args.insert("userDataMode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withBrowserLogs", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -7604,7 +7632,7 @@ impl ExecutableResource {
     }
 
     /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = browser {
@@ -7612,6 +7640,9 @@ impl ExecutableResource {
         }
         if let Some(ref v) = profile {
             args.insert("profile".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = user_data_mode {
+            args.insert("userDataMode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withBrowserLogs", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -12370,7 +12401,7 @@ impl ProjectResource {
     }
 
     /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = browser {
@@ -12378,6 +12409,9 @@ impl ProjectResource {
         }
         if let Some(ref v) = profile {
             args.insert("profile".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = user_data_mode {
+            args.insert("userDataMode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withBrowserLogs", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -14175,7 +14209,7 @@ impl TestDatabaseResource {
     }
 
     /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = browser {
@@ -14183,6 +14217,9 @@ impl TestDatabaseResource {
         }
         if let Some(ref v) = profile {
             args.insert("profile".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = user_data_mode {
+            args.insert("userDataMode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withBrowserLogs", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -15633,7 +15670,7 @@ impl TestRedisResource {
     }
 
     /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = browser {
@@ -15641,6 +15678,9 @@ impl TestRedisResource {
         }
         if let Some(ref v) = profile {
             args.insert("profile".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = user_data_mode {
+            args.insert("userDataMode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withBrowserLogs", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -17264,7 +17304,7 @@ impl TestVaultResource {
     }
 
     /// Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
-    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+    pub fn with_browser_logs(&self, browser: Option<&str>, profile: Option<&str>, user_data_mode: Option<BrowserUserDataMode>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = browser {
@@ -17272,6 +17312,9 @@ impl TestVaultResource {
         }
         if let Some(ref v) = profile {
             args.insert("profile".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = user_data_mode {
+            args.insert("userDataMode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withBrowserLogs", args)?;
         let handle: Handle = serde_json::from_value(result)?;

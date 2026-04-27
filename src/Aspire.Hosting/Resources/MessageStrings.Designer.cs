@@ -10,8 +10,8 @@
 
 namespace Aspire.Hosting.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Hosting.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class MessageStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal MessageStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Hosting.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Hosting.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Anonymous volumes cannot be read-only..
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerMountAnonymousVolumesReadOnlyExceptionMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Bind mounts must specify an absolute path..
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerMountBindMountsRequireRootedPaths", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Bind mounts must specify a source path..
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("ContainerMountBindMountsRequireSourceExceptionMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Application orchestrator dependency check returned an error: {0}.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DcpDependencyCheckFailedMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Newer version of the Aspire.Hosting.AppHost package is required to run the application. Ensure you are referencing at least version &apos;{0}&apos;..
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("DcpVersionCheckTooLowMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Installation instructions.
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("InstallationInstructions", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Missing command.
         /// </summary>
@@ -122,7 +122,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("MissingCommandNotificationTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at the specified location..
         /// </summary>
@@ -131,7 +131,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RequiredCommandNotFound", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Required command &apos;{0}&apos; was not found on PATH or at the specified location. For installation instructions, see: {1}.
         /// </summary>
@@ -140,7 +140,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RequiredCommandNotFoundWithLink", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Command &apos;{0}&apos; validation failed: {1}.
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RequiredCommandValidationFailed", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Command &apos;{0}&apos; validation failed: {1}. For installation instructions, see: {2}.
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("RequiredCommandValidationFailedWithLink", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; has a persistent lifetime but the AppHost project does not have user secrets configured. Generated parameter values (such as passwords) may change on each restart, causing persistent containers to be recreated. Run &apos;aspire secret set&apos; to initialize user secrets..
         /// </summary>
@@ -167,13 +167,166 @@ namespace Aspire.Hosting.Resources {
                 return ResourceManager.GetString("PersistentContainerWithoutUserSecrets", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Resource &apos;{0}&apos; may fail to start: {1}.
         /// </summary>
         internal static string ResourceMayFailToStart {
             get {
                 return ResourceManager.GetString("ResourceMayFailToStart", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (default).
+        /// </summary>
+        internal static string BrowserLogsDefaultProfileName {
+            get {
+                return ResourceManager.GetString("BrowserLogsDefaultProfileName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser configuration resolved an empty browser value..
+        /// </summary>
+        internal static string BrowserLogsEmptyBrowserConfiguration {
+            get {
+                return ResourceManager.GetString("BrowserLogsEmptyBrowserConfiguration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser configuration resolved an empty profile value..
+        /// </summary>
+        internal static string BrowserLogsEmptyProfileConfiguration {
+            get {
+                return ResourceManager.GetString("BrowserLogsEmptyProfileConfiguration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser configuration set &apos;{0}&apos; to &apos;{1}&apos; while &apos;{2}&apos; is &apos;{3}&apos;. Profiles can only be selected when &apos;{2}&apos; is &apos;{4}&apos;..
+        /// </summary>
+        internal static string BrowserLogsProfileRequiresSharedUserDataMode {
+            get {
+                return ResourceManager.GetString("BrowserLogsProfileRequiresSharedUserDataMode", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser configuration value &apos;{0}&apos; is not a valid &apos;{1}&apos;. Expected &apos;{2}&apos; or &apos;{3}&apos;..
+        /// </summary>
+        internal static string BrowserLogsInvalidUserDataModeConfiguration {
+            get {
+                return ResourceManager.GetString("BrowserLogsInvalidUserDataModeConfiguration", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to locate browser &apos;{0}&apos;. Specify an installed Chromium-based browser or an explicit executable path..
+        /// </summary>
+        internal static string BrowserLogsUnableToLocateBrowser {
+            get {
+                return ResourceManager.GetString("BrowserLogsUnableToLocateBrowser", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use &apos;{0}&apos; user data mode or run from a configured AppHost..
+        /// </summary>
+        internal static string BrowserLogsAppHostPathShaNotAvailable {
+            get {
+                return ResourceManager.GetString("BrowserLogsAppHostPathShaNotAvailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Browser user data directory &apos;{0}&apos; was not found..
+        /// </summary>
+        internal static string BrowserLogsUserDataDirectoryNotFound {
+            get {
+                return ResourceManager.GetString("BrowserLogsUserDataDirectoryNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to A tracked browser is already running for user data directory &apos;{0}&apos; with profile &apos;{1}&apos;. The requested profile is &apos;{2}&apos;. Close the existing tracked browser session or use isolated user data mode..
+        /// </summary>
+        internal static string BrowserLogsTrackedBrowserProfileConflict {
+            get {
+                return ResourceManager.GetString("BrowserLogsTrackedBrowserProfileConflict", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Unable to read Chromium profile metadata from &apos;{0}&apos; while resolving browser profile &apos;{1}&apos;..
+        /// </summary>
+        internal static string BrowserLogsUnableToReadProfileMetadata {
+            get {
+                return ResourceManager.GetString("BrowserLogsUnableToReadProfileMetadata", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Chromium profile metadata in &apos;{0}&apos; is invalid while resolving browser profile &apos;{1}&apos;..
+        /// </summary>
+        internal static string BrowserLogsInvalidProfileMetadata {
+            get {
+                return ResourceManager.GetString("BrowserLogsInvalidProfileMetadata", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Browser profile &apos;{0}&apos; was not found under &apos;{1}&apos;. Specify the profile directory name (for example &apos;Default&apos; or &apos;Profile 1&apos;) or a browser profile name from Chromium&apos;s profile metadata..
+        /// </summary>
+        internal static string BrowserLogsProfileNotFound {
+            get {
+                return ResourceManager.GetString("BrowserLogsProfileNotFound", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Browser profile &apos;{0}&apos; matched multiple Chromium profiles under &apos;{1}&apos;. Specify the profile directory name instead..
+        /// </summary>
+        internal static string BrowserLogsAmbiguousProfile {
+            get {
+                return ResourceManager.GetString("BrowserLogsAmbiguousProfile", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resource &apos;{0}&apos; does not have an HTTP or HTTPS endpoint. Browser logs require an endpoint to navigate to..
+        /// </summary>
+        internal static string BrowserLogsResourceMissingHttpEndpoint {
+            get {
+                return ResourceManager.GetString("BrowserLogsResourceMissingHttpEndpoint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Endpoint &apos;{0}&apos; for resource &apos;{1}&apos; has not been allocated yet..
+        /// </summary>
+        internal static string BrowserLogsEndpointNotAllocated {
+            get {
+                return ResourceManager.GetString("BrowserLogsEndpointNotAllocated", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser process exited with code {0} before reporting its process id..
+        /// </summary>
+        internal static string BrowserLogsProcessExitedBeforeProcessId {
+            get {
+                return ResourceManager.GetString("BrowserLogsProcessExitedBeforeProcessId", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Tracked browser process exited with code {0} before the debug endpoint metadata was written to &apos;{1}&apos;..
+        /// </summary>
+        internal static string BrowserLogsProcessExitedBeforeDebugEndpoint {
+            get {
+                return ResourceManager.GetString("BrowserLogsProcessExitedBeforeDebugEndpoint", resourceCulture);
             }
         }
     }

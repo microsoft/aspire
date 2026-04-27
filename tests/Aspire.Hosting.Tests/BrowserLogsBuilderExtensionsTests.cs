@@ -42,8 +42,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var browserLogsResource = Assert.Single(appModel.Resources.OfType<BrowserLogsResource>());
         Assert.Equal("web-browser-logs", browserLogsResource.Name);
         Assert.Equal(web.Resource.Name, browserLogsResource.ParentResource.Name);
-        Assert.Equal("chrome", browserLogsResource.Browser);
-        Assert.Null(browserLogsResource.Profile);
+        Assert.Equal("chrome", browserLogsResource.InitialConfiguration.Browser);
+        Assert.Null(browserLogsResource.InitialConfiguration.Profile);
         Assert.Contains(browserLogsResource.Annotations.OfType<NameValidationPolicyAnnotation>(), static annotation => annotation == NameValidationPolicyAnnotation.None);
 
         Assert.True(browserLogsResource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
@@ -73,6 +73,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "msedge";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Default";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
 
@@ -91,8 +92,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal("chrome", browserLogsResource.Browser);
-        Assert.Equal("Profile 1", browserLogsResource.Profile);
+        Assert.Equal("chrome", browserLogsResource.InitialConfiguration.Browser);
+        Assert.Equal("Profile 1", browserLogsResource.InitialConfiguration.Profile);
 
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
         Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.BrowserPropertyName && Equals(property.Value, "chrome"));
@@ -100,9 +101,23 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
-    public void GetDefaultBrowser_PrefersChromeWhenInstalled()
+    public void GetDefaultBrowser_PrefersEdgeWhenSharedModeAndEdgeIsInstalled()
     {
-        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(browser =>
+        var browser = BrowserConfiguration.GetDefaultBrowser(BrowserUserDataMode.Shared, browser =>
+            browser switch
+            {
+                "chrome" => "/resolved/chrome",
+                "msedge" => "/resolved/edge",
+                _ => null
+            });
+
+        Assert.Equal("msedge", browser);
+    }
+
+    [Fact]
+    public void GetDefaultBrowser_PrefersChromeWhenIsolatedModeAndChromeIsInstalled()
+    {
+        var browser = BrowserConfiguration.GetDefaultBrowser(BrowserUserDataMode.Isolated, browser =>
             browser switch
             {
                 "chrome" => "/resolved/chrome",
@@ -116,7 +131,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     [Fact]
     public void GetDefaultBrowser_FallsBackToEdgeWhenChromeIsMissing()
     {
-        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(browser =>
+        var browser = BrowserConfiguration.GetDefaultBrowser(browser =>
             browser switch
             {
                 "msedge" => "/resolved/edge",
@@ -129,7 +144,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     [Fact]
     public void GetDefaultBrowser_FallsBackToChromeWhenKnownBrowsersAreMissing()
     {
-        var browser = BrowserLogsBuilderExtensions.GetDefaultBrowser(static _ => null);
+        var browser = BrowserConfiguration.GetDefaultBrowser(static _ => null);
 
         Assert.Equal("chrome", browser);
     }
@@ -154,8 +169,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal(BrowserLogsBuilderExtensions.GetDefaultBrowser(BrowserLogsRunningSession.TryResolveBrowserExecutable), browserLogsResource.Browser);
-        Assert.Null(browserLogsResource.Profile);
+        Assert.Equal(BrowserConfiguration.GetDefaultBrowser(ChromiumBrowserResolver.TryResolveExecutable), browserLogsResource.InitialConfiguration.Browser);
+        Assert.Null(browserLogsResource.InitialConfiguration.Profile);
     }
 
     [Fact]
@@ -164,6 +179,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -175,13 +191,104 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "msedge", profile: "Default");
+        web.WithBrowserLogs(browser: "msedge", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
 
         using var app = builder.Build();
         var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
 
-        Assert.Equal("msedge", browserLogsResource.Browser);
-        Assert.Equal("Default", browserLogsResource.Profile);
+        Assert.Equal("msedge", browserLogsResource.InitialConfiguration.Browser);
+        Assert.Equal("Default", browserLogsResource.InitialConfiguration.Profile);
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+    }
+
+    [Fact]
+    public void WithBrowserLogs_DefaultsToSharedUserDataMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs();
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+        var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
+        Assert.Contains(snapshot.Properties, property => property.Name == BrowserLogsBuilderExtensions.UserDataModePropertyName && Equals(property.Value, nameof(BrowserUserDataMode.Shared)));
+    }
+
+    [Fact]
+    public void WithBrowserLogs_ReadsUserDataModeFromConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs();
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
+    }
+
+    [Fact]
+    public void WithBrowserLogs_RejectsProfileWhenUserDataModeIsIsolated()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => web.WithBrowserLogs(profile: "Default", userDataMode: BrowserUserDataMode.Isolated));
+        Assert.Contains(BrowserLogsBuilderExtensions.UserDataModeConfigurationKey, ex.Message);
+    }
+
+    [Fact]
+    public void WithBrowserLogs_ExplicitUserDataModeOverridesConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Isolated);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(userDataMode: BrowserUserDataMode.Shared);
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        Assert.Equal(BrowserUserDataMode.Shared, browserLogsResource.InitialConfiguration.UserDataMode);
     }
 
     [Fact]
@@ -214,8 +321,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var call = Assert.Single(sessionManager.Calls);
         Assert.Same(browserLogsResource, call.Resource);
         Assert.Equal(browserLogsResource.Name, call.ResourceName);
-        Assert.Equal("chrome", call.Settings.Browser);
-        Assert.Null(call.Settings.Profile);
+        Assert.Equal("chrome", call.Configuration.Browser);
+        Assert.Null(call.Configuration.Profile);
         Assert.Equal(new Uri("http://localhost:8080", UriKind.Absolute), call.Url);
     }
 
@@ -227,6 +334,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Default";
+        builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
 
         builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
             new BrowserLogsSessionManager(
@@ -259,9 +367,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         Assert.True(result.Success);
 
-        var launchSettings = Assert.Single(sessionFactory.Settings);
-        Assert.Equal("msedge", launchSettings.Browser);
-        Assert.Null(launchSettings.Profile);
+        var launchConfiguration = Assert.Single(sessionFactory.Configurations);
+        Assert.Equal("msedge", launchConfiguration.Browser);
+        Assert.Null(launchConfiguration.Profile);
 
         var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
             browserLogsResource.Name,
@@ -338,7 +446,12 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                     resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
                     HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserPropertyName, tempBrowserPath) &&
                     HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, tempBrowserPath) &&
-                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1)).DefaultTimeout();
+                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Owned)) &&
+                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.") &&
+                    HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                    resourceEvent.Snapshot.HealthReports.Any(report =>
+                        report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                        report.Status == HealthStatus.Unhealthy)).DefaultTimeout();
 
             Assert.Collection(
                 GetBrowserSessions(failedEvent.Snapshot),
@@ -409,7 +522,12 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
                 HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserPropertyName, "missing-browser") &&
                 !resourceEvent.Snapshot.Properties.Any(property => property.Name == BrowserLogsBuilderExtensions.BrowserExecutablePropertyName) &&
-                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1)).DefaultTimeout();
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Owned)) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.") &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                resourceEvent.Snapshot.HealthReports.Any(report =>
+                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                    report.Status == HealthStatus.Unhealthy)).DefaultTimeout();
 
         Assert.Collection(
             GetBrowserSessions(failedEvent.Snapshot),
@@ -418,6 +536,168 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Assert.Equal("session-0001", session.SessionId);
                 Assert.Equal("/fake/browser-1", session.BrowserExecutable);
             });
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_CommandPublishesFailureDiagnosticsWhenLaunchFailsBeforeAnySession()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionFactory = new FakeBrowserLogsRunningSessionFactory
+        {
+            NextStartException = new InvalidOperationException("Launch failed.", new TimeoutException("CDP timed out."))
+        };
+
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
+            new BrowserLogsSessionManager(
+                sp.GetRequiredService<ResourceLoggerService>(),
+                sp.GetRequiredService<ResourceNotificationService>(),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
+                sessionFactory));
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.Equal("Launch failed.", result.Message);
+
+        var errorText = "InvalidOperationException: Launch failed. --> TimeoutException: CDP timed out.";
+        var failedEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "None") &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
+                resourceEvent.Snapshot.HealthReports.Any(report =>
+                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                    report.Status == HealthStatus.Unhealthy &&
+                    report.Description == errorText)).DefaultTimeout();
+
+        Assert.Single(failedEvent.Snapshot.HealthReports);
+        Assert.Empty(GetBrowserSessions(failedEvent.Snapshot));
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_CommandClearsLastErrorAfterSuccessfulLaunch()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionFactory = new FakeBrowserLogsRunningSessionFactory
+        {
+            NextStartException = new InvalidOperationException("Launch failed.")
+        };
+
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
+            new BrowserLogsSessionManager(
+                sp.GetRequiredService<ResourceLoggerService>(),
+                sp.GetRequiredService<ResourceNotificationService>(),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
+                sessionFactory));
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var failedResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        Assert.False(failedResult.Success);
+
+        await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.FailedToStart &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, "InvalidOperationException: Launch failed.")).DefaultTimeout();
+
+        var successfulResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        Assert.True(successfulResult.Success);
+
+        var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                DoesNotHaveProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName) &&
+                !resourceEvent.Snapshot.HealthReports.Any(report => report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName)).DefaultTimeout();
+
+        Assert.Collection(
+            GetBrowserSessions(runningEvent.Snapshot),
+            session => Assert.Equal("session-0002", session.SessionId));
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_CommandSurfacesAdoptedBrowserDiagnostics()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionFactory = new FakeBrowserLogsRunningSessionFactory
+        {
+            NextBrowserHostOwnership = BrowserHostOwnership.Adopted,
+            NextProcessIdIsNull = true
+        };
+
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
+            new BrowserLogsSessionManager(
+                sp.GetRequiredService<ResourceLoggerService>(),
+                sp.GetRequiredService<ResourceNotificationService>(),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
+                sessionFactory));
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "msedge");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+        Assert.True(result.Success);
+
+        var runningEvent = await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, nameof(BrowserHostOwnership.Adopted)) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionsPropertyName, "session-0001 (adopted browser)")).DefaultTimeout();
+
+        var session = Assert.Single(GetBrowserSessions(runningEvent.Snapshot));
+        Assert.Equal(nameof(BrowserHostOwnership.Adopted), session.BrowserHostOwnership);
+        Assert.Null(session.ProcessId);
     }
 
     [Fact]
@@ -518,7 +798,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Properties = []
             });
 
-        web.WithBrowserLogs(browser: "chrome", profile: "Default");
+        web.WithBrowserLogs(browser: "chrome", profile: "Default", userDataMode: BrowserUserDataMode.Shared);
 
         using var app = builder.Build();
         await app.StartAsync();
@@ -550,6 +830,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 Assert.Equal("session-0001", session.SessionId);
                 Assert.Equal("chrome", session.Browser);
                 Assert.Equal("/fake/browser-1", session.BrowserExecutable);
+                Assert.Equal(nameof(BrowserHostOwnership.Owned), session.BrowserHostOwnership);
                 Assert.Equal(1001, session.ProcessId);
                 Assert.Equal("Default", session.Profile);
                 Assert.Equal("http://localhost:8080/", session.TargetUrl);
@@ -625,6 +906,73 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         Assert.Equal(KnownResourceStates.Finished, allCompletedEvent.Snapshot.State?.Text);
         Assert.Empty(GetBrowserSessions(allCompletedEvent.Snapshot));
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_PreservesLastErrorWhenOneOfMultipleSessionsFails()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
+
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
+            new BrowserLogsSessionManager(
+                sp.GetRequiredService<ResourceLoggerService>(),
+                sp.GetRequiredService<ResourceNotificationService>(),
+                sp.GetRequiredService<TimeProvider>(),
+                sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
+                sessionFactory));
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+
+        Assert.True((await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout()).Success);
+        Assert.True((await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout()).Success);
+
+        var firstSession = sessionFactory.Sessions[0];
+        var secondSession = sessionFactory.Sessions[1];
+        await firstSession.CompleteAsync(exitCode: 0, error: new InvalidOperationException("Target crashed."));
+
+        var errorText = "InvalidOperationException: Target crashed.";
+        await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.Running &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 1) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
+                resourceEvent.Snapshot.HealthReports.Any(report =>
+                    report.Name == "session-0002" &&
+                    report.Status == HealthStatus.Healthy) &&
+                resourceEvent.Snapshot.HealthReports.Any(report =>
+                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                    report.Status == HealthStatus.Unhealthy &&
+                    report.Description == errorText)).DefaultTimeout();
+
+        await secondSession.CompleteAsync(exitCode: 0);
+
+        await app.ResourceNotifications.WaitForResourceAsync(
+            browserLogsResource.Name,
+            resourceEvent =>
+                resourceEvent.Snapshot.State?.Text == KnownResourceStates.Exited &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.ActiveSessionCountPropertyName, 0) &&
+                HasProperty(resourceEvent.Snapshot, BrowserLogsBuilderExtensions.LastErrorPropertyName, errorText) &&
+                resourceEvent.Snapshot.HealthReports.Any(report =>
+                    report.Name == BrowserLogsBuilderExtensions.LastErrorPropertyName &&
+                    report.Status == HealthStatus.Unhealthy &&
+                    report.Description == errorText)).DefaultTimeout();
     }
 
     [Fact]
@@ -789,6 +1137,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     private static bool HasProperty(CustomResourceSnapshot snapshot, string name, object expectedValue) =>
         snapshot.Properties.Any(property => property.Name == name && Equals(property.Value, expectedValue));
 
+    private static bool DoesNotHaveProperty(CustomResourceSnapshot snapshot, string name) =>
+        !snapshot.Properties.Any(property => property.Name == name);
+
     private static IReadOnlyList<BrowserSessionPropertyValue> GetBrowserSessions(CustomResourceSnapshot snapshot)
     {
         var property = snapshot.Properties.Single(property => property.Name == BrowserLogsBuilderExtensions.BrowserSessionsPropertyName);
@@ -797,10 +1148,10 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             ?? throw new InvalidOperationException("Expected browser session property JSON.");
     }
 
-    private static BrowserLogsProtocolEvent ParseProtocolEvent(string json)
+    private static BrowserLogsCdpProtocolEvent ParseProtocolEvent(string json)
     {
         var payload = Encoding.UTF8.GetBytes(json);
-        return BrowserLogsProtocol.ParseEvent(BrowserLogsProtocol.ParseMessageHeader(payload), payload)
+        return BrowserLogsCdpProtocol.ParseEvent(BrowserLogsCdpProtocol.ParseMessageHeader(payload), payload)
             ?? throw new InvalidOperationException("Expected a browser protocol event frame.");
     }
 
@@ -811,30 +1162,33 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     {
         public List<SessionStartCall> Calls { get; } = [];
 
-        public Task StartSessionAsync(BrowserLogsResource resource, BrowserLogsSettings settings, string resourceName, Uri url, CancellationToken cancellationToken)
+        public Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
         {
-            Calls.Add(new SessionStartCall(resource, settings, resourceName, url));
+            Calls.Add(new SessionStartCall(resource, configuration, resourceName, url));
             return Task.CompletedTask;
         }
     }
 
-    private sealed record SessionStartCall(BrowserLogsResource Resource, BrowserLogsSettings Settings, string ResourceName, Uri Url);
+    private sealed record SessionStartCall(BrowserLogsResource Resource, BrowserConfiguration Configuration, string ResourceName, Uri Url);
 
     private sealed class FakeBrowserLogsRunningSessionFactory : IBrowserLogsRunningSessionFactory
     {
         public List<FakeBrowserLogsRunningSession> Sessions { get; } = [];
-        public List<BrowserLogsSettings> Settings { get; } = [];
+        public List<BrowserConfiguration> Configurations { get; } = [];
         public Exception? NextStartException { get; set; }
+        public BrowserHostOwnership NextBrowserHostOwnership { get; set; } = BrowserHostOwnership.Owned;
+        public int? NextProcessId { get; set; }
+        public bool NextProcessIdIsNull { get; set; }
 
         public Task<IBrowserLogsRunningSession> StartSessionAsync(
-            BrowserLogsSettings settings,
+            BrowserConfiguration configuration,
             string resourceName,
             Uri url,
             string sessionId,
             ILogger resourceLogger,
             CancellationToken cancellationToken)
         {
-            Settings.Add(settings);
+            Configurations.Add(configuration);
 
             if (NextStartException is { } exception)
             {
@@ -842,13 +1196,20 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 return Task.FromException<IBrowserLogsRunningSession>(exception);
             }
 
+            var sessionNumber = Sessions.Count + 1;
+            var processId = NextProcessIdIsNull ? (int?)null : NextProcessId ?? 1000 + sessionNumber;
             var session = new FakeBrowserLogsRunningSession(
                 sessionId,
-                $"/fake/browser-{Sessions.Count + 1}",
-                processId: 1001 + Sessions.Count,
+                $"/fake/browser-{sessionNumber}",
+                processId,
+                sessionNumber,
+                NextBrowserHostOwnership,
                 startedAt: DateTime.UtcNow);
 
             Sessions.Add(session);
+            NextBrowserHostOwnership = BrowserHostOwnership.Owned;
+            NextProcessId = null;
+            NextProcessIdIsNull = false;
 
             return Task.FromResult<IBrowserLogsRunningSession>(session);
         }
@@ -857,7 +1218,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     private sealed class FakeBrowserLogsRunningSession(
         string sessionId,
         string browserExecutable,
-        int processId,
+        int? processId,
+        int sessionNumber,
+        BrowserHostOwnership browserHostOwnership,
         DateTime startedAt) : IBrowserLogsRunningSession
     {
         private TaskCompletionSource<object?> _completionObserverGate = CreateSignaledTaskCompletionSource();
@@ -868,13 +1231,15 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public string BrowserExecutable { get; } = browserExecutable;
 
-        public Uri BrowserDebugEndpoint { get; } = new($"ws://127.0.0.1:{processId + 8000}/devtools/browser/browser-{processId - 1000}");
+        public Uri BrowserDebugEndpoint { get; } = new($"ws://127.0.0.1:{9000 + sessionNumber}/devtools/browser/browser-{sessionNumber}");
 
-        public int ProcessId { get; } = processId;
+        public BrowserHostOwnership BrowserHostOwnership { get; } = browserHostOwnership;
+
+        public int? ProcessId { get; } = processId;
 
         public DateTime StartedAt { get; } = startedAt;
 
-        public string TargetId { get; } = $"target-{processId - 1000}";
+        public string TargetId { get; } = $"target-{sessionNumber}";
 
         public int StopCallCount { get; private set; }
 
@@ -882,7 +1247,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         private TaskCompletionSource<object?> CompletionObserverStartedSource { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task StartCompletionObserver(Func<int, Exception?, Task> onCompleted)
+        public Task StartCompletionObserver(Func<int?, Exception?, Task> onCompleted)
         {
             _completionObserverTask = ObserveCompletionAsync(onCompleted);
             return _completionObserverTask;
@@ -912,7 +1277,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             _completionObserverGate.TrySetResult(null);
         }
 
-        private async Task ObserveCompletionAsync(Func<int, Exception?, Task> onCompleted)
+        private async Task ObserveCompletionAsync(Func<int?, Exception?, Task> onCompleted)
         {
             var (exitCode, error) = await _completionSource.Task;
             CompletionObserverStartedSource.TrySetResult(null);
@@ -934,10 +1299,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         string SessionId,
         string Browser,
         string BrowserExecutable,
-        int ProcessId,
+        int? ProcessId,
         string? Profile,
         DateTime StartedAt,
         string TargetUrl,
+        string BrowserHostOwnership,
         string CdpEndpoint,
         string PageCdpEndpoint,
         string TargetId);

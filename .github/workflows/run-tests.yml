@@ -642,5 +642,18 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path "${{ github.workspace }}/testresults") {
-            & ${{ env.DOTNET_SCRIPT }} run --project "${{ github.workspace }}/tools/GenerateTestSummary/GenerateTestSummary.csproj" -- "${{ github.workspace }}/testresults" -u "${{ steps.upload-logs.outputs.artifact-url }}"
+            $summaryArgs = @(
+              "run",
+              "--project",
+              "${{ github.workspace }}/tools/GenerateTestSummary/GenerateTestSummary.csproj",
+              "--",
+              "${{ github.workspace }}/testresults"
+            )
+
+            $artifactUrl = "${{ steps.upload-logs.outputs.artifact-url }}"
+            if (-not [string]::IsNullOrWhiteSpace($artifactUrl)) {
+              $summaryArgs += @("-u", $artifactUrl)
+            }
+
+            & ${{ env.DOTNET_SCRIPT }} @summaryArgs
           }

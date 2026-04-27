@@ -12,6 +12,8 @@ using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting;
 
+// Coordinates browser-log commands with dashboard resource state. The running session owns CDP capture; this manager
+// owns session ids, resource logs, health reports, and snapshot properties that make failures diagnosable in the dashboard.
 internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IAsyncDisposable
 {
     private static readonly JsonSerializerOptions s_browserSessionPropertyJsonOptions = new(JsonSerializerDefaults.Web);
@@ -25,7 +27,6 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     private int _disposing;
 
     public BrowserLogsSessionManager(
-        IFileSystemService fileSystemService,
         ResourceLoggerService resourceLoggerService,
         ResourceNotificationService resourceNotificationService,
         TimeProvider timeProvider,
@@ -35,7 +36,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceNotificationService,
             timeProvider,
             logger,
-            new BrowserLogsRunningSessionFactory(fileSystemService, logger, timeProvider))
+            new BrowserLogsRunningSessionFactory(logger, timeProvider))
     {
     }
 
@@ -53,15 +54,18 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         _sessionFactory = sessionFactory;
     }
 
-    public async Task StartSessionAsync(BrowserLogsResource resource, BrowserLogsSettings settings, string resourceName, Uri url, CancellationToken cancellationToken)
+    public async Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(resource);
-        ArgumentNullException.ThrowIfNull(settings.Browser);
+        ArgumentNullException.ThrowIfNull(configuration.Browser);
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
         ArgumentNullException.ThrowIfNull(url);
         ThrowIfDisposing();
 
         var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
+        // Dashboard commands can start/stop browser-log sessions for the same resource while previous targets are still
+        // completing. Serialize per resource so session ids, health reports, and properties describe the same observed
+        // set of browser targets.
         await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -72,12 +76,17 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             var sessionId = $"session-{sessionSequence:0000}";
             resourceState.LastSessionId = sessionId;
             resourceState.LastTargetUrl = url.ToString();
-            resourceState.LastBrowser = settings.Browser;
-            resourceState.LastBrowserExecutable = BrowserLogsRunningSession.TryResolveBrowserExecutable(settings.Browser);
-            resourceState.LastProfile = settings.Profile;
+            resourceState.LastBrowser = configuration.Browser;
+            resourceState.LastBrowserExecutable = ChromiumBrowserResolver.TryResolveExecutable(configuration.Browser);
+            if (resourceState.ActiveSessions.Count == 0)
+            {
+                resourceState.LastBrowserHostOwnership = null;
+            }
+            resourceState.LastError = null;
+            resourceState.LastProfile = configuration.Profile;
 
             var resourceLogger = _resourceLoggerService.GetLogger(resourceName);
-            resourceLogger.LogInformation("[{SessionId}] Opening tracked browser for '{Url}' using '{Browser}'.", sessionId, url, settings.Browser);
+            resourceLogger.LogInformation("[{SessionId}] Opening tracked browser for '{Url}' using '{Browser}'.", sessionId, url, configuration.Browser);
 
             var launchStartedAt = _timeProvider.GetUtcNow().UtcDateTime;
             var pendingSession = new PendingBrowserSession(sessionId, launchStartedAt, url);
@@ -96,7 +105,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             try
             {
                 session = await _sessionFactory.StartSessionAsync(
-                    settings,
+                    configuration,
                     resourceName,
                     url,
                     sessionId,
@@ -105,6 +114,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
             catch (Exception ex)
             {
+                resourceState.LastError = BrowserConnectionDiagnosticsLogger.DescribeConnectionProblem(ex);
                 resourceLogger.LogError(ex, "[{SessionId}] Failed to open tracked browser for '{Url}'.", sessionId, url);
 
                 await PublishResourceSnapshotAsync(
@@ -122,17 +132,23 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
 
             resourceState.LastBrowserExecutable = session.BrowserExecutable;
+            resourceState.LastBrowserHostOwnership = session.BrowserHostOwnership.ToString();
+            resourceState.LastError = null;
             var completionObserver = session.StartCompletionObserver(async (exitCode, error) =>
             {
                 await HandleSessionCompletedAsync(resource, resourceName, resourceState, session.SessionId, exitCode, error).ConfigureAwait(false);
             });
 
+            // The session snapshot intentionally stores both browser-level and page-level endpoints. In the dashboard,
+            // the browser endpoint explains what process was adopted/owned, while the page endpoint lets a developer
+            // inspect the exact target that is producing resource logs.
             resourceState.ActiveSessions[session.SessionId] = new ActiveBrowserSession(
                 session.SessionId,
-                settings.Browser,
+                configuration.Browser,
                 session.BrowserExecutable,
-                settings.Profile,
+                configuration.Profile,
                 session.BrowserDebugEndpoint,
+                session.BrowserHostOwnership.ToString(),
                 session.ProcessId,
                 session.StartedAt,
                 session.TargetId,
@@ -183,16 +199,43 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
         }
 
-        foreach (var session in sessionsToStop)
+        try
         {
-            await session.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            // StopAsync can throw (for example OperationCanceledException from BrowserHostLease's release timeout).
+            // Catch per-session so one failure doesn't strand other sessions, and use try/finally below so the locks
+            // and session factory are always disposed.
+            foreach (var session in sessionsToStop)
+            {
+                try
+                {
+                    await session.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to stop tracked browser session during disposal.");
+                }
+            }
+
+            try
+            {
+                await Task.WhenAll(completionObservers).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Tracked browser session completion observer failed during disposal.");
+            }
         }
-
-        await Task.WhenAll(completionObservers).ConfigureAwait(false);
-
-        foreach (var (_, resourceState) in _resourceStates)
+        finally
         {
-            resourceState.Lock.Dispose();
+            foreach (var (_, resourceState) in _resourceStates)
+            {
+                resourceState.Lock.Dispose();
+            }
+
+            if (_sessionFactory is IAsyncDisposable asyncDisposableFactory)
+            {
+                await asyncDisposableFactory.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 
@@ -201,7 +244,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string resourceName,
         ResourceSessionState resourceState,
         string sessionId,
-        int exitCode,
+        int? exitCode,
         Exception? error)
     {
         if (Volatile.Read(ref _disposing) != 0)
@@ -218,14 +261,21 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 return;
             }
 
+            // Multiple active sessions can share one visible browser. If one tab is closed or crashes, keep the resource
+            // running while other tabs are still producing logs; only the last completion controls stop time and exit code.
+            if (error is not null)
+            {
+                resourceState.LastError = BrowserConnectionDiagnosticsLogger.DescribeConnectionProblem(error);
+            }
+
             var completedAt = _timeProvider.GetUtcNow().UtcDateTime;
             var hasActiveSessions = resourceState.ActiveSessions.Count > 0;
             var (stateText, stateStyle) = hasActiveSessions
                 ? (KnownResourceStates.Running, KnownResourceStateStyles.Success)
-                : error switch
+                : resourceState.LastError switch
                 {
                     not null => (KnownResourceStates.Exited, KnownResourceStateStyles.Error),
-                    null when exitCode == 0 => (KnownResourceStates.Finished, KnownResourceStateStyles.Success),
+                    null when exitCode is null or 0 => (KnownResourceStates.Finished, KnownResourceStateStyles.Success),
                     _ => (KnownResourceStates.Exited, KnownResourceStateStyles.Error)
                 };
 
@@ -281,7 +331,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             reports.Add(new HealthReportSnapshot(
                 session.SessionId,
                 HealthStatus.Healthy,
-                $"PID {session.ProcessId} targeting {session.TargetUrl}",
+                $"{FormatProcessId(session.ProcessId)} targeting {session.TargetUrl}",
                 null)
             {
                 LastRunAt = runAt
@@ -295,6 +345,17 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 Status: null,
                 Description: $"Launching tracked browser for {pendingSession.TargetUrl}.",
                 ExceptionText: null)
+            {
+                LastRunAt = runAt
+            });
+        }
+        else if (resourceState.LastError is not null)
+        {
+            reports.Add(new HealthReportSnapshot(
+                BrowserLogsBuilderExtensions.LastErrorPropertyName,
+                HealthStatus.Unhealthy,
+                resourceState.LastError,
+                null)
             {
                 LastRunAt = runAt
             });
@@ -324,6 +385,16 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         {
             yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable);
         }
+
+        if (resourceState.LastBrowserHostOwnership is not null)
+        {
+            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership);
+        }
+
+        if (resourceState.LastError is not null)
+        {
+            yield return new ResourcePropertySnapshot(BrowserLogsBuilderExtensions.LastErrorPropertyName, resourceState.LastError);
+        }
     }
 
     private static ImmutableArray<ResourcePropertySnapshot> UpdateProperties(
@@ -338,6 +409,14 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         properties = resourceState.LastBrowserExecutable is not null
             ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserExecutablePropertyName, resourceState.LastBrowserExecutable)
             : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserExecutablePropertyName);
+
+        properties = resourceState.LastBrowserHostOwnership is not null
+            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName, resourceState.LastBrowserHostOwnership)
+            : RemoveProperty(properties, BrowserLogsBuilderExtensions.BrowserHostOwnershipPropertyName);
+
+        properties = resourceState.LastError is not null
+            ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.LastErrorPropertyName, resourceState.LastError)
+            : RemoveProperty(properties, BrowserLogsBuilderExtensions.LastErrorPropertyName);
 
         properties = resourceState.LastProfile is not null
             ? properties.SetResourceProperty(BrowserLogsBuilderExtensions.ProfilePropertyName, resourceState.LastProfile)
@@ -373,7 +452,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     {
         var activeSessions = sessions
             .OrderBy(static session => session.SessionId, StringComparer.Ordinal)
-            .Select(static session => $"{session.SessionId} (PID {session.ProcessId})")
+            .Select(static session => $"{session.SessionId} ({FormatProcessId(session.ProcessId)})")
             .ToArray();
 
         return activeSessions.Length > 0
@@ -393,6 +472,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
                 session.Profile,
                 session.StartedAt,
                 session.TargetUrl.ToString(),
+                session.BrowserHostOwnership,
                 session.BrowserDebugEndpoint.ToString(),
                 GetPageDebugEndpoint(session.BrowserDebugEndpoint, session.TargetId),
                 session.TargetId))
@@ -425,10 +505,17 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
         public string? LastBrowserExecutable { get; set; }
 
+        public string? LastBrowserHostOwnership { get; set; }
+
+        public string? LastError { get; set; }
+
         public string? LastBrowser { get; set; }
 
         public string? LastProfile { get; set; }
     }
+
+    private static string FormatProcessId(int? processId) =>
+        processId is { } pid ? $"PID {pid}" : "adopted browser";
 
     private sealed record ActiveBrowserSession(
         string SessionId,
@@ -436,7 +523,8 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string BrowserExecutable,
         string? Profile,
         Uri BrowserDebugEndpoint,
-        int ProcessId,
+        string BrowserHostOwnership,
+        int? ProcessId,
         DateTime StartedAt,
         string TargetId,
         Uri TargetUrl,
@@ -447,10 +535,11 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         string SessionId,
         string Browser,
         string BrowserExecutable,
-        int ProcessId,
+        int? ProcessId,
         string? Profile,
         DateTime StartedAt,
         string TargetUrl,
+        string BrowserHostOwnership,
         string CdpEndpoint,
         string PageCdpEndpoint,
         string TargetId);

@@ -1385,6 +1385,35 @@ public class BeforeStartEvent extends HandleWrapperBase {
 
 }
 
+// ===== BrowserUserDataMode.java =====
+// BrowserUserDataMode.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** BrowserUserDataMode enum. */
+public enum BrowserUserDataMode implements WireValueEnum {
+    SHARED("Shared"),
+    ISOLATED("Isolated");
+
+    private final String value;
+
+    BrowserUserDataMode(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static BrowserUserDataMode fromValue(String value) {
+        for (BrowserUserDataMode e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
 // ===== BuildOptions.java =====
 // BuildOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -1430,7 +1459,8 @@ public class CSharpAppResource extends ResourceBuilderBase {
     public CSharpAppResource withBrowserLogs(WithBrowserLogsOptions options) {
         var browser = options == null ? null : options.getBrowser();
         var profile = options == null ? null : options.getProfile();
-        return withBrowserLogsImpl(browser, profile);
+        var userDataMode = options == null ? null : options.getUserDataMode();
+        return withBrowserLogsImpl(browser, profile, userDataMode);
     }
 
     public CSharpAppResource withBrowserLogs() {
@@ -1438,7 +1468,7 @@ public class CSharpAppResource extends ResourceBuilderBase {
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    private CSharpAppResource withBrowserLogsImpl(String browser, String profile) {
+    private CSharpAppResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
@@ -1446,6 +1476,9 @@ public class CSharpAppResource extends ResourceBuilderBase {
         }
         if (profile != null) {
             reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        if (userDataMode != null) {
+            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -5177,7 +5210,8 @@ public class ContainerResource extends ResourceBuilderBase {
     public ContainerResource withBrowserLogs(WithBrowserLogsOptions options) {
         var browser = options == null ? null : options.getBrowser();
         var profile = options == null ? null : options.getProfile();
-        return withBrowserLogsImpl(browser, profile);
+        var userDataMode = options == null ? null : options.getUserDataMode();
+        return withBrowserLogsImpl(browser, profile, userDataMode);
     }
 
     public ContainerResource withBrowserLogs() {
@@ -5185,7 +5219,7 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    private ContainerResource withBrowserLogsImpl(String browser, String profile) {
+    private ContainerResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
@@ -5193,6 +5227,9 @@ public class ContainerResource extends ResourceBuilderBase {
         }
         if (profile != null) {
             reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        if (userDataMode != null) {
+            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -7509,7 +7546,8 @@ public class DotnetToolResource extends ResourceBuilderBase {
     public DotnetToolResource withBrowserLogs(WithBrowserLogsOptions options) {
         var browser = options == null ? null : options.getBrowser();
         var profile = options == null ? null : options.getProfile();
-        return withBrowserLogsImpl(browser, profile);
+        var userDataMode = options == null ? null : options.getUserDataMode();
+        return withBrowserLogsImpl(browser, profile, userDataMode);
     }
 
     public DotnetToolResource withBrowserLogs() {
@@ -7517,7 +7555,7 @@ public class DotnetToolResource extends ResourceBuilderBase {
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    private DotnetToolResource withBrowserLogsImpl(String browser, String profile) {
+    private DotnetToolResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
@@ -7525,6 +7563,9 @@ public class DotnetToolResource extends ResourceBuilderBase {
         }
         if (profile != null) {
             reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        if (userDataMode != null) {
+            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -9620,7 +9661,8 @@ public class ExecutableResource extends ResourceBuilderBase {
     public ExecutableResource withBrowserLogs(WithBrowserLogsOptions options) {
         var browser = options == null ? null : options.getBrowser();
         var profile = options == null ? null : options.getProfile();
-        return withBrowserLogsImpl(browser, profile);
+        var userDataMode = options == null ? null : options.getUserDataMode();
+        return withBrowserLogsImpl(browser, profile, userDataMode);
     }
 
     public ExecutableResource withBrowserLogs() {
@@ -9628,7 +9670,7 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    private ExecutableResource withBrowserLogsImpl(String browser, String profile) {
+    private ExecutableResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
@@ -9636,6 +9678,9 @@ public class ExecutableResource extends ResourceBuilderBase {
         }
         if (profile != null) {
             reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        if (userDataMode != null) {
+            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -15129,7 +15174,8 @@ public class ProjectResource extends ResourceBuilderBase {
     public ProjectResource withBrowserLogs(WithBrowserLogsOptions options) {
         var browser = options == null ? null : options.getBrowser();
         var profile = options == null ? null : options.getProfile();
-        return withBrowserLogsImpl(browser, profile);
+        var userDataMode = options == null ? null : options.getUserDataMode();
+        return withBrowserLogsImpl(browser, profile, userDataMode);
     }
 
     public ProjectResource withBrowserLogs() {
@@ -15137,7 +15183,7 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    private ProjectResource withBrowserLogsImpl(String browser, String profile) {
+    private ProjectResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
@@ -15145,6 +15191,9 @@ public class ProjectResource extends ResourceBuilderBase {
         }
         if (profile != null) {
             reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        if (userDataMode != null) {
+            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -17561,7 +17610,8 @@ public class TestDatabaseResource extends ResourceBuilderBase {
     public TestDatabaseResource withBrowserLogs(WithBrowserLogsOptions options) {
         var browser = options == null ? null : options.getBrowser();
         var profile = options == null ? null : options.getProfile();
-        return withBrowserLogsImpl(browser, profile);
+        var userDataMode = options == null ? null : options.getUserDataMode();
+        return withBrowserLogsImpl(browser, profile, userDataMode);
     }
 
     public TestDatabaseResource withBrowserLogs() {
@@ -17569,7 +17619,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    private TestDatabaseResource withBrowserLogsImpl(String browser, String profile) {
+    private TestDatabaseResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
@@ -17577,6 +17627,9 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         }
         if (profile != null) {
             reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        if (userDataMode != null) {
+            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -19480,7 +19533,8 @@ public class TestRedisResource extends ResourceBuilderBase {
     public TestRedisResource withBrowserLogs(WithBrowserLogsOptions options) {
         var browser = options == null ? null : options.getBrowser();
         var profile = options == null ? null : options.getProfile();
-        return withBrowserLogsImpl(browser, profile);
+        var userDataMode = options == null ? null : options.getUserDataMode();
+        return withBrowserLogsImpl(browser, profile, userDataMode);
     }
 
     public TestRedisResource withBrowserLogs() {
@@ -19488,7 +19542,7 @@ public class TestRedisResource extends ResourceBuilderBase {
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    private TestRedisResource withBrowserLogsImpl(String browser, String profile) {
+    private TestRedisResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
@@ -19496,6 +19550,9 @@ public class TestRedisResource extends ResourceBuilderBase {
         }
         if (profile != null) {
             reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        if (userDataMode != null) {
+            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -21552,7 +21609,8 @@ public class TestVaultResource extends ResourceBuilderBase {
     public TestVaultResource withBrowserLogs(WithBrowserLogsOptions options) {
         var browser = options == null ? null : options.getBrowser();
         var profile = options == null ? null : options.getProfile();
-        return withBrowserLogsImpl(browser, profile);
+        var userDataMode = options == null ? null : options.getUserDataMode();
+        return withBrowserLogsImpl(browser, profile, userDataMode);
     }
 
     public TestVaultResource withBrowserLogs() {
@@ -21560,7 +21618,7 @@ public class TestVaultResource extends ResourceBuilderBase {
     }
 
     /** Adds a child browser logs resource that opens tracked browser sessions and captures browser logs. */
-    private TestVaultResource withBrowserLogsImpl(String browser, String profile) {
+    private TestVaultResource withBrowserLogsImpl(String browser, String profile, BrowserUserDataMode userDataMode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         if (browser != null) {
@@ -21568,6 +21626,9 @@ public class TestVaultResource extends ResourceBuilderBase {
         }
         if (profile != null) {
             reqArgs.put("profile", AspireClient.serializeValue(profile));
+        }
+        if (userDataMode != null) {
+            reqArgs.put("userDataMode", AspireClient.serializeValue(userDataMode));
         }
         getClient().invokeCapability("Aspire.Hosting/withBrowserLogs", reqArgs);
         return this;
@@ -23430,6 +23491,7 @@ import java.util.function.*;
 public final class WithBrowserLogsOptions {
     private String browser;
     private String profile;
+    private BrowserUserDataMode userDataMode;
 
     public String getBrowser() { return browser; }
     public WithBrowserLogsOptions browser(String value) {
@@ -23440,6 +23502,12 @@ public final class WithBrowserLogsOptions {
     public String getProfile() { return profile; }
     public WithBrowserLogsOptions profile(String value) {
         this.profile = value;
+        return this;
+    }
+
+    public BrowserUserDataMode getUserDataMode() { return userDataMode; }
+    public WithBrowserLogsOptions userDataMode(BrowserUserDataMode value) {
+        this.userDataMode = value;
         return this;
     }
 
@@ -24138,6 +24206,7 @@ public final class WithVolumeOptions {
 .modules/BaseRegistrations.java
 .modules/BeforeResourceStartedEvent.java
 .modules/BeforeStartEvent.java
+.modules/BrowserUserDataMode.java
 .modules/BuildOptions.java
 .modules/CSharpAppResource.java
 .modules/CancellationToken.java

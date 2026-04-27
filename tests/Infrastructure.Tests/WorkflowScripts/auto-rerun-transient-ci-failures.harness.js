@@ -1,4 +1,5 @@
 const fs = require('node:fs/promises');
+const path = require('node:path');
 const rerunWorkflow = require('../../../.github/workflows/auto-rerun-transient-ci-failures.js');
 
 class SummaryRecorder {
@@ -61,6 +62,7 @@ async function dispatch(operation, payload) {
                         return payload.jobLogTextByJobId?.[String(job.id)] ?? '';
                     },
                     maxRetryableJobs: payload.maxRetryableJobs,
+                    retryPatternsConfig: payload.retryPatternsConfig ?? null,
                 });
 
                 return { ...result, logRequestJobIds };
@@ -93,6 +95,53 @@ async function dispatch(operation, payload) {
 
         case 'computeRerunExecutionEligibility':
             return rerunWorkflow.computeRerunExecutionEligibility(payload);
+
+        case 'validateRetryPatternsConfig':
+            return rerunWorkflow.validateRetryPatternsConfig(payload.config);
+
+        case 'loadRetryPatternsConfig':
+            return rerunWorkflow.loadRetryPatternsConfig(payload.configPath);
+
+        case 'extractFailedTestsFromTrx':
+            return rerunWorkflow.extractFailedTestsFromTrx(payload.trxContent);
+
+        case 'matchesRetryPattern':
+            return rerunWorkflow.matchesRetryPattern(payload.text, payload.patternValue);
+
+        case 'matchTestFailurePatterns':
+            return rerunWorkflow.matchTestFailurePatterns(
+                payload.failedTests,
+                payload.testProject,
+                payload.patterns);
+
+        case 'matchJobLogPattern':
+            return rerunWorkflow.matchJobLogPattern(
+                payload.jobName,
+                payload.jobLogText,
+                payload.patterns);
+
+        case 'analyzeTrxFiles':
+            return rerunWorkflow.analyzeTrxFiles(
+                payload.trxFileContents,
+                payload.testFailurePatterns);
+
+        case 'promoteTestExecutionFailureJobs':
+            return rerunWorkflow.promoteTestExecutionFailureJobs(
+                payload.retryableJobs ?? [],
+                payload.skippedJobs ?? [],
+                payload.allMatchedTests ?? []);
+
+        case 'selectTestResultsArtifact':
+            return rerunWorkflow.selectTestResultsArtifact(payload.artifacts);
+
+        case 'hasTestExecutionFailureStep':
+            return rerunWorkflow.hasTestExecutionFailureStep(payload.failedSteps ?? []);
+
+        case 'validateRetryPatternsConfigFromFile': {
+            const configPath = path.resolve(payload.configPath);
+            const result = rerunWorkflow.loadRetryPatternsConfig(configPath);
+            return result;
+        }
 
         case 'writeAnalysisSummary': {
             const summary = new SummaryRecorder();
