@@ -48,6 +48,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="namespace">A parameter resource builder for the namespace value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExport("withNamespaceFromParameter", MethodName = "withNamespaceFromParameter", Description = "Sets the target Kubernetes namespace for deployment using a parameter.")]
     public HelmChartOptions WithNamespace(IResourceBuilder<ParameterResource> @namespace)
     {
         ArgumentNullException.ThrowIfNull(@namespace);
@@ -77,6 +78,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="releaseName">A parameter resource builder for the release name value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExport("withReleaseNameFromParameter", MethodName = "withReleaseNameFromParameter", Description = "Sets the Helm release name for deployment using a parameter.")]
     public HelmChartOptions WithReleaseName(IResourceBuilder<ParameterResource> releaseName)
     {
         ArgumentNullException.ThrowIfNull(releaseName);
@@ -106,6 +108,7 @@ public sealed partial class HelmChartOptions
     /// </summary>
     /// <param name="version">A parameter resource builder for the chart version value.</param>
     /// <returns>This <see cref="HelmChartOptions"/> for chaining.</returns>
+    [AspireExport("withChartVersionFromParameter", MethodName = "withChartVersionFromParameter", Description = "Sets the Helm chart version for deployment using a parameter.")]
     public HelmChartOptions WithChartVersion(IResourceBuilder<ParameterResource> version)
     {
         ArgumentNullException.ThrowIfNull(version);
