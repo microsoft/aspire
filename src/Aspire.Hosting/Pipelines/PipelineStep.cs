@@ -110,7 +110,7 @@ public class PipelineStep
     /// </summary>
     /// <param name="tag">The tag to add.</param>
     [AspireExport(Description = "Adds a tag to the step")]
-    public void AddTag(string tag)
+    internal void AddTag(string tag)
     {
         ArgumentNullException.ThrowIfNull(tag);
         Tags.Add(tag);

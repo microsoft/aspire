@@ -7,7 +7,7 @@ void main() throws Exception {
         var resourceGroup = builder.addParameter("resource-group");
         var existingName = builder.addParameter("existing-name");
         var existingResourceGroup = builder.addParameter("existing-resource-group");
-        var connectionString = builder.addConnectionString("azure-validation", new AddConnectionStringOptions().environmentVariableName("AZURE_VALIDATION_CONNECTION_STRING"));
+        var connectionString = builder.addConnectionString("azure-validation", "AZURE_VALIDATION_CONNECTION_STRING");
         var azureEnvironment = builder.addAzureEnvironment();
         azureEnvironment.withLocation(location).withResourceGroup(resourceGroup);
         var container = builder.addContainer("api", "mcr.microsoft.com/dotnet/samples:aspnetapp");

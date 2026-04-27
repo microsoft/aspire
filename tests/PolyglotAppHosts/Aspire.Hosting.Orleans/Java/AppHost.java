@@ -2,7 +2,7 @@ import aspire.*;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
-        var provider = builder.addConnectionString("provider", new AddConnectionStringOptions().environmentVariableName("ORLEANS_PROVIDER_CONNECTION_STRING"));
+        var provider = builder.addConnectionString("provider", "ORLEANS_PROVIDER_CONNECTION_STRING");
         var orleans = builder.addOrleans("orleans")
             .withClusterId("cluster-id")
             .withServiceId("service-id")
