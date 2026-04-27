@@ -124,6 +124,24 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Capture a screenshot from the active tracked browser session and save it as a PNG artifact..
+        /// </summary>
+        internal static string CaptureScreenshotDescription {
+            get {
+                return ResourceManager.GetString("CaptureScreenshotDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Capture screenshot.
+        /// </summary>
+        internal static string CaptureScreenshotName {
+            get {
+                return ResourceManager.GetString("CaptureScreenshotName", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes..
         /// </summary>
         internal static string RebuildDescription {

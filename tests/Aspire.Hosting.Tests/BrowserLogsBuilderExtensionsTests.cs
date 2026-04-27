@@ -53,6 +53,9 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var command = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName);
         Assert.Equal(CommandStrings.OpenTrackedBrowserName, command.DisplayName);
         Assert.Equal(CommandStrings.OpenTrackedBrowserDescription, command.DisplayDescription);
+        var screenshotCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.CaptureScreenshotCommandName);
+        Assert.Equal(CommandStrings.CaptureScreenshotName, screenshotCommand.DisplayName);
+        Assert.Equal(CommandStrings.CaptureScreenshotDescription, screenshotCommand.DisplayDescription);
 
         var snapshot = browserLogsResource.Annotations.OfType<ResourceSnapshotAnnotation>().Single().InitialSnapshot;
         Assert.Equal(BrowserLogsBuilderExtensions.BrowserResourceType, snapshot.ResourceType);
@@ -327,6 +330,124 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
+    public async Task WithBrowserLogs_CaptureScreenshotCommandReturnsArtifactResult()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var sessionManager = new FakeBrowserLogsSessionManager
+        {
+            ScreenshotResult = new BrowserLogsScreenshotCaptureResult(
+                "session-0002",
+                new Uri("https://localhost:8443/"),
+                new ResourceCommandArtifact(
+                    "web-browser-logs",
+                    "screenshot",
+                    Path.Combine(AppContext.BaseDirectory, "artifacts", "screenshot.png"),
+                    "image/png",
+                    1234,
+                    new DateTimeOffset(2026, 4, 27, 12, 0, 0, TimeSpan.Zero)))
+        };
+        builder.Services.AddSingleton<IBrowserLogsSessionManager>(sessionManager);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "chrome");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.CaptureScreenshotCommandName).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.Equal("web-browser-logs", Assert.Single(sessionManager.CaptureScreenshotCalls));
+        Assert.Contains("screenshot.png", result.Message);
+        Assert.NotNull(result.Data);
+        Assert.Equal(CommandResultFormat.Json, result.Data.Format);
+        Assert.True(result.Data.DisplayImmediately);
+
+        using var document = JsonDocument.Parse(result.Data.Value);
+        Assert.Equal("web-browser-logs", document.RootElement.GetProperty("resourceName").GetString());
+        Assert.Equal("session-0002", document.RootElement.GetProperty("sessionId").GetString());
+        Assert.Equal("https://localhost:8443/", document.RootElement.GetProperty("targetUrl").GetString());
+        Assert.EndsWith("screenshot.png", document.RootElement.GetProperty("path").GetString(), StringComparison.Ordinal);
+        Assert.Equal("image/png", document.RootElement.GetProperty("mimeType").GetString());
+        Assert.Equal(1234, document.RootElement.GetProperty("sizeBytes").GetInt32());
+    }
+
+    [Fact]
+    public async Task WithBrowserLogs_CaptureScreenshotCommandWritesPngArtifact()
+    {
+        var artifactDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+            var sessionFactory = new FakeBrowserLogsRunningSessionFactory();
+
+            builder.Services.AddSingleton<IBrowserLogsSessionManager>(sp =>
+                new BrowserLogsSessionManager(
+                    sp.GetRequiredService<ResourceLoggerService>(),
+                    sp.GetRequiredService<ResourceNotificationService>(),
+                    sp.GetRequiredService<TimeProvider>(),
+                    sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
+                    new ResourceCommandArtifactWriter(sp.GetRequiredService<TimeProvider>(), () => artifactDirectory.FullName),
+                    sessionFactory));
+
+            var web = builder.AddResource(new TestHttpResource("web"))
+                .WithHttpEndpoint(targetPort: 8080)
+                .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+                .WithInitialState(new CustomResourceSnapshot
+                {
+                    ResourceType = "TestHttp",
+                    State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                    Properties = []
+                });
+
+            web.WithBrowserLogs(browser: "chrome");
+
+            using var app = builder.Build();
+            await app.StartAsync();
+
+            var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
+            var openResult = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.OpenTrackedBrowserCommandName).DefaultTimeout();
+            Assert.True(openResult.Success);
+
+            var session = Assert.Single(sessionFactory.Sessions);
+            session.ScreenshotBytes = [1, 2, 3, 4];
+
+            var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.CaptureScreenshotCommandName).DefaultTimeout();
+            var logs = await ConsoleLoggingTestHelpers.WatchForLogsAsync(
+                app.Services.GetRequiredService<ResourceLoggerService>().WatchAsync(browserLogsResource.Name),
+                targetLogCount: 6).DefaultTimeout();
+
+            Assert.True(result.Success);
+            Assert.NotNull(result.Data);
+
+            using var document = JsonDocument.Parse(result.Data.Value);
+            var path = document.RootElement.GetProperty("path").GetString();
+
+            Assert.NotNull(path);
+            Assert.StartsWith(artifactDirectory.FullName, path, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(session.ScreenshotBytes, await File.ReadAllBytesAsync(path));
+            Assert.Equal("session-0001", document.RootElement.GetProperty("sessionId").GetString());
+            Assert.Equal("http://localhost:8080/", document.RootElement.GetProperty("targetUrl").GetString());
+            Assert.Equal(session.ScreenshotBytes.Length, document.RootElement.GetProperty("sizeBytes").GetInt32());
+            Assert.Contains(logs, log => log.Content.Contains(path, StringComparison.Ordinal) && log.Content.Contains("4 bytes", StringComparison.Ordinal));
+        }
+        finally
+        {
+            artifactDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task WithBrowserLogs_CommandUsesLatestConfiguredSettingsAndRefreshesProperties()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -342,7 +463,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -397,7 +519,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -481,7 +604,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -553,7 +677,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -608,7 +733,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -667,7 +793,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -786,7 +913,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -920,7 +1048,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -987,7 +1116,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 sp.GetRequiredService<ResourceNotificationService>(),
                 sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                sessionFactory));
+                artifactWriter: null,
+                sessionFactory: sessionFactory));
 
         var web = builder.AddResource(new TestHttpResource("web"))
             .WithHttpEndpoint(targetPort: 8080)
@@ -1162,10 +1292,29 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     {
         public List<SessionStartCall> Calls { get; } = [];
 
+        public List<string> CaptureScreenshotCalls { get; } = [];
+
+        public BrowserLogsScreenshotCaptureResult ScreenshotResult { get; set; } = new(
+            "session-0001",
+            new Uri("https://localhost:5001/"),
+            new ResourceCommandArtifact(
+                "web-browser-logs",
+                "screenshot",
+                Path.Combine(AppContext.BaseDirectory, "screenshot.png"),
+                "image/png",
+                0,
+                DateTimeOffset.UnixEpoch));
+
         public Task StartSessionAsync(BrowserLogsResource resource, BrowserConfiguration configuration, string resourceName, Uri url, CancellationToken cancellationToken)
         {
             Calls.Add(new SessionStartCall(resource, configuration, resourceName, url));
             return Task.CompletedTask;
+        }
+
+        public Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, CancellationToken cancellationToken)
+        {
+            CaptureScreenshotCalls.Add(resourceName);
+            return Task.FromResult(ScreenshotResult);
         }
     }
 
@@ -1243,6 +1392,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
 
         public int StopCallCount { get; private set; }
 
+        public byte[] ScreenshotBytes { get; set; } = [0x89, 0x50, 0x4e, 0x47];
+
         public Task CompletionObserverStarted => CompletionObserverStartedSource.Task;
 
         private TaskCompletionSource<object?> CompletionObserverStartedSource { get; set; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1258,6 +1409,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             StopCallCount++;
             _completionSource.TrySetResult((0, null));
             return Task.CompletedTask;
+        }
+
+        public Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(ScreenshotBytes);
         }
 
         public async Task CompleteAsync(int exitCode, Exception? error = null)

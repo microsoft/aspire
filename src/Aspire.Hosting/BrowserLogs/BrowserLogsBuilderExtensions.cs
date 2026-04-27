@@ -4,6 +4,7 @@
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Configuration;
@@ -36,10 +37,15 @@ public static class BrowserLogsBuilderExtensions
     internal const string LastErrorPropertyName = "Last error";
     internal const string LastSessionPropertyName = "Last session";
     internal const string OpenTrackedBrowserCommandName = "open-tracked-browser";
+    internal const string CaptureScreenshotCommandName = "capture-screenshot";
+    private static readonly JsonSerializerOptions s_commandResultJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true
+    };
 
     /// <summary>
-    /// Adds a child resource that can open the application's primary browser endpoint in a tracked browser session and
-    /// surface browser console output in the dashboard console logs.
+    /// Adds a child resource that can open the application's primary browser endpoint in a tracked browser session,
+    /// surface browser diagnostics, and capture screenshots.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder.</param>
@@ -69,8 +75,8 @@ public static class BrowserLogsBuilderExtensions
     /// <para>
     /// This method adds a child browser logs resource beneath the parent resource represented by <paramref name="builder"/>.
     /// The child resource exposes a dashboard command that launches a Chromium-based browser in a tracked mode, attaches to
-    /// the browser's debugging protocol, and forwards browser console, error, and exception output to the child resource's
-    /// console log stream.
+    /// the browser's debugging protocol, forwards browser console, error, exception, and network output to the child
+    /// resource's console log stream, and can capture screenshots as command artifacts.
     /// </para>
     /// <para>
     /// The tracked browser session uses the <a href="https://chromedevtools.github.io/devtools-protocol/">Chrome DevTools
@@ -101,7 +107,7 @@ public static class BrowserLogsBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Adds a child browser logs resource that opens tracked browser sessions and captures browser logs.")]
+    [AspireExport(Description = "Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.")]
     public static IResourceBuilder<T> WithBrowserLogs<T>(
         this IResourceBuilder<T> builder,
         string? browser = null,
@@ -184,6 +190,53 @@ public static class BrowserLogsBuilderExtensions
 
                         return ResourceCommandState.Disabled;
                     }
+                })
+            .WithCommand(
+                CaptureScreenshotCommandName,
+                CommandStrings.CaptureScreenshotName,
+                async context =>
+                {
+                    try
+                    {
+                        var sessionManager = context.ServiceProvider.GetRequiredService<IBrowserLogsSessionManager>();
+                        var result = await sessionManager.CaptureScreenshotAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
+                        var resultJson = JsonSerializer.Serialize(
+                            new BrowserLogsScreenshotCommandResult(
+                                result.Artifact.ResourceName,
+                                result.SessionId,
+                                result.TargetUrl.ToString(),
+                                result.Artifact.FilePath,
+                                result.Artifact.MimeType,
+                                result.Artifact.SizeBytes,
+                                result.Artifact.CreatedAt),
+                            s_commandResultJsonOptions);
+
+                        return CommandResults.Success(
+                            $"Captured screenshot to '{result.Artifact.FilePath}'.",
+                            new CommandResultData
+                            {
+                                Value = resultJson,
+                                Format = CommandResultFormat.Json,
+                                DisplayImmediately = true
+                            });
+                    }
+                    catch (Exception ex)
+                    {
+                        return CommandResults.Failure(ex.Message);
+                    }
+                },
+                new CommandOptions
+                {
+                    Description = CommandStrings.CaptureScreenshotDescription,
+                    IconName = "Camera",
+                    IconVariant = IconVariant.Regular,
+                    UpdateState = context =>
+                    {
+                        var childState = context.ResourceSnapshot.State?.Text;
+                        return childState == KnownResourceStates.Running
+                            ? ResourceCommandState.Enabled
+                            : ResourceCommandState.Disabled;
+                    }
                 });
 
         builder.OnBeforeResourceStarted((_, @event, _) => RefreshBrowserLogsResourceAsync(@event.Services.GetRequiredService<ResourceNotificationService>()))
@@ -252,4 +305,12 @@ public static class BrowserLogsBuilderExtensions
         }
     }
 
+    private sealed record BrowserLogsScreenshotCommandResult(
+        string ResourceName,
+        string SessionId,
+        string TargetUrl,
+        string Path,
+        string MimeType,
+        long SizeBytes,
+        DateTimeOffset CreatedAt);
 }

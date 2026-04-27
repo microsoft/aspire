@@ -156,6 +156,12 @@
   <data name="OpenTrackedBrowserName" xml:space="preserve">
     <value>Open tracked browser</value>
   </data>
+  <data name="CaptureScreenshotDescription" xml:space="preserve">
+    <value>Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</value>
+  </data>
+  <data name="CaptureScreenshotName" xml:space="preserve">
+    <value>Capture screenshot</value>
+  </data>
   <data name="RebuildDescription" xml:space="preserve">
     <value>Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</value>
   </data>
