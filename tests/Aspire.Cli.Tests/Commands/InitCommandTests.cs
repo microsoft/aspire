@@ -4,6 +4,7 @@
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -246,5 +247,103 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.DoesNotContain(interactionService.DisplayedMessages, m => m.Message.Contains("To complete setup", StringComparison.Ordinal));
         Assert.DoesNotContain(subtleMessages, m => m.Contains("run the aspireify skill", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonPinsSdkVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        var appHostContent = await File.ReadAllTextAsync(appHostPath);
+
+        // The single-file skeleton must pin the SDK version with @<version> so downstream
+        // CLI operations (ProjectUpdater / FallbackProjectParser) can locate and update
+        // the directive.
+        var firstLine = appHostContent.Split('\n')[0].TrimEnd('\r');
+        Assert.StartsWith("#:sdk Aspire.AppHost.Sdk@", firstLine, StringComparison.Ordinal);
+        Assert.NotEqual("#:sdk Aspire.AppHost.Sdk@", firstLine);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireConfigAlreadyExists_MergesAppHostSection()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Pre-write an aspire.config.json with custom properties a user might have edited in.
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var existingConfig = new JsonObject
+        {
+            ["channel"] = "stable",
+            ["features"] = new JsonObject { ["polyglotSupportEnabled"] = true }
+        };
+        await File.WriteAllTextAsync(configPath, existingConfig.ToJsonString());
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var merged = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!.AsObject();
+        Assert.Equal("apphost.cs", merged["appHost"]!.AsObject()["path"]!.GetValue<string>());
+        // Pre-existing properties must be preserved.
+        Assert.Equal("stable", merged["channel"]!.GetValue<string>());
+        Assert.True(merged["features"]!.AsObject()["polyglotSupportEnabled"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAspireConfigIsMalformed_FailsCleanly()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Write a malformed aspire.config.json. The CLI configuration layer
+        // (ConfigurationHelper.AddSettingsFile) should surface a friendly
+        // InvalidOperationException identifying the offending file rather than a raw
+        // JsonReaderException stack trace.
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, "{ this is not json");
+
+        var ex = Assert.ThrowsAny<InvalidOperationException>(() =>
+        {
+            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+            using var serviceProvider = services.BuildServiceProvider();
+            return serviceProvider.GetRequiredService<InitCommand>();
+        });
+
+        Assert.Contains(AspireConfigFile.FileName, ex.Message, StringComparison.Ordinal);
+        await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenAppHostAlreadyExists_DoesNotOverwriteIt()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
+        const string preExistingContent = "// user-authored apphost\n";
+        await File.WriteAllTextAsync(appHostPath, preExistingContent);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(preExistingContent, await File.ReadAllTextAsync(appHostPath));
     }
 }
