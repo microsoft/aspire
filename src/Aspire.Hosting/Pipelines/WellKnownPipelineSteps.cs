@@ -15,53 +15,63 @@ public static class WellKnownPipelineSteps
     /// Aggregation step for all publish operations.
     /// All publish steps should be required by this step.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string Publish = "publish";
 
     /// <summary>
     /// The prerequisite step that runs before any publish operations.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string PublishPrereq = "publish-prereq";
 
     /// <summary>
     /// Aggregation step for all deploy operations.
     /// All deploy steps should be required by this step.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string Deploy = "deploy";
 
     /// <summary>
     /// The prerequisite step that runs before any deploy operations.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string DeployPrereq = "deploy-prereq";
 
     /// <summary>
     /// The step that prompts for parameter values before build, publish, or deployment operations.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string ProcessParameters = "process-parameters";
 
     /// <summary>
     /// The well-known step for building resources.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string Build = "build";
 
     /// <summary>
     /// The prerequisite step that runs before any build operations.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string BuildPrereq = "build-prereq";
 
     /// <summary>
     /// The meta-step that coordinates all push operations.
     /// All push steps should be required by this step.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string Push = "push";
 
     /// <summary>
     /// The prerequisite step that runs before any push operations.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string PushPrereq = "push-prereq";
 
     /// <summary>
     /// The diagnostic step that dumps dependency graph information for troubleshooting.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string Diagnostics = "diagnostics";
 
     /// <summary>
@@ -79,10 +89,12 @@ public static class WellKnownPipelineSteps
     /// Aggregation step for all destroy operations.
     /// All destroy steps should be required by this step.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string Destroy = "destroy";
 
     /// <summary>
     /// The prerequisite step that runs before any destroy operations.
     /// </summary>
+    [AspireValue("WellKnownPipelineSteps")]
     public const string DestroyPrereq = "destroy-prereq";
 }

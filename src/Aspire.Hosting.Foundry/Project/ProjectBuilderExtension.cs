@@ -302,7 +302,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="name">Name to give the model deployment</param>
     /// <param name="model">The <see cref="FoundryModel"/> to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the deployment resource.</returns>
-    [AspireExport("addModelDeploymentFromModel", Description = "Adds a model deployment to the parent Microsoft Foundry resource by using a model descriptor.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,
@@ -313,10 +313,32 @@ public static class AzureCognitiveServicesProjectExtensions
         return builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent).AddDeployment(name, model);
     }
 
+    [AspireExport("addModelDeployment", Description = "Adds a model deployment to the parent Microsoft Foundry resource.")]
+    internal static IResourceBuilder<FoundryDeploymentResource> AddModelDeploymentForPolyglot(
+        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(FoundryModel), typeof(string))] object model,
+        string? modelVersion = null,
+        string? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return model switch
+        {
+            FoundryModel foundryModel when modelVersion is null && format is null => builder.AddModelDeployment(name, foundryModel),
+            FoundryModel => throw new ArgumentException("Model version and format must be omitted when using a FoundryModel.", nameof(modelVersion)),
+            string modelName when modelVersion is not null && format is not null => builder.AddModelDeployment(name, modelName, modelVersion, format),
+            string => throw new ArgumentException("Model version and format are required when the model is provided as a string.", nameof(modelVersion)),
+            _ => throw new ArgumentException("Model must be a FoundryModel or a string model name.", nameof(model))
+        };
+    }
+
     /// <summary>
     /// Adds a model deployment to the parent Microsoft Foundry resource of the Microsoft Foundry project.
     /// </summary>
-    [AspireExport(Description = "Adds a model deployment to the parent Microsoft Foundry resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addModelDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddModelDeployment(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,

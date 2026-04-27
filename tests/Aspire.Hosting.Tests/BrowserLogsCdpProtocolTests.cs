@@ -79,6 +79,23 @@ public class BrowserLogsCdpProtocolTests
     }
 
     [Fact]
+    public void ParseCaptureScreenshotResponse_ReturnsBase64ImageData()
+    {
+        var payload = Encoding.UTF8.GetBytes("""
+            {
+              "id": 5,
+              "result": {
+                "data": "aW1hZ2UtZGF0YQ=="
+              }
+            }
+            """);
+
+        var result = BrowserLogsCdpProtocol.ParseCaptureScreenshotResponse(payload);
+
+        Assert.Equal("aW1hZ2UtZGF0YQ==", result.Data);
+    }
+
+    [Fact]
     public void ParseEvent_TargetDetachedFromTarget_UsesParameterSessionId()
     {
         var payload = Encoding.UTF8.GetBytes("""

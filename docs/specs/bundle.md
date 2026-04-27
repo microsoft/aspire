@@ -531,7 +531,7 @@ When the user's project requires integrations not included in the bundle:
 
 #### Aspire.TypeSystem
 
-`Aspire.TypeSystem` is a standalone assembly containing the ATS (Aspire Type System) scanner, model types, and codegen contracts (`ICodeGenerator`, `ILanguageSupport`, `AtsContext`). It was extracted from `Aspire.Hosting` to establish a clean boundary — `Aspire.Hosting` does **not** reference `Aspire.TypeSystem`. The ATS attributes (`[AspireExport]`, `[AspireDto]`) remain in `Aspire.Hosting` and are discovered by name-based matching via `AttributeDataReader`.
+`Aspire.TypeSystem` is a standalone assembly containing the ATS (Aspire Type System) scanner, model types, and codegen contracts (`ICodeGenerator`, `ILanguageSupport`, `AtsContext`). It was extracted from `Aspire.Hosting` to establish a clean boundary — `Aspire.Hosting` does **not** reference `Aspire.TypeSystem`. The ATS attributes (`[AspireExport]`, `[AspireDto]`, `[AspireValue]`) remain in `Aspire.Hosting` and are discovered by name-based matching via `AttributeDataReader`.
 
 All types in `Aspire.TypeSystem` are public. It is loaded in the default context and shared with the `IntegrationLoadContext`, so codegen contracts have the same type identity across the boundary.
 

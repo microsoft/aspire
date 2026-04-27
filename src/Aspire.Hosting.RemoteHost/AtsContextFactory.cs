@@ -49,8 +49,8 @@ internal sealed class AtsContextFactory
             }
         }
 
-        logger.LogDebug("Scanned {CapabilityCount} capabilities, {HandleTypeCount} handle types, {DtoCount} DTOs, {EnumCount} enums",
-            result.Capabilities.Count, result.HandleTypes.Count, result.DtoTypes.Count, result.EnumTypes.Count);
+        logger.LogDebug("Scanned {CapabilityCount} capabilities, {HandleTypeCount} handle types, {DtoCount} DTOs, {EnumCount} enums, {ExportedValueCount} exported values",
+            result.Capabilities.Count, result.HandleTypes.Count, result.DtoTypes.Count, result.EnumTypes.Count, result.ExportedValues.Count);
 
         return result.ToAtsContext();
     }

@@ -551,6 +551,68 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 }
 
 // ============================================================================
+// Exported Values
+// ============================================================================
+
+var TestConfigs = struct {
+	Default *TestConfigDto
+	Profiles struct {
+		Development *TestConfigDto
+	}
+	Secure *TestConfigDto
+	UnicodeGreeting string
+}{
+	Default: &TestConfigDto{Name: "default", Port: 6379, Enabled: true, OptionalField: "cache"},
+	Profiles: struct {
+		Development *TestConfigDto
+	}{
+		Development: &TestConfigDto{Name: "development", Port: 5001, Enabled: false, OptionalField: nil},
+	},
+	Secure: &TestConfigDto{Name: "secure", Port: 6380, Enabled: true, OptionalField: nil},
+	UnicodeGreeting: "你好こんにちは",
+}
+
+var WellKnownPipelineSteps = struct {
+	Build string
+	BuildPrereq string
+	Deploy string
+	DeployPrereq string
+	Destroy string
+	DestroyPrereq string
+	Diagnostics string
+	ProcessParameters string
+	Publish string
+	PublishPrereq string
+	Push string
+	PushPrereq string
+}{
+	Build: "build",
+	BuildPrereq: "build-prereq",
+	Deploy: "deploy",
+	DeployPrereq: "deploy-prereq",
+	Destroy: "destroy",
+	DestroyPrereq: "destroy-prereq",
+	Diagnostics: "diagnostics",
+	ProcessParameters: "process-parameters",
+	Publish: "publish",
+	PublishPrereq: "publish-prereq",
+	Push: "push",
+	PushPrereq: "push-prereq",
+}
+
+var WellKnownPipelineTags = struct {
+	BuildCompute string
+	DeployCompute string
+	ProvisionInfrastructure string
+	PushContainerImage string
+}{
+	BuildCompute: "build-compute",
+	DeployCompute: "deploy-compute",
+	ProvisionInfrastructure: "provision-infra",
+	PushContainerImage: "push-container-image",
+}
+
+// ============================================================================
 // Marker interfaces (from interface-metadata types)
 // ============================================================================
 
@@ -738,11 +800,9 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	PublishAsContainer() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WaitFor(dependency Resource, options ...*WaitForOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WaitForStart(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WaitForStart(dependency Resource, options ...*WaitForStartOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithArgs(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -810,27 +870,21 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithNestedConfig(config *TestNestedDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithOptionalString(options ...*WithOptionalStringOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithOtlpExporter() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithOtlpExporterProtocol(protocol OtlpProtocol) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithOtlpExporter(options ...*WithOtlpExporterOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithParentRelationship(parent Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithReference(source Resource, options ...*WithReferenceOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithReferenceEndpoint(endpointReference EndpointReference) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithReference(source any, options ...*WithReferenceOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithReferenceExternalService(externalService ExternalServiceResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithReferenceUri(name string, uri string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRelationship(resourceBuilder Resource, type_ string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRemoteImageName(remoteImageName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRemoteImageTag(remoteImageTag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithUrl(url string, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithValidator(validator func(arg TestResourceContext) bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithVaultDirect(option string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithVolume(target string, options ...*WithVolumeOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1085,7 +1139,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnviro
 }
 
 // WaitFor waits for another resource to be ready
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitFor(dependency Resource, options ...*WaitForOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -1093,7 +1147,14 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitFor(depend
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
+	if len(options) > 0 {
+		merged := &WaitForOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -1118,7 +1179,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForComplet
 }
 
 // WaitForStart waits for another resource to start
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForStart(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -1126,35 +1187,14 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForStart(d
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
+	if len(options) > 0 {
+		merged := &WaitForStartOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStart", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -1209,7 +1249,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBindMount(
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2235,25 +2275,20 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalSt
 }
 
 // WithOtlpExporter configures OTLP telemetry export
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOtlpExporter() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOtlpExporterOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporter", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOtlpExporterProtocol configures OTLP telemetry export with specific protocol
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOtlpExporterProtocol(protocol OtlpProtocol) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["protocol"] = serializeValue(protocol)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporterProtocol", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2317,14 +2352,20 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineSt
 }
 
 // WithReference adds a reference to another resource
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(source Resource, options ...*WithReferenceOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+// Allowed types for parameter source: Resource, EndpointReference, string, string.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(source any, options ...*WithReferenceOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
-	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
+	switch source.(type) {
+	case Resource, EndpointReference, string, string:
+	default:
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["source"] = serializeValue(source)
+	if source != nil { reqArgs["source"] = serializeValue(source) }
 	if len(options) > 0 {
 		merged := &WithReferenceOptions{}
 		for _, opt := range options {
@@ -2333,19 +2374,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReference", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceEndpoint adds a reference to an endpoint
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReferenceEndpoint(endpointReference EndpointReference) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEndpoint", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2358,32 +2386,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReferenceE
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEnvironment", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceExternalService adds a reference to an external service
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReferenceExternalService(externalService ExternalServiceResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if externalService != nil { if err := externalService.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["externalService"] = serializeValue(externalService)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceExternalService", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceUri adds a reference to a URI
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReferenceUri(name string, uri string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceUri", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2476,13 +2478,20 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDepen
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url string, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -2491,26 +2500,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url st
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2534,27 +2523,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlForEndp
 	return s
 }
 
-// WithUrlForEndpointFactory adds a URL for a specific endpoint via factory callback
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			return cb(callbackArg[EndpointReference](args, 0))
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpointFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+// WithUrls customizes displayed URLs via callback
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -2568,7 +2538,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlsCallba
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2761,11 +2731,9 @@ type CSharpAppResource interface {
 	PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) CSharpAppResource
 	TestWaitFor(dependency Resource) CSharpAppResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) CSharpAppResource
-	WaitFor(dependency Resource) CSharpAppResource
+	WaitFor(dependency Resource, options ...*WaitForOptions) CSharpAppResource
 	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) CSharpAppResource
-	WaitForStart(dependency Resource) CSharpAppResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) CSharpAppResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) CSharpAppResource
+	WaitForStart(dependency Resource, options ...*WaitForStartOptions) CSharpAppResource
 	WithArgs(args []string) CSharpAppResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) CSharpAppResource
 	WithBrowserLogs(options ...*WithBrowserLogsOptions) CSharpAppResource
@@ -2816,16 +2784,12 @@ type CSharpAppResource interface {
 	WithNestedConfig(config *TestNestedDto) CSharpAppResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) CSharpAppResource
 	WithOptionalString(options ...*WithOptionalStringOptions) CSharpAppResource
-	WithOtlpExporter() CSharpAppResource
-	WithOtlpExporterProtocol(protocol OtlpProtocol) CSharpAppResource
+	WithOtlpExporter(options ...*WithOtlpExporterOptions) CSharpAppResource
 	WithParentRelationship(parent Resource) CSharpAppResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) CSharpAppResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) CSharpAppResource
-	WithReference(source Resource, options ...*WithReferenceOptions) CSharpAppResource
-	WithReferenceEndpoint(endpointReference EndpointReference) CSharpAppResource
+	WithReference(source any, options ...*WithReferenceOptions) CSharpAppResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) CSharpAppResource
-	WithReferenceExternalService(externalService ExternalServiceResource) CSharpAppResource
-	WithReferenceUri(name string, uri string) CSharpAppResource
 	WithRelationship(resourceBuilder Resource, type_ string) CSharpAppResource
 	WithRemoteImageName(remoteImageName string) CSharpAppResource
 	WithRemoteImageTag(remoteImageTag string) CSharpAppResource
@@ -2833,11 +2797,9 @@ type CSharpAppResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
 	WithUnionDependency(dependency any) CSharpAppResource
-	WithUrl(url string, options ...*WithUrlOptions) CSharpAppResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) CSharpAppResource
+	WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource
-	WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) CSharpAppResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) CSharpAppResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) CSharpAppResource
 	WithValidator(validator func(arg TestResourceContext) bool) CSharpAppResource
 	WithoutHttpsCertificate() CSharpAppResource
 	Err() error
@@ -3119,7 +3081,7 @@ func (s *cSharpAppResource) TestWithEnvironmentCallback(callback func(arg TestEn
 }
 
 // WaitFor waits for another resource to be ready
-func (s *cSharpAppResource) WaitFor(dependency Resource) CSharpAppResource {
+func (s *cSharpAppResource) WaitFor(dependency Resource, options ...*WaitForOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -3127,7 +3089,14 @@ func (s *cSharpAppResource) WaitFor(dependency Resource) CSharpAppResource {
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
+	if len(options) > 0 {
+		merged := &WaitForOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3152,7 +3121,7 @@ func (s *cSharpAppResource) WaitForCompletion(dependency Resource, options ...*W
 }
 
 // WaitForStart waits for another resource to start
-func (s *cSharpAppResource) WaitForStart(dependency Resource) CSharpAppResource {
+func (s *cSharpAppResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -3160,35 +3129,14 @@ func (s *cSharpAppResource) WaitForStart(dependency Resource) CSharpAppResource 
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *cSharpAppResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) CSharpAppResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
+	if len(options) > 0 {
+		merged := &WaitForStartOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *cSharpAppResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) CSharpAppResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStart", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3223,7 +3171,7 @@ func (s *cSharpAppResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *cSharpAppResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4012,25 +3960,20 @@ func (s *cSharpAppResource) WithOptionalString(options ...*WithOptionalStringOpt
 }
 
 // WithOtlpExporter configures OTLP telemetry export
-func (s *cSharpAppResource) WithOtlpExporter() CSharpAppResource {
+func (s *cSharpAppResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOtlpExporterOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporter", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOtlpExporterProtocol configures OTLP telemetry export with specific protocol
-func (s *cSharpAppResource) WithOtlpExporterProtocol(protocol OtlpProtocol) CSharpAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["protocol"] = serializeValue(protocol)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporterProtocol", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4094,14 +4037,20 @@ func (s *cSharpAppResource) WithPipelineStepFactory(stepName string, callback fu
 }
 
 // WithReference adds a reference to another resource
-func (s *cSharpAppResource) WithReference(source Resource, options ...*WithReferenceOptions) CSharpAppResource {
+// Allowed types for parameter source: Resource, EndpointReference, string, string.
+func (s *cSharpAppResource) WithReference(source any, options ...*WithReferenceOptions) CSharpAppResource {
 	if s.err != nil { return s }
-	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
+	switch source.(type) {
+	case Resource, EndpointReference, string, string:
+	default:
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["source"] = serializeValue(source)
+	if source != nil { reqArgs["source"] = serializeValue(source) }
 	if len(options) > 0 {
 		merged := &WithReferenceOptions{}
 		for _, opt := range options {
@@ -4110,19 +4059,6 @@ func (s *cSharpAppResource) WithReference(source Resource, options ...*WithRefer
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReference", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceEndpoint adds a reference to an endpoint
-func (s *cSharpAppResource) WithReferenceEndpoint(endpointReference EndpointReference) CSharpAppResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEndpoint", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4135,32 +4071,6 @@ func (s *cSharpAppResource) WithReferenceEnvironment(options *ReferenceEnvironme
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEnvironment", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceExternalService adds a reference to an external service
-func (s *cSharpAppResource) WithReferenceExternalService(externalService ExternalServiceResource) CSharpAppResource {
-	if s.err != nil { return s }
-	if externalService != nil { if err := externalService.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["externalService"] = serializeValue(externalService)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceExternalService", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceUri adds a reference to a URI
-func (s *cSharpAppResource) WithReferenceUri(name string, uri string) CSharpAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceUri", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4265,13 +4175,20 @@ func (s *cSharpAppResource) WithUnionDependency(dependency any) CSharpAppResourc
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *cSharpAppResource) WithUrl(url string, options ...*WithUrlOptions) CSharpAppResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *cSharpAppResource) WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -4280,26 +4197,6 @@ func (s *cSharpAppResource) WithUrl(url string, options ...*WithUrlOptions) CSha
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *cSharpAppResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) CSharpAppResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4323,27 +4220,8 @@ func (s *cSharpAppResource) WithUrlForEndpoint(endpointName string, callback fun
 	return s
 }
 
-// WithUrlForEndpointFactory adds a URL for a specific endpoint via factory callback
-func (s *cSharpAppResource) WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) CSharpAppResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			return cb(callbackArg[EndpointReference](args, 0))
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpointFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *cSharpAppResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) CSharpAppResource {
+// WithUrls customizes displayed URLs via callback
+func (s *cSharpAppResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -4357,7 +4235,7 @@ func (s *cSharpAppResource) WithUrlsCallback(callback func(obj ResourceUrlsCallb
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4393,20 +4271,16 @@ func (s *cSharpAppResource) WithoutHttpsCertificate() CSharpAppResource {
 // CommandLineArgsCallbackContext is the public interface for handle type CommandLineArgsCallbackContext.
 type CommandLineArgsCallbackContext interface {
 	handleReference
-	CancellationToken() (*CancellationToken, error)
+	Args() CommandLineArgsEditor
 	ExecutionContext() DistributedApplicationExecutionContext
-	Logger() Logger
+	Log() LogFacade
 	Resource() Resource
-	SetExecutionContext(value DistributedApplicationExecutionContext) CommandLineArgsCallbackContext
-	SetLogger(value Logger) CommandLineArgsCallbackContext
-	Args() *List[any]
 	Err() error
 }
 
 // commandLineArgsCallbackContext is the unexported impl of CommandLineArgsCallbackContext.
 type commandLineArgsCallbackContext struct {
 	*resourceBuilderBase
-	args *List[any]
 }
 
 // newCommandLineArgsCallbackContextFromHandle wraps an existing handle as CommandLineArgsCallbackContext.
@@ -4414,30 +4288,26 @@ func newCommandLineArgsCallbackContextFromHandle(h *handle, c *client) CommandLi
 	return &commandLineArgsCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Args gets the Args property
-func (s *commandLineArgsCallbackContext) Args() *List[any] {
-	if s.args == nil {
-		s.args = newListWithGetter[any](s.handleWrapperBase, "Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.args")
-	}
-	return s.args
-}
-
-// CancellationToken gets the CancellationToken property
-func (s *commandLineArgsCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+// Args gets the command-line argument editor
+func (s *commandLineArgsCallbackContext) Args() CommandLineArgsEditor {
+	if s.err != nil { return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.cancellationToken", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.args", reqArgs)
 	if err != nil {
-		var zero *CancellationToken
-		return zero, err
+		return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
-	return decodeAs[*CancellationToken](result)
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.args returned unexpected type %T", result)
+		return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &commandLineArgsEditor{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext gets the execution context for this callback invocation
 func (s *commandLineArgsCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -4456,26 +4326,26 @@ func (s *commandLineArgsCallbackContext) ExecutionContext() DistributedApplicati
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Logger gets the Logger property
-func (s *commandLineArgsCallbackContext) Logger() Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+// Log gets the callback logger facade
+func (s *commandLineArgsCallbackContext) Log() LogFacade {
+	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.logger", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.log", reqArgs)
 	if err != nil {
-		return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.logger returned unexpected type %T", result)
-		return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.log returned unexpected type %T", result)
+		return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
-	return &logger{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+	return &logFacade{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the Resource property
+// Resource gets the resource associated with this callback
 func (s *commandLineArgsCallbackContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -4492,30 +4362,40 @@ func (s *commandLineArgsCallbackContext) Resource() Resource {
 	return typed
 }
 
-// SetExecutionContext sets the ExecutionContext property
-func (s *commandLineArgsCallbackContext) SetExecutionContext(value DistributedApplicationExecutionContext) CommandLineArgsCallbackContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.setExecutionContext", reqArgs); err != nil { s.setErr(err) }
-	return s
+// CommandLineArgsEditor is the public interface for handle type CommandLineArgsEditor.
+type CommandLineArgsEditor interface {
+	handleReference
+	Add(value any) error
+	Err() error
 }
 
-// SetLogger sets the Logger property
-func (s *commandLineArgsCallbackContext) SetLogger(value Logger) CommandLineArgsCallbackContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+// commandLineArgsEditor is the unexported impl of CommandLineArgsEditor.
+type commandLineArgsEditor struct {
+	*resourceBuilderBase
+}
+
+// newCommandLineArgsEditorFromHandle wraps an existing handle as CommandLineArgsEditor.
+func newCommandLineArgsEditorFromHandle(h *handle, c *client) CommandLineArgsEditor {
+	return &commandLineArgsEditor{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Add adds a command-line argument
+// Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue.
+func (s *commandLineArgsEditor) Add(value any) error {
+	if s.err != nil { return s.err }
+	switch value.(type) {
+	case string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue:
+	default:
+		err := fmt.Errorf("aspire: Add: parameter %q must be one of [string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue], got %T", "value", value)
+		return err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.setLogger", reqArgs); err != nil { s.setErr(err) }
-	return s
+	if value != nil { reqArgs["value"] = serializeValue(value) }
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/add", reqArgs)
+	return err
 }
 
 // Configuration is the public interface for handle type Configuration.
@@ -4672,995 +4552,6 @@ func (s *connectionStringAvailableEvent) Services() ServiceProvider {
 		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// ConnectionStringResource is the public interface for handle type ConnectionStringResource.
-type ConnectionStringResource interface {
-	handleReference
-	CreateExecutionConfiguration() ExecutionConfigurationBuilder
-	ExcludeFromManifest() ConnectionStringResource
-	ExcludeFromMcp() ConnectionStringResource
-	GetConnectionProperty(key string) *ReferenceExpression
-	GetResourceName() (string, error)
-	OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ConnectionStringResource
-	OnConnectionStringAvailable(callback func(arg ConnectionStringAvailableEvent)) ConnectionStringResource
-	OnInitializeResource(callback func(arg InitializeResourceEvent)) ConnectionStringResource
-	OnResourceReady(callback func(arg ResourceReadyEvent)) ConnectionStringResource
-	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ConnectionStringResource
-	TestWaitFor(dependency Resource) ConnectionStringResource
-	WaitFor(dependency Resource) ConnectionStringResource
-	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ConnectionStringResource
-	WaitForStart(dependency Resource) ConnectionStringResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) ConnectionStringResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) ConnectionStringResource
-	WithCancellableOperation(operation func(arg *CancellationToken)) ConnectionStringResource
-	WithChildRelationship(child Resource) ConnectionStringResource
-	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ConnectionStringResource
-	WithConfig(config *TestConfigDto) ConnectionStringResource
-	WithConnectionProperty(name string, value any) ConnectionStringResource
-	WithConnectionPropertyValue(name string, value string) ConnectionStringResource
-	WithConnectionString(connectionString *ReferenceExpression) ConnectionStringResource
-	WithConnectionStringDirect(connectionString string) ConnectionStringResource
-	WithContainerRegistry(registry Resource) ConnectionStringResource
-	WithCorrelationId(correlationId string) ConnectionStringResource
-	WithCreatedAt(createdAt string) ConnectionStringResource
-	WithDependency(dependency ResourceWithConnectionString) ConnectionStringResource
-	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ConnectionStringResource
-	WithEndpoints(endpoints []string) ConnectionStringResource
-	WithExplicitStart() ConnectionStringResource
-	WithHealthCheck(key string) ConnectionStringResource
-	WithIconName(iconName string, options ...*WithIconNameOptions) ConnectionStringResource
-	WithMergeEndpoint(endpointName string, port float64) ConnectionStringResource
-	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ConnectionStringResource
-	WithMergeLabel(label string) ConnectionStringResource
-	WithMergeLabelCategorized(label string, category string) ConnectionStringResource
-	WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) ConnectionStringResource
-	WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) ConnectionStringResource
-	WithMergeRoute(path string, method string, handler string, priority float64) ConnectionStringResource
-	WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ConnectionStringResource
-	WithModifiedAt(modifiedAt string) ConnectionStringResource
-	WithNestedConfig(config *TestNestedDto) ConnectionStringResource
-	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ConnectionStringResource
-	WithOptionalString(options ...*WithOptionalStringOptions) ConnectionStringResource
-	WithParentRelationship(parent Resource) ConnectionStringResource
-	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ConnectionStringResource
-	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ConnectionStringResource
-	WithRelationship(resourceBuilder Resource, type_ string) ConnectionStringResource
-	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ConnectionStringResource
-	WithStatus(status TestResourceStatus) ConnectionStringResource
-	WithUnionDependency(dependency any) ConnectionStringResource
-	WithUrl(url string, options ...*WithUrlOptions) ConnectionStringResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ConnectionStringResource
-	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ConnectionStringResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ConnectionStringResource
-	WithValidator(validator func(arg TestResourceContext) bool) ConnectionStringResource
-	Err() error
-}
-
-// connectionStringResource is the unexported impl of ConnectionStringResource.
-type connectionStringResource struct {
-	*resourceBuilderBase
-}
-
-// newConnectionStringResourceFromHandle wraps an existing handle as ConnectionStringResource.
-func newConnectionStringResourceFromHandle(h *handle, c *client) ConnectionStringResource {
-	return &connectionStringResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
-}
-
-// CreateExecutionConfiguration creates an execution configuration builder
-func (s *connectionStringResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
-	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"resource": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createExecutionConfiguration", reqArgs)
-	if err != nil {
-		return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/createExecutionConfiguration returned unexpected type %T", result)
-		return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// ExcludeFromManifest excludes the resource from the deployment manifest
-func (s *connectionStringResource) ExcludeFromManifest() ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/excludeFromManifest", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// ExcludeFromMcp excludes the resource from MCP server exposure
-func (s *connectionStringResource) ExcludeFromMcp() ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/excludeFromMcp", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// GetConnectionProperty gets a connection property by key
-func (s *connectionStringResource) GetConnectionProperty(key string) *ReferenceExpression {
-	if s.err != nil { return nil }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"resource": s.handle.ToJSON(),
-	}
-	reqArgs["key"] = serializeValue(key)
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getConnectionProperty", reqArgs)
-	if err != nil { s.setErr(err); return nil }
-	typed, ok := result.(*ReferenceExpression)
-	if !ok {
-		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/getConnectionProperty returned unexpected type %T", result))
-		return nil
-	}
-	return typed
-}
-
-// GetResourceName gets the resource name
-func (s *connectionStringResource) GetResourceName() (string, error) {
-	if s.err != nil { var zero string; return zero, s.err }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"resource": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getResourceName", reqArgs)
-	if err != nil {
-		var zero string
-		return zero, err
-	}
-	return decodeAs[string](result)
-}
-
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
-func (s *connectionStringResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[BeforeResourceStartedEvent](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onBeforeResourceStarted", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// OnConnectionStringAvailable subscribes to the ConnectionStringAvailable event
-func (s *connectionStringResource) OnConnectionStringAvailable(callback func(arg ConnectionStringAvailableEvent)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[ConnectionStringAvailableEvent](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onConnectionStringAvailable", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// OnInitializeResource subscribes to the InitializeResource event
-func (s *connectionStringResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[InitializeResourceEvent](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onInitializeResource", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// OnResourceReady subscribes to the ResourceReady event
-func (s *connectionStringResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[ResourceReadyEvent](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceReady", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// OnResourceStopped subscribes to the ResourceStopped event
-func (s *connectionStringResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[ResourceStoppedEvent](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/onResourceStopped", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// TestWaitFor waits for another resource (test version)
-func (s *connectionStringResource) TestWaitFor(dependency Resource) ConnectionStringResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/testWaitFor", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitFor waits for another resource to be ready
-func (s *connectionStringResource) WaitFor(dependency Resource) ConnectionStringResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForCompletion waits for resource completion
-func (s *connectionStringResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	if len(options) > 0 {
-		merged := &WaitForCompletionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceCompletion", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStart waits for another resource to start
-func (s *connectionStringResource) WaitForStart(dependency Resource) ConnectionStringResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *connectionStringResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) ConnectionStringResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *connectionStringResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) ConnectionStringResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithCancellableOperation performs a cancellable operation
-func (s *connectionStringResource) WithCancellableOperation(operation func(arg *CancellationToken)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if operation != nil {
-		cb := operation
-		shim := func(args ...any) any {
-			cb(callbackArg[*CancellationToken](args, 0))
-			return nil
-		}
-		reqArgs["operation"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCancellableOperation", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithChildRelationship sets a child relationship
-func (s *connectionStringResource) WithChildRelationship(child Resource) ConnectionStringResource {
-	if s.err != nil { return s }
-	if child != nil { if err := child.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["child"] = serializeValue(child)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderChildRelationship", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithCommand adds a resource command
-func (s *connectionStringResource) WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["displayName"] = serializeValue(displayName)
-	if executeCommand != nil {
-		cb := executeCommand
-		shim := func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
-		}
-		reqArgs["executeCommand"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithCommandOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithConfig configures the resource with a DTO
-func (s *connectionStringResource) WithConfig(config *TestConfigDto) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if config != nil { reqArgs["config"] = serializeValue(config) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConfig", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithConnectionProperty adds a connection property with a string or reference expression value
-// Allowed types for parameter value: string, *ReferenceExpression.
-func (s *connectionStringResource) WithConnectionProperty(name string, value any) ConnectionStringResource {
-	if s.err != nil { return s }
-	switch value.(type) {
-	case string, *ReferenceExpression:
-	default:
-		err := fmt.Errorf("aspire: WithConnectionProperty: parameter %q must be one of [string, *ReferenceExpression], got %T", "value", value)
-		s.setErr(err); return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectionProperty", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithConnectionPropertyValue adds a connection property with a string value
-func (s *connectionStringResource) WithConnectionPropertyValue(name string, value string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectionPropertyValue", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithConnectionString sets the connection string using a reference expression
-func (s *connectionStringResource) WithConnectionString(connectionString *ReferenceExpression) ConnectionStringResource {
-	if s.err != nil { return s }
-	if connectionString != nil { if err := connectionString.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if connectionString != nil { reqArgs["connectionString"] = serializeValue(connectionString) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConnectionString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithConnectionStringDirect sets connection string using direct interface target
-func (s *connectionStringResource) WithConnectionStringDirect(connectionString string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["connectionString"] = serializeValue(connectionString)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withConnectionStringDirect", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithContainerRegistry configures a resource to use a container registry
-func (s *connectionStringResource) WithContainerRegistry(registry Resource) ConnectionStringResource {
-	if s.err != nil { return s }
-	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["registry"] = serializeValue(registry)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerRegistry", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithCorrelationId sets the correlation ID
-func (s *connectionStringResource) WithCorrelationId(correlationId string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["correlationId"] = serializeValue(correlationId)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCorrelationId", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithCreatedAt sets the created timestamp
-func (s *connectionStringResource) WithCreatedAt(createdAt string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["createdAt"] = serializeValue(createdAt)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithDependency adds a dependency on another resource
-func (s *connectionStringResource) WithDependency(dependency ResourceWithConnectionString) ConnectionStringResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
-func (s *connectionStringResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithDockerfileBaseImageOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDockerfileBaseImage", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithEndpoints sets the endpoints
-func (s *connectionStringResource) WithEndpoints(endpoints []string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if endpoints != nil { reqArgs["endpoints"] = serializeValue(endpoints) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithExplicitStart prevents resource from starting automatically
-func (s *connectionStringResource) WithExplicitStart() ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExplicitStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithHealthCheck adds a health check by key
-func (s *connectionStringResource) WithHealthCheck(key string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["key"] = serializeValue(key)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithIconName sets the icon for the resource
-func (s *connectionStringResource) WithIconName(iconName string, options ...*WithIconNameOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["iconName"] = serializeValue(iconName)
-	if len(options) > 0 {
-		merged := &WithIconNameOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withIconName", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithMergeEndpoint configures a named endpoint
-func (s *connectionStringResource) WithMergeEndpoint(endpointName string, port float64) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	reqArgs["port"] = serializeValue(port)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithMergeEndpointScheme configures a named endpoint with scheme
-func (s *connectionStringResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	reqArgs["port"] = serializeValue(port)
-	reqArgs["scheme"] = serializeValue(scheme)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeEndpointScheme", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithMergeLabel adds a label to the resource
-func (s *connectionStringResource) WithMergeLabel(label string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["label"] = serializeValue(label)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabel", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithMergeLabelCategorized adds a categorized label to the resource
-func (s *connectionStringResource) WithMergeLabelCategorized(label string, category string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["label"] = serializeValue(label)
-	reqArgs["category"] = serializeValue(category)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLabelCategorized", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithMergeLogging configures resource logging
-func (s *connectionStringResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["logLevel"] = serializeValue(logLevel)
-	if len(options) > 0 {
-		merged := &WithMergeLoggingOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLogging", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithMergeLoggingPath configures resource logging with file path
-func (s *connectionStringResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["logLevel"] = serializeValue(logLevel)
-	reqArgs["logPath"] = serializeValue(logPath)
-	if len(options) > 0 {
-		merged := &WithMergeLoggingPathOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeLoggingPath", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithMergeRoute configures a route
-func (s *connectionStringResource) WithMergeRoute(path string, method string, handler string, priority float64) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["path"] = serializeValue(path)
-	reqArgs["method"] = serializeValue(method)
-	reqArgs["handler"] = serializeValue(handler)
-	reqArgs["priority"] = serializeValue(priority)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRoute", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithMergeRouteMiddleware configures a route with middleware
-func (s *connectionStringResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["path"] = serializeValue(path)
-	reqArgs["method"] = serializeValue(method)
-	reqArgs["handler"] = serializeValue(handler)
-	reqArgs["priority"] = serializeValue(priority)
-	reqArgs["middleware"] = serializeValue(middleware)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withMergeRouteMiddleware", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithModifiedAt sets the modified timestamp
-func (s *connectionStringResource) WithModifiedAt(modifiedAt string) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["modifiedAt"] = serializeValue(modifiedAt)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withModifiedAt", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithNestedConfig configures with nested DTO
-func (s *connectionStringResource) WithNestedConfig(config *TestNestedDto) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if config != nil { reqArgs["config"] = serializeValue(config) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withNestedConfig", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOptionalCallback configures with optional callback
-func (s *connectionStringResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithOptionalCallbackOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-		if merged.Callback != nil {
-			cb := merged.Callback
-			shim := func(args ...any) any {
-				cb(callbackArg[TestCallbackContext](args, 0))
-				return nil
-			}
-			reqArgs["callback"] = s.client.registerCallback(shim)
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOptionalString adds an optional string parameter
-func (s *connectionStringResource) WithOptionalString(options ...*WithOptionalStringOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithOptionalStringOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withOptionalString", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithParentRelationship sets the parent relationship
-func (s *connectionStringResource) WithParentRelationship(parent Resource) ConnectionStringResource {
-	if s.err != nil { return s }
-	if parent != nil { if err := parent.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["parent"] = serializeValue(parent)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
-func (s *connectionStringResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[PipelineConfigurationContext](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPipelineConfiguration", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithPipelineStepFactory adds a pipeline step to the resource
-func (s *connectionStringResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["stepName"] = serializeValue(stepName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[PipelineStepContext](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if len(options) > 0 {
-		merged := &WithPipelineStepFactoryOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPipelineStepFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithRelationship adds a relationship to another resource
-func (s *connectionStringResource) WithRelationship(resourceBuilder Resource, type_ string) ConnectionStringResource {
-	if s.err != nil { return s }
-	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["resourceBuilder"] = serializeValue(resourceBuilder)
-	reqArgs["type"] = serializeValue(type_)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderRelationship", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithRequiredCommand adds a required command dependency
-func (s *connectionStringResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["command"] = serializeValue(command)
-	if len(options) > 0 {
-		merged := &WithRequiredCommandOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithStatus sets the resource status
-func (s *connectionStringResource) WithStatus(status TestResourceStatus) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["status"] = serializeValue(status)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUnionDependency adds a dependency from a string or another resource
-// Allowed types for parameter dependency: string, ResourceWithConnectionString.
-func (s *connectionStringResource) WithUnionDependency(dependency any) ConnectionStringResource {
-	if s.err != nil { return s }
-	switch dependency.(type) {
-	case string, ResourceWithConnectionString:
-	default:
-		err := fmt.Errorf("aspire: WithUnionDependency: parameter %q must be one of [string, ResourceWithConnectionString], got %T", "dependency", dependency)
-		s.setErr(err); return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if dependency != nil { reqArgs["dependency"] = serializeValue(dependency) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withUnionDependency", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrl adds or modifies displayed URLs
-func (s *connectionStringResource) WithUrl(url string, options ...*WithUrlOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["url"] = serializeValue(url)
-	if len(options) > 0 {
-		merged := &WithUrlOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *connectionStringResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ConnectionStringResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
-func (s *connectionStringResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[*ResourceUrlAnnotation](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpoint", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *connectionStringResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			cb(callbackArg[ResourceUrlsCallbackContext](args, 0))
-			return nil
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithValidator adds validation callback
-func (s *connectionStringResource) WithValidator(validator func(arg TestResourceContext) bool) ConnectionStringResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if validator != nil {
-		cb := validator
-		shim := func(args ...any) any {
-			return cb(callbackArg[TestResourceContext](args, 0))
-		}
-		reqArgs["validator"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withValidator", reqArgs); err != nil { s.setErr(err) }
-	return s
 }
 
 // ContainerImagePushOptions is the public interface for handle type ContainerImagePushOptions.
@@ -5952,10 +4843,9 @@ type ContainerRegistryResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
 	WithUnionDependency(dependency any) ContainerRegistryResource
-	WithUrl(url string, options ...*WithUrlOptions) ContainerRegistryResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ContainerRegistryResource
+	WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerRegistryResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ContainerRegistryResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) ContainerRegistryResource
 	WithValidator(validator func(arg TestResourceContext) bool) ContainerRegistryResource
 	Err() error
 }
@@ -6622,13 +5512,20 @@ func (s *containerRegistryResource) WithUnionDependency(dependency any) Containe
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *containerRegistryResource) WithUrl(url string, options ...*WithUrlOptions) ContainerRegistryResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *containerRegistryResource) WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -6637,26 +5534,6 @@ func (s *containerRegistryResource) WithUrl(url string, options ...*WithUrlOptio
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *containerRegistryResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ContainerRegistryResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6680,8 +5557,8 @@ func (s *containerRegistryResource) WithUrlForEndpoint(endpointName string, call
 	return s
 }
 
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *containerRegistryResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ContainerRegistryResource {
+// WithUrls customizes displayed URLs via callback
+func (s *containerRegistryResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -6695,7 +5572,7 @@ func (s *containerRegistryResource) WithUrlsCallback(callback func(obj ResourceU
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6735,11 +5612,9 @@ type ContainerResource interface {
 	PublishAsContainer() ContainerResource
 	TestWaitFor(dependency Resource) ContainerResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ContainerResource
-	WaitFor(dependency Resource) ContainerResource
+	WaitFor(dependency Resource, options ...*WaitForOptions) ContainerResource
 	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ContainerResource
-	WaitForStart(dependency Resource) ContainerResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) ContainerResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) ContainerResource
+	WaitForStart(dependency Resource, options ...*WaitForStartOptions) ContainerResource
 	WithArgs(args []string) ContainerResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ContainerResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) ContainerResource
@@ -6807,27 +5682,21 @@ type ContainerResource interface {
 	WithNestedConfig(config *TestNestedDto) ContainerResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ContainerResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ContainerResource
-	WithOtlpExporter() ContainerResource
-	WithOtlpExporterProtocol(protocol OtlpProtocol) ContainerResource
+	WithOtlpExporter(options ...*WithOtlpExporterOptions) ContainerResource
 	WithParentRelationship(parent Resource) ContainerResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerResource
-	WithReference(source Resource, options ...*WithReferenceOptions) ContainerResource
-	WithReferenceEndpoint(endpointReference EndpointReference) ContainerResource
+	WithReference(source any, options ...*WithReferenceOptions) ContainerResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ContainerResource
-	WithReferenceExternalService(externalService ExternalServiceResource) ContainerResource
-	WithReferenceUri(name string, uri string) ContainerResource
 	WithRelationship(resourceBuilder Resource, type_ string) ContainerResource
 	WithRemoteImageName(remoteImageName string) ContainerResource
 	WithRemoteImageTag(remoteImageTag string) ContainerResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
 	WithUnionDependency(dependency any) ContainerResource
-	WithUrl(url string, options ...*WithUrlOptions) ContainerResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ContainerResource
+	WithUrl(url any, options ...*WithUrlOptions) ContainerResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerResource
-	WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) ContainerResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ContainerResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) ContainerResource
 	WithValidator(validator func(arg TestResourceContext) bool) ContainerResource
 	WithVolume(target string, options ...*WithVolumeOptions) ContainerResource
 	WithoutHttpsCertificate() ContainerResource
@@ -7081,7 +5950,7 @@ func (s *containerResource) TestWithEnvironmentCallback(callback func(arg TestEn
 }
 
 // WaitFor waits for another resource to be ready
-func (s *containerResource) WaitFor(dependency Resource) ContainerResource {
+func (s *containerResource) WaitFor(dependency Resource, options ...*WaitForOptions) ContainerResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -7089,7 +5958,14 @@ func (s *containerResource) WaitFor(dependency Resource) ContainerResource {
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
+	if len(options) > 0 {
+		merged := &WaitForOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7114,7 +5990,7 @@ func (s *containerResource) WaitForCompletion(dependency Resource, options ...*W
 }
 
 // WaitForStart waits for another resource to start
-func (s *containerResource) WaitForStart(dependency Resource) ContainerResource {
+func (s *containerResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) ContainerResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -7122,35 +5998,14 @@ func (s *containerResource) WaitForStart(dependency Resource) ContainerResource 
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *containerResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) ContainerResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
+	if len(options) > 0 {
+		merged := &WaitForStartOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *containerResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) ContainerResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStart", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7205,7 +6060,7 @@ func (s *containerResource) WithBindMount(source string, target string, options 
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *containerResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -8231,25 +7086,20 @@ func (s *containerResource) WithOptionalString(options ...*WithOptionalStringOpt
 }
 
 // WithOtlpExporter configures OTLP telemetry export
-func (s *containerResource) WithOtlpExporter() ContainerResource {
+func (s *containerResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOtlpExporterOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporter", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOtlpExporterProtocol configures OTLP telemetry export with specific protocol
-func (s *containerResource) WithOtlpExporterProtocol(protocol OtlpProtocol) ContainerResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["protocol"] = serializeValue(protocol)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporterProtocol", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -8313,14 +7163,20 @@ func (s *containerResource) WithPipelineStepFactory(stepName string, callback fu
 }
 
 // WithReference adds a reference to another resource
-func (s *containerResource) WithReference(source Resource, options ...*WithReferenceOptions) ContainerResource {
+// Allowed types for parameter source: Resource, EndpointReference, string, string.
+func (s *containerResource) WithReference(source any, options ...*WithReferenceOptions) ContainerResource {
 	if s.err != nil { return s }
-	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
+	switch source.(type) {
+	case Resource, EndpointReference, string, string:
+	default:
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["source"] = serializeValue(source)
+	if source != nil { reqArgs["source"] = serializeValue(source) }
 	if len(options) > 0 {
 		merged := &WithReferenceOptions{}
 		for _, opt := range options {
@@ -8329,19 +7185,6 @@ func (s *containerResource) WithReference(source Resource, options ...*WithRefer
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReference", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceEndpoint adds a reference to an endpoint
-func (s *containerResource) WithReferenceEndpoint(endpointReference EndpointReference) ContainerResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEndpoint", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -8354,32 +7197,6 @@ func (s *containerResource) WithReferenceEnvironment(options *ReferenceEnvironme
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEnvironment", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceExternalService adds a reference to an external service
-func (s *containerResource) WithReferenceExternalService(externalService ExternalServiceResource) ContainerResource {
-	if s.err != nil { return s }
-	if externalService != nil { if err := externalService.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["externalService"] = serializeValue(externalService)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceExternalService", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceUri adds a reference to a URI
-func (s *containerResource) WithReferenceUri(name string, uri string) ContainerResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceUri", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -8472,13 +7289,20 @@ func (s *containerResource) WithUnionDependency(dependency any) ContainerResourc
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *containerResource) WithUrl(url string, options ...*WithUrlOptions) ContainerResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *containerResource) WithUrl(url any, options ...*WithUrlOptions) ContainerResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -8487,26 +7311,6 @@ func (s *containerResource) WithUrl(url string, options ...*WithUrlOptions) Cont
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *containerResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ContainerResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -8530,27 +7334,8 @@ func (s *containerResource) WithUrlForEndpoint(endpointName string, callback fun
 	return s
 }
 
-// WithUrlForEndpointFactory adds a URL for a specific endpoint via factory callback
-func (s *containerResource) WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) ContainerResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			return cb(callbackArg[EndpointReference](args, 0))
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpointFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *containerResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ContainerResource {
+// WithUrls customizes displayed URLs via callback
+func (s *containerResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -8564,7 +7349,7 @@ func (s *containerResource) WithUrlsCallback(callback func(obj ResourceUrlsCallb
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -8660,29 +7445,20 @@ func (s *distributedApplication) Run(options ...*RunOptions) error {
 // DistributedApplicationBuilder is the public interface for handle type DistributedApplicationBuilder.
 type DistributedApplicationBuilder interface {
 	handleReference
-	AddCSharpApp(name string, path string) ProjectResource
-	AddCSharpAppWithOptions(name string, path string, configure func(obj ProjectResourceOptions)) CSharpAppResource
+	AddCSharpApp(name string, path string, options ...*AddCSharpAppOptions) CSharpAppResource
 	AddConnectionString(name string, options ...*AddConnectionStringOptions) ResourceWithConnectionString
-	AddConnectionStringBuilder(name string, connectionStringBuilder func(obj ReferenceExpressionBuilder)) ConnectionStringResource
-	AddConnectionStringExpression(name string, connectionStringExpression *ReferenceExpression) ConnectionStringResource
 	AddContainer(name string, image any) ContainerResource
-	AddContainerRegistry(name string, endpoint ParameterResource, options ...*AddContainerRegistryOptions) ContainerRegistryResource
-	AddContainerRegistryFromString(name string, endpoint string, options ...*AddContainerRegistryFromStringOptions) ContainerRegistryResource
+	AddContainerRegistry(name string, endpoint any, options ...*AddContainerRegistryOptions) ContainerRegistryResource
 	AddDockerfile(name string, contextPath string, options ...*AddDockerfileOptions) ContainerResource
 	AddDockerfileBuilder(name string, contextPath string, callback func(arg DockerfileBuilderCallbackContext), options ...*AddDockerfileBuilderOptions) ContainerResource
 	AddDotnetTool(name string, packageId string) DotnetToolResource
 	AddEventingSubscriber(subscribe func(arg EventingSubscriberRegistrationContext)) error
 	AddExecutable(name string, command string, workingDirectory string, args []string) ExecutableResource
-	AddExternalService(name string, url string) ExternalServiceResource
-	AddExternalServiceParameter(name string, urlParameter ParameterResource) ExternalServiceResource
-	AddExternalServiceUri(name string, uri string) ExternalServiceResource
+	AddExternalService(name string, url any) ExternalServiceResource
 	AddParameter(name string, options ...*AddParameterOptions) ParameterResource
 	AddParameterFromConfiguration(name string, configurationKey string, options ...*AddParameterFromConfigurationOptions) ParameterResource
 	AddParameterWithGeneratedValue(name string, value *GenerateParameterDefault, options ...*AddParameterWithGeneratedValueOptions) ParameterResource
-	AddParameterWithValue(name string, value string, options ...*AddParameterWithValueOptions) ParameterResource
-	AddProject(name string, projectPath string, launchProfileName string) ProjectResource
-	AddProjectWithOptions(name string, projectPath string, configure func(obj ProjectResourceOptions)) ProjectResource
-	AddProjectWithoutLaunchProfile(name string, projectPath string) ProjectResource
+	AddProject(name string, projectPath string, options ...*AddProjectOptions) ProjectResource
 	AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource
 	AddTestVault(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	AppHostDirectory() (string, error)
@@ -8710,28 +7486,7 @@ func newDistributedApplicationBuilderFromHandle(h *handle, c *client) Distribute
 }
 
 // AddCSharpApp adds a C# application resource
-func (s *distributedApplicationBuilder) AddCSharpApp(name string, path string) ProjectResource {
-	if s.err != nil { return &projectResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["path"] = serializeValue(path)
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addCSharpApp", reqArgs)
-	if err != nil {
-		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addCSharpApp returned unexpected type %T", result)
-		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &projectResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddCSharpAppWithOptions adds a C# application resource with configuration options
-func (s *distributedApplicationBuilder) AddCSharpAppWithOptions(name string, path string, configure func(obj ProjectResourceOptions)) CSharpAppResource {
+func (s *distributedApplicationBuilder) AddCSharpApp(name string, path string, options ...*AddCSharpAppOptions) CSharpAppResource {
 	if s.err != nil { return &cSharpAppResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -8739,21 +7494,20 @@ func (s *distributedApplicationBuilder) AddCSharpAppWithOptions(name string, pat
 	}
 	reqArgs["name"] = serializeValue(name)
 	reqArgs["path"] = serializeValue(path)
-	if configure != nil {
-		cb := configure
-		shim := func(args ...any) any {
-			cb(callbackArg[ProjectResourceOptions](args, 0))
-			return nil
+	if len(options) > 0 {
+		merged := &AddCSharpAppOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
-		reqArgs["configure"] = s.client.registerCallback(shim)
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addCSharpAppWithOptions", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addCSharpApp", reqArgs)
 	if err != nil {
 		return &cSharpAppResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addCSharpAppWithOptions returned unexpected type %T", result)
+		err := fmt.Errorf("aspire: Aspire.Hosting/addCSharpApp returned unexpected type %T", result)
 		return &cSharpAppResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &cSharpAppResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -8782,56 +7536,6 @@ func (s *distributedApplicationBuilder) AddConnectionString(name string, options
 		return nil
 	}
 	return typed
-}
-
-// AddConnectionStringBuilder adds a connection string with a builder callback
-func (s *distributedApplicationBuilder) AddConnectionStringBuilder(name string, connectionStringBuilder func(obj ReferenceExpressionBuilder)) ConnectionStringResource {
-	if s.err != nil { return &connectionStringResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if connectionStringBuilder != nil {
-		cb := connectionStringBuilder
-		shim := func(args ...any) any {
-			cb(callbackArg[ReferenceExpressionBuilder](args, 0))
-			return nil
-		}
-		reqArgs["connectionStringBuilder"] = s.client.registerCallback(shim)
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addConnectionStringBuilder", reqArgs)
-	if err != nil {
-		return &connectionStringResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addConnectionStringBuilder returned unexpected type %T", result)
-		return &connectionStringResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &connectionStringResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddConnectionStringExpression adds a connection string with a reference expression
-func (s *distributedApplicationBuilder) AddConnectionStringExpression(name string, connectionStringExpression *ReferenceExpression) ConnectionStringResource {
-	if s.err != nil { return &connectionStringResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	if connectionStringExpression != nil { if err := connectionStringExpression.Err(); err != nil { return &connectionStringResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	if connectionStringExpression != nil { reqArgs["connectionStringExpression"] = serializeValue(connectionStringExpression) }
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addConnectionStringExpression", reqArgs)
-	if err != nil {
-		return &connectionStringResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addConnectionStringExpression returned unexpected type %T", result)
-		return &connectionStringResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &connectionStringResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // AddContainer adds a container resource
@@ -8863,15 +7567,21 @@ func (s *distributedApplicationBuilder) AddContainer(name string, image any) Con
 }
 
 // AddContainerRegistry adds a container registry resource
-func (s *distributedApplicationBuilder) AddContainerRegistry(name string, endpoint ParameterResource, options ...*AddContainerRegistryOptions) ContainerRegistryResource {
+// Allowed types for parameter endpoint: string, ParameterResource.
+func (s *distributedApplicationBuilder) AddContainerRegistry(name string, endpoint any, options ...*AddContainerRegistryOptions) ContainerRegistryResource {
 	if s.err != nil { return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	if endpoint != nil { if err := endpoint.Err(); err != nil { return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} } }
+	switch endpoint.(type) {
+	case string, ParameterResource:
+	default:
+		err := fmt.Errorf("aspire: AddContainerRegistry: parameter %q must be one of [string, ParameterResource], got %T", "endpoint", endpoint)
+		return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpoint"] = serializeValue(endpoint)
+	if endpoint != nil { reqArgs["endpoint"] = serializeValue(endpoint) }
 	if len(options) > 0 {
 		merged := &AddContainerRegistryOptions{}
 		for _, opt := range options {
@@ -8886,34 +7596,6 @@ func (s *distributedApplicationBuilder) AddContainerRegistry(name string, endpoi
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/addContainerRegistry returned unexpected type %T", result)
-		return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &containerRegistryResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddContainerRegistryFromString adds a container registry with string endpoint
-func (s *distributedApplicationBuilder) AddContainerRegistryFromString(name string, endpoint string, options ...*AddContainerRegistryFromStringOptions) ContainerRegistryResource {
-	if s.err != nil { return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["endpoint"] = serializeValue(endpoint)
-	if len(options) > 0 {
-		merged := &AddContainerRegistryFromStringOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addContainerRegistryFromString", reqArgs)
-	if err != nil {
-		return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addContainerRegistryFromString returned unexpected type %T", result)
 		return &containerRegistryResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &containerRegistryResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -9047,14 +7729,21 @@ func (s *distributedApplicationBuilder) AddExecutable(name string, command strin
 }
 
 // AddExternalService adds an external service resource
-func (s *distributedApplicationBuilder) AddExternalService(name string, url string) ExternalServiceResource {
+// Allowed types for parameter url: string, string, ParameterResource.
+func (s *distributedApplicationBuilder) AddExternalService(name string, url any) ExternalServiceResource {
 	if s.err != nil { return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	switch url.(type) {
+	case string, string, ParameterResource:
+	default:
+		err := fmt.Errorf("aspire: AddExternalService: parameter %q must be one of [string, string, ParameterResource], got %T", "url", url)
+		return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["name"] = serializeValue(name)
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addExternalService", reqArgs)
 	if err != nil {
 		return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
@@ -9062,49 +7751,6 @@ func (s *distributedApplicationBuilder) AddExternalService(name string, url stri
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/addExternalService returned unexpected type %T", result)
-		return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &externalServiceResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddExternalServiceParameter adds an external service with a parameter URL
-func (s *distributedApplicationBuilder) AddExternalServiceParameter(name string, urlParameter ParameterResource) ExternalServiceResource {
-	if s.err != nil { return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	if urlParameter != nil { if err := urlParameter.Err(); err != nil { return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["urlParameter"] = serializeValue(urlParameter)
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addExternalServiceParameter", reqArgs)
-	if err != nil {
-		return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addExternalServiceParameter returned unexpected type %T", result)
-		return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &externalServiceResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddExternalServiceUri adds an external service with a URI
-func (s *distributedApplicationBuilder) AddExternalServiceUri(name string, uri string) ExternalServiceResource {
-	if s.err != nil { return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addExternalServiceUri", reqArgs)
-	if err != nil {
-		return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addExternalServiceUri returned unexpected type %T", result)
 		return &externalServiceResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &externalServiceResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -9193,36 +7839,8 @@ func (s *distributedApplicationBuilder) AddParameterWithGeneratedValue(name stri
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AddParameterWithValue adds a parameter with a default value
-func (s *distributedApplicationBuilder) AddParameterWithValue(name string, value string, options ...*AddParameterWithValueOptions) ParameterResource {
-	if s.err != nil { return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["value"] = serializeValue(value)
-	if len(options) > 0 {
-		merged := &AddParameterWithValueOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addParameterWithValue", reqArgs)
-	if err != nil {
-		return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addParameterWithValue returned unexpected type %T", result)
-		return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
 // AddProject adds a .NET project resource
-func (s *distributedApplicationBuilder) AddProject(name string, projectPath string, launchProfileName string) ProjectResource {
+func (s *distributedApplicationBuilder) AddProject(name string, projectPath string, options ...*AddProjectOptions) ProjectResource {
 	if s.err != nil { return &projectResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -9230,7 +7848,13 @@ func (s *distributedApplicationBuilder) AddProject(name string, projectPath stri
 	}
 	reqArgs["name"] = serializeValue(name)
 	reqArgs["projectPath"] = serializeValue(projectPath)
-	reqArgs["launchProfileName"] = serializeValue(launchProfileName)
+	if len(options) > 0 {
+		merged := &AddProjectOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addProject", reqArgs)
 	if err != nil {
 		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
@@ -9238,56 +7862,6 @@ func (s *distributedApplicationBuilder) AddProject(name string, projectPath stri
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/addProject returned unexpected type %T", result)
-		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &projectResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddProjectWithOptions adds a project resource with configuration options
-func (s *distributedApplicationBuilder) AddProjectWithOptions(name string, projectPath string, configure func(obj ProjectResourceOptions)) ProjectResource {
-	if s.err != nil { return &projectResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["projectPath"] = serializeValue(projectPath)
-	if configure != nil {
-		cb := configure
-		shim := func(args ...any) any {
-			cb(callbackArg[ProjectResourceOptions](args, 0))
-			return nil
-		}
-		reqArgs["configure"] = s.client.registerCallback(shim)
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addProjectWithOptions", reqArgs)
-	if err != nil {
-		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addProjectWithOptions returned unexpected type %T", result)
-		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &projectResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// AddProjectWithoutLaunchProfile adds a .NET project resource without a launch profile
-func (s *distributedApplicationBuilder) AddProjectWithoutLaunchProfile(name string, projectPath string) ProjectResource {
-	if s.err != nil { return &projectResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["projectPath"] = serializeValue(projectPath)
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addProjectWithoutLaunchProfile", reqArgs)
-	if err != nil {
-		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/addProjectWithoutLaunchProfile returned unexpected type %T", result)
 		return &projectResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -10269,15 +8843,12 @@ type DotnetToolResource interface {
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) DotnetToolResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) DotnetToolResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) DotnetToolResource
-	PublishAsDockerFile() DotnetToolResource
-	PublishAsDockerFileWithConfigure(configure func(obj ContainerResource)) DotnetToolResource
+	PublishAsDockerFile(configure func(obj ContainerResource)) DotnetToolResource
 	TestWaitFor(dependency Resource) DotnetToolResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) DotnetToolResource
-	WaitFor(dependency Resource) DotnetToolResource
+	WaitFor(dependency Resource, options ...*WaitForOptions) DotnetToolResource
 	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) DotnetToolResource
-	WaitForStart(dependency Resource) DotnetToolResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) DotnetToolResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) DotnetToolResource
+	WaitForStart(dependency Resource, options ...*WaitForStartOptions) DotnetToolResource
 	WithArgs(args []string) DotnetToolResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) DotnetToolResource
 	WithBrowserLogs(options ...*WithBrowserLogsOptions) DotnetToolResource
@@ -10329,16 +8900,12 @@ type DotnetToolResource interface {
 	WithNestedConfig(config *TestNestedDto) DotnetToolResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) DotnetToolResource
 	WithOptionalString(options ...*WithOptionalStringOptions) DotnetToolResource
-	WithOtlpExporter() DotnetToolResource
-	WithOtlpExporterProtocol(protocol OtlpProtocol) DotnetToolResource
+	WithOtlpExporter(options ...*WithOtlpExporterOptions) DotnetToolResource
 	WithParentRelationship(parent Resource) DotnetToolResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) DotnetToolResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) DotnetToolResource
-	WithReference(source Resource, options ...*WithReferenceOptions) DotnetToolResource
-	WithReferenceEndpoint(endpointReference EndpointReference) DotnetToolResource
+	WithReference(source any, options ...*WithReferenceOptions) DotnetToolResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) DotnetToolResource
-	WithReferenceExternalService(externalService ExternalServiceResource) DotnetToolResource
-	WithReferenceUri(name string, uri string) DotnetToolResource
 	WithRelationship(resourceBuilder Resource, type_ string) DotnetToolResource
 	WithRemoteImageName(remoteImageName string) DotnetToolResource
 	WithRemoteImageTag(remoteImageTag string) DotnetToolResource
@@ -10351,11 +8918,9 @@ type DotnetToolResource interface {
 	WithToolSource(source string) DotnetToolResource
 	WithToolVersion(version string) DotnetToolResource
 	WithUnionDependency(dependency any) DotnetToolResource
-	WithUrl(url string, options ...*WithUrlOptions) DotnetToolResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) DotnetToolResource
+	WithUrl(url any, options ...*WithUrlOptions) DotnetToolResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) DotnetToolResource
-	WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) DotnetToolResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) DotnetToolResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) DotnetToolResource
 	WithValidator(validator func(arg TestResourceContext) bool) DotnetToolResource
 	WithWorkingDirectory(workingDirectory string) DotnetToolResource
 	WithoutHttpsCertificate() DotnetToolResource
@@ -10554,19 +9119,8 @@ func (s *dotnetToolResource) OnResourceStopped(callback func(arg ResourceStopped
 	return s
 }
 
-// PublishAsDockerFile publishes the executable as a Docker container
-func (s *dotnetToolResource) PublishAsDockerFile() DotnetToolResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsDockerFile", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// PublishAsDockerFileWithConfigure publishes an executable as a Docker file with optional container configuration
-func (s *dotnetToolResource) PublishAsDockerFileWithConfigure(configure func(obj ContainerResource)) DotnetToolResource {
+// PublishAsDockerFile publishes an executable as a Docker file
+func (s *dotnetToolResource) PublishAsDockerFile(configure func(obj ContainerResource)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -10580,7 +9134,7 @@ func (s *dotnetToolResource) PublishAsDockerFileWithConfigure(configure func(obj
 		}
 		reqArgs["configure"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsDockerFileWithConfigure", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsDockerFile", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10617,7 +9171,7 @@ func (s *dotnetToolResource) TestWithEnvironmentCallback(callback func(arg TestE
 }
 
 // WaitFor waits for another resource to be ready
-func (s *dotnetToolResource) WaitFor(dependency Resource) DotnetToolResource {
+func (s *dotnetToolResource) WaitFor(dependency Resource, options ...*WaitForOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -10625,7 +9179,14 @@ func (s *dotnetToolResource) WaitFor(dependency Resource) DotnetToolResource {
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
+	if len(options) > 0 {
+		merged := &WaitForOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10650,7 +9211,7 @@ func (s *dotnetToolResource) WaitForCompletion(dependency Resource, options ...*
 }
 
 // WaitForStart waits for another resource to start
-func (s *dotnetToolResource) WaitForStart(dependency Resource) DotnetToolResource {
+func (s *dotnetToolResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -10658,35 +9219,14 @@ func (s *dotnetToolResource) WaitForStart(dependency Resource) DotnetToolResourc
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *dotnetToolResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) DotnetToolResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
+	if len(options) > 0 {
+		merged := &WaitForStartOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *dotnetToolResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) DotnetToolResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStart", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10721,7 +9261,7 @@ func (s *dotnetToolResource) WithArgsCallback(callback func(obj CommandLineArgsC
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *dotnetToolResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11522,25 +10062,20 @@ func (s *dotnetToolResource) WithOptionalString(options ...*WithOptionalStringOp
 }
 
 // WithOtlpExporter configures OTLP telemetry export
-func (s *dotnetToolResource) WithOtlpExporter() DotnetToolResource {
+func (s *dotnetToolResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOtlpExporterOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporter", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOtlpExporterProtocol configures OTLP telemetry export with specific protocol
-func (s *dotnetToolResource) WithOtlpExporterProtocol(protocol OtlpProtocol) DotnetToolResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["protocol"] = serializeValue(protocol)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporterProtocol", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11604,14 +10139,20 @@ func (s *dotnetToolResource) WithPipelineStepFactory(stepName string, callback f
 }
 
 // WithReference adds a reference to another resource
-func (s *dotnetToolResource) WithReference(source Resource, options ...*WithReferenceOptions) DotnetToolResource {
+// Allowed types for parameter source: Resource, EndpointReference, string, string.
+func (s *dotnetToolResource) WithReference(source any, options ...*WithReferenceOptions) DotnetToolResource {
 	if s.err != nil { return s }
-	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
+	switch source.(type) {
+	case Resource, EndpointReference, string, string:
+	default:
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["source"] = serializeValue(source)
+	if source != nil { reqArgs["source"] = serializeValue(source) }
 	if len(options) > 0 {
 		merged := &WithReferenceOptions{}
 		for _, opt := range options {
@@ -11620,19 +10161,6 @@ func (s *dotnetToolResource) WithReference(source Resource, options ...*WithRefe
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReference", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceEndpoint adds a reference to an endpoint
-func (s *dotnetToolResource) WithReferenceEndpoint(endpointReference EndpointReference) DotnetToolResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEndpoint", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11645,32 +10173,6 @@ func (s *dotnetToolResource) WithReferenceEnvironment(options *ReferenceEnvironm
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEnvironment", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceExternalService adds a reference to an external service
-func (s *dotnetToolResource) WithReferenceExternalService(externalService ExternalServiceResource) DotnetToolResource {
-	if s.err != nil { return s }
-	if externalService != nil { if err := externalService.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["externalService"] = serializeValue(externalService)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceExternalService", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceUri adds a reference to a URI
-func (s *dotnetToolResource) WithReferenceUri(name string, uri string) DotnetToolResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceUri", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11832,13 +10334,20 @@ func (s *dotnetToolResource) WithUnionDependency(dependency any) DotnetToolResou
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *dotnetToolResource) WithUrl(url string, options ...*WithUrlOptions) DotnetToolResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *dotnetToolResource) WithUrl(url any, options ...*WithUrlOptions) DotnetToolResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -11847,26 +10356,6 @@ func (s *dotnetToolResource) WithUrl(url string, options ...*WithUrlOptions) Dot
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *dotnetToolResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) DotnetToolResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11890,27 +10379,8 @@ func (s *dotnetToolResource) WithUrlForEndpoint(endpointName string, callback fu
 	return s
 }
 
-// WithUrlForEndpointFactory adds a URL for a specific endpoint via factory callback
-func (s *dotnetToolResource) WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) DotnetToolResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			return cb(callbackArg[EndpointReference](args, 0))
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpointFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *dotnetToolResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) DotnetToolResource {
+// WithUrls customizes displayed URLs via callback
+func (s *dotnetToolResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -11924,7 +10394,7 @@ func (s *dotnetToolResource) WithUrlsCallback(callback func(obj ResourceUrlsCall
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12104,7 +10574,7 @@ func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (str
 			}
 		}
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/getValueAsync", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs)
 	if err != nil {
 		var zero string
 		return zero, err
@@ -12684,19 +11154,16 @@ func (s *endpointUpdateContext) UriScheme() (string, error) {
 // EnvironmentCallbackContext is the public interface for handle type EnvironmentCallbackContext.
 type EnvironmentCallbackContext interface {
 	handleReference
-	CancellationToken() (*CancellationToken, error)
+	Environment() EnvironmentEditor
 	ExecutionContext() DistributedApplicationExecutionContext
-	Logger() Logger
+	Log() LogFacade
 	Resource() Resource
-	SetLogger(value Logger) EnvironmentCallbackContext
-	EnvironmentVariables() *Dict[string, any]
 	Err() error
 }
 
 // environmentCallbackContext is the unexported impl of EnvironmentCallbackContext.
 type environmentCallbackContext struct {
 	*resourceBuilderBase
-	environmentVariables *Dict[string, any]
 }
 
 // newEnvironmentCallbackContextFromHandle wraps an existing handle as EnvironmentCallbackContext.
@@ -12704,30 +11171,26 @@ func newEnvironmentCallbackContextFromHandle(h *handle, c *client) EnvironmentCa
 	return &environmentCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
-func (s *environmentCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+// Environment gets the environment variable editor
+func (s *environmentCallbackContext) Environment() EnvironmentEditor {
+	if s.err != nil { return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.cancellationToken", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environment", reqArgs)
 	if err != nil {
-		var zero *CancellationToken
-		return zero, err
+		return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
-	return decodeAs[*CancellationToken](result)
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environment returned unexpected type %T", result)
+		return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &environmentEditor{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// EnvironmentVariables gets the EnvironmentVariables property
-func (s *environmentCallbackContext) EnvironmentVariables() *Dict[string, any] {
-	if s.environmentVariables == nil {
-		s.environmentVariables = newDictWithGetter[string, any](s.handleWrapperBase, "Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environmentVariables")
-	}
-	return s.environmentVariables
-}
-
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext gets the execution context for this callback invocation
 func (s *environmentCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12746,26 +11209,26 @@ func (s *environmentCallbackContext) ExecutionContext() DistributedApplicationEx
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Logger gets the Logger property
-func (s *environmentCallbackContext) Logger() Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+// Log gets the callback logger facade
+func (s *environmentCallbackContext) Log() LogFacade {
+	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.logger", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.log", reqArgs)
 	if err != nil {
-		return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.logger returned unexpected type %T", result)
-		return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.log returned unexpected type %T", result)
+		return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
-	return &logger{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+	return &logFacade{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the Resource property
+// Resource gets the resource associated with this callback
 func (s *environmentCallbackContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -12782,17 +11245,41 @@ func (s *environmentCallbackContext) Resource() Resource {
 	return typed
 }
 
-// SetLogger sets the Logger property
-func (s *environmentCallbackContext) SetLogger(value Logger) EnvironmentCallbackContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+// EnvironmentEditor is the public interface for handle type EnvironmentEditor.
+type EnvironmentEditor interface {
+	handleReference
+	Set(name string, value any) error
+	Err() error
+}
+
+// environmentEditor is the unexported impl of EnvironmentEditor.
+type environmentEditor struct {
+	*resourceBuilderBase
+}
+
+// newEnvironmentEditorFromHandle wraps an existing handle as EnvironmentEditor.
+func newEnvironmentEditorFromHandle(h *handle, c *client) EnvironmentEditor {
+	return &environmentEditor{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Set sets an environment variable
+// Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue.
+func (s *environmentEditor) Set(name string, value any) error {
+	if s.err != nil { return s.err }
+	switch value.(type) {
+	case string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue:
+	default:
+		err := fmt.Errorf("aspire: Set: parameter %q must be one of [string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue], got %T", "value", value)
+		return err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.setLogger", reqArgs); err != nil { s.setErr(err) }
-	return s
+	reqArgs["name"] = serializeValue(name)
+	if value != nil { reqArgs["value"] = serializeValue(value) }
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/set", reqArgs)
+	return err
 }
 
 // EventingSubscriberRegistrationContext is the public interface for handle type EventingSubscriberRegistrationContext.
@@ -12917,15 +11404,12 @@ type ExecutableResource interface {
 	OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ExecutableResource
 	OnResourceReady(callback func(arg ResourceReadyEvent)) ExecutableResource
 	OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExecutableResource
-	PublishAsDockerFile() ExecutableResource
-	PublishAsDockerFileWithConfigure(configure func(obj ContainerResource)) ExecutableResource
+	PublishAsDockerFile(configure func(obj ContainerResource)) ExecutableResource
 	TestWaitFor(dependency Resource) ExecutableResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ExecutableResource
-	WaitFor(dependency Resource) ExecutableResource
+	WaitFor(dependency Resource, options ...*WaitForOptions) ExecutableResource
 	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ExecutableResource
-	WaitForStart(dependency Resource) ExecutableResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) ExecutableResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) ExecutableResource
+	WaitForStart(dependency Resource, options ...*WaitForStartOptions) ExecutableResource
 	WithArgs(args []string) ExecutableResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ExecutableResource
 	WithBrowserLogs(options ...*WithBrowserLogsOptions) ExecutableResource
@@ -12977,27 +11461,21 @@ type ExecutableResource interface {
 	WithNestedConfig(config *TestNestedDto) ExecutableResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ExecutableResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ExecutableResource
-	WithOtlpExporter() ExecutableResource
-	WithOtlpExporterProtocol(protocol OtlpProtocol) ExecutableResource
+	WithOtlpExporter(options ...*WithOtlpExporterOptions) ExecutableResource
 	WithParentRelationship(parent Resource) ExecutableResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExecutableResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExecutableResource
-	WithReference(source Resource, options ...*WithReferenceOptions) ExecutableResource
-	WithReferenceEndpoint(endpointReference EndpointReference) ExecutableResource
+	WithReference(source any, options ...*WithReferenceOptions) ExecutableResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ExecutableResource
-	WithReferenceExternalService(externalService ExternalServiceResource) ExecutableResource
-	WithReferenceUri(name string, uri string) ExecutableResource
 	WithRelationship(resourceBuilder Resource, type_ string) ExecutableResource
 	WithRemoteImageName(remoteImageName string) ExecutableResource
 	WithRemoteImageTag(remoteImageTag string) ExecutableResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
 	WithUnionDependency(dependency any) ExecutableResource
-	WithUrl(url string, options ...*WithUrlOptions) ExecutableResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ExecutableResource
+	WithUrl(url any, options ...*WithUrlOptions) ExecutableResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource
-	WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) ExecutableResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ExecutableResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExecutableResource
 	WithValidator(validator func(arg TestResourceContext) bool) ExecutableResource
 	WithWorkingDirectory(workingDirectory string) ExecutableResource
 	WithoutHttpsCertificate() ExecutableResource
@@ -13196,19 +11674,8 @@ func (s *executableResource) OnResourceStopped(callback func(arg ResourceStopped
 	return s
 }
 
-// PublishAsDockerFile publishes the executable as a Docker container
-func (s *executableResource) PublishAsDockerFile() ExecutableResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsDockerFile", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// PublishAsDockerFileWithConfigure publishes an executable as a Docker file with optional container configuration
-func (s *executableResource) PublishAsDockerFileWithConfigure(configure func(obj ContainerResource)) ExecutableResource {
+// PublishAsDockerFile publishes an executable as a Docker file
+func (s *executableResource) PublishAsDockerFile(configure func(obj ContainerResource)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -13222,7 +11689,7 @@ func (s *executableResource) PublishAsDockerFileWithConfigure(configure func(obj
 		}
 		reqArgs["configure"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsDockerFileWithConfigure", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/publishAsDockerFile", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13259,7 +11726,7 @@ func (s *executableResource) TestWithEnvironmentCallback(callback func(arg TestE
 }
 
 // WaitFor waits for another resource to be ready
-func (s *executableResource) WaitFor(dependency Resource) ExecutableResource {
+func (s *executableResource) WaitFor(dependency Resource, options ...*WaitForOptions) ExecutableResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -13267,7 +11734,14 @@ func (s *executableResource) WaitFor(dependency Resource) ExecutableResource {
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
+	if len(options) > 0 {
+		merged := &WaitForOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13292,7 +11766,7 @@ func (s *executableResource) WaitForCompletion(dependency Resource, options ...*
 }
 
 // WaitForStart waits for another resource to start
-func (s *executableResource) WaitForStart(dependency Resource) ExecutableResource {
+func (s *executableResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) ExecutableResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -13300,35 +11774,14 @@ func (s *executableResource) WaitForStart(dependency Resource) ExecutableResourc
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *executableResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) ExecutableResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
+	if len(options) > 0 {
+		merged := &WaitForStartOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *executableResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) ExecutableResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStart", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13363,7 +11816,7 @@ func (s *executableResource) WithArgsCallback(callback func(obj CommandLineArgsC
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *executableResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14164,25 +12617,20 @@ func (s *executableResource) WithOptionalString(options ...*WithOptionalStringOp
 }
 
 // WithOtlpExporter configures OTLP telemetry export
-func (s *executableResource) WithOtlpExporter() ExecutableResource {
+func (s *executableResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOtlpExporterOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporter", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOtlpExporterProtocol configures OTLP telemetry export with specific protocol
-func (s *executableResource) WithOtlpExporterProtocol(protocol OtlpProtocol) ExecutableResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["protocol"] = serializeValue(protocol)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporterProtocol", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14246,14 +12694,20 @@ func (s *executableResource) WithPipelineStepFactory(stepName string, callback f
 }
 
 // WithReference adds a reference to another resource
-func (s *executableResource) WithReference(source Resource, options ...*WithReferenceOptions) ExecutableResource {
+// Allowed types for parameter source: Resource, EndpointReference, string, string.
+func (s *executableResource) WithReference(source any, options ...*WithReferenceOptions) ExecutableResource {
 	if s.err != nil { return s }
-	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
+	switch source.(type) {
+	case Resource, EndpointReference, string, string:
+	default:
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["source"] = serializeValue(source)
+	if source != nil { reqArgs["source"] = serializeValue(source) }
 	if len(options) > 0 {
 		merged := &WithReferenceOptions{}
 		for _, opt := range options {
@@ -14262,19 +12716,6 @@ func (s *executableResource) WithReference(source Resource, options ...*WithRefe
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReference", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceEndpoint adds a reference to an endpoint
-func (s *executableResource) WithReferenceEndpoint(endpointReference EndpointReference) ExecutableResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEndpoint", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14287,32 +12728,6 @@ func (s *executableResource) WithReferenceEnvironment(options *ReferenceEnvironm
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEnvironment", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceExternalService adds a reference to an external service
-func (s *executableResource) WithReferenceExternalService(externalService ExternalServiceResource) ExecutableResource {
-	if s.err != nil { return s }
-	if externalService != nil { if err := externalService.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["externalService"] = serializeValue(externalService)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceExternalService", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceUri adds a reference to a URI
-func (s *executableResource) WithReferenceUri(name string, uri string) ExecutableResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceUri", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14405,13 +12820,20 @@ func (s *executableResource) WithUnionDependency(dependency any) ExecutableResou
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *executableResource) WithUrl(url string, options ...*WithUrlOptions) ExecutableResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *executableResource) WithUrl(url any, options ...*WithUrlOptions) ExecutableResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -14420,26 +12842,6 @@ func (s *executableResource) WithUrl(url string, options ...*WithUrlOptions) Exe
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *executableResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ExecutableResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14463,27 +12865,8 @@ func (s *executableResource) WithUrlForEndpoint(endpointName string, callback fu
 	return s
 }
 
-// WithUrlForEndpointFactory adds a URL for a specific endpoint via factory callback
-func (s *executableResource) WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) ExecutableResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			return cb(callbackArg[EndpointReference](args, 0))
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpointFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *executableResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ExecutableResource {
+// WithUrls customizes displayed URLs via callback
+func (s *executableResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -14497,7 +12880,7 @@ func (s *executableResource) WithUrlsCallback(callback func(obj ResourceUrlsCall
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14880,8 +13263,8 @@ type ExternalServiceResource interface {
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ExternalServiceResource
 	WithEndpoints(endpoints []string) ExternalServiceResource
 	WithExplicitStart() ExternalServiceResource
-	WithExternalServiceHttpHealthCheck(options ...*WithExternalServiceHttpHealthCheckOptions) ExternalServiceResource
 	WithHealthCheck(key string) ExternalServiceResource
+	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExternalServiceResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ExternalServiceResource
 	WithMergeEndpoint(endpointName string, port float64) ExternalServiceResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ExternalServiceResource
@@ -14902,10 +13285,9 @@ type ExternalServiceResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
 	WithUnionDependency(dependency any) ExternalServiceResource
-	WithUrl(url string, options ...*WithUrlOptions) ExternalServiceResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ExternalServiceResource
+	WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExternalServiceResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ExternalServiceResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExternalServiceResource
 	WithValidator(validator func(arg TestResourceContext) bool) ExternalServiceResource
 	Err() error
 }
@@ -15227,24 +13609,6 @@ func (s *externalServiceResource) WithExplicitStart() ExternalServiceResource {
 	return s
 }
 
-// WithExternalServiceHttpHealthCheck adds an HTTP health check to an external service
-func (s *externalServiceResource) WithExternalServiceHttpHealthCheck(options ...*WithExternalServiceHttpHealthCheckOptions) ExternalServiceResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithExternalServiceHttpHealthCheckOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExternalServiceHttpHealthCheck", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
 // WithHealthCheck adds a health check by key
 func (s *externalServiceResource) WithHealthCheck(key string) ExternalServiceResource {
 	if s.err != nil { return s }
@@ -15254,6 +13618,24 @@ func (s *externalServiceResource) WithHealthCheck(key string) ExternalServiceRes
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHttpHealthCheck adds an HTTP health check to the external service
+func (s *externalServiceResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHttpHealthCheckOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withExternalServiceHttpHealthCheck", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15590,13 +13972,20 @@ func (s *externalServiceResource) WithUnionDependency(dependency any) ExternalSe
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *externalServiceResource) WithUrl(url string, options ...*WithUrlOptions) ExternalServiceResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *externalServiceResource) WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -15605,26 +13994,6 @@ func (s *externalServiceResource) WithUrl(url string, options ...*WithUrlOptions
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *externalServiceResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ExternalServiceResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15648,8 +14017,8 @@ func (s *externalServiceResource) WithUrlForEndpoint(endpointName string, callba
 	return s
 }
 
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *externalServiceResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ExternalServiceResource {
+// WithUrls customizes displayed URLs via callback
+func (s *externalServiceResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -15663,7 +14032,7 @@ func (s *externalServiceResource) WithUrlsCallback(callback func(obj ResourceUrl
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15912,6 +14281,74 @@ func (s *initializeResourceEvent) Services() ServiceProvider {
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// LogFacade is the public interface for handle type LogFacade.
+type LogFacade interface {
+	handleReference
+	Debug(message string) error
+	Error(message string) error
+	Info(message string) error
+	Warning(message string) error
+	Err() error
+}
+
+// logFacade is the unexported impl of LogFacade.
+type logFacade struct {
+	*resourceBuilderBase
+}
+
+// newLogFacadeFromHandle wraps an existing handle as LogFacade.
+func newLogFacadeFromHandle(h *handle, c *client) LogFacade {
+	return &logFacade{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Debug writes a debug log message
+func (s *logFacade) Debug(message string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["message"] = serializeValue(message)
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/debug", reqArgs)
+	return err
+}
+
+// Error writes an error log message
+func (s *logFacade) Error(message string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["message"] = serializeValue(message)
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/error", reqArgs)
+	return err
+}
+
+// Info writes an informational log message
+func (s *logFacade) Info(message string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["message"] = serializeValue(message)
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/info", reqArgs)
+	return err
+}
+
+// Warning writes a warning log message
+func (s *logFacade) Warning(message string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["message"] = serializeValue(message)
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/warning", reqArgs)
+	return err
+}
+
 // Logger is the public interface for handle type Logger.
 type Logger interface {
 	handleReference
@@ -16076,10 +14513,9 @@ type ParameterResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
 	WithUnionDependency(dependency any) ParameterResource
-	WithUrl(url string, options ...*WithUrlOptions) ParameterResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ParameterResource
+	WithUrl(url any, options ...*WithUrlOptions) ParameterResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ParameterResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ParameterResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) ParameterResource
 	WithValidator(validator func(arg TestResourceContext) bool) ParameterResource
 	Err() error
 }
@@ -16765,13 +15201,20 @@ func (s *parameterResource) WithUnionDependency(dependency any) ParameterResourc
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *parameterResource) WithUrl(url string, options ...*WithUrlOptions) ParameterResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *parameterResource) WithUrl(url any, options ...*WithUrlOptions) ParameterResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -16780,26 +15223,6 @@ func (s *parameterResource) WithUrl(url string, options ...*WithUrlOptions) Para
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *parameterResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ParameterResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16823,8 +15246,8 @@ func (s *parameterResource) WithUrlForEndpoint(endpointName string, callback fun
 	return s
 }
 
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *parameterResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ParameterResource {
+// WithUrls customizes displayed URLs via callback
+func (s *parameterResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -16838,7 +15261,7 @@ func (s *parameterResource) WithUrlsCallback(callback func(obj ResourceUrlsCallb
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16863,13 +15286,9 @@ func (s *parameterResource) WithValidator(validator func(arg TestResourceContext
 // PipelineConfigurationContext is the public interface for handle type PipelineConfigurationContext.
 type PipelineConfigurationContext interface {
 	handleReference
-	GetStepsByTag(tag string) ([]PipelineStep, error)
-	Model() DistributedApplicationModel
-	Services() ServiceProvider
-	SetModel(value DistributedApplicationModel) PipelineConfigurationContext
-	SetServices(value ServiceProvider) PipelineConfigurationContext
-	SetSteps(value []PipelineStep) PipelineConfigurationContext
-	Steps() ([]PipelineStep, error)
+	GetSteps(tag string) ([]PipelineStep, error)
+	Log() LogFacade
+	Pipeline() PipelineEditor
 	Err() error
 }
 
@@ -16883,15 +15302,15 @@ func newPipelineConfigurationContextFromHandle(h *handle, c *client) PipelineCon
 	return &pipelineConfigurationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetStepsByTag gets pipeline steps with the specified tag
-func (s *pipelineConfigurationContext) GetStepsByTag(tag string) ([]PipelineStep, error) {
+// GetSteps gets pipeline steps with the specified tag
+func (s *pipelineConfigurationContext) GetSteps(tag string) ([]PipelineStep, error) {
 	if s.err != nil { var zero []PipelineStep; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	reqArgs["tag"] = serializeValue(tag)
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/getStepsByTag", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/getSteps", reqArgs)
 	if err != nil {
 		var zero []PipelineStep
 		return zero, err
@@ -16899,95 +15318,42 @@ func (s *pipelineConfigurationContext) GetStepsByTag(tag string) ([]PipelineStep
 	return decodeAs[[]PipelineStep](result)
 }
 
-// Model gets the Model property
-func (s *pipelineConfigurationContext) Model() DistributedApplicationModel {
-	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+// Log gets the callback logger facade
+func (s *pipelineConfigurationContext) Log() LogFacade {
+	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineConfigurationContext.model", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineConfigurationContext.log", reqArgs)
 	if err != nil {
-		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.Pipelines/PipelineConfigurationContext.model returned unexpected type %T", result)
-		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		err := fmt.Errorf("aspire: Aspire.Hosting.Pipelines/PipelineConfigurationContext.log returned unexpected type %T", result)
+		return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
-	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+	return &logFacade{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Services gets the Services property
-func (s *pipelineConfigurationContext) Services() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+// Pipeline gets the pipeline editor
+func (s *pipelineConfigurationContext) Pipeline() PipelineEditor {
+	if s.err != nil { return &pipelineEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineConfigurationContext.services", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineConfigurationContext.pipeline", reqArgs)
 	if err != nil {
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		return &pipelineEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.Pipelines/PipelineConfigurationContext.services returned unexpected type %T", result)
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		err := fmt.Errorf("aspire: Aspire.Hosting.Pipelines/PipelineConfigurationContext.pipeline returned unexpected type %T", result)
+		return &pipelineEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
-	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
-}
-
-// SetModel sets the Model property
-func (s *pipelineConfigurationContext) SetModel(value DistributedApplicationModel) PipelineConfigurationContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineConfigurationContext.setModel", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetServices sets the Services property
-func (s *pipelineConfigurationContext) SetServices(value ServiceProvider) PipelineConfigurationContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineConfigurationContext.setServices", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetSteps sets the Steps property
-func (s *pipelineConfigurationContext) SetSteps(value []PipelineStep) PipelineConfigurationContext {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineConfigurationContext.setSteps", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// Steps gets the Steps property
-func (s *pipelineConfigurationContext) Steps() ([]PipelineStep, error) {
-	if s.err != nil { var zero []PipelineStep; return zero, s.err }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineConfigurationContext.steps", reqArgs)
-	if err != nil {
-		var zero []PipelineStep
-		return zero, err
-	}
-	return decodeAs[[]PipelineStep](result)
+	return &pipelineEditor{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // PipelineContext is the public interface for handle type PipelineContext.
@@ -17147,37 +15513,86 @@ func (s *pipelineContext) Summary() PipelineSummary {
 	return &pipelineSummary{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// PipelineEditor is the public interface for handle type PipelineEditor.
+type PipelineEditor interface {
+	handleReference
+	Steps() ([]PipelineStep, error)
+	StepsByTag(tag string) ([]PipelineStep, error)
+	Err() error
+}
+
+// pipelineEditor is the unexported impl of PipelineEditor.
+type pipelineEditor struct {
+	*resourceBuilderBase
+}
+
+// newPipelineEditorFromHandle wraps an existing handle as PipelineEditor.
+func newPipelineEditorFromHandle(h *handle, c *client) PipelineEditor {
+	return &pipelineEditor{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Steps gets all configured pipeline steps
+func (s *pipelineEditor) Steps() ([]PipelineStep, error) {
+	if s.err != nil { var zero []PipelineStep; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/steps", reqArgs)
+	if err != nil {
+		var zero []PipelineStep
+		return zero, err
+	}
+	return decodeAs[[]PipelineStep](result)
+}
+
+// StepsByTag gets pipeline steps with the specified tag
+func (s *pipelineEditor) StepsByTag(tag string) ([]PipelineStep, error) {
+	if s.err != nil { var zero []PipelineStep; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["tag"] = serializeValue(tag)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/stepsByTag", reqArgs)
+	if err != nil {
+		var zero []PipelineStep
+		return zero, err
+	}
+	return decodeAs[[]PipelineStep](result)
+}
+
 // PipelineStep is the public interface for handle type PipelineStep.
 type PipelineStep interface {
 	handleReference
+	AddTag(tag string) error
 	DependsOn(stepName string) error
 	Description() (string, error)
 	Name() (string, error)
 	RequiredBy(stepName string) error
-	Resource() Resource
-	SetDependsOnSteps(value *List[string]) PipelineStep
-	SetDescription(value string) PipelineStep
-	SetName(value string) PipelineStep
-	SetRequiredBySteps(value *List[string]) PipelineStep
-	SetResource(value Resource) PipelineStep
-	SetTags(value *List[string]) PipelineStep
-	DependsOnSteps() *List[string]
-	RequiredBySteps() *List[string]
-	Tags() *List[string]
 	Err() error
 }
 
 // pipelineStep is the unexported impl of PipelineStep.
 type pipelineStep struct {
 	*resourceBuilderBase
-	dependsOnSteps *List[string]
-	requiredBySteps *List[string]
-	tags *List[string]
 }
 
 // newPipelineStepFromHandle wraps an existing handle as PipelineStep.
 func newPipelineStepFromHandle(h *handle, c *client) PipelineStep {
 	return &pipelineStep{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AddTag adds a tag to the step
+func (s *pipelineStep) AddTag(tag string) error {
+	if s.err != nil { return s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["tag"] = serializeValue(tag)
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/addTag", reqArgs)
+	return err
 }
 
 // DependsOn adds a dependency on another step by name
@@ -17192,15 +15607,7 @@ func (s *pipelineStep) DependsOn(stepName string) error {
 	return err
 }
 
-// DependsOnSteps gets the DependsOnSteps property
-func (s *pipelineStep) DependsOnSteps() *List[string] {
-	if s.dependsOnSteps == nil {
-		s.dependsOnSteps = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps")
-	}
-	return s.dependsOnSteps
-}
-
-// Description gets the Description property
+// Description gets the human-readable description of the step
 func (s *pipelineStep) Description() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -17215,7 +15622,7 @@ func (s *pipelineStep) Description() (string, error) {
 	return decodeAs[string](result)
 }
 
-// Name gets the Name property
+// Name gets the unique name of the step
 func (s *pipelineStep) Name() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -17240,112 +15647,6 @@ func (s *pipelineStep) RequiredBy(stepName string) error {
 	reqArgs["stepName"] = serializeValue(stepName)
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/requiredBy", reqArgs)
 	return err
-}
-
-// RequiredBySteps gets the RequiredBySteps property
-func (s *pipelineStep) RequiredBySteps() *List[string] {
-	if s.requiredBySteps == nil {
-		s.requiredBySteps = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps")
-	}
-	return s.requiredBySteps
-}
-
-// Resource gets the Resource property
-func (s *pipelineStep) Resource() Resource {
-	if s.err != nil { return nil }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStep.resource", reqArgs)
-	if err != nil { s.setErr(err); return nil }
-	typed, ok := result.(Resource)
-	if !ok {
-		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.Pipelines/PipelineStep.resource returned unexpected type %T", result))
-		return nil
-	}
-	return typed
-}
-
-// SetDependsOnSteps sets the DependsOnSteps property
-func (s *pipelineStep) SetDependsOnSteps(value *List[string]) PipelineStep {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStep.setDependsOnSteps", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetDescription sets the Description property
-func (s *pipelineStep) SetDescription(value string) PipelineStep {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStep.setDescription", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetName sets the Name property
-func (s *pipelineStep) SetName(value string) PipelineStep {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStep.setName", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetRequiredBySteps sets the RequiredBySteps property
-func (s *pipelineStep) SetRequiredBySteps(value *List[string]) PipelineStep {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStep.setRequiredBySteps", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetResource sets the Resource property
-func (s *pipelineStep) SetResource(value Resource) PipelineStep {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStep.setResource", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// SetTags sets the Tags property
-func (s *pipelineStep) SetTags(value *List[string]) PipelineStep {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	if value != nil { reqArgs["value"] = serializeValue(value) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/PipelineStep.setTags", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// Tags gets the Tags property
-func (s *pipelineStep) Tags() *List[string] {
-	if s.tags == nil {
-		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.tags")
-	}
-	return s.tags
 }
 
 // PipelineStepContext is the public interface for handle type PipelineStepContext.
@@ -17693,11 +15994,9 @@ type ProjectResource interface {
 	PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) ProjectResource
 	TestWaitFor(dependency Resource) ProjectResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) ProjectResource
-	WaitFor(dependency Resource) ProjectResource
+	WaitFor(dependency Resource, options ...*WaitForOptions) ProjectResource
 	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ProjectResource
-	WaitForStart(dependency Resource) ProjectResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) ProjectResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) ProjectResource
+	WaitForStart(dependency Resource, options ...*WaitForStartOptions) ProjectResource
 	WithArgs(args []string) ProjectResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ProjectResource
 	WithBrowserLogs(options ...*WithBrowserLogsOptions) ProjectResource
@@ -17748,16 +16047,12 @@ type ProjectResource interface {
 	WithNestedConfig(config *TestNestedDto) ProjectResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ProjectResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ProjectResource
-	WithOtlpExporter() ProjectResource
-	WithOtlpExporterProtocol(protocol OtlpProtocol) ProjectResource
+	WithOtlpExporter(options ...*WithOtlpExporterOptions) ProjectResource
 	WithParentRelationship(parent Resource) ProjectResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ProjectResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ProjectResource
-	WithReference(source Resource, options ...*WithReferenceOptions) ProjectResource
-	WithReferenceEndpoint(endpointReference EndpointReference) ProjectResource
+	WithReference(source any, options ...*WithReferenceOptions) ProjectResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ProjectResource
-	WithReferenceExternalService(externalService ExternalServiceResource) ProjectResource
-	WithReferenceUri(name string, uri string) ProjectResource
 	WithRelationship(resourceBuilder Resource, type_ string) ProjectResource
 	WithRemoteImageName(remoteImageName string) ProjectResource
 	WithRemoteImageTag(remoteImageTag string) ProjectResource
@@ -17765,11 +16060,9 @@ type ProjectResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
 	WithUnionDependency(dependency any) ProjectResource
-	WithUrl(url string, options ...*WithUrlOptions) ProjectResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ProjectResource
+	WithUrl(url any, options ...*WithUrlOptions) ProjectResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource
-	WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) ProjectResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ProjectResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) ProjectResource
 	WithValidator(validator func(arg TestResourceContext) bool) ProjectResource
 	WithoutHttpsCertificate() ProjectResource
 	Err() error
@@ -18051,7 +16344,7 @@ func (s *projectResource) TestWithEnvironmentCallback(callback func(arg TestEnvi
 }
 
 // WaitFor waits for another resource to be ready
-func (s *projectResource) WaitFor(dependency Resource) ProjectResource {
+func (s *projectResource) WaitFor(dependency Resource, options ...*WaitForOptions) ProjectResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -18059,7 +16352,14 @@ func (s *projectResource) WaitFor(dependency Resource) ProjectResource {
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
+	if len(options) > 0 {
+		merged := &WaitForOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18084,7 +16384,7 @@ func (s *projectResource) WaitForCompletion(dependency Resource, options ...*Wai
 }
 
 // WaitForStart waits for another resource to start
-func (s *projectResource) WaitForStart(dependency Resource) ProjectResource {
+func (s *projectResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) ProjectResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -18092,35 +16392,14 @@ func (s *projectResource) WaitForStart(dependency Resource) ProjectResource {
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *projectResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) ProjectResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
+	if len(options) > 0 {
+		merged := &WaitForStartOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *projectResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) ProjectResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStart", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18155,7 +16434,7 @@ func (s *projectResource) WithArgsCallback(callback func(obj CommandLineArgsCall
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *projectResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18944,25 +17223,20 @@ func (s *projectResource) WithOptionalString(options ...*WithOptionalStringOptio
 }
 
 // WithOtlpExporter configures OTLP telemetry export
-func (s *projectResource) WithOtlpExporter() ProjectResource {
+func (s *projectResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOtlpExporterOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporter", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOtlpExporterProtocol configures OTLP telemetry export with specific protocol
-func (s *projectResource) WithOtlpExporterProtocol(protocol OtlpProtocol) ProjectResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["protocol"] = serializeValue(protocol)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporterProtocol", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19026,14 +17300,20 @@ func (s *projectResource) WithPipelineStepFactory(stepName string, callback func
 }
 
 // WithReference adds a reference to another resource
-func (s *projectResource) WithReference(source Resource, options ...*WithReferenceOptions) ProjectResource {
+// Allowed types for parameter source: Resource, EndpointReference, string, string.
+func (s *projectResource) WithReference(source any, options ...*WithReferenceOptions) ProjectResource {
 	if s.err != nil { return s }
-	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
+	switch source.(type) {
+	case Resource, EndpointReference, string, string:
+	default:
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["source"] = serializeValue(source)
+	if source != nil { reqArgs["source"] = serializeValue(source) }
 	if len(options) > 0 {
 		merged := &WithReferenceOptions{}
 		for _, opt := range options {
@@ -19042,19 +17322,6 @@ func (s *projectResource) WithReference(source Resource, options ...*WithReferen
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReference", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceEndpoint adds a reference to an endpoint
-func (s *projectResource) WithReferenceEndpoint(endpointReference EndpointReference) ProjectResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEndpoint", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19067,32 +17334,6 @@ func (s *projectResource) WithReferenceEnvironment(options *ReferenceEnvironment
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEnvironment", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceExternalService adds a reference to an external service
-func (s *projectResource) WithReferenceExternalService(externalService ExternalServiceResource) ProjectResource {
-	if s.err != nil { return s }
-	if externalService != nil { if err := externalService.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["externalService"] = serializeValue(externalService)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceExternalService", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceUri adds a reference to a URI
-func (s *projectResource) WithReferenceUri(name string, uri string) ProjectResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceUri", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19197,13 +17438,20 @@ func (s *projectResource) WithUnionDependency(dependency any) ProjectResource {
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *projectResource) WithUrl(url string, options ...*WithUrlOptions) ProjectResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *projectResource) WithUrl(url any, options ...*WithUrlOptions) ProjectResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -19212,26 +17460,6 @@ func (s *projectResource) WithUrl(url string, options ...*WithUrlOptions) Projec
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *projectResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) ProjectResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19255,27 +17483,8 @@ func (s *projectResource) WithUrlForEndpoint(endpointName string, callback func(
 	return s
 }
 
-// WithUrlForEndpointFactory adds a URL for a specific endpoint via factory callback
-func (s *projectResource) WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) ProjectResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			return cb(callbackArg[EndpointReference](args, 0))
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpointFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *projectResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) ProjectResource {
+// WithUrls customizes displayed URLs via callback
+func (s *projectResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -19289,7 +17498,7 @@ func (s *projectResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbac
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20142,19 +18351,17 @@ func (s *resourceStoppedEvent) Services() ServiceProvider {
 // ResourceUrlsCallbackContext is the public interface for handle type ResourceUrlsCallbackContext.
 type ResourceUrlsCallbackContext interface {
 	handleReference
-	CancellationToken() (*CancellationToken, error)
 	ExecutionContext() DistributedApplicationExecutionContext
-	Logger() Logger
+	GetEndpoint(name string) EndpointReference
+	Log() LogFacade
 	Resource() Resource
-	SetLogger(value Logger) ResourceUrlsCallbackContext
-	Urls() *List[*ResourceUrlAnnotation]
+	Urls() ResourceUrlsEditor
 	Err() error
 }
 
 // resourceUrlsCallbackContext is the unexported impl of ResourceUrlsCallbackContext.
 type resourceUrlsCallbackContext struct {
 	*resourceBuilderBase
-	urls *List[*ResourceUrlAnnotation]
 }
 
 // newResourceUrlsCallbackContextFromHandle wraps an existing handle as ResourceUrlsCallbackContext.
@@ -20162,22 +18369,7 @@ func newResourceUrlsCallbackContextFromHandle(h *handle, c *client) ResourceUrls
 	return &resourceUrlsCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
-func (s *resourceUrlsCallbackContext) CancellationToken() (*CancellationToken, error) {
-	if s.err != nil { var zero *CancellationToken; return zero, s.err }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.cancellationToken", reqArgs)
-	if err != nil {
-		var zero *CancellationToken
-		return zero, err
-	}
-	return decodeAs[*CancellationToken](result)
-}
-
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext gets the execution context for this callback invocation
 func (s *resourceUrlsCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -20196,26 +18388,46 @@ func (s *resourceUrlsCallbackContext) ExecutionContext() DistributedApplicationE
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Logger gets the Logger property
-func (s *resourceUrlsCallbackContext) Logger() Logger {
-	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+// GetEndpoint gets an endpoint reference from the associated resource
+func (s *resourceUrlsCallbackContext) GetEndpoint(name string) EndpointReference {
+	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.logger", reqArgs)
+	reqArgs["name"] = serializeValue(name)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/getEndpoint", reqArgs)
 	if err != nil {
-		return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.logger returned unexpected type %T", result)
-		return &logger{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/getEndpoint returned unexpected type %T", result)
+		return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
-	return &logger{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the Resource property
+// Log gets the callback logger facade
+func (s *resourceUrlsCallbackContext) Log() LogFacade {
+	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.log", reqArgs)
+	if err != nil {
+		return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.log returned unexpected type %T", result)
+		return &logFacade{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &logFacade{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Resource gets the resource associated with these URLs
 func (s *resourceUrlsCallbackContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -20232,25 +18444,115 @@ func (s *resourceUrlsCallbackContext) Resource() Resource {
 	return typed
 }
 
-// SetLogger sets the Logger property
-func (s *resourceUrlsCallbackContext) SetLogger(value Logger) ResourceUrlsCallbackContext {
-	if s.err != nil { return s }
-	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
+// Urls gets the URL editor
+func (s *resourceUrlsCallbackContext) Urls() ResourceUrlsEditor {
+	if s.err != nil { return &resourceUrlsEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.setLogger", reqArgs); err != nil { s.setErr(err) }
-	return s
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.urls", reqArgs)
+	if err != nil {
+		return &resourceUrlsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.urls returned unexpected type %T", result)
+		return &resourceUrlsEditor{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &resourceUrlsEditor{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Urls gets the Urls property
-func (s *resourceUrlsCallbackContext) Urls() *List[*ResourceUrlAnnotation] {
-	if s.urls == nil {
-		s.urls = newListWithGetter[*ResourceUrlAnnotation](s.handleWrapperBase, "Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.urls")
+// ResourceUrlsEditor is the public interface for handle type ResourceUrlsEditor.
+type ResourceUrlsEditor interface {
+	handleReference
+	Add(url any, options ...*AddOptions) error
+	AddForEndpoint(endpoint EndpointReference, url any, options ...*AddForEndpointOptions) error
+	ExecutionContext() DistributedApplicationExecutionContext
+	Err() error
+}
+
+// resourceUrlsEditor is the unexported impl of ResourceUrlsEditor.
+type resourceUrlsEditor struct {
+	*resourceBuilderBase
+}
+
+// newResourceUrlsEditorFromHandle wraps an existing handle as ResourceUrlsEditor.
+func newResourceUrlsEditorFromHandle(h *handle, c *client) ResourceUrlsEditor {
+	return &resourceUrlsEditor{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Add adds a displayed URL
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *resourceUrlsEditor) Add(url any, options ...*AddOptions) error {
+	if s.err != nil { return s.err }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: Add: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		return err
 	}
-	return s.urls
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if url != nil { reqArgs["url"] = serializeValue(url) }
+	if len(options) > 0 {
+		merged := &AddOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.add", reqArgs)
+	return err
+}
+
+// AddForEndpoint adds a displayed URL for a specific endpoint
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *resourceUrlsEditor) AddForEndpoint(endpoint EndpointReference, url any, options ...*AddForEndpointOptions) error {
+	if s.err != nil { return s.err }
+	if endpoint != nil { if err := endpoint.Err(); err != nil { return err } }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: AddForEndpoint: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		return err
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["endpoint"] = serializeValue(endpoint)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
+	if len(options) > 0 {
+		merged := &AddForEndpointOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint", reqArgs)
+	return err
+}
+
+// ExecutionContext gets the execution context for this URL editor
+func (s *resourceUrlsEditor) ExecutionContext() DistributedApplicationExecutionContext {
+	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext", reqArgs)
+	if err != nil {
+		return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext returned unexpected type %T", result)
+		return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // ResourceWithContainerFiles is the public interface for handle type ResourceWithContainerFiles.
@@ -20619,11 +18921,9 @@ type TestDatabaseResource interface {
 	PublishAsContainer() TestDatabaseResource
 	TestWaitFor(dependency Resource) TestDatabaseResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource
-	WaitFor(dependency Resource) TestDatabaseResource
+	WaitFor(dependency Resource, options ...*WaitForOptions) TestDatabaseResource
 	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) TestDatabaseResource
-	WaitForStart(dependency Resource) TestDatabaseResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) TestDatabaseResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) TestDatabaseResource
+	WaitForStart(dependency Resource, options ...*WaitForStartOptions) TestDatabaseResource
 	WithArgs(args []string) TestDatabaseResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestDatabaseResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) TestDatabaseResource
@@ -20691,27 +18991,21 @@ type TestDatabaseResource interface {
 	WithNestedConfig(config *TestNestedDto) TestDatabaseResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestDatabaseResource
 	WithOptionalString(options ...*WithOptionalStringOptions) TestDatabaseResource
-	WithOtlpExporter() TestDatabaseResource
-	WithOtlpExporterProtocol(protocol OtlpProtocol) TestDatabaseResource
+	WithOtlpExporter(options ...*WithOtlpExporterOptions) TestDatabaseResource
 	WithParentRelationship(parent Resource) TestDatabaseResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestDatabaseResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestDatabaseResource
-	WithReference(source Resource, options ...*WithReferenceOptions) TestDatabaseResource
-	WithReferenceEndpoint(endpointReference EndpointReference) TestDatabaseResource
+	WithReference(source any, options ...*WithReferenceOptions) TestDatabaseResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestDatabaseResource
-	WithReferenceExternalService(externalService ExternalServiceResource) TestDatabaseResource
-	WithReferenceUri(name string, uri string) TestDatabaseResource
 	WithRelationship(resourceBuilder Resource, type_ string) TestDatabaseResource
 	WithRemoteImageName(remoteImageName string) TestDatabaseResource
 	WithRemoteImageTag(remoteImageTag string) TestDatabaseResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
 	WithUnionDependency(dependency any) TestDatabaseResource
-	WithUrl(url string, options ...*WithUrlOptions) TestDatabaseResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) TestDatabaseResource
+	WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestDatabaseResource
-	WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) TestDatabaseResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) TestDatabaseResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) TestDatabaseResource
 	WithValidator(validator func(arg TestResourceContext) bool) TestDatabaseResource
 	WithVolume(target string, options ...*WithVolumeOptions) TestDatabaseResource
 	WithoutHttpsCertificate() TestDatabaseResource
@@ -20965,7 +19259,7 @@ func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg Tes
 }
 
 // WaitFor waits for another resource to be ready
-func (s *testDatabaseResource) WaitFor(dependency Resource) TestDatabaseResource {
+func (s *testDatabaseResource) WaitFor(dependency Resource, options ...*WaitForOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -20973,7 +19267,14 @@ func (s *testDatabaseResource) WaitFor(dependency Resource) TestDatabaseResource
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
+	if len(options) > 0 {
+		merged := &WaitForOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20998,7 +19299,7 @@ func (s *testDatabaseResource) WaitForCompletion(dependency Resource, options ..
 }
 
 // WaitForStart waits for another resource to start
-func (s *testDatabaseResource) WaitForStart(dependency Resource) TestDatabaseResource {
+func (s *testDatabaseResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -21006,35 +19307,14 @@ func (s *testDatabaseResource) WaitForStart(dependency Resource) TestDatabaseRes
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *testDatabaseResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) TestDatabaseResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
+	if len(options) > 0 {
+		merged := &WaitForStartOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *testDatabaseResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) TestDatabaseResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStart", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21089,7 +19369,7 @@ func (s *testDatabaseResource) WithBindMount(source string, target string, optio
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *testDatabaseResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22115,25 +20395,20 @@ func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalString
 }
 
 // WithOtlpExporter configures OTLP telemetry export
-func (s *testDatabaseResource) WithOtlpExporter() TestDatabaseResource {
+func (s *testDatabaseResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOtlpExporterOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporter", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOtlpExporterProtocol configures OTLP telemetry export with specific protocol
-func (s *testDatabaseResource) WithOtlpExporterProtocol(protocol OtlpProtocol) TestDatabaseResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["protocol"] = serializeValue(protocol)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporterProtocol", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22197,14 +20472,20 @@ func (s *testDatabaseResource) WithPipelineStepFactory(stepName string, callback
 }
 
 // WithReference adds a reference to another resource
-func (s *testDatabaseResource) WithReference(source Resource, options ...*WithReferenceOptions) TestDatabaseResource {
+// Allowed types for parameter source: Resource, EndpointReference, string, string.
+func (s *testDatabaseResource) WithReference(source any, options ...*WithReferenceOptions) TestDatabaseResource {
 	if s.err != nil { return s }
-	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
+	switch source.(type) {
+	case Resource, EndpointReference, string, string:
+	default:
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["source"] = serializeValue(source)
+	if source != nil { reqArgs["source"] = serializeValue(source) }
 	if len(options) > 0 {
 		merged := &WithReferenceOptions{}
 		for _, opt := range options {
@@ -22213,19 +20494,6 @@ func (s *testDatabaseResource) WithReference(source Resource, options ...*WithRe
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReference", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceEndpoint adds a reference to an endpoint
-func (s *testDatabaseResource) WithReferenceEndpoint(endpointReference EndpointReference) TestDatabaseResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEndpoint", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22238,32 +20506,6 @@ func (s *testDatabaseResource) WithReferenceEnvironment(options *ReferenceEnviro
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEnvironment", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceExternalService adds a reference to an external service
-func (s *testDatabaseResource) WithReferenceExternalService(externalService ExternalServiceResource) TestDatabaseResource {
-	if s.err != nil { return s }
-	if externalService != nil { if err := externalService.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["externalService"] = serializeValue(externalService)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceExternalService", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceUri adds a reference to a URI
-func (s *testDatabaseResource) WithReferenceUri(name string, uri string) TestDatabaseResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceUri", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22356,13 +20598,20 @@ func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseR
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *testDatabaseResource) WithUrl(url string, options ...*WithUrlOptions) TestDatabaseResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *testDatabaseResource) WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -22371,26 +20620,6 @@ func (s *testDatabaseResource) WithUrl(url string, options ...*WithUrlOptions) T
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *testDatabaseResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) TestDatabaseResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22414,27 +20643,8 @@ func (s *testDatabaseResource) WithUrlForEndpoint(endpointName string, callback 
 	return s
 }
 
-// WithUrlForEndpointFactory adds a URL for a specific endpoint via factory callback
-func (s *testDatabaseResource) WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) TestDatabaseResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			return cb(callbackArg[EndpointReference](args, 0))
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpointFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *testDatabaseResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) TestDatabaseResource {
+// WithUrls customizes displayed URLs via callback
+func (s *testDatabaseResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -22448,7 +20658,7 @@ func (s *testDatabaseResource) WithUrlsCallback(callback func(obj ResourceUrlsCa
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22603,6 +20813,68 @@ func (s *testEnvironmentContext) SetPriority(value float64) TestEnvironmentConte
 	return s
 }
 
+// TestMutableCollectionContext is the public interface for handle type TestMutableCollectionContext.
+type TestMutableCollectionContext interface {
+	handleReference
+	SetCounts(value *Dict[string, float64]) TestMutableCollectionContext
+	SetTags(value *List[string]) TestMutableCollectionContext
+	Counts() *Dict[string, float64]
+	Tags() *List[string]
+	Err() error
+}
+
+// testMutableCollectionContext is the unexported impl of TestMutableCollectionContext.
+type testMutableCollectionContext struct {
+	*resourceBuilderBase
+	counts *Dict[string, float64]
+	tags *List[string]
+}
+
+// newTestMutableCollectionContextFromHandle wraps an existing handle as TestMutableCollectionContext.
+func newTestMutableCollectionContextFromHandle(h *handle, c *client) TestMutableCollectionContext {
+	return &testMutableCollectionContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Counts gets the Counts property
+func (s *testMutableCollectionContext) Counts() *Dict[string, float64] {
+	if s.counts == nil {
+		s.counts = newDictWithGetter[string, float64](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts")
+	}
+	return s.counts
+}
+
+// SetCounts sets the Counts property
+func (s *testMutableCollectionContext) SetCounts(value *Dict[string, float64]) TestMutableCollectionContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if value != nil { reqArgs["value"] = serializeValue(value) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetTags sets the Tags property
+func (s *testMutableCollectionContext) SetTags(value *List[string]) TestMutableCollectionContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if value != nil { reqArgs["value"] = serializeValue(value) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// Tags gets the Tags property
+func (s *testMutableCollectionContext) Tags() *List[string] {
+	if s.tags == nil {
+		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags")
+	}
+	return s.tags
+}
+
 // TestRedisResource is the public interface for handle type TestRedisResource.
 type TestRedisResource interface {
 	handleReference
@@ -22626,12 +20898,10 @@ type TestRedisResource interface {
 	PublishAsContainer() TestRedisResource
 	TestWaitFor(dependency Resource) TestRedisResource
 	TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource
-	WaitFor(dependency Resource) TestRedisResource
+	WaitFor(dependency Resource, options ...*WaitForOptions) TestRedisResource
 	WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) TestRedisResource
 	WaitForReadyAsync(timeout float64, options ...*WaitForReadyAsyncOptions) (bool, error)
-	WaitForStart(dependency Resource) TestRedisResource
-	WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) TestRedisResource
-	WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) TestRedisResource
+	WaitForStart(dependency Resource, options ...*WaitForStartOptions) TestRedisResource
 	WithArgs(args []string) TestRedisResource
 	WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestRedisResource
 	WithBindMount(source string, target string, options ...*WithBindMountOptions) TestRedisResource
@@ -22644,7 +20914,6 @@ type TestRedisResource interface {
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestRedisResource
 	WithConfig(config *TestConfigDto) TestRedisResource
 	WithConnectionProperty(name string, value any) TestRedisResource
-	WithConnectionPropertyValue(name string, value string) TestRedisResource
 	WithConnectionString(connectionString *ReferenceExpression) TestRedisResource
 	WithConnectionStringDirect(connectionString string) TestRedisResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestRedisResource
@@ -22705,29 +20974,23 @@ type TestRedisResource interface {
 	WithNestedConfig(config *TestNestedDto) TestRedisResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource
 	WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource
-	WithOtlpExporter() TestRedisResource
-	WithOtlpExporterProtocol(protocol OtlpProtocol) TestRedisResource
+	WithOtlpExporter(options ...*WithOtlpExporterOptions) TestRedisResource
 	WithParentRelationship(parent Resource) TestRedisResource
 	WithPersistence(options ...*WithPersistenceOptions) TestRedisResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestRedisResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestRedisResource
 	WithRedisSpecific(option string) TestRedisResource
-	WithReference(source Resource, options ...*WithReferenceOptions) TestRedisResource
-	WithReferenceEndpoint(endpointReference EndpointReference) TestRedisResource
+	WithReference(source any, options ...*WithReferenceOptions) TestRedisResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestRedisResource
-	WithReferenceExternalService(externalService ExternalServiceResource) TestRedisResource
-	WithReferenceUri(name string, uri string) TestRedisResource
 	WithRelationship(resourceBuilder Resource, type_ string) TestRedisResource
 	WithRemoteImageName(remoteImageName string) TestRedisResource
 	WithRemoteImageTag(remoteImageTag string) TestRedisResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
-	WithUrl(url string, options ...*WithUrlOptions) TestRedisResource
-	WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) TestRedisResource
+	WithUrl(url any, options ...*WithUrlOptions) TestRedisResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestRedisResource
-	WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) TestRedisResource
-	WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) TestRedisResource
+	WithUrls(callback func(obj ResourceUrlsCallbackContext)) TestRedisResource
 	WithValidator(validator func(arg TestResourceContext) bool) TestRedisResource
 	WithVolume(target string, options ...*WithVolumeOptions) TestRedisResource
 	WithoutHttpsCertificate() TestRedisResource
@@ -23108,7 +21371,7 @@ func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEn
 }
 
 // WaitFor waits for another resource to be ready
-func (s *testRedisResource) WaitFor(dependency Resource) TestRedisResource {
+func (s *testRedisResource) WaitFor(dependency Resource, options ...*WaitForOptions) TestRedisResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -23116,7 +21379,14 @@ func (s *testRedisResource) WaitFor(dependency Resource) TestRedisResource {
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResource", reqArgs); err != nil { s.setErr(err) }
+	if len(options) > 0 {
+		merged := &WaitForOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitFor", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23170,7 +21440,7 @@ func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitF
 }
 
 // WaitForStart waits for another resource to start
-func (s *testRedisResource) WaitForStart(dependency Resource) TestRedisResource {
+func (s *testRedisResource) WaitForStart(dependency Resource, options ...*WaitForStartOptions) TestRedisResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
 	ctx := context.Background()
@@ -23178,35 +21448,14 @@ func (s *testRedisResource) WaitForStart(dependency Resource) TestRedisResource 
 		"builder": s.handle.ToJSON(),
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStart", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForStartWithBehavior waits for another resource to start with specific behavior
-func (s *testRedisResource) WaitForStartWithBehavior(dependency Resource, waitBehavior WaitBehavior) TestRedisResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
+	if len(options) > 0 {
+		merged := &WaitForStartOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStartWithBehavior", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WaitForWithBehavior waits for another resource with specific behavior
-func (s *testRedisResource) WaitForWithBehavior(dependency Resource, waitBehavior WaitBehavior) TestRedisResource {
-	if s.err != nil { return s }
-	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["dependency"] = serializeValue(dependency)
-	reqArgs["waitBehavior"] = serializeValue(waitBehavior)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForWithBehavior", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForStart", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23261,7 +21510,7 @@ func (s *testRedisResource) WithBindMount(source string, target string, options 
 	return s
 }
 
-// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions and captures browser logs.
+// WithBrowserLogs adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.
 func (s *testRedisResource) WithBrowserLogs(options ...*WithBrowserLogsOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23413,19 +21662,6 @@ func (s *testRedisResource) WithConnectionProperty(name string, value any) TestR
 	reqArgs["name"] = serializeValue(name)
 	if value != nil { reqArgs["value"] = serializeValue(value) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectionProperty", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithConnectionPropertyValue adds a connection property with a string value
-func (s *testRedisResource) WithConnectionPropertyValue(name string, value string) TestRedisResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["value"] = serializeValue(value)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withConnectionPropertyValue", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24382,25 +22618,20 @@ func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOpt
 }
 
 // WithOtlpExporter configures OTLP telemetry export
-func (s *testRedisResource) WithOtlpExporter() TestRedisResource {
+func (s *testRedisResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithOtlpExporterOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporter", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithOtlpExporterProtocol configures OTLP telemetry export with specific protocol
-func (s *testRedisResource) WithOtlpExporterProtocol(protocol OtlpProtocol) TestRedisResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["protocol"] = serializeValue(protocol)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOtlpExporterProtocol", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24494,14 +22725,20 @@ func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
 }
 
 // WithReference adds a reference to another resource
-func (s *testRedisResource) WithReference(source Resource, options ...*WithReferenceOptions) TestRedisResource {
+// Allowed types for parameter source: Resource, EndpointReference, string, string.
+func (s *testRedisResource) WithReference(source any, options ...*WithReferenceOptions) TestRedisResource {
 	if s.err != nil { return s }
-	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
+	switch source.(type) {
+	case Resource, EndpointReference, string, string:
+	default:
+		err := fmt.Errorf("aspire: WithReference: parameter %q must be one of [Resource, EndpointReference, string, string], got %T", "source", source)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["source"] = serializeValue(source)
+	if source != nil { reqArgs["source"] = serializeValue(source) }
 	if len(options) > 0 {
 		merged := &WithReferenceOptions{}
 		for _, opt := range options {
@@ -24510,19 +22747,6 @@ func (s *testRedisResource) WithReference(source Resource, options ...*WithRefer
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReference", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceEndpoint adds a reference to an endpoint
-func (s *testRedisResource) WithReferenceEndpoint(endpointReference EndpointReference) TestRedisResource {
-	if s.err != nil { return s }
-	if endpointReference != nil { if err := endpointReference.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointReference"] = serializeValue(endpointReference)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEndpoint", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24535,32 +22759,6 @@ func (s *testRedisResource) WithReferenceEnvironment(options *ReferenceEnvironme
 	}
 	if options != nil { reqArgs["options"] = serializeValue(options) }
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceEnvironment", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceExternalService adds a reference to an external service
-func (s *testRedisResource) WithReferenceExternalService(externalService ExternalServiceResource) TestRedisResource {
-	if s.err != nil { return s }
-	if externalService != nil { if err := externalService.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["externalService"] = serializeValue(externalService)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceExternalService", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithReferenceUri adds a reference to a URI
-func (s *testRedisResource) WithReferenceUri(name string, uri string) TestRedisResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["name"] = serializeValue(name)
-	reqArgs["uri"] = serializeValue(uri)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withReferenceUri", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24653,13 +22851,20 @@ func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResourc
 }
 
 // WithUrl adds or modifies displayed URLs
-func (s *testRedisResource) WithUrl(url string, options ...*WithUrlOptions) TestRedisResource {
+// Allowed types for parameter url: string, *ReferenceExpression.
+func (s *testRedisResource) WithUrl(url any, options ...*WithUrlOptions) TestRedisResource {
 	if s.err != nil { return s }
+	switch url.(type) {
+	case string, *ReferenceExpression:
+	default:
+		err := fmt.Errorf("aspire: WithUrl: parameter %q must be one of [string, *ReferenceExpression], got %T", "url", url)
+		s.setErr(err); return s
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
-	reqArgs["url"] = serializeValue(url)
+	if url != nil { reqArgs["url"] = serializeValue(url) }
 	if len(options) > 0 {
 		merged := &WithUrlOptions{}
 		for _, opt := range options {
@@ -24668,26 +22873,6 @@ func (s *testRedisResource) WithUrl(url string, options ...*WithUrlOptions) Test
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrl", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlExpression adds a URL using a reference expression
-func (s *testRedisResource) WithUrlExpression(url *ReferenceExpression, options ...*WithUrlExpressionOptions) TestRedisResource {
-	if s.err != nil { return s }
-	if url != nil { if err := url.Err(); err != nil { s.setErr(err); return s } }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if url != nil { reqArgs["url"] = serializeValue(url) }
-	if len(options) > 0 {
-		merged := &WithUrlExpressionOptions{}
-		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
-		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlExpression", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24711,27 +22896,8 @@ func (s *testRedisResource) WithUrlForEndpoint(endpointName string, callback fun
 	return s
 }
 
-// WithUrlForEndpointFactory adds a URL for a specific endpoint via factory callback
-func (s *testRedisResource) WithUrlForEndpointFactory(endpointName string, callback func(arg EndpointReference) *ResourceUrlAnnotation) TestRedisResource {
-	if s.err != nil { return s }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["endpointName"] = serializeValue(endpointName)
-	if callback != nil {
-		cb := callback
-		shim := func(args ...any) any {
-			return cb(callbackArg[EndpointReference](args, 0))
-		}
-		reqArgs["callback"] = s.client.registerCallback(shim)
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlForEndpointFactory", reqArgs); err != nil { s.setErr(err) }
-	return s
-}
-
-// WithUrlsCallback customizes displayed URLs via callback
-func (s *testRedisResource) WithUrlsCallback(callback func(obj ResourceUrlsCallbackContext)) TestRedisResource {
+// WithUrls customizes displayed URLs via callback
+func (s *testRedisResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -24745,7 +22911,7 @@ func (s *testRedisResource) WithUrlsCallback(callback func(obj ResourceUrlsCallb
 		}
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrlsCallback", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withUrls", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -25096,22 +23262,10 @@ func (o *WithBrowserLogsOptions) ToMap() map[string]any {
 
 // AddContainerRegistryOptions carries optional parameters for AddContainerRegistry.
 type AddContainerRegistryOptions struct {
-	Repository *ParameterResource `json:"repository,omitempty"`
+	Repository any `json:"repository,omitempty"`
 }
 
 func (o *AddContainerRegistryOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Repository != nil { m["repository"] = serializeValue(o.Repository) }
-	return m
-}
-
-// AddContainerRegistryFromStringOptions carries optional parameters for AddContainerRegistryFromString.
-type AddContainerRegistryFromStringOptions struct {
-	Repository *string `json:"repository,omitempty"`
-}
-
-func (o *AddContainerRegistryFromStringOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Repository != nil { m["repository"] = serializeValue(o.Repository) }
@@ -25235,17 +23389,19 @@ func (o *RunOptions) ToMap() map[string]any {
 	return m
 }
 
-// WithExternalServiceHttpHealthCheckOptions carries optional parameters for WithExternalServiceHttpHealthCheck.
-type WithExternalServiceHttpHealthCheckOptions struct {
+// WithHttpHealthCheckOptions carries optional parameters for WithHttpHealthCheck.
+type WithHttpHealthCheckOptions struct {
 	Path *string `json:"path,omitempty"`
 	StatusCode *float64 `json:"statusCode,omitempty"`
+	EndpointName *string `json:"endpointName,omitempty"`
 }
 
-func (o *WithExternalServiceHttpHealthCheckOptions) ToMap() map[string]any {
+func (o *WithHttpHealthCheckOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Path != nil { m["path"] = serializeValue(o.Path) }
 	if o.StatusCode != nil { m["statusCode"] = serializeValue(o.StatusCode) }
+	if o.EndpointName != nil { m["endpointName"] = serializeValue(o.EndpointName) }
 	return m
 }
 
@@ -25263,27 +23419,29 @@ func (o *WithMcpServerOptions) ToMap() map[string]any {
 	return m
 }
 
+// WithOtlpExporterOptions carries optional parameters for WithOtlpExporter.
+type WithOtlpExporterOptions struct {
+	Protocol *OtlpProtocol `json:"protocol,omitempty"`
+}
+
+func (o *WithOtlpExporterOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Protocol != nil { m["protocol"] = serializeValue(o.Protocol) }
+	return m
+}
+
 // AddParameterOptions carries optional parameters for AddParameter.
 type AddParameterOptions struct {
+	Value *string `json:"value,omitempty"`
+	PublishValueAsDefault *bool `json:"publishValueAsDefault,omitempty"`
 	Secret *bool `json:"secret,omitempty"`
 }
 
 func (o *AddParameterOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
-	if o.Secret != nil { m["secret"] = serializeValue(o.Secret) }
-	return m
-}
-
-// AddParameterWithValueOptions carries optional parameters for AddParameterWithValue.
-type AddParameterWithValueOptions struct {
-	PublishValueAsDefault *bool `json:"publishValueAsDefault,omitempty"`
-	Secret *bool `json:"secret,omitempty"`
-}
-
-func (o *AddParameterWithValueOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
+	if o.Value != nil { m["value"] = serializeValue(o.Value) }
 	if o.PublishValueAsDefault != nil { m["publishValueAsDefault"] = serializeValue(o.PublishValueAsDefault) }
 	if o.Secret != nil { m["secret"] = serializeValue(o.Secret) }
 	return m
@@ -25329,13 +23487,37 @@ func (o *WithDescriptionOptions) ToMap() map[string]any {
 
 // AddConnectionStringOptions carries optional parameters for AddConnectionString.
 type AddConnectionStringOptions struct {
-	EnvironmentVariableName *string `json:"environmentVariableName,omitempty"`
+	EnvironmentVariableNameOrExpression any `json:"environmentVariableNameOrExpression,omitempty"`
 }
 
 func (o *AddConnectionStringOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
-	if o.EnvironmentVariableName != nil { m["environmentVariableName"] = serializeValue(o.EnvironmentVariableName) }
+	if o.EnvironmentVariableNameOrExpression != nil { m["environmentVariableNameOrExpression"] = serializeValue(o.EnvironmentVariableNameOrExpression) }
+	return m
+}
+
+// AddProjectOptions carries optional parameters for AddProject.
+type AddProjectOptions struct {
+	LaunchProfileOrOptions any `json:"launchProfileOrOptions,omitempty"`
+}
+
+func (o *AddProjectOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.LaunchProfileOrOptions != nil { m["launchProfileOrOptions"] = serializeValue(o.LaunchProfileOrOptions) }
+	return m
+}
+
+// AddCSharpAppOptions carries optional parameters for AddCSharpApp.
+type AddCSharpAppOptions struct {
+	Options *ProjectResourceOptions `json:"options,omitempty"`
+}
+
+func (o *AddCSharpAppOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
 	return m
 }
 
@@ -25496,15 +23678,27 @@ func (o *WithUrlOptions) ToMap() map[string]any {
 	return m
 }
 
-// WithUrlExpressionOptions carries optional parameters for WithUrlExpression.
-type WithUrlExpressionOptions struct {
-	DisplayText *string `json:"displayText,omitempty"`
+// WaitForOptions carries optional parameters for WaitFor.
+type WaitForOptions struct {
+	WaitBehavior *WaitBehavior `json:"waitBehavior,omitempty"`
 }
 
-func (o *WithUrlExpressionOptions) ToMap() map[string]any {
+func (o *WaitForOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
-	if o.DisplayText != nil { m["displayText"] = serializeValue(o.DisplayText) }
+	if o.WaitBehavior != nil { m["waitBehavior"] = serializeValue(o.WaitBehavior) }
+	return m
+}
+
+// WaitForStartOptions carries optional parameters for WaitForStart.
+type WaitForStartOptions struct {
+	WaitBehavior *WaitBehavior `json:"waitBehavior,omitempty"`
+}
+
+func (o *WaitForStartOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.WaitBehavior != nil { m["waitBehavior"] = serializeValue(o.WaitBehavior) }
 	return m
 }
 
@@ -25517,22 +23711,6 @@ func (o *WaitForCompletionOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.ExitCode != nil { m["exitCode"] = serializeValue(o.ExitCode) }
-	return m
-}
-
-// WithHttpHealthCheckOptions carries optional parameters for WithHttpHealthCheck.
-type WithHttpHealthCheckOptions struct {
-	Path *string `json:"path,omitempty"`
-	StatusCode *float64 `json:"statusCode,omitempty"`
-	EndpointName *string `json:"endpointName,omitempty"`
-}
-
-func (o *WithHttpHealthCheckOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Path != nil { m["path"] = serializeValue(o.Path) }
-	if o.StatusCode != nil { m["statusCode"] = serializeValue(o.StatusCode) }
-	if o.EndpointName != nil { m["endpointName"] = serializeValue(o.EndpointName) }
 	return m
 }
 
@@ -25896,17 +24074,6 @@ func (o *GetValueAsyncOptions) ToMap() map[string]any {
 	return m
 }
 
-// GetValueOptions carries optional parameters for GetValue.
-type GetValueOptions struct {
-	CancellationToken *CancellationToken `json:"-"`
-}
-
-func (o *GetValueOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	return m
-}
-
 // AppendFormattedOptions carries optional parameters for AppendFormatted.
 type AppendFormattedOptions struct {
 	Format *string `json:"format,omitempty"`
@@ -25928,6 +24095,30 @@ func (o *AppendValueProviderOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Format != nil { m["format"] = serializeValue(o.Format) }
+	return m
+}
+
+// AddOptions carries optional parameters for Add.
+type AddOptions struct {
+	DisplayText *string `json:"displayText,omitempty"`
+}
+
+func (o *AddOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.DisplayText != nil { m["displayText"] = serializeValue(o.DisplayText) }
+	return m
+}
+
+// AddForEndpointOptions carries optional parameters for AddForEndpoint.
+type AddForEndpointOptions struct {
+	DisplayText *string `json:"displayText,omitempty"`
+}
+
+func (o *AddForEndpointOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.DisplayText != nil { m["displayText"] = serializeValue(o.DisplayText) }
 	return m
 }
 
@@ -26085,14 +24276,14 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", func(h *handle, c *client) any {
 		return newCommandLineArgsCallbackContextFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor", func(h *handle, c *client) any {
+		return newCommandLineArgsEditorFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", func(h *handle, c *client) any {
 		return newConfigurationFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", func(h *handle, c *client) any {
 		return newConnectionStringAvailableEventFromHandle(h, c)
-	})
-	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ConnectionStringResource", func(h *handle, c *client) any {
-		return newConnectionStringResourceFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", func(h *handle, c *client) any {
 		return newContainerImagePushOptionsFromHandle(h, c)
@@ -26166,6 +24357,9 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", func(h *handle, c *client) any {
 		return newEnvironmentCallbackContextFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor", func(h *handle, c *client) any {
+		return newEnvironmentEditorFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", func(h *handle, c *client) any {
 		return newEventingSubscriberRegistrationContextFromHandle(h, c)
 	})
@@ -26196,6 +24390,9 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", func(h *handle, c *client) any {
 		return newInitializeResourceEventFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", func(h *handle, c *client) any {
+		return newLogFacadeFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger", func(h *handle, c *client) any {
 		return newLoggerFromHandle(h, c)
 	})
@@ -26210,6 +24407,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", func(h *handle, c *client) any {
 		return newPipelineContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineEditor", func(h *handle, c *client) any {
+		return newPipelineEditorFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep", func(h *handle, c *client) any {
 		return newPipelineStepFromHandle(h, c)
@@ -26256,6 +24456,9 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", func(h *handle, c *client) any {
 		return newResourceUrlsCallbackContextFromHandle(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor", func(h *handle, c *client) any {
+		return newResourceUrlsEditorFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles", func(h *handle, c *client) any {
 		return newResourceWithContainerFilesFromHandle(h, c)
 	})
@@ -26273,6 +24476,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", func(h *handle, c *client) any {
 		return newTestEnvironmentContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", func(h *handle, c *client) any {
+		return newTestMutableCollectionContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", func(h *handle, c *client) any {
 		return newTestRedisResourceFromHandle(h, c)

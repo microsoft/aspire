@@ -40,6 +40,23 @@ public class AtsPythonCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspirePy = files["aspire_app.py"];
+
+        Assert.Contains("TestConfigs = types.SimpleNamespace()", aspirePy);
+        Assert.Contains("TestConfigs.Default =", aspirePy);
+        Assert.Contains("TestConfigs.Profiles = types.SimpleNamespace()", aspirePy);
+        Assert.Contains("TestConfigs.Profiles.Development =", aspirePy);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithTestTypes_IncludesCapabilities()
     {
         // Arrange

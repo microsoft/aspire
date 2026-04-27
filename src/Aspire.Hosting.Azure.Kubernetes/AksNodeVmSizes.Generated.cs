@@ -27,21 +27,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NC16as_T4_v3 — 16 vCPUs — 110 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC16asT4V3 = "Standard_NC16as_T4_v3";
 
         /// <summary>
         /// Standard_NC4as_T4_v3 — 4 vCPUs — 28 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC4asT4V3 = "Standard_NC4as_T4_v3";
 
         /// <summary>
         /// Standard_NC64as_T4_v3 — 64 vCPUs — 440 GB RAM — 4 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC64asT4V3 = "Standard_NC64as_T4_v3";
 
         /// <summary>
         /// Standard_NC8as_T4_v3 — 8 vCPUs — 56 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC8asT4V3 = "Standard_NC8as_T4_v3";
     }
 
@@ -53,6 +57,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_ND96amsr_A100_v4 — 96 vCPUs — 1800 GB RAM — 8 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND96amsrA100V4 = "Standard_ND96amsr_A100_v4";
     }
 
@@ -64,6 +69,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_ND96asr_v4 — 96 vCPUs — 900 GB RAM — 8 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND96asrV4 = "Standard_ND96asr_v4";
     }
 
@@ -75,31 +81,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_A2m_v2 — 2 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardA2mV2 = "Standard_A2m_v2";
 
         /// <summary>
         /// Standard_A2_v2 — 2 vCPUs — 4 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardA2V2 = "Standard_A2_v2";
 
         /// <summary>
         /// Standard_A4m_v2 — 4 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardA4mV2 = "Standard_A4m_v2";
 
         /// <summary>
         /// Standard_A4_v2 — 4 vCPUs — 8 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardA4V2 = "Standard_A4_v2";
 
         /// <summary>
         /// Standard_A8m_v2 — 8 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardA8mV2 = "Standard_A8m_v2";
 
         /// <summary>
         /// Standard_A8_v2 — 8 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardA8V2 = "Standard_A8_v2";
     }
 
@@ -111,51 +123,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_B16als_v2 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB16alsV2 = "Standard_B16als_v2";
 
         /// <summary>
         /// Standard_B16as_v2 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB16asV2 = "Standard_B16as_v2";
 
         /// <summary>
         /// Standard_B2als_v2 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB2alsV2 = "Standard_B2als_v2";
 
         /// <summary>
         /// Standard_B2as_v2 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB2asV2 = "Standard_B2as_v2";
 
         /// <summary>
         /// Standard_B32als_v2 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB32alsV2 = "Standard_B32als_v2";
 
         /// <summary>
         /// Standard_B32as_v2 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB32asV2 = "Standard_B32as_v2";
 
         /// <summary>
         /// Standard_B4als_v2 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB4alsV2 = "Standard_B4als_v2";
 
         /// <summary>
         /// Standard_B4as_v2 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB4asV2 = "Standard_B4as_v2";
 
         /// <summary>
         /// Standard_B8als_v2 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB8alsV2 = "Standard_B8als_v2";
 
         /// <summary>
         /// Standard_B8as_v2 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB8asV2 = "Standard_B8as_v2";
     }
 
@@ -167,41 +189,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_B16pls_v2 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB16plsV2 = "Standard_B16pls_v2";
 
         /// <summary>
         /// Standard_B16ps_v2 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB16psV2 = "Standard_B16ps_v2";
 
         /// <summary>
         /// Standard_B2pls_v2 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB2plsV2 = "Standard_B2pls_v2";
 
         /// <summary>
         /// Standard_B2ps_v2 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB2psV2 = "Standard_B2ps_v2";
 
         /// <summary>
         /// Standard_B4pls_v2 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB4plsV2 = "Standard_B4pls_v2";
 
         /// <summary>
         /// Standard_B4ps_v2 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB4psV2 = "Standard_B4ps_v2";
 
         /// <summary>
         /// Standard_B8pls_v2 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB8plsV2 = "Standard_B8pls_v2";
 
         /// <summary>
         /// Standard_B8ps_v2 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB8psV2 = "Standard_B8ps_v2";
     }
 
@@ -213,36 +243,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_B12ms — 12 vCPUs — 48 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB12ms = "Standard_B12ms";
 
         /// <summary>
         /// Standard_B16ms — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB16ms = "Standard_B16ms";
 
         /// <summary>
         /// Standard_B20ms — 20 vCPUs — 80 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB20ms = "Standard_B20ms";
 
         /// <summary>
         /// Standard_B2ms — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB2ms = "Standard_B2ms";
 
         /// <summary>
         /// Standard_B2s — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB2s = "Standard_B2s";
 
         /// <summary>
         /// Standard_B4ms — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB4ms = "Standard_B4ms";
 
         /// <summary>
         /// Standard_B8ms — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB8ms = "Standard_B8ms";
     }
 
@@ -254,51 +291,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_B16ls_v2 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB16lsV2 = "Standard_B16ls_v2";
 
         /// <summary>
         /// Standard_B16s_v2 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB16sV2 = "Standard_B16s_v2";
 
         /// <summary>
         /// Standard_B2ls_v2 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB2lsV2 = "Standard_B2ls_v2";
 
         /// <summary>
         /// Standard_B2s_v2 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB2sV2 = "Standard_B2s_v2";
 
         /// <summary>
         /// Standard_B32ls_v2 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB32lsV2 = "Standard_B32ls_v2";
 
         /// <summary>
         /// Standard_B32s_v2 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB32sV2 = "Standard_B32s_v2";
 
         /// <summary>
         /// Standard_B4ls_v2 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB4lsV2 = "Standard_B4ls_v2";
 
         /// <summary>
         /// Standard_B4s_v2 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB4sV2 = "Standard_B4s_v2";
 
         /// <summary>
         /// Standard_B8ls_v2 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB8lsV2 = "Standard_B8ls_v2";
 
         /// <summary>
         /// Standard_B8s_v2 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardB8sV2 = "Standard_B8s_v2";
     }
 
@@ -310,41 +357,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16ads_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16adsV5 = "Standard_D16ads_v5";
 
         /// <summary>
         /// Standard_D2ads_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2adsV5 = "Standard_D2ads_v5";
 
         /// <summary>
         /// Standard_D32ads_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32adsV5 = "Standard_D32ads_v5";
 
         /// <summary>
         /// Standard_D48ads_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48adsV5 = "Standard_D48ads_v5";
 
         /// <summary>
         /// Standard_D4ads_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4adsV5 = "Standard_D4ads_v5";
 
         /// <summary>
         /// Standard_D64ads_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64adsV5 = "Standard_D64ads_v5";
 
         /// <summary>
         /// Standard_D8ads_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8adsV5 = "Standard_D8ads_v5";
 
         /// <summary>
         /// Standard_D96ads_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96adsV5 = "Standard_D96ads_v5";
     }
 
@@ -356,51 +411,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D128ads_v7 — 128 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD128adsV7 = "Standard_D128ads_v7";
 
         /// <summary>
         /// Standard_D160ads_v7 — 160 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD160adsV7 = "Standard_D160ads_v7";
 
         /// <summary>
         /// Standard_D16ads_v7 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16adsV7 = "Standard_D16ads_v7";
 
         /// <summary>
         /// Standard_D2ads_v7 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2adsV7 = "Standard_D2ads_v7";
 
         /// <summary>
         /// Standard_D32ads_v7 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32adsV7 = "Standard_D32ads_v7";
 
         /// <summary>
         /// Standard_D48ads_v7 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48adsV7 = "Standard_D48ads_v7";
 
         /// <summary>
         /// Standard_D4ads_v7 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4adsV7 = "Standard_D4ads_v7";
 
         /// <summary>
         /// Standard_D64ads_v7 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64adsV7 = "Standard_D64ads_v7";
 
         /// <summary>
         /// Standard_D8ads_v7 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8adsV7 = "Standard_D8ads_v7";
 
         /// <summary>
         /// Standard_D96ads_v7 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96adsV7 = "Standard_D96ads_v7";
     }
 
@@ -412,41 +477,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16ads_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16adsV6 = "Standard_D16ads_v6";
 
         /// <summary>
         /// Standard_D2ads_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2adsV6 = "Standard_D2ads_v6";
 
         /// <summary>
         /// Standard_D32ads_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32adsV6 = "Standard_D32ads_v6";
 
         /// <summary>
         /// Standard_D48ads_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48adsV6 = "Standard_D48ads_v6";
 
         /// <summary>
         /// Standard_D4ads_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4adsV6 = "Standard_D4ads_v6";
 
         /// <summary>
         /// Standard_D64ads_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64adsV6 = "Standard_D64ads_v6";
 
         /// <summary>
         /// Standard_D8ads_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8adsV6 = "Standard_D8ads_v6";
 
         /// <summary>
         /// Standard_D96ads_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96adsV6 = "Standard_D96ads_v6";
     }
 
@@ -458,51 +531,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D128alds_v7 — 128 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD128aldsV7 = "Standard_D128alds_v7";
 
         /// <summary>
         /// Standard_D160alds_v7 — 160 vCPUs — 320 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD160aldsV7 = "Standard_D160alds_v7";
 
         /// <summary>
         /// Standard_D16alds_v7 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16aldsV7 = "Standard_D16alds_v7";
 
         /// <summary>
         /// Standard_D2alds_v7 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2aldsV7 = "Standard_D2alds_v7";
 
         /// <summary>
         /// Standard_D32alds_v7 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32aldsV7 = "Standard_D32alds_v7";
 
         /// <summary>
         /// Standard_D48alds_v7 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48aldsV7 = "Standard_D48alds_v7";
 
         /// <summary>
         /// Standard_D4alds_v7 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4aldsV7 = "Standard_D4alds_v7";
 
         /// <summary>
         /// Standard_D64alds_v7 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64aldsV7 = "Standard_D64alds_v7";
 
         /// <summary>
         /// Standard_D8alds_v7 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8aldsV7 = "Standard_D8alds_v7";
 
         /// <summary>
         /// Standard_D96alds_v7 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96aldsV7 = "Standard_D96alds_v7";
     }
 
@@ -514,41 +597,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16alds_v6 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16aldsV6 = "Standard_D16alds_v6";
 
         /// <summary>
         /// Standard_D2alds_v6 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2aldsV6 = "Standard_D2alds_v6";
 
         /// <summary>
         /// Standard_D32alds_v6 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32aldsV6 = "Standard_D32alds_v6";
 
         /// <summary>
         /// Standard_D48alds_v6 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48aldsV6 = "Standard_D48alds_v6";
 
         /// <summary>
         /// Standard_D4alds_v6 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4aldsV6 = "Standard_D4alds_v6";
 
         /// <summary>
         /// Standard_D64alds_v6 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64aldsV6 = "Standard_D64alds_v6";
 
         /// <summary>
         /// Standard_D8alds_v6 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8aldsV6 = "Standard_D8alds_v6";
 
         /// <summary>
         /// Standard_D96alds_v6 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96aldsV6 = "Standard_D96alds_v6";
     }
 
@@ -560,51 +651,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D128als_v7 — 128 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD128alsV7 = "Standard_D128als_v7";
 
         /// <summary>
         /// Standard_D160als_v7 — 160 vCPUs — 320 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD160alsV7 = "Standard_D160als_v7";
 
         /// <summary>
         /// Standard_D16als_v7 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16alsV7 = "Standard_D16als_v7";
 
         /// <summary>
         /// Standard_D2als_v7 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2alsV7 = "Standard_D2als_v7";
 
         /// <summary>
         /// Standard_D32als_v7 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32alsV7 = "Standard_D32als_v7";
 
         /// <summary>
         /// Standard_D48als_v7 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48alsV7 = "Standard_D48als_v7";
 
         /// <summary>
         /// Standard_D4als_v7 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4alsV7 = "Standard_D4als_v7";
 
         /// <summary>
         /// Standard_D64als_v7 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64alsV7 = "Standard_D64als_v7";
 
         /// <summary>
         /// Standard_D8als_v7 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8alsV7 = "Standard_D8als_v7";
 
         /// <summary>
         /// Standard_D96als_v7 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96alsV7 = "Standard_D96als_v7";
     }
 
@@ -616,41 +717,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16als_v6 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16alsV6 = "Standard_D16als_v6";
 
         /// <summary>
         /// Standard_D2als_v6 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2alsV6 = "Standard_D2als_v6";
 
         /// <summary>
         /// Standard_D32als_v6 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32alsV6 = "Standard_D32als_v6";
 
         /// <summary>
         /// Standard_D48als_v6 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48alsV6 = "Standard_D48als_v6";
 
         /// <summary>
         /// Standard_D4als_v6 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4alsV6 = "Standard_D4als_v6";
 
         /// <summary>
         /// Standard_D64als_v6 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64alsV6 = "Standard_D64als_v6";
 
         /// <summary>
         /// Standard_D8als_v6 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8alsV6 = "Standard_D8als_v6";
 
         /// <summary>
         /// Standard_D96als_v6 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96alsV6 = "Standard_D96als_v6";
     }
 
@@ -662,41 +771,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16as_v4 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16asV4 = "Standard_D16as_v4";
 
         /// <summary>
         /// Standard_D2as_v4 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2asV4 = "Standard_D2as_v4";
 
         /// <summary>
         /// Standard_D32as_v4 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32asV4 = "Standard_D32as_v4";
 
         /// <summary>
         /// Standard_D48as_v4 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48asV4 = "Standard_D48as_v4";
 
         /// <summary>
         /// Standard_D4as_v4 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4asV4 = "Standard_D4as_v4";
 
         /// <summary>
         /// Standard_D64as_v4 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64asV4 = "Standard_D64as_v4";
 
         /// <summary>
         /// Standard_D8as_v4 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8asV4 = "Standard_D8as_v4";
 
         /// <summary>
         /// Standard_D96as_v4 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96asV4 = "Standard_D96as_v4";
     }
 
@@ -708,41 +825,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16as_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16asV5 = "Standard_D16as_v5";
 
         /// <summary>
         /// Standard_D2as_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2asV5 = "Standard_D2as_v5";
 
         /// <summary>
         /// Standard_D32as_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32asV5 = "Standard_D32as_v5";
 
         /// <summary>
         /// Standard_D48as_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48asV5 = "Standard_D48as_v5";
 
         /// <summary>
         /// Standard_D4as_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4asV5 = "Standard_D4as_v5";
 
         /// <summary>
         /// Standard_D64as_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64asV5 = "Standard_D64as_v5";
 
         /// <summary>
         /// Standard_D8as_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8asV5 = "Standard_D8as_v5";
 
         /// <summary>
         /// Standard_D96as_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96asV5 = "Standard_D96as_v5";
     }
 
@@ -754,51 +879,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D128as_v7 — 128 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD128asV7 = "Standard_D128as_v7";
 
         /// <summary>
         /// Standard_D160as_v7 — 160 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD160asV7 = "Standard_D160as_v7";
 
         /// <summary>
         /// Standard_D16as_v7 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16asV7 = "Standard_D16as_v7";
 
         /// <summary>
         /// Standard_D2as_v7 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2asV7 = "Standard_D2as_v7";
 
         /// <summary>
         /// Standard_D32as_v7 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32asV7 = "Standard_D32as_v7";
 
         /// <summary>
         /// Standard_D48as_v7 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48asV7 = "Standard_D48as_v7";
 
         /// <summary>
         /// Standard_D4as_v7 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4asV7 = "Standard_D4as_v7";
 
         /// <summary>
         /// Standard_D64as_v7 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64asV7 = "Standard_D64as_v7";
 
         /// <summary>
         /// Standard_D8as_v7 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8asV7 = "Standard_D8as_v7";
 
         /// <summary>
         /// Standard_D96as_v7 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96asV7 = "Standard_D96as_v7";
     }
 
@@ -810,41 +945,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16a_v4 — 16 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16aV4 = "Standard_D16a_v4";
 
         /// <summary>
         /// Standard_D2a_v4 — 2 vCPUs — 8 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2aV4 = "Standard_D2a_v4";
 
         /// <summary>
         /// Standard_D32a_v4 — 32 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32aV4 = "Standard_D32a_v4";
 
         /// <summary>
         /// Standard_D48a_v4 — 48 vCPUs — 192 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48aV4 = "Standard_D48a_v4";
 
         /// <summary>
         /// Standard_D4a_v4 — 4 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4aV4 = "Standard_D4a_v4";
 
         /// <summary>
         /// Standard_D64a_v4 — 64 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64aV4 = "Standard_D64a_v4";
 
         /// <summary>
         /// Standard_D8a_v4 — 8 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8aV4 = "Standard_D8a_v4";
 
         /// <summary>
         /// Standard_D96a_v4 — 96 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96aV4 = "Standard_D96a_v4";
     }
 
@@ -856,41 +999,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16as_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16asV6 = "Standard_D16as_v6";
 
         /// <summary>
         /// Standard_D2as_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2asV6 = "Standard_D2as_v6";
 
         /// <summary>
         /// Standard_D32as_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32asV6 = "Standard_D32as_v6";
 
         /// <summary>
         /// Standard_D48as_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48asV6 = "Standard_D48as_v6";
 
         /// <summary>
         /// Standard_D4as_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4asV6 = "Standard_D4as_v6";
 
         /// <summary>
         /// Standard_D64as_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64asV6 = "Standard_D64as_v6";
 
         /// <summary>
         /// Standard_D8as_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8asV6 = "Standard_D8as_v6";
 
         /// <summary>
         /// Standard_D96as_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96asV6 = "Standard_D96as_v6";
     }
 
@@ -902,36 +1053,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16as_cc_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16asCcV5 = "Standard_DC16as_cc_v5";
 
         /// <summary>
         /// Standard_DC32as_cc_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32asCcV5 = "Standard_DC32as_cc_v5";
 
         /// <summary>
         /// Standard_DC48as_cc_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48asCcV5 = "Standard_DC48as_cc_v5";
 
         /// <summary>
         /// Standard_DC4as_cc_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4asCcV5 = "Standard_DC4as_cc_v5";
 
         /// <summary>
         /// Standard_DC64as_cc_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64asCcV5 = "Standard_DC64as_cc_v5";
 
         /// <summary>
         /// Standard_DC8as_cc_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8asCcV5 = "Standard_DC8as_cc_v5";
 
         /// <summary>
         /// Standard_DC96as_cc_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96asCcV5 = "Standard_DC96as_cc_v5";
     }
 
@@ -943,36 +1101,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16ads_cc_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16adsCcV5 = "Standard_DC16ads_cc_v5";
 
         /// <summary>
         /// Standard_DC32ads_cc_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32adsCcV5 = "Standard_DC32ads_cc_v5";
 
         /// <summary>
         /// Standard_DC48ads_cc_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48adsCcV5 = "Standard_DC48ads_cc_v5";
 
         /// <summary>
         /// Standard_DC4ads_cc_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4adsCcV5 = "Standard_DC4ads_cc_v5";
 
         /// <summary>
         /// Standard_DC64ads_cc_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64adsCcV5 = "Standard_DC64ads_cc_v5";
 
         /// <summary>
         /// Standard_DC8ads_cc_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8adsCcV5 = "Standard_DC8ads_cc_v5";
 
         /// <summary>
         /// Standard_DC96ads_cc_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96adsCcV5 = "Standard_DC96ads_cc_v5";
     }
 
@@ -984,41 +1149,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16ads_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16adsV5 = "Standard_DC16ads_v5";
 
         /// <summary>
         /// Standard_DC2ads_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2adsV5 = "Standard_DC2ads_v5";
 
         /// <summary>
         /// Standard_DC32ads_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32adsV5 = "Standard_DC32ads_v5";
 
         /// <summary>
         /// Standard_DC48ads_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48adsV5 = "Standard_DC48ads_v5";
 
         /// <summary>
         /// Standard_DC4ads_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4adsV5 = "Standard_DC4ads_v5";
 
         /// <summary>
         /// Standard_DC64ads_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64adsV5 = "Standard_DC64ads_v5";
 
         /// <summary>
         /// Standard_DC8ads_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8adsV5 = "Standard_DC8ads_v5";
 
         /// <summary>
         /// Standard_DC96ads_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96adsV5 = "Standard_DC96ads_v5";
     }
 
@@ -1030,41 +1203,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16ads_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16adsV6 = "Standard_DC16ads_v6";
 
         /// <summary>
         /// Standard_DC2ads_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2adsV6 = "Standard_DC2ads_v6";
 
         /// <summary>
         /// Standard_DC32ads_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32adsV6 = "Standard_DC32ads_v6";
 
         /// <summary>
         /// Standard_DC48ads_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48adsV6 = "Standard_DC48ads_v6";
 
         /// <summary>
         /// Standard_DC4ads_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4adsV6 = "Standard_DC4ads_v6";
 
         /// <summary>
         /// Standard_DC64ads_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64adsV6 = "Standard_DC64ads_v6";
 
         /// <summary>
         /// Standard_DC8ads_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8adsV6 = "Standard_DC8ads_v6";
 
         /// <summary>
         /// Standard_DC96ads_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96adsV6 = "Standard_DC96ads_v6";
     }
 
@@ -1076,41 +1257,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16as_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16asV5 = "Standard_DC16as_v5";
 
         /// <summary>
         /// Standard_DC2as_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2asV5 = "Standard_DC2as_v5";
 
         /// <summary>
         /// Standard_DC32as_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32asV5 = "Standard_DC32as_v5";
 
         /// <summary>
         /// Standard_DC48as_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48asV5 = "Standard_DC48as_v5";
 
         /// <summary>
         /// Standard_DC4as_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4asV5 = "Standard_DC4as_v5";
 
         /// <summary>
         /// Standard_DC64as_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64asV5 = "Standard_DC64as_v5";
 
         /// <summary>
         /// Standard_DC8as_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8asV5 = "Standard_DC8as_v5";
 
         /// <summary>
         /// Standard_DC96as_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96asV5 = "Standard_DC96as_v5";
     }
 
@@ -1122,41 +1311,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16as_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16asV6 = "Standard_DC16as_v6";
 
         /// <summary>
         /// Standard_DC2as_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2asV6 = "Standard_DC2as_v6";
 
         /// <summary>
         /// Standard_DC32as_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32asV6 = "Standard_DC32as_v6";
 
         /// <summary>
         /// Standard_DC48as_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48asV6 = "Standard_DC48as_v6";
 
         /// <summary>
         /// Standard_DC4as_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4asV6 = "Standard_DC4as_v6";
 
         /// <summary>
         /// Standard_DC64as_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64asV6 = "Standard_DC64as_v6";
 
         /// <summary>
         /// Standard_DC8as_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8asV6 = "Standard_DC8as_v6";
 
         /// <summary>
         /// Standard_DC96as_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96asV6 = "Standard_DC96as_v6";
     }
 
@@ -1168,41 +1365,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16eds_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16edsV5 = "Standard_DC16eds_v5";
 
         /// <summary>
         /// Standard_DC2eds_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2edsV5 = "Standard_DC2eds_v5";
 
         /// <summary>
         /// Standard_DC32eds_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32edsV5 = "Standard_DC32eds_v5";
 
         /// <summary>
         /// Standard_DC48eds_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48edsV5 = "Standard_DC48eds_v5";
 
         /// <summary>
         /// Standard_DC4eds_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4edsV5 = "Standard_DC4eds_v5";
 
         /// <summary>
         /// Standard_DC64eds_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64edsV5 = "Standard_DC64eds_v5";
 
         /// <summary>
         /// Standard_DC8eds_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8edsV5 = "Standard_DC8eds_v5";
 
         /// <summary>
         /// Standard_DC96eds_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96edsV5 = "Standard_DC96eds_v5";
     }
 
@@ -1214,46 +1419,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC128eds_v6 — 128 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC128edsV6 = "Standard_DC128eds_v6";
 
         /// <summary>
         /// Standard_DC16eds_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16edsV6 = "Standard_DC16eds_v6";
 
         /// <summary>
         /// Standard_DC2eds_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2edsV6 = "Standard_DC2eds_v6";
 
         /// <summary>
         /// Standard_DC32eds_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32edsV6 = "Standard_DC32eds_v6";
 
         /// <summary>
         /// Standard_DC48eds_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48edsV6 = "Standard_DC48eds_v6";
 
         /// <summary>
         /// Standard_DC4eds_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4edsV6 = "Standard_DC4eds_v6";
 
         /// <summary>
         /// Standard_DC64eds_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64edsV6 = "Standard_DC64eds_v6";
 
         /// <summary>
         /// Standard_DC8eds_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8edsV6 = "Standard_DC8eds_v6";
 
         /// <summary>
         /// Standard_DC96eds_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96edsV6 = "Standard_DC96eds_v6";
     }
 
@@ -1265,41 +1479,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16es_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16esV5 = "Standard_DC16es_v5";
 
         /// <summary>
         /// Standard_DC2es_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2esV5 = "Standard_DC2es_v5";
 
         /// <summary>
         /// Standard_DC32es_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32esV5 = "Standard_DC32es_v5";
 
         /// <summary>
         /// Standard_DC48es_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48esV5 = "Standard_DC48es_v5";
 
         /// <summary>
         /// Standard_DC4es_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4esV5 = "Standard_DC4es_v5";
 
         /// <summary>
         /// Standard_DC64es_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64esV5 = "Standard_DC64es_v5";
 
         /// <summary>
         /// Standard_DC8es_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8esV5 = "Standard_DC8es_v5";
 
         /// <summary>
         /// Standard_DC96es_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96esV5 = "Standard_DC96es_v5";
     }
 
@@ -1311,46 +1533,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC128es_v6 — 128 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC128esV6 = "Standard_DC128es_v6";
 
         /// <summary>
         /// Standard_DC16es_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16esV6 = "Standard_DC16es_v6";
 
         /// <summary>
         /// Standard_DC2es_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2esV6 = "Standard_DC2es_v6";
 
         /// <summary>
         /// Standard_DC32es_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32esV6 = "Standard_DC32es_v6";
 
         /// <summary>
         /// Standard_DC48es_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48esV6 = "Standard_DC48es_v6";
 
         /// <summary>
         /// Standard_DC4es_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4esV6 = "Standard_DC4es_v6";
 
         /// <summary>
         /// Standard_DC64es_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC64esV6 = "Standard_DC64es_v6";
 
         /// <summary>
         /// Standard_DC8es_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8esV6 = "Standard_DC8es_v6";
 
         /// <summary>
         /// Standard_DC96es_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC96esV6 = "Standard_DC96es_v6";
     }
 
@@ -1362,16 +1593,19 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC2s_v2 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2sV2 = "Standard_DC2s_v2";
 
         /// <summary>
         /// Standard_DC4s_v2 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4sV2 = "Standard_DC4s_v2";
 
         /// <summary>
         /// Standard_DC8_v2 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8V2 = "Standard_DC8_v2";
     }
 
@@ -1383,36 +1617,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16s_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16sV3 = "Standard_DC16s_v3";
 
         /// <summary>
         /// Standard_DC24s_v3 — 24 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC24sV3 = "Standard_DC24s_v3";
 
         /// <summary>
         /// Standard_DC2s_v3 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2sV3 = "Standard_DC2s_v3";
 
         /// <summary>
         /// Standard_DC32s_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32sV3 = "Standard_DC32s_v3";
 
         /// <summary>
         /// Standard_DC48s_v3 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48sV3 = "Standard_DC48s_v3";
 
         /// <summary>
         /// Standard_DC4s_v3 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4sV3 = "Standard_DC4s_v3";
 
         /// <summary>
         /// Standard_DC8s_v3 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8sV3 = "Standard_DC8s_v3";
     }
 
@@ -1424,36 +1665,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DC16ds_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC16dsV3 = "Standard_DC16ds_v3";
 
         /// <summary>
         /// Standard_DC24ds_v3 — 24 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC24dsV3 = "Standard_DC24ds_v3";
 
         /// <summary>
         /// Standard_DC2ds_v3 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC2dsV3 = "Standard_DC2ds_v3";
 
         /// <summary>
         /// Standard_DC32ds_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC32dsV3 = "Standard_DC32ds_v3";
 
         /// <summary>
         /// Standard_DC48ds_v3 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC48dsV3 = "Standard_DC48ds_v3";
 
         /// <summary>
         /// Standard_DC4ds_v3 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC4dsV3 = "Standard_DC4ds_v3";
 
         /// <summary>
         /// Standard_DC8ds_v3 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDC8dsV3 = "Standard_DC8ds_v3";
     }
 
@@ -1465,36 +1713,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16ds_v4 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16dsV4 = "Standard_D16ds_v4";
 
         /// <summary>
         /// Standard_D2ds_v4 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2dsV4 = "Standard_D2ds_v4";
 
         /// <summary>
         /// Standard_D32ds_v4 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32dsV4 = "Standard_D32ds_v4";
 
         /// <summary>
         /// Standard_D48ds_v4 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48dsV4 = "Standard_D48ds_v4";
 
         /// <summary>
         /// Standard_D4ds_v4 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4dsV4 = "Standard_D4ds_v4";
 
         /// <summary>
         /// Standard_D64ds_v4 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64dsV4 = "Standard_D64ds_v4";
 
         /// <summary>
         /// Standard_D8ds_v4 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8dsV4 = "Standard_D8ds_v4";
     }
 
@@ -1506,41 +1761,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16ds_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16dsV5 = "Standard_D16ds_v5";
 
         /// <summary>
         /// Standard_D2ds_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2dsV5 = "Standard_D2ds_v5";
 
         /// <summary>
         /// Standard_D32ds_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32dsV5 = "Standard_D32ds_v5";
 
         /// <summary>
         /// Standard_D48ds_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48dsV5 = "Standard_D48ds_v5";
 
         /// <summary>
         /// Standard_D4ds_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4dsV5 = "Standard_D4ds_v5";
 
         /// <summary>
         /// Standard_D64ds_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64dsV5 = "Standard_D64ds_v5";
 
         /// <summary>
         /// Standard_D8ds_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8dsV5 = "Standard_D8ds_v5";
 
         /// <summary>
         /// Standard_D96ds_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96dsV5 = "Standard_D96ds_v5";
     }
 
@@ -1552,51 +1815,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D128ds_v6 — 128 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD128dsV6 = "Standard_D128ds_v6";
 
         /// <summary>
         /// Standard_D16ds_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16dsV6 = "Standard_D16ds_v6";
 
         /// <summary>
         /// Standard_D192ds_v6 — 192 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD192dsV6 = "Standard_D192ds_v6";
 
         /// <summary>
         /// Standard_D2ds_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2dsV6 = "Standard_D2ds_v6";
 
         /// <summary>
         /// Standard_D32ds_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32dsV6 = "Standard_D32ds_v6";
 
         /// <summary>
         /// Standard_D48ds_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48dsV6 = "Standard_D48ds_v6";
 
         /// <summary>
         /// Standard_D4ds_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4dsV6 = "Standard_D4ds_v6";
 
         /// <summary>
         /// Standard_D64ds_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64dsV6 = "Standard_D64ds_v6";
 
         /// <summary>
         /// Standard_D8ds_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8dsV6 = "Standard_D8ds_v6";
 
         /// <summary>
         /// Standard_D96ds_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96dsV6 = "Standard_D96ds_v6";
     }
 
@@ -1608,36 +1881,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16d_v4 — 16 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16dV4 = "Standard_D16d_v4";
 
         /// <summary>
         /// Standard_D2d_v4 — 2 vCPUs — 8 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2dV4 = "Standard_D2d_v4";
 
         /// <summary>
         /// Standard_D32d_v4 — 32 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32dV4 = "Standard_D32d_v4";
 
         /// <summary>
         /// Standard_D48d_v4 — 48 vCPUs — 192 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48dV4 = "Standard_D48d_v4";
 
         /// <summary>
         /// Standard_D4d_v4 — 4 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4dV4 = "Standard_D4d_v4";
 
         /// <summary>
         /// Standard_D64d_v4 — 64 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64dV4 = "Standard_D64d_v4";
 
         /// <summary>
         /// Standard_D8d_v4 — 8 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8dV4 = "Standard_D8d_v4";
     }
 
@@ -1649,41 +1929,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16d_v5 — 16 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16dV5 = "Standard_D16d_v5";
 
         /// <summary>
         /// Standard_D2d_v5 — 2 vCPUs — 8 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2dV5 = "Standard_D2d_v5";
 
         /// <summary>
         /// Standard_D32d_v5 — 32 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32dV5 = "Standard_D32d_v5";
 
         /// <summary>
         /// Standard_D48d_v5 — 48 vCPUs — 192 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48dV5 = "Standard_D48d_v5";
 
         /// <summary>
         /// Standard_D4d_v5 — 4 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4dV5 = "Standard_D4d_v5";
 
         /// <summary>
         /// Standard_D64d_v5 — 64 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64dV5 = "Standard_D64d_v5";
 
         /// <summary>
         /// Standard_D8d_v5 — 8 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8dV5 = "Standard_D8d_v5";
 
         /// <summary>
         /// Standard_D96d_v5 — 96 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96dV5 = "Standard_D96d_v5";
     }
 
@@ -1695,36 +1983,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D11 — 2 vCPUs — 14 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD11 = "Standard_D11";
 
         /// <summary>
         /// Standard_D12 — 4 vCPUs — 28 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD12 = "Standard_D12";
 
         /// <summary>
         /// Standard_D13 — 8 vCPUs — 56 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD13 = "Standard_D13";
 
         /// <summary>
         /// Standard_D14 — 16 vCPUs — 112 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD14 = "Standard_D14";
 
         /// <summary>
         /// Standard_D2 — 2 vCPUs — 7 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2 = "Standard_D2";
 
         /// <summary>
         /// Standard_D3 — 4 vCPUs — 14 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD3 = "Standard_D3";
 
         /// <summary>
         /// Standard_D4 — 8 vCPUs — 28 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4 = "Standard_D4";
     }
 
@@ -1736,41 +2031,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16lds_v5 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16ldsV5 = "Standard_D16lds_v5";
 
         /// <summary>
         /// Standard_D2lds_v5 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2ldsV5 = "Standard_D2lds_v5";
 
         /// <summary>
         /// Standard_D32lds_v5 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32ldsV5 = "Standard_D32lds_v5";
 
         /// <summary>
         /// Standard_D48lds_v5 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48ldsV5 = "Standard_D48lds_v5";
 
         /// <summary>
         /// Standard_D4lds_v5 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4ldsV5 = "Standard_D4lds_v5";
 
         /// <summary>
         /// Standard_D64lds_v5 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64ldsV5 = "Standard_D64lds_v5";
 
         /// <summary>
         /// Standard_D8lds_v5 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8ldsV5 = "Standard_D8lds_v5";
 
         /// <summary>
         /// Standard_D96lds_v5 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96ldsV5 = "Standard_D96lds_v5";
     }
 
@@ -1782,46 +2085,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D128lds_v6 — 128 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD128ldsV6 = "Standard_D128lds_v6";
 
         /// <summary>
         /// Standard_D16lds_v6 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16ldsV6 = "Standard_D16lds_v6";
 
         /// <summary>
         /// Standard_D2lds_v6 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2ldsV6 = "Standard_D2lds_v6";
 
         /// <summary>
         /// Standard_D32lds_v6 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32ldsV6 = "Standard_D32lds_v6";
 
         /// <summary>
         /// Standard_D48lds_v6 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48ldsV6 = "Standard_D48lds_v6";
 
         /// <summary>
         /// Standard_D4lds_v6 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4ldsV6 = "Standard_D4lds_v6";
 
         /// <summary>
         /// Standard_D64lds_v6 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64ldsV6 = "Standard_D64lds_v6";
 
         /// <summary>
         /// Standard_D8lds_v6 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8ldsV6 = "Standard_D8lds_v6";
 
         /// <summary>
         /// Standard_D96lds_v6 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96ldsV6 = "Standard_D96lds_v6";
     }
 
@@ -1833,41 +2145,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16ls_v5 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16lsV5 = "Standard_D16ls_v5";
 
         /// <summary>
         /// Standard_D2ls_v5 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2lsV5 = "Standard_D2ls_v5";
 
         /// <summary>
         /// Standard_D32ls_v5 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32lsV5 = "Standard_D32ls_v5";
 
         /// <summary>
         /// Standard_D48ls_v5 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48lsV5 = "Standard_D48ls_v5";
 
         /// <summary>
         /// Standard_D4ls_v5 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4lsV5 = "Standard_D4ls_v5";
 
         /// <summary>
         /// Standard_D64ls_v5 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64lsV5 = "Standard_D64ls_v5";
 
         /// <summary>
         /// Standard_D8ls_v5 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8lsV5 = "Standard_D8ls_v5";
 
         /// <summary>
         /// Standard_D96ls_v5 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96lsV5 = "Standard_D96ls_v5";
     }
 
@@ -1879,46 +2199,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D128ls_v6 — 128 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD128lsV6 = "Standard_D128ls_v6";
 
         /// <summary>
         /// Standard_D16ls_v6 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16lsV6 = "Standard_D16ls_v6";
 
         /// <summary>
         /// Standard_D2ls_v6 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2lsV6 = "Standard_D2ls_v6";
 
         /// <summary>
         /// Standard_D32ls_v6 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32lsV6 = "Standard_D32ls_v6";
 
         /// <summary>
         /// Standard_D48ls_v6 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48lsV6 = "Standard_D48ls_v6";
 
         /// <summary>
         /// Standard_D4ls_v6 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4lsV6 = "Standard_D4ls_v6";
 
         /// <summary>
         /// Standard_D64ls_v6 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64lsV6 = "Standard_D64ls_v6";
 
         /// <summary>
         /// Standard_D8ls_v6 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8lsV6 = "Standard_D8ls_v6";
 
         /// <summary>
         /// Standard_D96ls_v6 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96lsV6 = "Standard_D96ls_v6";
     }
 
@@ -1930,36 +2259,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16pds_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16pdsV5 = "Standard_D16pds_v5";
 
         /// <summary>
         /// Standard_D2pds_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2pdsV5 = "Standard_D2pds_v5";
 
         /// <summary>
         /// Standard_D32pds_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32pdsV5 = "Standard_D32pds_v5";
 
         /// <summary>
         /// Standard_D48pds_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48pdsV5 = "Standard_D48pds_v5";
 
         /// <summary>
         /// Standard_D4pds_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4pdsV5 = "Standard_D4pds_v5";
 
         /// <summary>
         /// Standard_D64pds_v5 — 64 vCPUs — 208 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64pdsV5 = "Standard_D64pds_v5";
 
         /// <summary>
         /// Standard_D8pds_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8pdsV5 = "Standard_D8pds_v5";
     }
 
@@ -1971,41 +2307,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16pds_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16pdsV6 = "Standard_D16pds_v6";
 
         /// <summary>
         /// Standard_D2pds_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2pdsV6 = "Standard_D2pds_v6";
 
         /// <summary>
         /// Standard_D32pds_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32pdsV6 = "Standard_D32pds_v6";
 
         /// <summary>
         /// Standard_D48pds_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48pdsV6 = "Standard_D48pds_v6";
 
         /// <summary>
         /// Standard_D4pds_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4pdsV6 = "Standard_D4pds_v6";
 
         /// <summary>
         /// Standard_D64pds_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64pdsV6 = "Standard_D64pds_v6";
 
         /// <summary>
         /// Standard_D8pds_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8pdsV6 = "Standard_D8pds_v6";
 
         /// <summary>
         /// Standard_D96pds_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96pdsV6 = "Standard_D96pds_v6";
     }
 
@@ -2017,36 +2361,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16plds_v5 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16pldsV5 = "Standard_D16plds_v5";
 
         /// <summary>
         /// Standard_D2plds_v5 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2pldsV5 = "Standard_D2plds_v5";
 
         /// <summary>
         /// Standard_D32plds_v5 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32pldsV5 = "Standard_D32plds_v5";
 
         /// <summary>
         /// Standard_D48plds_v5 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48pldsV5 = "Standard_D48plds_v5";
 
         /// <summary>
         /// Standard_D4plds_v5 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4pldsV5 = "Standard_D4plds_v5";
 
         /// <summary>
         /// Standard_D64plds_v5 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64pldsV5 = "Standard_D64plds_v5";
 
         /// <summary>
         /// Standard_D8plds_v5 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8pldsV5 = "Standard_D8plds_v5";
     }
 
@@ -2058,41 +2409,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16plds_v6 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16pldsV6 = "Standard_D16plds_v6";
 
         /// <summary>
         /// Standard_D2plds_v6 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2pldsV6 = "Standard_D2plds_v6";
 
         /// <summary>
         /// Standard_D32plds_v6 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32pldsV6 = "Standard_D32plds_v6";
 
         /// <summary>
         /// Standard_D48plds_v6 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48pldsV6 = "Standard_D48plds_v6";
 
         /// <summary>
         /// Standard_D4plds_v6 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4pldsV6 = "Standard_D4plds_v6";
 
         /// <summary>
         /// Standard_D64plds_v6 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64pldsV6 = "Standard_D64plds_v6";
 
         /// <summary>
         /// Standard_D8plds_v6 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8pldsV6 = "Standard_D8plds_v6";
 
         /// <summary>
         /// Standard_D96plds_v6 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96pldsV6 = "Standard_D96plds_v6";
     }
 
@@ -2104,36 +2463,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16pls_v5 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16plsV5 = "Standard_D16pls_v5";
 
         /// <summary>
         /// Standard_D2pls_v5 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2plsV5 = "Standard_D2pls_v5";
 
         /// <summary>
         /// Standard_D32pls_v5 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32plsV5 = "Standard_D32pls_v5";
 
         /// <summary>
         /// Standard_D48pls_v5 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48plsV5 = "Standard_D48pls_v5";
 
         /// <summary>
         /// Standard_D4pls_v5 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4plsV5 = "Standard_D4pls_v5";
 
         /// <summary>
         /// Standard_D64pls_v5 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64plsV5 = "Standard_D64pls_v5";
 
         /// <summary>
         /// Standard_D8pls_v5 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8plsV5 = "Standard_D8pls_v5";
     }
 
@@ -2145,41 +2511,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16pls_v6 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16plsV6 = "Standard_D16pls_v6";
 
         /// <summary>
         /// Standard_D2pls_v6 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2plsV6 = "Standard_D2pls_v6";
 
         /// <summary>
         /// Standard_D32pls_v6 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32plsV6 = "Standard_D32pls_v6";
 
         /// <summary>
         /// Standard_D48pls_v6 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48plsV6 = "Standard_D48pls_v6";
 
         /// <summary>
         /// Standard_D4pls_v6 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4plsV6 = "Standard_D4pls_v6";
 
         /// <summary>
         /// Standard_D64pls_v6 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64plsV6 = "Standard_D64pls_v6";
 
         /// <summary>
         /// Standard_D8pls_v6 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8plsV6 = "Standard_D8pls_v6";
 
         /// <summary>
         /// Standard_D96pls_v6 — 96 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96plsV6 = "Standard_D96pls_v6";
     }
 
@@ -2191,36 +2565,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16ps_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16psV5 = "Standard_D16ps_v5";
 
         /// <summary>
         /// Standard_D2ps_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2psV5 = "Standard_D2ps_v5";
 
         /// <summary>
         /// Standard_D32ps_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32psV5 = "Standard_D32ps_v5";
 
         /// <summary>
         /// Standard_D48ps_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48psV5 = "Standard_D48ps_v5";
 
         /// <summary>
         /// Standard_D4ps_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4psV5 = "Standard_D4ps_v5";
 
         /// <summary>
         /// Standard_D64ps_v5 — 64 vCPUs — 208 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64psV5 = "Standard_D64ps_v5";
 
         /// <summary>
         /// Standard_D8ps_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8psV5 = "Standard_D8ps_v5";
     }
 
@@ -2232,41 +2613,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16ps_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16psV6 = "Standard_D16ps_v6";
 
         /// <summary>
         /// Standard_D2ps_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2psV6 = "Standard_D2ps_v6";
 
         /// <summary>
         /// Standard_D32ps_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32psV6 = "Standard_D32ps_v6";
 
         /// <summary>
         /// Standard_D48ps_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48psV6 = "Standard_D48ps_v6";
 
         /// <summary>
         /// Standard_D4ps_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4psV6 = "Standard_D4ps_v6";
 
         /// <summary>
         /// Standard_D64ps_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64psV6 = "Standard_D64ps_v6";
 
         /// <summary>
         /// Standard_D8ps_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8psV6 = "Standard_D8ps_v6";
 
         /// <summary>
         /// Standard_D96ps_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96psV6 = "Standard_D96ps_v6";
     }
 
@@ -2278,36 +2667,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DS11 — 2 vCPUs — 14 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS11 = "Standard_DS11";
 
         /// <summary>
         /// Standard_DS12 — 4 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS12 = "Standard_DS12";
 
         /// <summary>
         /// Standard_DS13 — 8 vCPUs — 56 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS13 = "Standard_DS13";
 
         /// <summary>
         /// Standard_DS14 — 16 vCPUs — 112 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS14 = "Standard_DS14";
 
         /// <summary>
         /// Standard_DS2 — 2 vCPUs — 7 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS2 = "Standard_DS2";
 
         /// <summary>
         /// Standard_DS3 — 4 vCPUs — 14 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS3 = "Standard_DS3";
 
         /// <summary>
         /// Standard_DS4 — 8 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS4 = "Standard_DS4";
     }
 
@@ -2319,81 +2715,97 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DS11-1_v2 — 2 vCPUs — 14 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS111V2 = "Standard_DS11-1_v2";
 
         /// <summary>
         /// Standard_DS11_v2 — 2 vCPUs — 14 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS11V2 = "Standard_DS11_v2";
 
         /// <summary>
         /// Standard_DS12-1_v2 — 4 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS121V2 = "Standard_DS12-1_v2";
 
         /// <summary>
         /// Standard_DS12-2_v2 — 4 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS122V2 = "Standard_DS12-2_v2";
 
         /// <summary>
         /// Standard_DS12_v2 — 4 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS12V2 = "Standard_DS12_v2";
 
         /// <summary>
         /// Standard_DS13-2_v2 — 8 vCPUs — 56 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS132V2 = "Standard_DS13-2_v2";
 
         /// <summary>
         /// Standard_DS13-4_v2 — 8 vCPUs — 56 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS134V2 = "Standard_DS13-4_v2";
 
         /// <summary>
         /// Standard_DS13_v2 — 8 vCPUs — 56 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS13V2 = "Standard_DS13_v2";
 
         /// <summary>
         /// Standard_DS14-4_v2 — 16 vCPUs — 112 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS144V2 = "Standard_DS14-4_v2";
 
         /// <summary>
         /// Standard_DS14-8_v2 — 16 vCPUs — 112 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS148V2 = "Standard_DS14-8_v2";
 
         /// <summary>
         /// Standard_DS14_v2 — 16 vCPUs — 112 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS14V2 = "Standard_DS14_v2";
 
         /// <summary>
         /// Standard_DS15_v2 — 20 vCPUs — 140 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS15V2 = "Standard_DS15_v2";
 
         /// <summary>
         /// Standard_DS2_v2 — 2 vCPUs — 7 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS2V2 = "Standard_DS2_v2";
 
         /// <summary>
         /// Standard_DS3_v2 — 4 vCPUs — 14 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS3V2 = "Standard_DS3_v2";
 
         /// <summary>
         /// Standard_DS4_v2 — 8 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS4V2 = "Standard_DS4_v2";
 
         /// <summary>
         /// Standard_DS5_v2 — 16 vCPUs — 56 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS5V2 = "Standard_DS5_v2";
     }
 
@@ -2405,41 +2817,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_DS11_v2_Promo — 2 vCPUs — 14 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS11V2Promo = "Standard_DS11_v2_Promo";
 
         /// <summary>
         /// Standard_DS12_v2_Promo — 4 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS12V2Promo = "Standard_DS12_v2_Promo";
 
         /// <summary>
         /// Standard_DS13_v2_Promo — 8 vCPUs — 56 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS13V2Promo = "Standard_DS13_v2_Promo";
 
         /// <summary>
         /// Standard_DS14_v2_Promo — 16 vCPUs — 112 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS14V2Promo = "Standard_DS14_v2_Promo";
 
         /// <summary>
         /// Standard_DS2_v2_Promo — 2 vCPUs — 7 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS2V2Promo = "Standard_DS2_v2_Promo";
 
         /// <summary>
         /// Standard_DS3_v2_Promo — 4 vCPUs — 14 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS3V2Promo = "Standard_DS3_v2_Promo";
 
         /// <summary>
         /// Standard_DS4_v2_Promo — 8 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS4V2Promo = "Standard_DS4_v2_Promo";
 
         /// <summary>
         /// Standard_DS5_v2_Promo — 16 vCPUs — 56 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardDS5V2Promo = "Standard_DS5_v2_Promo";
     }
 
@@ -2451,36 +2871,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16s_v3 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16sV3 = "Standard_D16s_v3";
 
         /// <summary>
         /// Standard_D2s_v3 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2sV3 = "Standard_D2s_v3";
 
         /// <summary>
         /// Standard_D32s_v3 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32sV3 = "Standard_D32s_v3";
 
         /// <summary>
         /// Standard_D48s_v3 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48sV3 = "Standard_D48s_v3";
 
         /// <summary>
         /// Standard_D4s_v3 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4sV3 = "Standard_D4s_v3";
 
         /// <summary>
         /// Standard_D64s_v3 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64sV3 = "Standard_D64s_v3";
 
         /// <summary>
         /// Standard_D8s_v3 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8sV3 = "Standard_D8s_v3";
     }
 
@@ -2492,36 +2919,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16s_v4 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16sV4 = "Standard_D16s_v4";
 
         /// <summary>
         /// Standard_D2s_v4 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2sV4 = "Standard_D2s_v4";
 
         /// <summary>
         /// Standard_D32s_v4 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32sV4 = "Standard_D32s_v4";
 
         /// <summary>
         /// Standard_D48s_v4 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48sV4 = "Standard_D48s_v4";
 
         /// <summary>
         /// Standard_D4s_v4 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4sV4 = "Standard_D4s_v4";
 
         /// <summary>
         /// Standard_D64s_v4 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64sV4 = "Standard_D64s_v4";
 
         /// <summary>
         /// Standard_D8s_v4 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8sV4 = "Standard_D8s_v4";
     }
 
@@ -2533,41 +2967,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16s_v5 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16sV5 = "Standard_D16s_v5";
 
         /// <summary>
         /// Standard_D2s_v5 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2sV5 = "Standard_D2s_v5";
 
         /// <summary>
         /// Standard_D32s_v5 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32sV5 = "Standard_D32s_v5";
 
         /// <summary>
         /// Standard_D48s_v5 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48sV5 = "Standard_D48s_v5";
 
         /// <summary>
         /// Standard_D4s_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4sV5 = "Standard_D4s_v5";
 
         /// <summary>
         /// Standard_D64s_v5 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64sV5 = "Standard_D64s_v5";
 
         /// <summary>
         /// Standard_D8s_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8sV5 = "Standard_D8s_v5";
 
         /// <summary>
         /// Standard_D96s_v5 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96sV5 = "Standard_D96s_v5";
     }
 
@@ -2579,51 +3021,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D128s_v6 — 128 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD128sV6 = "Standard_D128s_v6";
 
         /// <summary>
         /// Standard_D16s_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16sV6 = "Standard_D16s_v6";
 
         /// <summary>
         /// Standard_D192s_v6 — 192 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD192sV6 = "Standard_D192s_v6";
 
         /// <summary>
         /// Standard_D2s_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2sV6 = "Standard_D2s_v6";
 
         /// <summary>
         /// Standard_D32s_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32sV6 = "Standard_D32s_v6";
 
         /// <summary>
         /// Standard_D48s_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48sV6 = "Standard_D48s_v6";
 
         /// <summary>
         /// Standard_D4s_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4sV6 = "Standard_D4s_v6";
 
         /// <summary>
         /// Standard_D64s_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64sV6 = "Standard_D64s_v6";
 
         /// <summary>
         /// Standard_D8s_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8sV6 = "Standard_D8s_v6";
 
         /// <summary>
         /// Standard_D96s_v6 — 96 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96sV6 = "Standard_D96s_v6";
     }
 
@@ -2635,46 +3087,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D11_v2 — 2 vCPUs — 14 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD11V2 = "Standard_D11_v2";
 
         /// <summary>
         /// Standard_D12_v2 — 4 vCPUs — 28 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD12V2 = "Standard_D12_v2";
 
         /// <summary>
         /// Standard_D13_v2 — 8 vCPUs — 56 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD13V2 = "Standard_D13_v2";
 
         /// <summary>
         /// Standard_D14_v2 — 16 vCPUs — 112 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD14V2 = "Standard_D14_v2";
 
         /// <summary>
         /// Standard_D15_v2 — 20 vCPUs — 140 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD15V2 = "Standard_D15_v2";
 
         /// <summary>
         /// Standard_D2_v2 — 2 vCPUs — 7 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2V2 = "Standard_D2_v2";
 
         /// <summary>
         /// Standard_D3_v2 — 4 vCPUs — 14 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD3V2 = "Standard_D3_v2";
 
         /// <summary>
         /// Standard_D4_v2 — 8 vCPUs — 28 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4V2 = "Standard_D4_v2";
 
         /// <summary>
         /// Standard_D5_v2 — 16 vCPUs — 56 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD5V2 = "Standard_D5_v2";
     }
 
@@ -2686,41 +3147,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D11_v2_Promo — 2 vCPUs — 14 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD11V2Promo = "Standard_D11_v2_Promo";
 
         /// <summary>
         /// Standard_D12_v2_Promo — 4 vCPUs — 28 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD12V2Promo = "Standard_D12_v2_Promo";
 
         /// <summary>
         /// Standard_D13_v2_Promo — 8 vCPUs — 56 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD13V2Promo = "Standard_D13_v2_Promo";
 
         /// <summary>
         /// Standard_D14_v2_Promo — 16 vCPUs — 112 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD14V2Promo = "Standard_D14_v2_Promo";
 
         /// <summary>
         /// Standard_D2_v2_Promo — 2 vCPUs — 7 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2V2Promo = "Standard_D2_v2_Promo";
 
         /// <summary>
         /// Standard_D3_v2_Promo — 4 vCPUs — 14 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD3V2Promo = "Standard_D3_v2_Promo";
 
         /// <summary>
         /// Standard_D4_v2_Promo — 8 vCPUs — 28 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4V2Promo = "Standard_D4_v2_Promo";
 
         /// <summary>
         /// Standard_D5_v2_Promo — 16 vCPUs — 56 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD5V2Promo = "Standard_D5_v2_Promo";
     }
 
@@ -2732,36 +3201,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16_v3 — 16 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16V3 = "Standard_D16_v3";
 
         /// <summary>
         /// Standard_D2_v3 — 2 vCPUs — 8 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2V3 = "Standard_D2_v3";
 
         /// <summary>
         /// Standard_D32_v3 — 32 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32V3 = "Standard_D32_v3";
 
         /// <summary>
         /// Standard_D48_v3 — 48 vCPUs — 192 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48V3 = "Standard_D48_v3";
 
         /// <summary>
         /// Standard_D4_v3 — 4 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4V3 = "Standard_D4_v3";
 
         /// <summary>
         /// Standard_D64_v3 — 64 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64V3 = "Standard_D64_v3";
 
         /// <summary>
         /// Standard_D8_v3 — 8 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8V3 = "Standard_D8_v3";
     }
 
@@ -2773,36 +3249,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16_v4 — 16 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16V4 = "Standard_D16_v4";
 
         /// <summary>
         /// Standard_D2_v4 — 2 vCPUs — 8 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2V4 = "Standard_D2_v4";
 
         /// <summary>
         /// Standard_D32_v4 — 32 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32V4 = "Standard_D32_v4";
 
         /// <summary>
         /// Standard_D48_v4 — 48 vCPUs — 192 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48V4 = "Standard_D48_v4";
 
         /// <summary>
         /// Standard_D4_v4 — 4 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4V4 = "Standard_D4_v4";
 
         /// <summary>
         /// Standard_D64_v4 — 64 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64V4 = "Standard_D64_v4";
 
         /// <summary>
         /// Standard_D8_v4 — 8 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8V4 = "Standard_D8_v4";
     }
 
@@ -2814,41 +3297,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_D16_v5 — 16 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD16V5 = "Standard_D16_v5";
 
         /// <summary>
         /// Standard_D2_v5 — 2 vCPUs — 8 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD2V5 = "Standard_D2_v5";
 
         /// <summary>
         /// Standard_D32_v5 — 32 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD32V5 = "Standard_D32_v5";
 
         /// <summary>
         /// Standard_D48_v5 — 48 vCPUs — 192 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD48V5 = "Standard_D48_v5";
 
         /// <summary>
         /// Standard_D4_v5 — 4 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD4V5 = "Standard_D4_v5";
 
         /// <summary>
         /// Standard_D64_v5 — 64 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD64V5 = "Standard_D64_v5";
 
         /// <summary>
         /// Standard_D8_v5 — 8 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD8V5 = "Standard_D8_v5";
 
         /// <summary>
         /// Standard_D96_v5 — 96 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardD96V5 = "Standard_D96_v5";
     }
 
@@ -2860,101 +3351,121 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16-4ads_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164adsV5 = "Standard_E16-4ads_v5";
 
         /// <summary>
         /// Standard_E16-8ads_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168adsV5 = "Standard_E16-8ads_v5";
 
         /// <summary>
         /// Standard_E16ads_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16adsV5 = "Standard_E16ads_v5";
 
         /// <summary>
         /// Standard_E20ads_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20adsV5 = "Standard_E20ads_v5";
 
         /// <summary>
         /// Standard_E2ads_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2adsV5 = "Standard_E2ads_v5";
 
         /// <summary>
         /// Standard_E32-16ads_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216adsV5 = "Standard_E32-16ads_v5";
 
         /// <summary>
         /// Standard_E32-8ads_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328adsV5 = "Standard_E32-8ads_v5";
 
         /// <summary>
         /// Standard_E32ads_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32adsV5 = "Standard_E32ads_v5";
 
         /// <summary>
         /// Standard_E4-2ads_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42adsV5 = "Standard_E4-2ads_v5";
 
         /// <summary>
         /// Standard_E48ads_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48adsV5 = "Standard_E48ads_v5";
 
         /// <summary>
         /// Standard_E4ads_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4adsV5 = "Standard_E4ads_v5";
 
         /// <summary>
         /// Standard_E64-16ads_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416adsV5 = "Standard_E64-16ads_v5";
 
         /// <summary>
         /// Standard_E64-32ads_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432adsV5 = "Standard_E64-32ads_v5";
 
         /// <summary>
         /// Standard_E64ads_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64adsV5 = "Standard_E64ads_v5";
 
         /// <summary>
         /// Standard_E8-2ads_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82adsV5 = "Standard_E8-2ads_v5";
 
         /// <summary>
         /// Standard_E8-4ads_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84adsV5 = "Standard_E8-4ads_v5";
 
         /// <summary>
         /// Standard_E8ads_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8adsV5 = "Standard_E8ads_v5";
 
         /// <summary>
         /// Standard_E96-24ads_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624adsV5 = "Standard_E96-24ads_v5";
 
         /// <summary>
         /// Standard_E96-48ads_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648adsV5 = "Standard_E96-48ads_v5";
 
         /// <summary>
         /// Standard_E96ads_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96adsV5 = "Standard_E96ads_v5";
     }
 
@@ -2966,116 +3477,139 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E128-32ads_v7 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE12832adsV7 = "Standard_E128-32ads_v7";
 
         /// <summary>
         /// Standard_E128-64ads_v7 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE12864adsV7 = "Standard_E128-64ads_v7";
 
         /// <summary>
         /// Standard_E128ads_v7 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE128adsV7 = "Standard_E128ads_v7";
 
         /// <summary>
         /// Standard_E16-4ads_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164adsV7 = "Standard_E16-4ads_v7";
 
         /// <summary>
         /// Standard_E16-8ads_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168adsV7 = "Standard_E16-8ads_v7";
 
         /// <summary>
         /// Standard_E160ads_v7 — 160 vCPUs — 1280 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE160adsV7 = "Standard_E160ads_v7";
 
         /// <summary>
         /// Standard_E16ads_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16adsV7 = "Standard_E16ads_v7";
 
         /// <summary>
         /// Standard_E2ads_v7 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2adsV7 = "Standard_E2ads_v7";
 
         /// <summary>
         /// Standard_E32-16ads_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216adsV7 = "Standard_E32-16ads_v7";
 
         /// <summary>
         /// Standard_E32-8ads_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328adsV7 = "Standard_E32-8ads_v7";
 
         /// <summary>
         /// Standard_E32ads_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32adsV7 = "Standard_E32ads_v7";
 
         /// <summary>
         /// Standard_E4-2ads_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42adsV7 = "Standard_E4-2ads_v7";
 
         /// <summary>
         /// Standard_E48ads_v7 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48adsV7 = "Standard_E48ads_v7";
 
         /// <summary>
         /// Standard_E4ads_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4adsV7 = "Standard_E4ads_v7";
 
         /// <summary>
         /// Standard_E64-16ads_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416adsV7 = "Standard_E64-16ads_v7";
 
         /// <summary>
         /// Standard_E64-32ads_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432adsV7 = "Standard_E64-32ads_v7";
 
         /// <summary>
         /// Standard_E64ads_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64adsV7 = "Standard_E64ads_v7";
 
         /// <summary>
         /// Standard_E8-2ads_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82adsV7 = "Standard_E8-2ads_v7";
 
         /// <summary>
         /// Standard_E8-4ads_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84adsV7 = "Standard_E8-4ads_v7";
 
         /// <summary>
         /// Standard_E8ads_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8adsV7 = "Standard_E8ads_v7";
 
         /// <summary>
         /// Standard_E96-24ads_v7 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624adsV7 = "Standard_E96-24ads_v7";
 
         /// <summary>
         /// Standard_E96-48ads_v7 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648adsV7 = "Standard_E96-48ads_v7";
 
         /// <summary>
         /// Standard_E96ads_v7 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96adsV7 = "Standard_E96ads_v7";
     }
 
@@ -3087,56 +3621,67 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16ads_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16adsV6 = "Standard_E16ads_v6";
 
         /// <summary>
         /// Standard_E20ads_v6 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20adsV6 = "Standard_E20ads_v6";
 
         /// <summary>
         /// Standard_E2ads_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2adsV6 = "Standard_E2ads_v6";
 
         /// <summary>
         /// Standard_E32ads_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32adsV6 = "Standard_E32ads_v6";
 
         /// <summary>
         /// Standard_E48ads_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48adsV6 = "Standard_E48ads_v6";
 
         /// <summary>
         /// Standard_E4ads_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4adsV6 = "Standard_E4ads_v6";
 
         /// <summary>
         /// Standard_E64ads_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64adsV6 = "Standard_E64ads_v6";
 
         /// <summary>
         /// Standard_E8ads_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8adsV6 = "Standard_E8ads_v6";
 
         /// <summary>
         /// Standard_E96-24ads_v6 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624adsV6 = "Standard_E96-24ads_v6";
 
         /// <summary>
         /// Standard_E96-48ads_v6 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648adsV6 = "Standard_E96-48ads_v6";
 
         /// <summary>
         /// Standard_E96ads_v6 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96adsV6 = "Standard_E96ads_v6";
     }
 
@@ -3148,101 +3693,121 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16-4as_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164asV4 = "Standard_E16-4as_v4";
 
         /// <summary>
         /// Standard_E16-8as_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168asV4 = "Standard_E16-8as_v4";
 
         /// <summary>
         /// Standard_E16as_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16asV4 = "Standard_E16as_v4";
 
         /// <summary>
         /// Standard_E20as_v4 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20asV4 = "Standard_E20as_v4";
 
         /// <summary>
         /// Standard_E2as_v4 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2asV4 = "Standard_E2as_v4";
 
         /// <summary>
         /// Standard_E32-16as_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216asV4 = "Standard_E32-16as_v4";
 
         /// <summary>
         /// Standard_E32-8as_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328asV4 = "Standard_E32-8as_v4";
 
         /// <summary>
         /// Standard_E32as_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32asV4 = "Standard_E32as_v4";
 
         /// <summary>
         /// Standard_E4-2as_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42asV4 = "Standard_E4-2as_v4";
 
         /// <summary>
         /// Standard_E48as_v4 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48asV4 = "Standard_E48as_v4";
 
         /// <summary>
         /// Standard_E4as_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4asV4 = "Standard_E4as_v4";
 
         /// <summary>
         /// Standard_E64-16as_v4 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416asV4 = "Standard_E64-16as_v4";
 
         /// <summary>
         /// Standard_E64-32as_v4 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432asV4 = "Standard_E64-32as_v4";
 
         /// <summary>
         /// Standard_E64as_v4 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64asV4 = "Standard_E64as_v4";
 
         /// <summary>
         /// Standard_E8-2as_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82asV4 = "Standard_E8-2as_v4";
 
         /// <summary>
         /// Standard_E8-4as_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84asV4 = "Standard_E8-4as_v4";
 
         /// <summary>
         /// Standard_E8as_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8asV4 = "Standard_E8as_v4";
 
         /// <summary>
         /// Standard_E96-24as_v4 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624asV4 = "Standard_E96-24as_v4";
 
         /// <summary>
         /// Standard_E96-48as_v4 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648asV4 = "Standard_E96-48as_v4";
 
         /// <summary>
         /// Standard_E96as_v4 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96asV4 = "Standard_E96as_v4";
     }
 
@@ -3254,101 +3819,121 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16-4as_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164asV5 = "Standard_E16-4as_v5";
 
         /// <summary>
         /// Standard_E16-8as_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168asV5 = "Standard_E16-8as_v5";
 
         /// <summary>
         /// Standard_E16as_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16asV5 = "Standard_E16as_v5";
 
         /// <summary>
         /// Standard_E20as_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20asV5 = "Standard_E20as_v5";
 
         /// <summary>
         /// Standard_E2as_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2asV5 = "Standard_E2as_v5";
 
         /// <summary>
         /// Standard_E32-16as_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216asV5 = "Standard_E32-16as_v5";
 
         /// <summary>
         /// Standard_E32-8as_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328asV5 = "Standard_E32-8as_v5";
 
         /// <summary>
         /// Standard_E32as_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32asV5 = "Standard_E32as_v5";
 
         /// <summary>
         /// Standard_E4-2as_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42asV5 = "Standard_E4-2as_v5";
 
         /// <summary>
         /// Standard_E48as_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48asV5 = "Standard_E48as_v5";
 
         /// <summary>
         /// Standard_E4as_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4asV5 = "Standard_E4as_v5";
 
         /// <summary>
         /// Standard_E64-16as_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416asV5 = "Standard_E64-16as_v5";
 
         /// <summary>
         /// Standard_E64-32as_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432asV5 = "Standard_E64-32as_v5";
 
         /// <summary>
         /// Standard_E64as_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64asV5 = "Standard_E64as_v5";
 
         /// <summary>
         /// Standard_E8-2as_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82asV5 = "Standard_E8-2as_v5";
 
         /// <summary>
         /// Standard_E8-4as_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84asV5 = "Standard_E8-4as_v5";
 
         /// <summary>
         /// Standard_E8as_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8asV5 = "Standard_E8as_v5";
 
         /// <summary>
         /// Standard_E96-24as_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624asV5 = "Standard_E96-24as_v5";
 
         /// <summary>
         /// Standard_E96-48as_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648asV5 = "Standard_E96-48as_v5";
 
         /// <summary>
         /// Standard_E96as_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96asV5 = "Standard_E96as_v5";
     }
 
@@ -3360,116 +3945,139 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E128-32as_v7 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE12832asV7 = "Standard_E128-32as_v7";
 
         /// <summary>
         /// Standard_E128-64as_v7 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE12864asV7 = "Standard_E128-64as_v7";
 
         /// <summary>
         /// Standard_E128as_v7 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE128asV7 = "Standard_E128as_v7";
 
         /// <summary>
         /// Standard_E16-4as_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164asV7 = "Standard_E16-4as_v7";
 
         /// <summary>
         /// Standard_E16-8as_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168asV7 = "Standard_E16-8as_v7";
 
         /// <summary>
         /// Standard_E160as_v7 — 160 vCPUs — 1280 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE160asV7 = "Standard_E160as_v7";
 
         /// <summary>
         /// Standard_E16as_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16asV7 = "Standard_E16as_v7";
 
         /// <summary>
         /// Standard_E2as_v7 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2asV7 = "Standard_E2as_v7";
 
         /// <summary>
         /// Standard_E32-16as_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216asV7 = "Standard_E32-16as_v7";
 
         /// <summary>
         /// Standard_E32-8as_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328asV7 = "Standard_E32-8as_v7";
 
         /// <summary>
         /// Standard_E32as_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32asV7 = "Standard_E32as_v7";
 
         /// <summary>
         /// Standard_E4-2as_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42asV7 = "Standard_E4-2as_v7";
 
         /// <summary>
         /// Standard_E48as_v7 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48asV7 = "Standard_E48as_v7";
 
         /// <summary>
         /// Standard_E4as_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4asV7 = "Standard_E4as_v7";
 
         /// <summary>
         /// Standard_E64-16as_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416asV7 = "Standard_E64-16as_v7";
 
         /// <summary>
         /// Standard_E64-32as_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432asV7 = "Standard_E64-32as_v7";
 
         /// <summary>
         /// Standard_E64as_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64asV7 = "Standard_E64as_v7";
 
         /// <summary>
         /// Standard_E8-2as_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82asV7 = "Standard_E8-2as_v7";
 
         /// <summary>
         /// Standard_E8-4as_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84asV7 = "Standard_E8-4as_v7";
 
         /// <summary>
         /// Standard_E8as_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8asV7 = "Standard_E8as_v7";
 
         /// <summary>
         /// Standard_E96-24as_v7 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624asV7 = "Standard_E96-24as_v7";
 
         /// <summary>
         /// Standard_E96-48as_v7 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648asV7 = "Standard_E96-48as_v7";
 
         /// <summary>
         /// Standard_E96as_v7 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96asV7 = "Standard_E96as_v7";
     }
 
@@ -3481,46 +4089,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16a_v4 — 16 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16aV4 = "Standard_E16a_v4";
 
         /// <summary>
         /// Standard_E20a_v4 — 20 vCPUs — 160 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20aV4 = "Standard_E20a_v4";
 
         /// <summary>
         /// Standard_E2a_v4 — 2 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2aV4 = "Standard_E2a_v4";
 
         /// <summary>
         /// Standard_E32a_v4 — 32 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32aV4 = "Standard_E32a_v4";
 
         /// <summary>
         /// Standard_E48a_v4 — 48 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48aV4 = "Standard_E48a_v4";
 
         /// <summary>
         /// Standard_E4a_v4 — 4 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4aV4 = "Standard_E4a_v4";
 
         /// <summary>
         /// Standard_E64a_v4 — 64 vCPUs — 512 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64aV4 = "Standard_E64a_v4";
 
         /// <summary>
         /// Standard_E8a_v4 — 8 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8aV4 = "Standard_E8a_v4";
 
         /// <summary>
         /// Standard_E96a_v4 — 96 vCPUs — 672 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96aV4 = "Standard_E96a_v4";
     }
 
@@ -3532,46 +4149,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16as_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16asV6 = "Standard_E16as_v6";
 
         /// <summary>
         /// Standard_E20as_v6 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20asV6 = "Standard_E20as_v6";
 
         /// <summary>
         /// Standard_E2as_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2asV6 = "Standard_E2as_v6";
 
         /// <summary>
         /// Standard_E32as_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32asV6 = "Standard_E32as_v6";
 
         /// <summary>
         /// Standard_E48as_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48asV6 = "Standard_E48as_v6";
 
         /// <summary>
         /// Standard_E4as_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4asV6 = "Standard_E4as_v6";
 
         /// <summary>
         /// Standard_E64as_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64asV6 = "Standard_E64as_v6";
 
         /// <summary>
         /// Standard_E8as_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8asV6 = "Standard_E8as_v6";
 
         /// <summary>
         /// Standard_E96as_v6 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96asV6 = "Standard_E96as_v6";
     }
 
@@ -3583,41 +4209,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16bds_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16bdsV5 = "Standard_E16bds_v5";
 
         /// <summary>
         /// Standard_E2bds_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2bdsV5 = "Standard_E2bds_v5";
 
         /// <summary>
         /// Standard_E32bds_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32bdsV5 = "Standard_E32bds_v5";
 
         /// <summary>
         /// Standard_E48bds_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48bdsV5 = "Standard_E48bds_v5";
 
         /// <summary>
         /// Standard_E4bds_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4bdsV5 = "Standard_E4bds_v5";
 
         /// <summary>
         /// Standard_E64bds_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64bdsV5 = "Standard_E64bds_v5";
 
         /// <summary>
         /// Standard_E8bds_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8bdsV5 = "Standard_E8bds_v5";
 
         /// <summary>
         /// Standard_E96bds_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96bdsV5 = "Standard_E96bds_v5";
     }
 
@@ -3629,41 +4263,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16bs_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16bsV5 = "Standard_E16bs_v5";
 
         /// <summary>
         /// Standard_E2bs_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2bsV5 = "Standard_E2bs_v5";
 
         /// <summary>
         /// Standard_E32bs_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32bsV5 = "Standard_E32bs_v5";
 
         /// <summary>
         /// Standard_E48bs_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48bsV5 = "Standard_E48bs_v5";
 
         /// <summary>
         /// Standard_E4bs_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4bsV5 = "Standard_E4bs_v5";
 
         /// <summary>
         /// Standard_E64bs_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64bsV5 = "Standard_E64bs_v5";
 
         /// <summary>
         /// Standard_E8bs_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8bsV5 = "Standard_E8bs_v5";
 
         /// <summary>
         /// Standard_E96bs_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96bsV5 = "Standard_E96bs_v5";
     }
 
@@ -3675,41 +4317,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC16as_cc_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16asCcV5 = "Standard_EC16as_cc_v5";
 
         /// <summary>
         /// Standard_EC20as_cc_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC20asCcV5 = "Standard_EC20as_cc_v5";
 
         /// <summary>
         /// Standard_EC32as_cc_v5 — 32 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32asCcV5 = "Standard_EC32as_cc_v5";
 
         /// <summary>
         /// Standard_EC48as_cc_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48asCcV5 = "Standard_EC48as_cc_v5";
 
         /// <summary>
         /// Standard_EC4as_cc_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4asCcV5 = "Standard_EC4as_cc_v5";
 
         /// <summary>
         /// Standard_EC64as_cc_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64asCcV5 = "Standard_EC64as_cc_v5";
 
         /// <summary>
         /// Standard_EC8as_cc_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8asCcV5 = "Standard_EC8as_cc_v5";
 
         /// <summary>
         /// Standard_EC96as_cc_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC96asCcV5 = "Standard_EC96as_cc_v5";
     }
 
@@ -3721,41 +4371,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC16ads_cc_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16adsCcV5 = "Standard_EC16ads_cc_v5";
 
         /// <summary>
         /// Standard_EC20ads_cc_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC20adsCcV5 = "Standard_EC20ads_cc_v5";
 
         /// <summary>
         /// Standard_EC32ads_cc_v5 — 32 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32adsCcV5 = "Standard_EC32ads_cc_v5";
 
         /// <summary>
         /// Standard_EC48ads_cc_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48adsCcV5 = "Standard_EC48ads_cc_v5";
 
         /// <summary>
         /// Standard_EC4ads_cc_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4adsCcV5 = "Standard_EC4ads_cc_v5";
 
         /// <summary>
         /// Standard_EC64ads_cc_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64adsCcV5 = "Standard_EC64ads_cc_v5";
 
         /// <summary>
         /// Standard_EC8ads_cc_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8adsCcV5 = "Standard_EC8ads_cc_v5";
 
         /// <summary>
         /// Standard_EC96ads_cc_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC96adsCcV5 = "Standard_EC96ads_cc_v5";
     }
 
@@ -3767,46 +4425,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC16ads_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16adsV5 = "Standard_EC16ads_v5";
 
         /// <summary>
         /// Standard_EC20ads_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC20adsV5 = "Standard_EC20ads_v5";
 
         /// <summary>
         /// Standard_EC2ads_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC2adsV5 = "Standard_EC2ads_v5";
 
         /// <summary>
         /// Standard_EC32ads_v5 — 32 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32adsV5 = "Standard_EC32ads_v5";
 
         /// <summary>
         /// Standard_EC48ads_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48adsV5 = "Standard_EC48ads_v5";
 
         /// <summary>
         /// Standard_EC4ads_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4adsV5 = "Standard_EC4ads_v5";
 
         /// <summary>
         /// Standard_EC64ads_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64adsV5 = "Standard_EC64ads_v5";
 
         /// <summary>
         /// Standard_EC8ads_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8adsV5 = "Standard_EC8ads_v5";
 
         /// <summary>
         /// Standard_EC96ads_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC96adsV5 = "Standard_EC96ads_v5";
     }
 
@@ -3818,41 +4485,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC16ads_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16adsV6 = "Standard_EC16ads_v6";
 
         /// <summary>
         /// Standard_EC2ads_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC2adsV6 = "Standard_EC2ads_v6";
 
         /// <summary>
         /// Standard_EC32ads_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32adsV6 = "Standard_EC32ads_v6";
 
         /// <summary>
         /// Standard_EC48ads_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48adsV6 = "Standard_EC48ads_v6";
 
         /// <summary>
         /// Standard_EC4ads_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4adsV6 = "Standard_EC4ads_v6";
 
         /// <summary>
         /// Standard_EC64ads_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64adsV6 = "Standard_EC64ads_v6";
 
         /// <summary>
         /// Standard_EC8ads_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8adsV6 = "Standard_EC8ads_v6";
 
         /// <summary>
         /// Standard_EC96ads_v6 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC96adsV6 = "Standard_EC96ads_v6";
     }
 
@@ -3864,46 +4539,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC16as_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16asV5 = "Standard_EC16as_v5";
 
         /// <summary>
         /// Standard_EC20as_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC20asV5 = "Standard_EC20as_v5";
 
         /// <summary>
         /// Standard_EC2as_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC2asV5 = "Standard_EC2as_v5";
 
         /// <summary>
         /// Standard_EC32as_v5 — 32 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32asV5 = "Standard_EC32as_v5";
 
         /// <summary>
         /// Standard_EC48as_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48asV5 = "Standard_EC48as_v5";
 
         /// <summary>
         /// Standard_EC4as_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4asV5 = "Standard_EC4as_v5";
 
         /// <summary>
         /// Standard_EC64as_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64asV5 = "Standard_EC64as_v5";
 
         /// <summary>
         /// Standard_EC8as_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8asV5 = "Standard_EC8as_v5";
 
         /// <summary>
         /// Standard_EC96as_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC96asV5 = "Standard_EC96as_v5";
     }
 
@@ -3915,41 +4599,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC16as_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16asV6 = "Standard_EC16as_v6";
 
         /// <summary>
         /// Standard_EC2as_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC2asV6 = "Standard_EC2as_v6";
 
         /// <summary>
         /// Standard_EC32as_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32asV6 = "Standard_EC32as_v6";
 
         /// <summary>
         /// Standard_EC48as_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48asV6 = "Standard_EC48as_v6";
 
         /// <summary>
         /// Standard_EC4as_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4asV6 = "Standard_EC4as_v6";
 
         /// <summary>
         /// Standard_EC64as_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64asV6 = "Standard_EC64as_v6";
 
         /// <summary>
         /// Standard_EC8as_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8asV6 = "Standard_EC8as_v6";
 
         /// <summary>
         /// Standard_EC96as_v6 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC96asV6 = "Standard_EC96as_v6";
     }
 
@@ -3961,41 +4653,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC128eds_v5 — 128 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC128edsV5 = "Standard_EC128eds_v5";
 
         /// <summary>
         /// Standard_EC16eds_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16edsV5 = "Standard_EC16eds_v5";
 
         /// <summary>
         /// Standard_EC2eds_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC2edsV5 = "Standard_EC2eds_v5";
 
         /// <summary>
         /// Standard_EC32eds_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32edsV5 = "Standard_EC32eds_v5";
 
         /// <summary>
         /// Standard_EC48eds_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48edsV5 = "Standard_EC48eds_v5";
 
         /// <summary>
         /// Standard_EC4eds_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4edsV5 = "Standard_EC4eds_v5";
 
         /// <summary>
         /// Standard_EC64eds_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64edsV5 = "Standard_EC64eds_v5";
 
         /// <summary>
         /// Standard_EC8eds_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8edsV5 = "Standard_EC8eds_v5";
     }
 
@@ -4007,36 +4707,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC16eds_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16edsV6 = "Standard_EC16eds_v6";
 
         /// <summary>
         /// Standard_EC2eds_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC2edsV6 = "Standard_EC2eds_v6";
 
         /// <summary>
         /// Standard_EC32eds_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32edsV6 = "Standard_EC32eds_v6";
 
         /// <summary>
         /// Standard_EC48eds_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48edsV6 = "Standard_EC48eds_v6";
 
         /// <summary>
         /// Standard_EC4eds_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4edsV6 = "Standard_EC4eds_v6";
 
         /// <summary>
         /// Standard_EC64eds_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64edsV6 = "Standard_EC64eds_v6";
 
         /// <summary>
         /// Standard_EC8eds_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8edsV6 = "Standard_EC8eds_v6";
     }
 
@@ -4048,41 +4755,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC128es_v5 — 128 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC128esV5 = "Standard_EC128es_v5";
 
         /// <summary>
         /// Standard_EC16es_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16esV5 = "Standard_EC16es_v5";
 
         /// <summary>
         /// Standard_EC2es_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC2esV5 = "Standard_EC2es_v5";
 
         /// <summary>
         /// Standard_EC32es_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32esV5 = "Standard_EC32es_v5";
 
         /// <summary>
         /// Standard_EC48es_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48esV5 = "Standard_EC48es_v5";
 
         /// <summary>
         /// Standard_EC4es_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4esV5 = "Standard_EC4es_v5";
 
         /// <summary>
         /// Standard_EC64es_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64esV5 = "Standard_EC64es_v5";
 
         /// <summary>
         /// Standard_EC8es_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8esV5 = "Standard_EC8es_v5";
     }
 
@@ -4094,36 +4809,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC16es_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC16esV6 = "Standard_EC16es_v6";
 
         /// <summary>
         /// Standard_EC2es_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC2esV6 = "Standard_EC2es_v6";
 
         /// <summary>
         /// Standard_EC32es_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC32esV6 = "Standard_EC32es_v6";
 
         /// <summary>
         /// Standard_EC48es_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC48esV6 = "Standard_EC48es_v6";
 
         /// <summary>
         /// Standard_EC4es_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC4esV6 = "Standard_EC4es_v6";
 
         /// <summary>
         /// Standard_EC64es_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC64esV6 = "Standard_EC64es_v6";
 
         /// <summary>
         /// Standard_EC8es_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC8esV6 = "Standard_EC8es_v6";
     }
 
@@ -4135,6 +4857,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC96iads_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC96iadsV5 = "Standard_EC96iads_v5";
     }
 
@@ -4146,6 +4869,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC96ias_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC96iasV5 = "Standard_EC96ias_v5";
     }
 
@@ -4157,6 +4881,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC128ieds_v5 — 128 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC128iedsV5 = "Standard_EC128ieds_v5";
     }
 
@@ -4168,6 +4893,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_EC128ies_v5 — 128 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardEC128iesV5 = "Standard_EC128ies_v5";
     }
 
@@ -4179,86 +4905,103 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16-4ds_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164dsV4 = "Standard_E16-4ds_v4";
 
         /// <summary>
         /// Standard_E16-8ds_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168dsV4 = "Standard_E16-8ds_v4";
 
         /// <summary>
         /// Standard_E16ds_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16dsV4 = "Standard_E16ds_v4";
 
         /// <summary>
         /// Standard_E20ds_v4 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20dsV4 = "Standard_E20ds_v4";
 
         /// <summary>
         /// Standard_E2ds_v4 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2dsV4 = "Standard_E2ds_v4";
 
         /// <summary>
         /// Standard_E32-16ds_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216dsV4 = "Standard_E32-16ds_v4";
 
         /// <summary>
         /// Standard_E32-8ds_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328dsV4 = "Standard_E32-8ds_v4";
 
         /// <summary>
         /// Standard_E32ds_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32dsV4 = "Standard_E32ds_v4";
 
         /// <summary>
         /// Standard_E4-2ds_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42dsV4 = "Standard_E4-2ds_v4";
 
         /// <summary>
         /// Standard_E48ds_v4 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48dsV4 = "Standard_E48ds_v4";
 
         /// <summary>
         /// Standard_E4ds_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4dsV4 = "Standard_E4ds_v4";
 
         /// <summary>
         /// Standard_E64-16ds_v4 — 64 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416dsV4 = "Standard_E64-16ds_v4";
 
         /// <summary>
         /// Standard_E64-32ds_v4 — 64 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432dsV4 = "Standard_E64-32ds_v4";
 
         /// <summary>
         /// Standard_E64ds_v4 — 64 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64dsV4 = "Standard_E64ds_v4";
 
         /// <summary>
         /// Standard_E8-2ds_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82dsV4 = "Standard_E8-2ds_v4";
 
         /// <summary>
         /// Standard_E8-4ds_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84dsV4 = "Standard_E8-4ds_v4";
 
         /// <summary>
         /// Standard_E8ds_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8dsV4 = "Standard_E8ds_v4";
     }
 
@@ -4270,101 +5013,121 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16-4ds_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164dsV5 = "Standard_E16-4ds_v5";
 
         /// <summary>
         /// Standard_E16-8ds_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168dsV5 = "Standard_E16-8ds_v5";
 
         /// <summary>
         /// Standard_E16ds_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16dsV5 = "Standard_E16ds_v5";
 
         /// <summary>
         /// Standard_E20ds_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20dsV5 = "Standard_E20ds_v5";
 
         /// <summary>
         /// Standard_E2ds_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2dsV5 = "Standard_E2ds_v5";
 
         /// <summary>
         /// Standard_E32-16ds_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216dsV5 = "Standard_E32-16ds_v5";
 
         /// <summary>
         /// Standard_E32-8ds_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328dsV5 = "Standard_E32-8ds_v5";
 
         /// <summary>
         /// Standard_E32ds_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32dsV5 = "Standard_E32ds_v5";
 
         /// <summary>
         /// Standard_E4-2ds_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42dsV5 = "Standard_E4-2ds_v5";
 
         /// <summary>
         /// Standard_E48ds_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48dsV5 = "Standard_E48ds_v5";
 
         /// <summary>
         /// Standard_E4ds_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4dsV5 = "Standard_E4ds_v5";
 
         /// <summary>
         /// Standard_E64-16ds_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416dsV5 = "Standard_E64-16ds_v5";
 
         /// <summary>
         /// Standard_E64-32ds_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432dsV5 = "Standard_E64-32ds_v5";
 
         /// <summary>
         /// Standard_E64ds_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64dsV5 = "Standard_E64ds_v5";
 
         /// <summary>
         /// Standard_E8-2ds_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82dsV5 = "Standard_E8-2ds_v5";
 
         /// <summary>
         /// Standard_E8-4ds_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84dsV5 = "Standard_E8-4ds_v5";
 
         /// <summary>
         /// Standard_E8ds_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8dsV5 = "Standard_E8ds_v5";
 
         /// <summary>
         /// Standard_E96-24ds_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624dsV5 = "Standard_E96-24ds_v5";
 
         /// <summary>
         /// Standard_E96-48ds_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648dsV5 = "Standard_E96-48ds_v5";
 
         /// <summary>
         /// Standard_E96ds_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96dsV5 = "Standard_E96ds_v5";
     }
 
@@ -4376,121 +5139,145 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E128-32ds_v6 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE12832dsV6 = "Standard_E128-32ds_v6";
 
         /// <summary>
         /// Standard_E128-64ds_v6 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE12864dsV6 = "Standard_E128-64ds_v6";
 
         /// <summary>
         /// Standard_E128ds_v6 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE128dsV6 = "Standard_E128ds_v6";
 
         /// <summary>
         /// Standard_E16-4ds_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164dsV6 = "Standard_E16-4ds_v6";
 
         /// <summary>
         /// Standard_E16-8ds_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168dsV6 = "Standard_E16-8ds_v6";
 
         /// <summary>
         /// Standard_E16ds_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16dsV6 = "Standard_E16ds_v6";
 
         /// <summary>
         /// Standard_E192ids_v6 — 192 vCPUs — 1832 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE192idsV6 = "Standard_E192ids_v6";
 
         /// <summary>
         /// Standard_E20ds_v6 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20dsV6 = "Standard_E20ds_v6";
 
         /// <summary>
         /// Standard_E2ds_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2dsV6 = "Standard_E2ds_v6";
 
         /// <summary>
         /// Standard_E32-16ds_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216dsV6 = "Standard_E32-16ds_v6";
 
         /// <summary>
         /// Standard_E32-8ds_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328dsV6 = "Standard_E32-8ds_v6";
 
         /// <summary>
         /// Standard_E32ds_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32dsV6 = "Standard_E32ds_v6";
 
         /// <summary>
         /// Standard_E4-2ds_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42dsV6 = "Standard_E4-2ds_v6";
 
         /// <summary>
         /// Standard_E48ds_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48dsV6 = "Standard_E48ds_v6";
 
         /// <summary>
         /// Standard_E4ds_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4dsV6 = "Standard_E4ds_v6";
 
         /// <summary>
         /// Standard_E64-16ds_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416dsV6 = "Standard_E64-16ds_v6";
 
         /// <summary>
         /// Standard_E64-32ds_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432dsV6 = "Standard_E64-32ds_v6";
 
         /// <summary>
         /// Standard_E64ds_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64dsV6 = "Standard_E64ds_v6";
 
         /// <summary>
         /// Standard_E8-2ds_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82dsV6 = "Standard_E8-2ds_v6";
 
         /// <summary>
         /// Standard_E8-4ds_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84dsV6 = "Standard_E8-4ds_v6";
 
         /// <summary>
         /// Standard_E8ds_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8dsV6 = "Standard_E8ds_v6";
 
         /// <summary>
         /// Standard_E96-24ds_v6 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624dsV6 = "Standard_E96-24ds_v6";
 
         /// <summary>
         /// Standard_E96-48ds_v6 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648dsV6 = "Standard_E96-48ds_v6";
 
         /// <summary>
         /// Standard_E96ds_v6 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96dsV6 = "Standard_E96ds_v6";
     }
 
@@ -4502,41 +5289,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16d_v4 — 16 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16dV4 = "Standard_E16d_v4";
 
         /// <summary>
         /// Standard_E20d_v4 — 20 vCPUs — 160 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20dV4 = "Standard_E20d_v4";
 
         /// <summary>
         /// Standard_E2d_v4 — 2 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2dV4 = "Standard_E2d_v4";
 
         /// <summary>
         /// Standard_E32d_v4 — 32 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32dV4 = "Standard_E32d_v4";
 
         /// <summary>
         /// Standard_E48d_v4 — 48 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48dV4 = "Standard_E48d_v4";
 
         /// <summary>
         /// Standard_E4d_v4 — 4 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4dV4 = "Standard_E4d_v4";
 
         /// <summary>
         /// Standard_E64d_v4 — 64 vCPUs — 504 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64dV4 = "Standard_E64d_v4";
 
         /// <summary>
         /// Standard_E8d_v4 — 8 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8dV4 = "Standard_E8d_v4";
     }
 
@@ -4548,46 +5343,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16d_v5 — 16 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16dV5 = "Standard_E16d_v5";
 
         /// <summary>
         /// Standard_E20d_v5 — 20 vCPUs — 160 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20dV5 = "Standard_E20d_v5";
 
         /// <summary>
         /// Standard_E2d_v5 — 2 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2dV5 = "Standard_E2d_v5";
 
         /// <summary>
         /// Standard_E32d_v5 — 32 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32dV5 = "Standard_E32d_v5";
 
         /// <summary>
         /// Standard_E48d_v5 — 48 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48dV5 = "Standard_E48d_v5";
 
         /// <summary>
         /// Standard_E4d_v5 — 4 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4dV5 = "Standard_E4d_v5";
 
         /// <summary>
         /// Standard_E64d_v5 — 64 vCPUs — 512 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64dV5 = "Standard_E64d_v5";
 
         /// <summary>
         /// Standard_E8d_v5 — 8 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8dV5 = "Standard_E8d_v5";
 
         /// <summary>
         /// Standard_E96d_v5 — 96 vCPUs — 672 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96dV5 = "Standard_E96d_v5";
     }
 
@@ -4599,6 +5403,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E112iads_v5 — 112 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE112iadsV5 = "Standard_E112iads_v5";
     }
 
@@ -4610,6 +5415,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E96ias_v4 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96iasV4 = "Standard_E96ias_v4";
     }
 
@@ -4621,6 +5427,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E112ias_v5 — 112 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE112iasV5 = "Standard_E112ias_v5";
     }
 
@@ -4632,6 +5439,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E112ibds_v5 — 112 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE112ibdsV5 = "Standard_E112ibds_v5";
     }
 
@@ -4643,6 +5451,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E112ibs_v5 — 112 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE112ibsV5 = "Standard_E112ibs_v5";
     }
 
@@ -4654,6 +5463,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E104ids_v5 — 104 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE104idsV5 = "Standard_E104ids_v5";
     }
 
@@ -4665,6 +5475,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E104id_v5 — 104 vCPUs — 672 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE104idV5 = "Standard_E104id_v5";
     }
 
@@ -4676,6 +5487,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E64is_v3 — 64 vCPUs — 432 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64isV3 = "Standard_E64is_v3";
     }
 
@@ -4687,6 +5499,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E104is_v5 — 104 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE104isV5 = "Standard_E104is_v5";
     }
 
@@ -4698,6 +5511,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E64i_v3 — 64 vCPUs — 432 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64iV3 = "Standard_E64i_v3";
     }
 
@@ -4709,6 +5523,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E104i_v5 — 104 vCPUs — 672 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE104iV5 = "Standard_E104i_v5";
     }
 
@@ -4720,31 +5535,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16pds_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16pdsV5 = "Standard_E16pds_v5";
 
         /// <summary>
         /// Standard_E20pds_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20pdsV5 = "Standard_E20pds_v5";
 
         /// <summary>
         /// Standard_E2pds_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2pdsV5 = "Standard_E2pds_v5";
 
         /// <summary>
         /// Standard_E32pds_v5 — 32 vCPUs — 208 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32pdsV5 = "Standard_E32pds_v5";
 
         /// <summary>
         /// Standard_E4pds_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4pdsV5 = "Standard_E4pds_v5";
 
         /// <summary>
         /// Standard_E8pds_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8pdsV5 = "Standard_E8pds_v5";
     }
 
@@ -4756,41 +5577,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16pds_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16pdsV6 = "Standard_E16pds_v6";
 
         /// <summary>
         /// Standard_E2pds_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2pdsV6 = "Standard_E2pds_v6";
 
         /// <summary>
         /// Standard_E32pds_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32pdsV6 = "Standard_E32pds_v6";
 
         /// <summary>
         /// Standard_E48pds_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48pdsV6 = "Standard_E48pds_v6";
 
         /// <summary>
         /// Standard_E4pds_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4pdsV6 = "Standard_E4pds_v6";
 
         /// <summary>
         /// Standard_E64pds_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64pdsV6 = "Standard_E64pds_v6";
 
         /// <summary>
         /// Standard_E8pds_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8pdsV6 = "Standard_E8pds_v6";
 
         /// <summary>
         /// Standard_E96pds_v6 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96pdsV6 = "Standard_E96pds_v6";
     }
 
@@ -4802,31 +5631,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16ps_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16psV5 = "Standard_E16ps_v5";
 
         /// <summary>
         /// Standard_E20ps_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20psV5 = "Standard_E20ps_v5";
 
         /// <summary>
         /// Standard_E2ps_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2psV5 = "Standard_E2ps_v5";
 
         /// <summary>
         /// Standard_E32ps_v5 — 32 vCPUs — 208 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32psV5 = "Standard_E32ps_v5";
 
         /// <summary>
         /// Standard_E4ps_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4psV5 = "Standard_E4ps_v5";
 
         /// <summary>
         /// Standard_E8ps_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8psV5 = "Standard_E8ps_v5";
     }
 
@@ -4838,41 +5673,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16ps_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16psV6 = "Standard_E16ps_v6";
 
         /// <summary>
         /// Standard_E2ps_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2psV6 = "Standard_E2ps_v6";
 
         /// <summary>
         /// Standard_E32ps_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32psV6 = "Standard_E32ps_v6";
 
         /// <summary>
         /// Standard_E48ps_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48psV6 = "Standard_E48ps_v6";
 
         /// <summary>
         /// Standard_E4ps_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4psV6 = "Standard_E4ps_v6";
 
         /// <summary>
         /// Standard_E64ps_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64psV6 = "Standard_E64ps_v6";
 
         /// <summary>
         /// Standard_E8ps_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8psV6 = "Standard_E8ps_v6";
 
         /// <summary>
         /// Standard_E96ps_v6 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96psV6 = "Standard_E96ps_v6";
     }
 
@@ -4884,86 +5727,103 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16-4s_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164sV3 = "Standard_E16-4s_v3";
 
         /// <summary>
         /// Standard_E16-8s_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168sV3 = "Standard_E16-8s_v3";
 
         /// <summary>
         /// Standard_E16s_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16sV3 = "Standard_E16s_v3";
 
         /// <summary>
         /// Standard_E20s_v3 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20sV3 = "Standard_E20s_v3";
 
         /// <summary>
         /// Standard_E2s_v3 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2sV3 = "Standard_E2s_v3";
 
         /// <summary>
         /// Standard_E32-16s_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216sV3 = "Standard_E32-16s_v3";
 
         /// <summary>
         /// Standard_E32-8s_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328sV3 = "Standard_E32-8s_v3";
 
         /// <summary>
         /// Standard_E32s_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32sV3 = "Standard_E32s_v3";
 
         /// <summary>
         /// Standard_E4-2s_v3 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42sV3 = "Standard_E4-2s_v3";
 
         /// <summary>
         /// Standard_E48s_v3 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48sV3 = "Standard_E48s_v3";
 
         /// <summary>
         /// Standard_E4s_v3 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4sV3 = "Standard_E4s_v3";
 
         /// <summary>
         /// Standard_E64-16s_v3 — 64 vCPUs — 432 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416sV3 = "Standard_E64-16s_v3";
 
         /// <summary>
         /// Standard_E64-32s_v3 — 64 vCPUs — 432 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432sV3 = "Standard_E64-32s_v3";
 
         /// <summary>
         /// Standard_E64s_v3 — 64 vCPUs — 432 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64sV3 = "Standard_E64s_v3";
 
         /// <summary>
         /// Standard_E8-2s_v3 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82sV3 = "Standard_E8-2s_v3";
 
         /// <summary>
         /// Standard_E8-4s_v3 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84sV3 = "Standard_E8-4s_v3";
 
         /// <summary>
         /// Standard_E8s_v3 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8sV3 = "Standard_E8s_v3";
     }
 
@@ -4975,86 +5835,103 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16-4s_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164sV4 = "Standard_E16-4s_v4";
 
         /// <summary>
         /// Standard_E16-8s_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168sV4 = "Standard_E16-8s_v4";
 
         /// <summary>
         /// Standard_E16s_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16sV4 = "Standard_E16s_v4";
 
         /// <summary>
         /// Standard_E20s_v4 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20sV4 = "Standard_E20s_v4";
 
         /// <summary>
         /// Standard_E2s_v4 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2sV4 = "Standard_E2s_v4";
 
         /// <summary>
         /// Standard_E32-16s_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216sV4 = "Standard_E32-16s_v4";
 
         /// <summary>
         /// Standard_E32-8s_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328sV4 = "Standard_E32-8s_v4";
 
         /// <summary>
         /// Standard_E32s_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32sV4 = "Standard_E32s_v4";
 
         /// <summary>
         /// Standard_E4-2s_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42sV4 = "Standard_E4-2s_v4";
 
         /// <summary>
         /// Standard_E48s_v4 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48sV4 = "Standard_E48s_v4";
 
         /// <summary>
         /// Standard_E4s_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4sV4 = "Standard_E4s_v4";
 
         /// <summary>
         /// Standard_E64-16s_v4 — 64 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416sV4 = "Standard_E64-16s_v4";
 
         /// <summary>
         /// Standard_E64-32s_v4 — 64 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432sV4 = "Standard_E64-32s_v4";
 
         /// <summary>
         /// Standard_E64s_v4 — 64 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64sV4 = "Standard_E64s_v4";
 
         /// <summary>
         /// Standard_E8-2s_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82sV4 = "Standard_E8-2s_v4";
 
         /// <summary>
         /// Standard_E8-4s_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84sV4 = "Standard_E8-4s_v4";
 
         /// <summary>
         /// Standard_E8s_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8sV4 = "Standard_E8s_v4";
     }
 
@@ -5066,101 +5943,121 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16-4s_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164sV5 = "Standard_E16-4s_v5";
 
         /// <summary>
         /// Standard_E16-8s_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168sV5 = "Standard_E16-8s_v5";
 
         /// <summary>
         /// Standard_E16s_v5 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16sV5 = "Standard_E16s_v5";
 
         /// <summary>
         /// Standard_E20s_v5 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20sV5 = "Standard_E20s_v5";
 
         /// <summary>
         /// Standard_E2s_v5 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2sV5 = "Standard_E2s_v5";
 
         /// <summary>
         /// Standard_E32-16s_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216sV5 = "Standard_E32-16s_v5";
 
         /// <summary>
         /// Standard_E32-8s_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328sV5 = "Standard_E32-8s_v5";
 
         /// <summary>
         /// Standard_E32s_v5 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32sV5 = "Standard_E32s_v5";
 
         /// <summary>
         /// Standard_E4-2s_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42sV5 = "Standard_E4-2s_v5";
 
         /// <summary>
         /// Standard_E48s_v5 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48sV5 = "Standard_E48s_v5";
 
         /// <summary>
         /// Standard_E4s_v5 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4sV5 = "Standard_E4s_v5";
 
         /// <summary>
         /// Standard_E64-16s_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416sV5 = "Standard_E64-16s_v5";
 
         /// <summary>
         /// Standard_E64-32s_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432sV5 = "Standard_E64-32s_v5";
 
         /// <summary>
         /// Standard_E64s_v5 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64sV5 = "Standard_E64s_v5";
 
         /// <summary>
         /// Standard_E8-2s_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82sV5 = "Standard_E8-2s_v5";
 
         /// <summary>
         /// Standard_E8-4s_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84sV5 = "Standard_E8-4s_v5";
 
         /// <summary>
         /// Standard_E8s_v5 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8sV5 = "Standard_E8s_v5";
 
         /// <summary>
         /// Standard_E96-24s_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624sV5 = "Standard_E96-24s_v5";
 
         /// <summary>
         /// Standard_E96-48s_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648sV5 = "Standard_E96-48s_v5";
 
         /// <summary>
         /// Standard_E96s_v5 — 96 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96sV5 = "Standard_E96s_v5";
     }
 
@@ -5172,121 +6069,145 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E128-32s_v6 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE12832sV6 = "Standard_E128-32s_v6";
 
         /// <summary>
         /// Standard_E128-64s_v6 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE12864sV6 = "Standard_E128-64s_v6";
 
         /// <summary>
         /// Standard_E128s_v6 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE128sV6 = "Standard_E128s_v6";
 
         /// <summary>
         /// Standard_E16-4s_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE164sV6 = "Standard_E16-4s_v6";
 
         /// <summary>
         /// Standard_E16-8s_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE168sV6 = "Standard_E16-8s_v6";
 
         /// <summary>
         /// Standard_E16s_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16sV6 = "Standard_E16s_v6";
 
         /// <summary>
         /// Standard_E192is_v6 — 192 vCPUs — 1832 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE192isV6 = "Standard_E192is_v6";
 
         /// <summary>
         /// Standard_E20s_v6 — 20 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20sV6 = "Standard_E20s_v6";
 
         /// <summary>
         /// Standard_E2s_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2sV6 = "Standard_E2s_v6";
 
         /// <summary>
         /// Standard_E32-16s_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE3216sV6 = "Standard_E32-16s_v6";
 
         /// <summary>
         /// Standard_E32-8s_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE328sV6 = "Standard_E32-8s_v6";
 
         /// <summary>
         /// Standard_E32s_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32sV6 = "Standard_E32s_v6";
 
         /// <summary>
         /// Standard_E4-2s_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE42sV6 = "Standard_E4-2s_v6";
 
         /// <summary>
         /// Standard_E48s_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48sV6 = "Standard_E48s_v6";
 
         /// <summary>
         /// Standard_E4s_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4sV6 = "Standard_E4s_v6";
 
         /// <summary>
         /// Standard_E64-16s_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6416sV6 = "Standard_E64-16s_v6";
 
         /// <summary>
         /// Standard_E64-32s_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE6432sV6 = "Standard_E64-32s_v6";
 
         /// <summary>
         /// Standard_E64s_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64sV6 = "Standard_E64s_v6";
 
         /// <summary>
         /// Standard_E8-2s_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE82sV6 = "Standard_E8-2s_v6";
 
         /// <summary>
         /// Standard_E8-4s_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE84sV6 = "Standard_E8-4s_v6";
 
         /// <summary>
         /// Standard_E8s_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8sV6 = "Standard_E8s_v6";
 
         /// <summary>
         /// Standard_E96-24s_v6 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9624sV6 = "Standard_E96-24s_v6";
 
         /// <summary>
         /// Standard_E96-48s_v6 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE9648sV6 = "Standard_E96-48s_v6";
 
         /// <summary>
         /// Standard_E96s_v6 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96sV6 = "Standard_E96s_v6";
     }
 
@@ -5298,41 +6219,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16_v3 — 16 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16V3 = "Standard_E16_v3";
 
         /// <summary>
         /// Standard_E20_v3 — 20 vCPUs — 160 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20V3 = "Standard_E20_v3";
 
         /// <summary>
         /// Standard_E2_v3 — 2 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2V3 = "Standard_E2_v3";
 
         /// <summary>
         /// Standard_E32_v3 — 32 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32V3 = "Standard_E32_v3";
 
         /// <summary>
         /// Standard_E48_v3 — 48 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48V3 = "Standard_E48_v3";
 
         /// <summary>
         /// Standard_E4_v3 — 4 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4V3 = "Standard_E4_v3";
 
         /// <summary>
         /// Standard_E64_v3 — 64 vCPUs — 432 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64V3 = "Standard_E64_v3";
 
         /// <summary>
         /// Standard_E8_v3 — 8 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8V3 = "Standard_E8_v3";
     }
 
@@ -5344,41 +6273,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16_v4 — 16 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16V4 = "Standard_E16_v4";
 
         /// <summary>
         /// Standard_E20_v4 — 20 vCPUs — 160 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20V4 = "Standard_E20_v4";
 
         /// <summary>
         /// Standard_E2_v4 — 2 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2V4 = "Standard_E2_v4";
 
         /// <summary>
         /// Standard_E32_v4 — 32 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32V4 = "Standard_E32_v4";
 
         /// <summary>
         /// Standard_E48_v4 — 48 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48V4 = "Standard_E48_v4";
 
         /// <summary>
         /// Standard_E4_v4 — 4 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4V4 = "Standard_E4_v4";
 
         /// <summary>
         /// Standard_E64_v4 — 64 vCPUs — 504 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64V4 = "Standard_E64_v4";
 
         /// <summary>
         /// Standard_E8_v4 — 8 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8V4 = "Standard_E8_v4";
     }
 
@@ -5390,46 +6327,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E16_v5 — 16 vCPUs — 128 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE16V5 = "Standard_E16_v5";
 
         /// <summary>
         /// Standard_E20_v5 — 20 vCPUs — 160 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE20V5 = "Standard_E20_v5";
 
         /// <summary>
         /// Standard_E2_v5 — 2 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE2V5 = "Standard_E2_v5";
 
         /// <summary>
         /// Standard_E32_v5 — 32 vCPUs — 256 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE32V5 = "Standard_E32_v5";
 
         /// <summary>
         /// Standard_E48_v5 — 48 vCPUs — 384 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE48V5 = "Standard_E48_v5";
 
         /// <summary>
         /// Standard_E4_v5 — 4 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE4V5 = "Standard_E4_v5";
 
         /// <summary>
         /// Standard_E64_v5 — 64 vCPUs — 512 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE64V5 = "Standard_E64_v5";
 
         /// <summary>
         /// Standard_E8_v5 — 8 vCPUs — 64 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE8V5 = "Standard_E8_v5";
 
         /// <summary>
         /// Standard_E96_v5 — 96 vCPUs — 672 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE96V5 = "Standard_E96_v5";
     }
 
@@ -5441,41 +6387,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16ads_v7 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16adsV7 = "Standard_F16ads_v7";
 
         /// <summary>
         /// Standard_F2ads_v7 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2adsV7 = "Standard_F2ads_v7";
 
         /// <summary>
         /// Standard_F32ads_v7 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32adsV7 = "Standard_F32ads_v7";
 
         /// <summary>
         /// Standard_F48ads_v7 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48adsV7 = "Standard_F48ads_v7";
 
         /// <summary>
         /// Standard_F4ads_v7 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4adsV7 = "Standard_F4ads_v7";
 
         /// <summary>
         /// Standard_F64ads_v7 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64adsV7 = "Standard_F64ads_v7";
 
         /// <summary>
         /// Standard_F80ads_v7 — 80 vCPUs — 320 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF80adsV7 = "Standard_F80ads_v7";
 
         /// <summary>
         /// Standard_F8ads_v7 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8adsV7 = "Standard_F8ads_v7";
     }
 
@@ -5487,41 +6441,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16alds_v7 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16aldsV7 = "Standard_F16alds_v7";
 
         /// <summary>
         /// Standard_F2alds_v7 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2aldsV7 = "Standard_F2alds_v7";
 
         /// <summary>
         /// Standard_F32alds_v7 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32aldsV7 = "Standard_F32alds_v7";
 
         /// <summary>
         /// Standard_F48alds_v7 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48aldsV7 = "Standard_F48alds_v7";
 
         /// <summary>
         /// Standard_F4alds_v7 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4aldsV7 = "Standard_F4alds_v7";
 
         /// <summary>
         /// Standard_F64alds_v7 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64aldsV7 = "Standard_F64alds_v7";
 
         /// <summary>
         /// Standard_F80alds_v7 — 80 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF80aldsV7 = "Standard_F80alds_v7";
 
         /// <summary>
         /// Standard_F8alds_v7 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8aldsV7 = "Standard_F8alds_v7";
     }
 
@@ -5533,36 +6495,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16als_v6 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16alsV6 = "Standard_F16als_v6";
 
         /// <summary>
         /// Standard_F2als_v6 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2alsV6 = "Standard_F2als_v6";
 
         /// <summary>
         /// Standard_F32als_v6 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32alsV6 = "Standard_F32als_v6";
 
         /// <summary>
         /// Standard_F48als_v6 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48alsV6 = "Standard_F48als_v6";
 
         /// <summary>
         /// Standard_F4als_v6 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4alsV6 = "Standard_F4als_v6";
 
         /// <summary>
         /// Standard_F64als_v6 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64alsV6 = "Standard_F64als_v6";
 
         /// <summary>
         /// Standard_F8als_v6 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8alsV6 = "Standard_F8als_v6";
     }
 
@@ -5574,41 +6543,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16als_v7 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16alsV7 = "Standard_F16als_v7";
 
         /// <summary>
         /// Standard_F2als_v7 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2alsV7 = "Standard_F2als_v7";
 
         /// <summary>
         /// Standard_F32als_v7 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32alsV7 = "Standard_F32als_v7";
 
         /// <summary>
         /// Standard_F48als_v7 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48alsV7 = "Standard_F48als_v7";
 
         /// <summary>
         /// Standard_F4als_v7 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4alsV7 = "Standard_F4als_v7";
 
         /// <summary>
         /// Standard_F64als_v7 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64alsV7 = "Standard_F64als_v7";
 
         /// <summary>
         /// Standard_F80als_v7 — 80 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF80alsV7 = "Standard_F80als_v7";
 
         /// <summary>
         /// Standard_F8als_v7 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8alsV7 = "Standard_F8als_v7";
     }
 
@@ -5620,96 +6597,115 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16-4amds_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF164amdsV7 = "Standard_F16-4amds_v7";
 
         /// <summary>
         /// Standard_F16-8amds_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF168amdsV7 = "Standard_F16-8amds_v7";
 
         /// <summary>
         /// Standard_F16amds_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16amdsV7 = "Standard_F16amds_v7";
 
         /// <summary>
         /// Standard_F2-1amds_v7 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF21amdsV7 = "Standard_F2-1amds_v7";
 
         /// <summary>
         /// Standard_F2amds_v7 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2amdsV7 = "Standard_F2amds_v7";
 
         /// <summary>
         /// Standard_F32-16amds_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF3216amdsV7 = "Standard_F32-16amds_v7";
 
         /// <summary>
         /// Standard_F32-8amds_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF328amdsV7 = "Standard_F32-8amds_v7";
 
         /// <summary>
         /// Standard_F32amds_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32amdsV7 = "Standard_F32amds_v7";
 
         /// <summary>
         /// Standard_F4-1amds_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF41amdsV7 = "Standard_F4-1amds_v7";
 
         /// <summary>
         /// Standard_F4-2amds_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF42amdsV7 = "Standard_F4-2amds_v7";
 
         /// <summary>
         /// Standard_F48amds_v7 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48amdsV7 = "Standard_F48amds_v7";
 
         /// <summary>
         /// Standard_F4amds_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4amdsV7 = "Standard_F4amds_v7";
 
         /// <summary>
         /// Standard_F64-16amds_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF6416amdsV7 = "Standard_F64-16amds_v7";
 
         /// <summary>
         /// Standard_F64-32amds_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF6432amdsV7 = "Standard_F64-32amds_v7";
 
         /// <summary>
         /// Standard_F64amds_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64amdsV7 = "Standard_F64amds_v7";
 
         /// <summary>
         /// Standard_F8-2amds_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF82amdsV7 = "Standard_F8-2amds_v7";
 
         /// <summary>
         /// Standard_F8-4amds_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF84amdsV7 = "Standard_F8-4amds_v7";
 
         /// <summary>
         /// Standard_F80amds_v7 — 80 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF80amdsV7 = "Standard_F80amds_v7";
 
         /// <summary>
         /// Standard_F8amds_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8amdsV7 = "Standard_F8amds_v7";
     }
 
@@ -5721,36 +6717,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16ams_v6 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16amsV6 = "Standard_F16ams_v6";
 
         /// <summary>
         /// Standard_F2ams_v6 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2amsV6 = "Standard_F2ams_v6";
 
         /// <summary>
         /// Standard_F32ams_v6 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32amsV6 = "Standard_F32ams_v6";
 
         /// <summary>
         /// Standard_F48ams_v6 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48amsV6 = "Standard_F48ams_v6";
 
         /// <summary>
         /// Standard_F4ams_v6 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4amsV6 = "Standard_F4ams_v6";
 
         /// <summary>
         /// Standard_F64ams_v6 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64amsV6 = "Standard_F64ams_v6";
 
         /// <summary>
         /// Standard_F8ams_v6 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8amsV6 = "Standard_F8ams_v6";
     }
 
@@ -5762,96 +6765,115 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16-4ams_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF164amsV7 = "Standard_F16-4ams_v7";
 
         /// <summary>
         /// Standard_F16-8ams_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF168amsV7 = "Standard_F16-8ams_v7";
 
         /// <summary>
         /// Standard_F16ams_v7 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16amsV7 = "Standard_F16ams_v7";
 
         /// <summary>
         /// Standard_F2-1ams_v7 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF21amsV7 = "Standard_F2-1ams_v7";
 
         /// <summary>
         /// Standard_F2ams_v7 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2amsV7 = "Standard_F2ams_v7";
 
         /// <summary>
         /// Standard_F32-16ams_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF3216amsV7 = "Standard_F32-16ams_v7";
 
         /// <summary>
         /// Standard_F32-8ams_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF328amsV7 = "Standard_F32-8ams_v7";
 
         /// <summary>
         /// Standard_F32ams_v7 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32amsV7 = "Standard_F32ams_v7";
 
         /// <summary>
         /// Standard_F4-1ams_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF41amsV7 = "Standard_F4-1ams_v7";
 
         /// <summary>
         /// Standard_F4-2ams_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF42amsV7 = "Standard_F4-2ams_v7";
 
         /// <summary>
         /// Standard_F48ams_v7 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48amsV7 = "Standard_F48ams_v7";
 
         /// <summary>
         /// Standard_F4ams_v7 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4amsV7 = "Standard_F4ams_v7";
 
         /// <summary>
         /// Standard_F64-16ams_v7 — 80 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF6416amsV7 = "Standard_F64-16ams_v7";
 
         /// <summary>
         /// Standard_F64-32ams_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF6432amsV7 = "Standard_F64-32ams_v7";
 
         /// <summary>
         /// Standard_F64ams_v7 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64amsV7 = "Standard_F64ams_v7";
 
         /// <summary>
         /// Standard_F8-2ams_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF82amsV7 = "Standard_F8-2ams_v7";
 
         /// <summary>
         /// Standard_F8-4ams_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF84amsV7 = "Standard_F8-4ams_v7";
 
         /// <summary>
         /// Standard_F80ams_v7 — 80 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF80amsV7 = "Standard_F80ams_v7";
 
         /// <summary>
         /// Standard_F8ams_v7 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8amsV7 = "Standard_F8ams_v7";
     }
 
@@ -5863,36 +6885,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16as_v6 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16asV6 = "Standard_F16as_v6";
 
         /// <summary>
         /// Standard_F2as_v6 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2asV6 = "Standard_F2as_v6";
 
         /// <summary>
         /// Standard_F32as_v6 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32asV6 = "Standard_F32as_v6";
 
         /// <summary>
         /// Standard_F48as_v6 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48asV6 = "Standard_F48as_v6";
 
         /// <summary>
         /// Standard_F4as_v6 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4asV6 = "Standard_F4as_v6";
 
         /// <summary>
         /// Standard_F64as_v6 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64asV6 = "Standard_F64as_v6";
 
         /// <summary>
         /// Standard_F8as_v6 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8asV6 = "Standard_F8as_v6";
     }
 
@@ -5904,41 +6933,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16as_v7 — 16 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16asV7 = "Standard_F16as_v7";
 
         /// <summary>
         /// Standard_F2as_v7 — 2 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2asV7 = "Standard_F2as_v7";
 
         /// <summary>
         /// Standard_F32as_v7 — 32 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32asV7 = "Standard_F32as_v7";
 
         /// <summary>
         /// Standard_F48as_v7 — 48 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48asV7 = "Standard_F48as_v7";
 
         /// <summary>
         /// Standard_F4as_v7 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4asV7 = "Standard_F4as_v7";
 
         /// <summary>
         /// Standard_F64as_v7 — 64 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64asV7 = "Standard_F64as_v7";
 
         /// <summary>
         /// Standard_F80as_v7 — 80 vCPUs — 320 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF80asV7 = "Standard_F80as_v7";
 
         /// <summary>
         /// Standard_F8as_v7 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8asV7 = "Standard_F8as_v7";
     }
 
@@ -5950,21 +6987,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16 — 16 vCPUs — 32 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16 = "Standard_F16";
 
         /// <summary>
         /// Standard_F2 — 2 vCPUs — 4 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2 = "Standard_F2";
 
         /// <summary>
         /// Standard_F4 — 4 vCPUs — 8 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4 = "Standard_F4";
 
         /// <summary>
         /// Standard_F8 — 8 vCPUs — 16 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8 = "Standard_F8";
     }
 
@@ -5976,21 +7017,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16s — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16s = "Standard_F16s";
 
         /// <summary>
         /// Standard_F2s — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2s = "Standard_F2s";
 
         /// <summary>
         /// Standard_F4s — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4s = "Standard_F4s";
 
         /// <summary>
         /// Standard_F8s — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8s = "Standard_F8s";
     }
 
@@ -6002,41 +7047,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_F16s_v2 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF16sV2 = "Standard_F16s_v2";
 
         /// <summary>
         /// Standard_F2s_v2 — 2 vCPUs — 4 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF2sV2 = "Standard_F2s_v2";
 
         /// <summary>
         /// Standard_F32s_v2 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF32sV2 = "Standard_F32s_v2";
 
         /// <summary>
         /// Standard_F48s_v2 — 48 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF48sV2 = "Standard_F48s_v2";
 
         /// <summary>
         /// Standard_F4s_v2 — 4 vCPUs — 8 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF4sV2 = "Standard_F4s_v2";
 
         /// <summary>
         /// Standard_F64s_v2 — 64 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF64sV2 = "Standard_F64s_v2";
 
         /// <summary>
         /// Standard_F72s_v2 — 72 vCPUs — 144 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF72sV2 = "Standard_F72s_v2";
 
         /// <summary>
         /// Standard_F8s_v2 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardF8sV2 = "Standard_F8s_v2";
     }
 
@@ -6048,131 +7101,157 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_FX12-6mds_v2 — 12 vCPUs — 252 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX126mdsV2 = "Standard_FX12-6mds_v2";
 
         /// <summary>
         /// Standard_FX12mds_v2 — 12 vCPUs — 252 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX12mdsV2 = "Standard_FX12mds_v2";
 
         /// <summary>
         /// Standard_FX16-4mds_v2 — 16 vCPUs — 336 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX164mdsV2 = "Standard_FX16-4mds_v2";
 
         /// <summary>
         /// Standard_FX16-8mds_v2 — 16 vCPUs — 336 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX168mdsV2 = "Standard_FX16-8mds_v2";
 
         /// <summary>
         /// Standard_FX16mds_v2 — 16 vCPUs — 336 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX16mdsV2 = "Standard_FX16mds_v2";
 
         /// <summary>
         /// Standard_FX24-12mds_v2 — 24 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX2412mdsV2 = "Standard_FX24-12mds_v2";
 
         /// <summary>
         /// Standard_FX24-6mds_v2 — 24 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX246mdsV2 = "Standard_FX24-6mds_v2";
 
         /// <summary>
         /// Standard_FX24mds_v2 — 24 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX24mdsV2 = "Standard_FX24mds_v2";
 
         /// <summary>
         /// Standard_FX2mds_v2 — 2 vCPUs — 42 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX2mdsV2 = "Standard_FX2mds_v2";
 
         /// <summary>
         /// Standard_FX32-16mds_v2 — 32 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX3216mdsV2 = "Standard_FX32-16mds_v2";
 
         /// <summary>
         /// Standard_FX32-8mds_v2 — 32 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX328mdsV2 = "Standard_FX32-8mds_v2";
 
         /// <summary>
         /// Standard_FX32mds_v2 — 32 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX32mdsV2 = "Standard_FX32mds_v2";
 
         /// <summary>
         /// Standard_FX4-2mds_v2 — 4 vCPUs — 84 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX42mdsV2 = "Standard_FX4-2mds_v2";
 
         /// <summary>
         /// Standard_FX48-12mds_v2 — 48 vCPUs — 1008 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX4812mdsV2 = "Standard_FX48-12mds_v2";
 
         /// <summary>
         /// Standard_FX48-24mds_v2 — 48 vCPUs — 1008 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX4824mdsV2 = "Standard_FX48-24mds_v2";
 
         /// <summary>
         /// Standard_FX48mds_v2 — 48 vCPUs — 1008 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX48mdsV2 = "Standard_FX48mds_v2";
 
         /// <summary>
         /// Standard_FX4mds_v2 — 4 vCPUs — 84 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX4mdsV2 = "Standard_FX4mds_v2";
 
         /// <summary>
         /// Standard_FX64-16mds_v2 — 64 vCPUs — 1344 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX6416mdsV2 = "Standard_FX64-16mds_v2";
 
         /// <summary>
         /// Standard_FX64-32mds_v2 — 64 vCPUs — 1344 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX6432mdsV2 = "Standard_FX64-32mds_v2";
 
         /// <summary>
         /// Standard_FX64mds_v2 — 64 vCPUs — 1344 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX64mdsV2 = "Standard_FX64mds_v2";
 
         /// <summary>
         /// Standard_FX8-2mds_v2 — 8 vCPUs — 168 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX82mdsV2 = "Standard_FX8-2mds_v2";
 
         /// <summary>
         /// Standard_FX8-4mds_v2 — 8 vCPUs — 168 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX84mdsV2 = "Standard_FX8-4mds_v2";
 
         /// <summary>
         /// Standard_FX8mds_v2 — 8 vCPUs — 168 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX8mdsV2 = "Standard_FX8mds_v2";
 
         /// <summary>
         /// Standard_FX96-24mds_v2 — 96 vCPUs — 1832 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX9624mdsV2 = "Standard_FX96-24mds_v2";
 
         /// <summary>
         /// Standard_FX96-48mds_v2 — 96 vCPUs — 1832 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX9648mdsV2 = "Standard_FX96-48mds_v2";
 
         /// <summary>
         /// Standard_FX96mds_v2 — 96 vCPUs — 1832 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX96mdsV2 = "Standard_FX96mds_v2";
     }
 
@@ -6184,26 +7263,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_FX12mds — 12 vCPUs — 252 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX12mds = "Standard_FX12mds";
 
         /// <summary>
         /// Standard_FX24mds — 24 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX24mds = "Standard_FX24mds";
 
         /// <summary>
         /// Standard_FX36mds — 36 vCPUs — 756 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX36mds = "Standard_FX36mds";
 
         /// <summary>
         /// Standard_FX48mds — 48 vCPUs — 1008 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX48mds = "Standard_FX48mds";
 
         /// <summary>
         /// Standard_FX4mds — 4 vCPUs — 84 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX4mds = "Standard_FX4mds";
     }
 
@@ -6215,131 +7299,157 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_FX12-6ms_v2 — 12 vCPUs — 252 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX126msV2 = "Standard_FX12-6ms_v2";
 
         /// <summary>
         /// Standard_FX12ms_v2 — 12 vCPUs — 252 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX12msV2 = "Standard_FX12ms_v2";
 
         /// <summary>
         /// Standard_FX16-4ms_v2 — 16 vCPUs — 336 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX164msV2 = "Standard_FX16-4ms_v2";
 
         /// <summary>
         /// Standard_FX16-8ms_v2 — 16 vCPUs — 336 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX168msV2 = "Standard_FX16-8ms_v2";
 
         /// <summary>
         /// Standard_FX16ms_v2 — 16 vCPUs — 336 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX16msV2 = "Standard_FX16ms_v2";
 
         /// <summary>
         /// Standard_FX24-12ms_v2 — 24 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX2412msV2 = "Standard_FX24-12ms_v2";
 
         /// <summary>
         /// Standard_FX24-6ms_v2 — 24 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX246msV2 = "Standard_FX24-6ms_v2";
 
         /// <summary>
         /// Standard_FX24ms_v2 — 24 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX24msV2 = "Standard_FX24ms_v2";
 
         /// <summary>
         /// Standard_FX2ms_v2 — 2 vCPUs — 42 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX2msV2 = "Standard_FX2ms_v2";
 
         /// <summary>
         /// Standard_FX32-16ms_v2 — 32 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX3216msV2 = "Standard_FX32-16ms_v2";
 
         /// <summary>
         /// Standard_FX32-8ms_v2 — 32 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX328msV2 = "Standard_FX32-8ms_v2";
 
         /// <summary>
         /// Standard_FX32ms_v2 — 32 vCPUs — 672 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX32msV2 = "Standard_FX32ms_v2";
 
         /// <summary>
         /// Standard_FX4-2ms_v2 — 4 vCPUs — 84 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX42msV2 = "Standard_FX4-2ms_v2";
 
         /// <summary>
         /// Standard_FX48-12ms_v2 — 48 vCPUs — 1008 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX4812msV2 = "Standard_FX48-12ms_v2";
 
         /// <summary>
         /// Standard_FX48-24ms_v2 — 48 vCPUs — 1008 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX4824msV2 = "Standard_FX48-24ms_v2";
 
         /// <summary>
         /// Standard_FX48ms_v2 — 48 vCPUs — 1008 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX48msV2 = "Standard_FX48ms_v2";
 
         /// <summary>
         /// Standard_FX4ms_v2 — 4 vCPUs — 84 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX4msV2 = "Standard_FX4ms_v2";
 
         /// <summary>
         /// Standard_FX64-16ms_v2 — 64 vCPUs — 1344 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX6416msV2 = "Standard_FX64-16ms_v2";
 
         /// <summary>
         /// Standard_FX64-32ms_v2 — 64 vCPUs — 1344 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX6432msV2 = "Standard_FX64-32ms_v2";
 
         /// <summary>
         /// Standard_FX64ms_v2 — 64 vCPUs — 1344 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX64msV2 = "Standard_FX64ms_v2";
 
         /// <summary>
         /// Standard_FX8-2ms_v2 — 8 vCPUs — 168 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX82msV2 = "Standard_FX8-2ms_v2";
 
         /// <summary>
         /// Standard_FX8-4ms_v2 — 8 vCPUs — 168 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX84msV2 = "Standard_FX8-4ms_v2";
 
         /// <summary>
         /// Standard_FX8ms_v2 — 8 vCPUs — 168 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX8msV2 = "Standard_FX8ms_v2";
 
         /// <summary>
         /// Standard_FX96-24ms_v2 — 96 vCPUs — 1832 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX9624msV2 = "Standard_FX96-24ms_v2";
 
         /// <summary>
         /// Standard_FX96-48ms_v2 — 96 vCPUs — 1832 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX9648msV2 = "Standard_FX96-48ms_v2";
 
         /// <summary>
         /// Standard_FX96ms_v2 — 96 vCPUs — 1832 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardFX96msV2 = "Standard_FX96ms_v2";
     }
 
@@ -6351,26 +7461,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_G1 — 2 vCPUs — 28 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardG1 = "Standard_G1";
 
         /// <summary>
         /// Standard_G2 — 4 vCPUs — 56 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardG2 = "Standard_G2";
 
         /// <summary>
         /// Standard_G3 — 8 vCPUs — 112 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardG3 = "Standard_G3";
 
         /// <summary>
         /// Standard_G4 — 16 vCPUs — 224 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardG4 = "Standard_G4";
 
         /// <summary>
         /// Standard_G5 — 32 vCPUs — 448 GB RAM
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardG5 = "Standard_G5";
     }
 
@@ -6382,46 +7497,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_GS1 — 2 vCPUs — 28 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS1 = "Standard_GS1";
 
         /// <summary>
         /// Standard_GS2 — 4 vCPUs — 56 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS2 = "Standard_GS2";
 
         /// <summary>
         /// Standard_GS3 — 8 vCPUs — 112 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS3 = "Standard_GS3";
 
         /// <summary>
         /// Standard_GS4 — 16 vCPUs — 224 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS4 = "Standard_GS4";
 
         /// <summary>
         /// Standard_GS4-4 — 16 vCPUs — 224 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS44 = "Standard_GS4-4";
 
         /// <summary>
         /// Standard_GS4-8 — 16 vCPUs — 224 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS48 = "Standard_GS4-8";
 
         /// <summary>
         /// Standard_GS5 — 32 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS5 = "Standard_GS5";
 
         /// <summary>
         /// Standard_GS5-16 — 32 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS516 = "Standard_GS5-16";
 
         /// <summary>
         /// Standard_GS5-8 — 32 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardGS58 = "Standard_GS5-8";
     }
 
@@ -6433,26 +7557,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_HB120-16rs_v2 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB12016rsV2 = "Standard_HB120-16rs_v2";
 
         /// <summary>
         /// Standard_HB120-32rs_v2 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB12032rsV2 = "Standard_HB120-32rs_v2";
 
         /// <summary>
         /// Standard_HB120-64rs_v2 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB12064rsV2 = "Standard_HB120-64rs_v2";
 
         /// <summary>
         /// Standard_HB120-96rs_v2 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB12096rsV2 = "Standard_HB120-96rs_v2";
 
         /// <summary>
         /// Standard_HB120rs_v2 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB120rsV2 = "Standard_HB120rs_v2";
     }
 
@@ -6464,26 +7593,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_HB120-16rs_v3 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB12016rsV3 = "Standard_HB120-16rs_v3";
 
         /// <summary>
         /// Standard_HB120-32rs_v3 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB12032rsV3 = "Standard_HB120-32rs_v3";
 
         /// <summary>
         /// Standard_HB120-64rs_v3 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB12064rsV3 = "Standard_HB120-64rs_v3";
 
         /// <summary>
         /// Standard_HB120-96rs_v3 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB12096rsV3 = "Standard_HB120-96rs_v3";
 
         /// <summary>
         /// Standard_HB120rs_v3 — 120 vCPUs — 456 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB120rsV3 = "Standard_HB120rs_v3";
     }
 
@@ -6495,26 +7629,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_HB176-144rs_v4 — 176 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB176144rsV4 = "Standard_HB176-144rs_v4";
 
         /// <summary>
         /// Standard_HB176-24rs_v4 — 176 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB17624rsV4 = "Standard_HB176-24rs_v4";
 
         /// <summary>
         /// Standard_HB176-48rs_v4 — 176 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB17648rsV4 = "Standard_HB176-48rs_v4";
 
         /// <summary>
         /// Standard_HB176-96rs_v4 — 176 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB17696rsV4 = "Standard_HB176-96rs_v4";
 
         /// <summary>
         /// Standard_HB176rs_v4 — 176 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB176rsV4 = "Standard_HB176rs_v4";
     }
 
@@ -6526,41 +7665,49 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_HB368-144rs_v5 — 368 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB368144rsV5 = "Standard_HB368-144rs_v5";
 
         /// <summary>
         /// Standard_HB368-192rs_v5 — 368 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB368192rsV5 = "Standard_HB368-192rs_v5";
 
         /// <summary>
         /// Standard_HB368-240rs_v5 — 368 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB368240rsV5 = "Standard_HB368-240rs_v5";
 
         /// <summary>
         /// Standard_HB368-288rs_v5 — 368 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB368288rsV5 = "Standard_HB368-288rs_v5";
 
         /// <summary>
         /// Standard_HB368-336rs_v5 — 368 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB368336rsV5 = "Standard_HB368-336rs_v5";
 
         /// <summary>
         /// Standard_HB368-48rs_v5 — 368 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB36848rsV5 = "Standard_HB368-48rs_v5";
 
         /// <summary>
         /// Standard_HB368-96rs_v5 — 368 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB36896rsV5 = "Standard_HB368-96rs_v5";
 
         /// <summary>
         /// Standard_HB368rs_v5 — 368 vCPUs — 448 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHB368rsV5 = "Standard_HB368rs_v5";
     }
 
@@ -6572,16 +7719,19 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_HC44-16rs — 44 vCPUs — 352 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHC4416rs = "Standard_HC44-16rs";
 
         /// <summary>
         /// Standard_HC44-32rs — 44 vCPUs — 352 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHC4432rs = "Standard_HC44-32rs";
 
         /// <summary>
         /// Standard_HC44rs — 44 vCPUs — 352 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHC44rs = "Standard_HC44rs";
     }
 
@@ -6593,26 +7743,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_HX176-144rs — 176 vCPUs — 1408 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHX176144rs = "Standard_HX176-144rs";
 
         /// <summary>
         /// Standard_HX176-24rs — 176 vCPUs — 1408 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHX17624rs = "Standard_HX176-24rs";
 
         /// <summary>
         /// Standard_HX176-48rs — 176 vCPUs — 1408 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHX17648rs = "Standard_HX176-48rs";
 
         /// <summary>
         /// Standard_HX176-96rs — 176 vCPUs — 1408 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHX17696rs = "Standard_HX176-96rs";
 
         /// <summary>
         /// Standard_HX176rs — 176 vCPUs — 1408 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardHX176rs = "Standard_HX176rs";
     }
 
@@ -6624,36 +7779,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_L12aos_v4 — 12 vCPUs — 96 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL12aosV4 = "Standard_L12aos_v4";
 
         /// <summary>
         /// Standard_L16aos_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL16aosV4 = "Standard_L16aos_v4";
 
         /// <summary>
         /// Standard_L24aos_v4 — 24 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL24aosV4 = "Standard_L24aos_v4";
 
         /// <summary>
         /// Standard_L2aos_v4 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL2aosV4 = "Standard_L2aos_v4";
 
         /// <summary>
         /// Standard_L32aos_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL32aosV4 = "Standard_L32aos_v4";
 
         /// <summary>
         /// Standard_L4aos_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL4aosV4 = "Standard_L4aos_v4";
 
         /// <summary>
         /// Standard_L8aos_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL8aosV4 = "Standard_L8aos_v4";
     }
 
@@ -6665,31 +7827,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_L16as_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL16asV3 = "Standard_L16as_v3";
 
         /// <summary>
         /// Standard_L32as_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL32asV3 = "Standard_L32as_v3";
 
         /// <summary>
         /// Standard_L48as_v3 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL48asV3 = "Standard_L48as_v3";
 
         /// <summary>
         /// Standard_L64as_v3 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL64asV3 = "Standard_L64as_v3";
 
         /// <summary>
         /// Standard_L80as_v3 — 80 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL80asV3 = "Standard_L80as_v3";
 
         /// <summary>
         /// Standard_L8as_v3 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL8asV3 = "Standard_L8as_v3";
     }
 
@@ -6701,46 +7869,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_L16as_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL16asV4 = "Standard_L16as_v4";
 
         /// <summary>
         /// Standard_L2as_v4 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL2asV4 = "Standard_L2as_v4";
 
         /// <summary>
         /// Standard_L32as_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL32asV4 = "Standard_L32as_v4";
 
         /// <summary>
         /// Standard_L48as_v4 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL48asV4 = "Standard_L48as_v4";
 
         /// <summary>
         /// Standard_L4as_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL4asV4 = "Standard_L4as_v4";
 
         /// <summary>
         /// Standard_L64as_v4 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL64asV4 = "Standard_L64as_v4";
 
         /// <summary>
         /// Standard_L80as_v4 — 80 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL80asV4 = "Standard_L80as_v4";
 
         /// <summary>
         /// Standard_L8as_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL8asV4 = "Standard_L8as_v4";
 
         /// <summary>
         /// Standard_L96as_v4 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL96asV4 = "Standard_L96as_v4";
     }
 
@@ -6752,21 +7929,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_L16s — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL16s = "Standard_L16s";
 
         /// <summary>
         /// Standard_L32s — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL32s = "Standard_L32s";
 
         /// <summary>
         /// Standard_L4s — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL4s = "Standard_L4s";
 
         /// <summary>
         /// Standard_L8s — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL8s = "Standard_L8s";
     }
 
@@ -6778,31 +7959,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_L16s_v2 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL16sV2 = "Standard_L16s_v2";
 
         /// <summary>
         /// Standard_L32s_v2 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL32sV2 = "Standard_L32s_v2";
 
         /// <summary>
         /// Standard_L48s_v2 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL48sV2 = "Standard_L48s_v2";
 
         /// <summary>
         /// Standard_L64s_v2 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL64sV2 = "Standard_L64s_v2";
 
         /// <summary>
         /// Standard_L80s_v2 — 80 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL80sV2 = "Standard_L80s_v2";
 
         /// <summary>
         /// Standard_L8s_v2 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL8sV2 = "Standard_L8s_v2";
     }
 
@@ -6814,31 +8001,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_L16s_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL16sV3 = "Standard_L16s_v3";
 
         /// <summary>
         /// Standard_L32s_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL32sV3 = "Standard_L32s_v3";
 
         /// <summary>
         /// Standard_L48s_v3 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL48sV3 = "Standard_L48s_v3";
 
         /// <summary>
         /// Standard_L64s_v3 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL64sV3 = "Standard_L64s_v3";
 
         /// <summary>
         /// Standard_L80s_v3 — 80 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL80sV3 = "Standard_L80s_v3";
 
         /// <summary>
         /// Standard_L8s_v3 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL8sV3 = "Standard_L8s_v3";
     }
 
@@ -6850,46 +8043,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_L16s_v4 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL16sV4 = "Standard_L16s_v4";
 
         /// <summary>
         /// Standard_L2s_v4 — 2 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL2sV4 = "Standard_L2s_v4";
 
         /// <summary>
         /// Standard_L32s_v4 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL32sV4 = "Standard_L32s_v4";
 
         /// <summary>
         /// Standard_L48s_v4 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL48sV4 = "Standard_L48s_v4";
 
         /// <summary>
         /// Standard_L4s_v4 — 4 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL4sV4 = "Standard_L4s_v4";
 
         /// <summary>
         /// Standard_L64s_v4 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL64sV4 = "Standard_L64s_v4";
 
         /// <summary>
         /// Standard_L80s_v4 — 80 vCPUs — 640 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL80sV4 = "Standard_L80s_v4";
 
         /// <summary>
         /// Standard_L8s_v4 — 8 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL8sV4 = "Standard_L8s_v4";
 
         /// <summary>
         /// Standard_L96s_v4 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardL96sV4 = "Standard_L96s_v4";
     }
 
@@ -6901,86 +8103,103 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M128-64bds_3_v3 — 128 vCPUs — 2794 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM12864bds3V3 = "Standard_M128-64bds_3_v3";
 
         /// <summary>
         /// Standard_M128-64bds_v3 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM12864bdsV3 = "Standard_M128-64bds_v3";
 
         /// <summary>
         /// Standard_M128bds_3_v3 — 128 vCPUs — 2794 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128bds3V3 = "Standard_M128bds_3_v3";
 
         /// <summary>
         /// Standard_M128bds_v3 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128bdsV3 = "Standard_M128bds_v3";
 
         /// <summary>
         /// Standard_M16bds_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM16bdsV3 = "Standard_M16bds_v3";
 
         /// <summary>
         /// Standard_M176-88bds_4_v3 — 176 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM17688bds4V3 = "Standard_M176-88bds_4_v3";
 
         /// <summary>
         /// Standard_M176-88bds_v3 — 176 vCPUs — 1536 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM17688bdsV3 = "Standard_M176-88bds_v3";
 
         /// <summary>
         /// Standard_M176bds_4_v3 — 176 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM176bds4V3 = "Standard_M176bds_4_v3";
 
         /// <summary>
         /// Standard_M176bds_v3 — 176 vCPUs — 1536 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM176bdsV3 = "Standard_M176bds_v3";
 
         /// <summary>
         /// Standard_M32bds_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM32bdsV3 = "Standard_M32bds_v3";
 
         /// <summary>
         /// Standard_M48bds_v3 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM48bdsV3 = "Standard_M48bds_v3";
 
         /// <summary>
         /// Standard_M64-32bds_1_v3 — 64 vCPUs — 1397 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM6432bds1V3 = "Standard_M64-32bds_1_v3";
 
         /// <summary>
         /// Standard_M64bds_1_v3 — 64 vCPUs — 1397 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64bds1V3 = "Standard_M64bds_1_v3";
 
         /// <summary>
         /// Standard_M64bds_v3 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64bdsV3 = "Standard_M64bds_v3";
 
         /// <summary>
         /// Standard_M96-48bds_2_v3 — 96 vCPUs — 1946 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM9648bds2V3 = "Standard_M96-48bds_2_v3";
 
         /// <summary>
         /// Standard_M96bds_2_v3 — 96 vCPUs — 1946 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM96bds2V3 = "Standard_M96bds_2_v3";
 
         /// <summary>
         /// Standard_M96bds_v3 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM96bdsV3 = "Standard_M96bds_v3";
     }
 
@@ -6992,51 +8211,61 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M128-64bs_v3 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM12864bsV3 = "Standard_M128-64bs_v3";
 
         /// <summary>
         /// Standard_M128bs_v3 — 128 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128bsV3 = "Standard_M128bs_v3";
 
         /// <summary>
         /// Standard_M16bs_v3 — 16 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM16bsV3 = "Standard_M16bs_v3";
 
         /// <summary>
         /// Standard_M176-88bs_v3 — 176 vCPUs — 1536 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM17688bsV3 = "Standard_M176-88bs_v3";
 
         /// <summary>
         /// Standard_M176bs_v3 — 176 vCPUs — 1536 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM176bsV3 = "Standard_M176bs_v3";
 
         /// <summary>
         /// Standard_M32bs_v3 — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM32bsV3 = "Standard_M32bs_v3";
 
         /// <summary>
         /// Standard_M416bs_v3 — 416 vCPUs — 3800 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416bsV3 = "Standard_M416bs_v3";
 
         /// <summary>
         /// Standard_M48bs_v3 — 48 vCPUs — 384 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM48bsV3 = "Standard_M48bs_v3";
 
         /// <summary>
         /// Standard_M64bs_v3 — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64bsV3 = "Standard_M64bs_v3";
 
         /// <summary>
         /// Standard_M96bs_v3 — 96 vCPUs — 768 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM96bsV3 = "Standard_M96bs_v3";
     }
 
@@ -7048,21 +8277,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M416ds_6_v3 — 416 vCPUs — 5696 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416ds6V3 = "Standard_M416ds_6_v3";
 
         /// <summary>
         /// Standard_M416ds_8_v3 — 416 vCPUs — 7600 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416ds8V3 = "Standard_M416ds_8_v3";
 
         /// <summary>
         /// Standard_M624ds_12_v3 — 624 vCPUs — 11400 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM624ds12V3 = "Standard_M624ds_12_v3";
 
         /// <summary>
         /// Standard_M832ds_12_v3 — 832 vCPUs — 11400 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM832ds12V3 = "Standard_M832ds_12_v3";
     }
 
@@ -7074,26 +8307,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M128dms_v2 — 128 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128dmsV2 = "Standard_M128dms_v2";
 
         /// <summary>
         /// Standard_M128ds_v2 — 128 vCPUs — 2048 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128dsV2 = "Standard_M128ds_v2";
 
         /// <summary>
         /// Standard_M32dms_v2 — 32 vCPUs — 875 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM32dmsV2 = "Standard_M32dms_v2";
 
         /// <summary>
         /// Standard_M64dms_v2 — 64 vCPUs — 1792 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64dmsV2 = "Standard_M64dms_v2";
 
         /// <summary>
         /// Standard_M64ds_v2 — 64 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64dsV2 = "Standard_M64ds_v2";
     }
 
@@ -7105,36 +8343,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M12ds_v3 — 12 vCPUs — 240 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM12dsV3 = "Standard_M12ds_v3";
 
         /// <summary>
         /// Standard_M176ds_3_v3 — 176 vCPUs — 2794 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM176ds3V3 = "Standard_M176ds_3_v3";
 
         /// <summary>
         /// Standard_M176ds_4_v3 — 176 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM176ds4V3 = "Standard_M176ds_4_v3";
 
         /// <summary>
         /// Standard_M24ds_v3 — 24 vCPUs — 480 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM24dsV3 = "Standard_M24ds_v3";
 
         /// <summary>
         /// Standard_M48ds_1_v3 — 48 vCPUs — 974 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM48ds1V3 = "Standard_M48ds_1_v3";
 
         /// <summary>
         /// Standard_M96ds_1_v3 — 96 vCPUs — 974 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM96ds1V3 = "Standard_M96ds_1_v3";
 
         /// <summary>
         /// Standard_M96ds_2_v3 — 96 vCPUs — 1946 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM96ds2V3 = "Standard_M96ds_2_v3";
     }
 
@@ -7146,6 +8391,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M832ids_16_v3 — 832 vCPUs — 15200 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM832ids16V3 = "Standard_M832ids_16_v3";
     }
 
@@ -7157,11 +8403,13 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M192idms_v2 — 192 vCPUs — 4096 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM192idmsV2 = "Standard_M192idms_v2";
 
         /// <summary>
         /// Standard_M192ids_v2 — 192 vCPUs — 2048 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM192idsV2 = "Standard_M192ids_v2";
     }
 
@@ -7173,6 +8421,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M832is_16_v3 — 832 vCPUs — 15200 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM832is16V3 = "Standard_M832is_16_v3";
     }
 
@@ -7184,11 +8433,13 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M192ims_v2 — 192 vCPUs — 4096 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM192imsV2 = "Standard_M192ims_v2";
 
         /// <summary>
         /// Standard_M192is_v2 — 192 vCPUs — 2048 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM192isV2 = "Standard_M192is_v2";
     }
 
@@ -7200,121 +8451,145 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M128 — 128 vCPUs — 2048 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128 = "Standard_M128";
 
         /// <summary>
         /// Standard_M128-32ms — 128 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM12832ms = "Standard_M128-32ms";
 
         /// <summary>
         /// Standard_M128-64ms — 128 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM12864ms = "Standard_M128-64ms";
 
         /// <summary>
         /// Standard_M128m — 128 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128m = "Standard_M128m";
 
         /// <summary>
         /// Standard_M128ms — 128 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128ms = "Standard_M128ms";
 
         /// <summary>
         /// Standard_M128s — 128 vCPUs — 2048 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128s = "Standard_M128s";
 
         /// <summary>
         /// Standard_M16-4ms — 16 vCPUs — 437.5 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM164ms = "Standard_M16-4ms";
 
         /// <summary>
         /// Standard_M16-8ms — 16 vCPUs — 437.5 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM168ms = "Standard_M16-8ms";
 
         /// <summary>
         /// Standard_M16ms — 16 vCPUs — 437.5 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM16ms = "Standard_M16ms";
 
         /// <summary>
         /// Standard_M32-16ms — 32 vCPUs — 875 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM3216ms = "Standard_M32-16ms";
 
         /// <summary>
         /// Standard_M32-8ms — 32 vCPUs — 875 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM328ms = "Standard_M32-8ms";
 
         /// <summary>
         /// Standard_M32ls — 32 vCPUs — 256 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM32ls = "Standard_M32ls";
 
         /// <summary>
         /// Standard_M32ms — 32 vCPUs — 875 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM32ms = "Standard_M32ms";
 
         /// <summary>
         /// Standard_M32ts — 32 vCPUs — 192 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM32ts = "Standard_M32ts";
 
         /// <summary>
         /// Standard_M64 — 64 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64 = "Standard_M64";
 
         /// <summary>
         /// Standard_M64-16ms — 64 vCPUs — 1792 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM6416ms = "Standard_M64-16ms";
 
         /// <summary>
         /// Standard_M64-32ms — 64 vCPUs — 1792 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM6432ms = "Standard_M64-32ms";
 
         /// <summary>
         /// Standard_M64ls — 64 vCPUs — 512 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64ls = "Standard_M64ls";
 
         /// <summary>
         /// Standard_M64m — 64 vCPUs — 1792 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64m = "Standard_M64m";
 
         /// <summary>
         /// Standard_M64ms — 64 vCPUs — 1792 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64ms = "Standard_M64ms";
 
         /// <summary>
         /// Standard_M64s — 64 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64s = "Standard_M64s";
 
         /// <summary>
         /// Standard_M8-2ms — 8 vCPUs — 218.75 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM82ms = "Standard_M8-2ms";
 
         /// <summary>
         /// Standard_M8-4ms — 8 vCPUs — 218.75 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM84ms = "Standard_M8-4ms";
 
         /// <summary>
         /// Standard_M8ms — 8 vCPUs — 218.75 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM8ms = "Standard_M8ms";
     }
 
@@ -7326,21 +8601,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M416s_6_v3 — 416 vCPUs — 5696 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416s6V3 = "Standard_M416s_6_v3";
 
         /// <summary>
         /// Standard_M416s_8_v3 — 416 vCPUs — 7600 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416s8V3 = "Standard_M416s_8_v3";
 
         /// <summary>
         /// Standard_M624s_12_v3 — 624 vCPUs — 11400 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM624s12V3 = "Standard_M624s_12_v3";
 
         /// <summary>
         /// Standard_M832s_12_v3 — 832 vCPUs — 11400 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM832s12V3 = "Standard_M832s_12_v3";
     }
 
@@ -7352,26 +8631,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M128ms_v2 — 128 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128msV2 = "Standard_M128ms_v2";
 
         /// <summary>
         /// Standard_M128s_v2 — 128 vCPUs — 2048 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM128sV2 = "Standard_M128s_v2";
 
         /// <summary>
         /// Standard_M32ms_v2 — 32 vCPUs — 875 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM32msV2 = "Standard_M32ms_v2";
 
         /// <summary>
         /// Standard_M64ms_v2 — 64 vCPUs — 1792 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64msV2 = "Standard_M64ms_v2";
 
         /// <summary>
         /// Standard_M64s_v2 — 64 vCPUs — 1024 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM64sV2 = "Standard_M64s_v2";
     }
 
@@ -7383,36 +8667,43 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M12s_v3 — 12 vCPUs — 240 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM12sV3 = "Standard_M12s_v3";
 
         /// <summary>
         /// Standard_M176s_3_v3 — 176 vCPUs — 2794 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM176s3V3 = "Standard_M176s_3_v3";
 
         /// <summary>
         /// Standard_M176s_4_v3 — 176 vCPUs — 3892 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM176s4V3 = "Standard_M176s_4_v3";
 
         /// <summary>
         /// Standard_M24s_v3 — 24 vCPUs — 480 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM24sV3 = "Standard_M24s_v3";
 
         /// <summary>
         /// Standard_M48s_1_v3 — 48 vCPUs — 974 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM48s1V3 = "Standard_M48s_1_v3";
 
         /// <summary>
         /// Standard_M96s_1_v3 — 96 vCPUs — 974 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM96s1V3 = "Standard_M96s_1_v3";
 
         /// <summary>
         /// Standard_M96s_2_v3 — 96 vCPUs — 1946 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM96s2V3 = "Standard_M96s_2_v3";
     }
 
@@ -7424,46 +8715,55 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_M208ms_v2 — 208 vCPUs — 5700 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM208msV2 = "Standard_M208ms_v2";
 
         /// <summary>
         /// Standard_M208s_v2 — 208 vCPUs — 2850 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM208sV2 = "Standard_M208s_v2";
 
         /// <summary>
         /// Standard_M416-208ms_v2 — 416 vCPUs — 11400 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416208msV2 = "Standard_M416-208ms_v2";
 
         /// <summary>
         /// Standard_M416-208s_v2 — 416 vCPUs — 5700 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416208sV2 = "Standard_M416-208s_v2";
 
         /// <summary>
         /// Standard_M416ms_v2 — 416 vCPUs — 11400 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416msV2 = "Standard_M416ms_v2";
 
         /// <summary>
         /// Standard_M416s_10_v2 — 416 vCPUs — 9496 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416s10V2 = "Standard_M416s_10_v2";
 
         /// <summary>
         /// Standard_M416s_8_v2 — 416 vCPUs — 7600 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416s8V2 = "Standard_M416s_8_v2";
 
         /// <summary>
         /// Standard_M416s_9_v2 — 416 vCPUs — 8568 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416s9V2 = "Standard_M416s_9_v2";
 
         /// <summary>
         /// Standard_M416s_v2 — 416 vCPUs — 5700 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardM416sV2 = "Standard_M416s_v2";
     }
 
@@ -7475,16 +8775,19 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NC24ads_A100_v4 — 24 vCPUs — 220 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC24adsA100V4 = "Standard_NC24ads_A100_v4";
 
         /// <summary>
         /// Standard_NC48ads_A100_v4 — 48 vCPUs — 440 GB RAM — 2 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC48adsA100V4 = "Standard_NC48ads_A100_v4";
 
         /// <summary>
         /// Standard_NC96ads_A100_v4 — 96 vCPUs — 880 GB RAM — 4 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC96adsA100V4 = "Standard_NC96ads_A100_v4";
     }
 
@@ -7496,16 +8799,19 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NC16ads_A10_v4 — 16 vCPUs — 200 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC16adsA10V4 = "Standard_NC16ads_A10_v4";
 
         /// <summary>
         /// Standard_NC32ads_A10_v4 — 32 vCPUs — 400 GB RAM — 2 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC32adsA10V4 = "Standard_NC32ads_A10_v4";
 
         /// <summary>
         /// Standard_NC8ads_A10_v4 — 8 vCPUs — 100 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC8adsA10V4 = "Standard_NC8ads_A10_v4";
     }
 
@@ -7517,11 +8823,13 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NC40ads_H100_v5 — 40 vCPUs — 320 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC40adsH100V5 = "Standard_NC40ads_H100_v5";
 
         /// <summary>
         /// Standard_NC80adis_H100_v5 — 80 vCPUs — 640 GB RAM — 2 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC80adisH100V5 = "Standard_NC80adis_H100_v5";
     }
 
@@ -7533,6 +8841,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NCC40ads_H100_v5 — 40 vCPUs — 320 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNCC40adsH100V5 = "Standard_NCC40ads_H100_v5";
     }
 
@@ -7544,21 +8853,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NC12s_v3 — 12 vCPUs — 224 GB RAM — 2 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC12sV3 = "Standard_NC12s_v3";
 
         /// <summary>
         /// Standard_NC24rs_v3 — 24 vCPUs — 448 GB RAM — 4 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC24rsV3 = "Standard_NC24rs_v3";
 
         /// <summary>
         /// Standard_NC24s_v3 — 24 vCPUs — 448 GB RAM — 4 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC24sV3 = "Standard_NC24s_v3";
 
         /// <summary>
         /// Standard_NC6s_v3 — 6 vCPUs — 112 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNC6sV3 = "Standard_NC6s_v3";
     }
 
@@ -7570,6 +8883,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_ND128isr_NDR_GB200_v6 — 128 vCPUs — 864 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND128isrNDRGB200V6 = "Standard_ND128isr_NDR_GB200_v6";
     }
 
@@ -7581,6 +8895,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_ND128isr_GB300_v6 — 128 vCPUs — 864 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND128isrGB300V6 = "Standard_ND128isr_GB300_v6";
     }
 
@@ -7592,6 +8907,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_ND96isr_H200_v5 — 96 vCPUs — 1850 GB RAM — 8 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND96isrH200V5 = "Standard_ND96isr_H200_v5";
     }
 
@@ -7603,11 +8919,13 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_ND96isr_MI300X_v5 — 96 vCPUs — 1850 GB RAM — 8 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND96isrMI300XV5 = "Standard_ND96isr_MI300X_v5";
 
         /// <summary>
         /// Standard_ND96is_MI300X_v5 — 96 vCPUs — 1850 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND96isMI300XV5 = "Standard_ND96is_MI300X_v5";
     }
 
@@ -7619,6 +8937,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_ND96isr_H100_v5 — 96 vCPUs — 1900 GB RAM — 8 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND96isrH100V5 = "Standard_ND96isr_H100_v5";
     }
 
@@ -7630,6 +8949,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_ND40rs_v2 — 40 vCPUs — 672 GB RAM — 8 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardND40rsV2 = "Standard_ND40rs_v2";
     }
 
@@ -7641,21 +8961,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NG16ads_V620_v1 — 16 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNG16adsV620V1 = "Standard_NG16ads_V620_v1";
 
         /// <summary>
         /// Standard_NG32adms_V620_v1 — 32 vCPUs — 176 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNG32admsV620V1 = "Standard_NG32adms_V620_v1";
 
         /// <summary>
         /// Standard_NG32ads_V620_v1 — 32 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNG32adsV620V1 = "Standard_NG32ads_V620_v1";
 
         /// <summary>
         /// Standard_NG8ads_V620_v1 — 8 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNG8adsV620V1 = "Standard_NG8ads_V620_v1";
     }
 
@@ -7667,16 +8991,19 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NP10s — 10 vCPUs — 168 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNP10s = "Standard_NP10s";
 
         /// <summary>
         /// Standard_NP20s — 20 vCPUs — 336 GB RAM — 2 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNP20s = "Standard_NP20s";
 
         /// <summary>
         /// Standard_NP40s — 40 vCPUs — 672 GB RAM — 4 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNP40s = "Standard_NP40s";
     }
 
@@ -7688,31 +9015,37 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NV12ads_A10_v5 — 12 vCPUs — 110 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV12adsA10V5 = "Standard_NV12ads_A10_v5";
 
         /// <summary>
         /// Standard_NV18ads_A10_v5 — 18 vCPUs — 220 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV18adsA10V5 = "Standard_NV18ads_A10_v5";
 
         /// <summary>
         /// Standard_NV36adms_A10_v5 — 36 vCPUs — 880 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV36admsA10V5 = "Standard_NV36adms_A10_v5";
 
         /// <summary>
         /// Standard_NV36ads_A10_v5 — 36 vCPUs — 440 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV36adsA10V5 = "Standard_NV36ads_A10_v5";
 
         /// <summary>
         /// Standard_NV6ads_A10_v5 — 6 vCPUs — 55 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV6adsA10V5 = "Standard_NV6ads_A10_v5";
 
         /// <summary>
         /// Standard_NV72ads_A10_v5 — 72 vCPUs — 880 GB RAM — 2 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV72adsA10V5 = "Standard_NV72ads_A10_v5";
     }
 
@@ -7724,26 +9057,31 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NV12ads_V710_v5 — 12 vCPUs — 64 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV12adsV710V5 = "Standard_NV12ads_V710_v5";
 
         /// <summary>
         /// Standard_NV24ads_V710_v5 — 24 vCPUs — 128 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV24adsV710V5 = "Standard_NV24ads_V710_v5";
 
         /// <summary>
         /// Standard_NV28adms_V710_v5 — 28 vCPUs — 160 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV28admsV710V5 = "Standard_NV28adms_V710_v5";
 
         /// <summary>
         /// Standard_NV4ads_V710_v5 — 4 vCPUs — 16 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV4adsV710V5 = "Standard_NV4ads_V710_v5";
 
         /// <summary>
         /// Standard_NV8ads_V710_v5 — 8 vCPUs — 32 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV8adsV710V5 = "Standard_NV8ads_V710_v5";
     }
 
@@ -7755,16 +9093,19 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NV12s_v2 — 12 vCPUs — 224 GB RAM — 2 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV12sV2 = "Standard_NV12s_v2";
 
         /// <summary>
         /// Standard_NV24s_v2 — 24 vCPUs — 448 GB RAM — 4 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV24sV2 = "Standard_NV24s_v2";
 
         /// <summary>
         /// Standard_NV6s_v2 — 6 vCPUs — 112 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV6sV2 = "Standard_NV6s_v2";
     }
 
@@ -7776,16 +9117,19 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NV12s_v3 — 12 vCPUs — 112 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV12sV3 = "Standard_NV12s_v3";
 
         /// <summary>
         /// Standard_NV24s_v3 — 24 vCPUs — 224 GB RAM — 2 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV24sV3 = "Standard_NV24s_v3";
 
         /// <summary>
         /// Standard_NV48s_v3 — 48 vCPUs — 448 GB RAM — 4 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV48sV3 = "Standard_NV48s_v3";
     }
 
@@ -7797,21 +9141,25 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_NV16as_v4 — 16 vCPUs — 56 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV16asV4 = "Standard_NV16as_v4";
 
         /// <summary>
         /// Standard_NV32as_v4 — 32 vCPUs — 112 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV32asV4 = "Standard_NV32as_v4";
 
         /// <summary>
         /// Standard_NV4as_v4 — 4 vCPUs — 14 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV4asV4 = "Standard_NV4as_v4";
 
         /// <summary>
         /// Standard_NV8as_v4 — 8 vCPUs — 28 GB RAM — 1 GPU(s) — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardNV8asV4 = "Standard_NV8as_v4";
     }
 
@@ -7823,6 +9171,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_PB6s — 6 vCPUs — 112 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardPB6s = "Standard_PB6s";
     }
 
@@ -7834,6 +9183,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E80ids_v4 — 80 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE80idsV4 = "Standard_E80ids_v4";
     }
 
@@ -7845,6 +9195,7 @@ public static partial class AksNodeVmSizes
         /// <summary>
         /// Standard_E80is_v4 — 80 vCPUs — 504 GB RAM — Premium SSD
         /// </summary>
+        [AspireValue("AksNodeVmSizes")]
         public const string StandardE80isV4 = "Standard_E80is_v4";
     }
 }

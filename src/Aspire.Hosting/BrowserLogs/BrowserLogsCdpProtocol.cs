@@ -40,6 +40,7 @@ internal static class BrowserLogsCdpProtocol
     internal const string NetworkRequestWillBeSentMethod = "Network.requestWillBeSent";
     internal const string NetworkResponseReceivedMethod = "Network.responseReceived";
     internal const string PageEnableMethod = "Page.enable";
+    internal const string PageCaptureScreenshotMethod = "Page.captureScreenshot";
     internal const string PageNavigateMethod = "Page.navigate";
     internal const string RuntimeConsoleApiCalledMethod = "Runtime.consoleAPICalled";
     internal const string RuntimeEnableMethod = "Runtime.enable";
@@ -191,6 +192,20 @@ internal static class BrowserLogsCdpProtocol
         ThrowIfProtocolError(envelope.Error);
 
         return BrowserLogsCommandAck.Instance;
+    }
+
+    internal static BrowserLogsCaptureScreenshotResult ParseCaptureScreenshotResponse(ReadOnlySpan<byte> framePayload)
+    {
+        var envelope = DeserializeFrame(framePayload, BrowserLogsCdpProtocolJsonContext.Default.BrowserLogsCaptureScreenshotResponseEnvelope);
+        ThrowIfProtocolError(envelope.Error);
+
+        var result = envelope.Result ?? throw new InvalidOperationException("Tracked browser screenshot capture did not return a result payload.");
+        if (string.IsNullOrWhiteSpace(result.Data))
+        {
+            throw new InvalidOperationException("Tracked browser screenshot capture did not return image data.");
+        }
+
+        return result;
     }
 
     internal static string DescribeFrame(ReadOnlySpan<byte> framePayload, int maxLength = 512)
@@ -402,6 +417,24 @@ internal sealed class BrowserLogsCommandAckResponseEnvelope
 
     [JsonPropertyName("id")]
     public long Id { get; init; }
+}
+
+internal sealed class BrowserLogsCaptureScreenshotResponseEnvelope
+{
+    [JsonPropertyName("error")]
+    public BrowserLogsCdpProtocolError? Error { get; init; }
+
+    [JsonPropertyName("id")]
+    public long Id { get; init; }
+
+    [JsonPropertyName("result")]
+    public BrowserLogsCaptureScreenshotResult? Result { get; init; }
+}
+
+internal sealed class BrowserLogsCaptureScreenshotResult
+{
+    [JsonPropertyName("data")]
+    public string? Data { get; init; }
 }
 
 internal interface IBrowserLogsEventEnvelope<out TParameters>
@@ -899,6 +932,7 @@ internal sealed class BrowserLogsCdpProtocolValueJsonConverter : JsonConverter<B
 
 [JsonSourceGenerationOptions(DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(BrowserLogsAttachToTargetResponseEnvelope))]
+[JsonSerializable(typeof(BrowserLogsCaptureScreenshotResponseEnvelope))]
 [JsonSerializable(typeof(BrowserLogsCommandAckResponseEnvelope))]
 [JsonSerializable(typeof(BrowserLogsConsoleApiCalledEnvelope))]
 [JsonSerializable(typeof(BrowserLogsCreateTargetResponseEnvelope))]

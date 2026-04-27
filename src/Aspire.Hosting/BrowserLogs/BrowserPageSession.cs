@@ -30,6 +30,10 @@ internal sealed class BrowserPageSession : IBrowserPageSession
     private readonly BrowserLogsCdpConnectionFactory _connectionFactory;
     private readonly Func<BrowserLogsCdpProtocolEvent, ValueTask> _eventHandler;
     private readonly IBrowserHost _host;
+    // Serializes every operation that replaces, disposes, or sends a command through the current CDP connection.
+    // Without this, screenshot capture can read a live connection reference while reconnect/dispose tears down that
+    // same websocket underneath it.
+    private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly bool _reuseInitialBlankTarget;
     private readonly string _sessionId;
@@ -70,6 +74,28 @@ internal sealed class BrowserPageSession : IBrowserPageSession
     public string TargetSessionId => _targetSessionId ?? throw new InvalidOperationException("Browser target session id is not available before the target session starts.");
 
     public Task<BrowserPageSessionResult> Completion => _monitorTask ?? throw new InvalidOperationException("Browser page session has not started.");
+
+    public async Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(CancellationToken cancellationToken)
+    {
+        await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+            var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
+            var targetSessionId = _targetSessionId ?? throw new InvalidOperationException("Browser target session id is not available before the target session starts.");
+
+            // Keep the lock for the whole CDP command. Capturing only the fields under the lock is not enough because
+            // BrowserPageSession.DisposeAsync and reconnect both dispose the connection object itself.
+            using var captureCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopCts.Token);
+            return await connection.CaptureScreenshotAsync(targetSessionId, captureCts.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
 
     internal static BrowserPageSessionResult? TryGetPageCompletion(BrowserLogsCdpProtocolEvent protocolEvent, string? targetId, string? targetSessionId)
     {
@@ -159,18 +185,29 @@ internal sealed class BrowserPageSession : IBrowserPageSession
 
         _stopCts.Cancel();
 
-        var connection = _connection;
-        if (connection is not null && ReferenceEquals(connection, _connection) && _targetId is not null)
+        // Cancel first so any in-flight screenshot command holding _connectionLock is interrupted before disposal waits
+        // for the lock. Once the lock is acquired, no new capture/reconnect can use the connection while the target is
+        // being closed and the websocket is being disposed.
+        await _connectionLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
         {
-            try
+            var connection = _connection;
+            if (connection is not null && ReferenceEquals(connection, _connection) && _targetId is not null)
             {
-                using var closeTargetCts = new CancellationTokenSource(s_closeTargetTimeout);
-                await connection.CloseTargetAsync(_targetId, closeTargetCts.Token).ConfigureAwait(false);
+                try
+                {
+                    using var closeTargetCts = new CancellationTokenSource(s_closeTargetTimeout);
+                    await connection.CloseTargetAsync(_targetId, closeTargetCts.Token).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to close tracked browser target '{TargetId}' for session '{SessionId}'.", _targetId, _sessionId);
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Failed to close tracked browser target '{TargetId}' for session '{SessionId}'.", _targetId, _sessionId);
-            }
+        }
+        finally
+        {
+            _connectionLock.Release();
         }
 
         _completionSource.TrySetResult(new BrowserPageSessionResult(BrowserPageSessionCompletionKind.Stopped, Error: null));
@@ -189,41 +226,53 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         }
 
         _stopCts.Dispose();
+        _connectionLock.Dispose();
     }
 
     private async Task ConnectAsync(bool createTarget, CancellationToken cancellationToken)
     {
-        await DisposeConnectionAsync().ConfigureAwait(false);
+        // ConnectAsync is used for startup and reconnect. It swaps the current websocket, target attachment, and target
+        // session id as one critical section so command callers never observe a half-attached page session.
+        await _connectionLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        _connection = await _connectionFactory(_host.DebugEndpoint, HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
-        // Target discovery must be re-enabled for every browser-level connection, including reconnects. The
-        // subscription is attached to this websocket, not to the browser process, and it is what makes Chromium emit
-        // targetDestroyed/targetCrashed/detachedFromTarget events that tell us whether the tracked tab is gone.
-        await _connection.EnableTargetDiscoveryAsync(cancellationToken).ConfigureAwait(false);
-
-        if (createTarget)
+        try
         {
-            _targetId = await CreateTargetAsync(cancellationToken).ConfigureAwait(false);
+            await DisposeConnectionCoreAsync().ConfigureAwait(false);
+
+            _connection = await _connectionFactory(_host.DebugEndpoint, HandleEventAsync, _logger, cancellationToken).ConfigureAwait(false);
+            // Target discovery must be re-enabled for every browser-level connection, including reconnects. The
+            // subscription is attached to this websocket, not to the browser process, and it is what makes Chromium emit
+            // targetDestroyed/targetCrashed/detachedFromTarget events that tell us whether the tracked tab is gone.
+            await _connection.EnableTargetDiscoveryAsync(cancellationToken).ConfigureAwait(false);
+
+            if (createTarget)
+            {
+                _targetId = await CreateTargetAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            if (_targetId is null)
+            {
+                throw new InvalidOperationException("Tracked browser target id is not available.");
+            }
+
+            // Reconnects reuse the existing target id. A transient websocket drop does not necessarily close the browser
+            // tab, so recovering should reattach to the same page instead of opening a duplicate tab in the user's browser.
+            var attachToTargetResult = await _connection.AttachToTargetAsync(_targetId, cancellationToken).ConfigureAwait(false);
+            _targetSessionId = attachToTargetResult.SessionId
+                ?? throw new InvalidOperationException("Browser target attachment did not return a session id.");
+
+            // Runtime/Log/Page/Network subscriptions are scoped to the attached target session. They have to be re-enabled
+            // after every attach, including reconnects, or the page keeps running with no events flowing back to resource logs.
+            await _connection.EnablePageInstrumentationAsync(_targetSessionId, cancellationToken).ConfigureAwait(false);
+
+            if (createTarget)
+            {
+                await _connection.NavigateAsync(_targetSessionId, _url, cancellationToken).ConfigureAwait(false);
+            }
         }
-
-        if (_targetId is null)
+        finally
         {
-            throw new InvalidOperationException("Tracked browser target id is not available.");
-        }
-
-        // Reconnects reuse the existing target id. A transient websocket drop does not necessarily close the browser
-        // tab, so recovering should reattach to the same page instead of opening a duplicate tab in the user's browser.
-        var attachToTargetResult = await _connection.AttachToTargetAsync(_targetId, cancellationToken).ConfigureAwait(false);
-        _targetSessionId = attachToTargetResult.SessionId
-            ?? throw new InvalidOperationException("Browser target attachment did not return a session id.");
-
-        // Runtime/Log/Page/Network subscriptions are scoped to the attached target session. They have to be re-enabled
-        // after every attach, including reconnects, or the page keeps running with no events flowing back to resource logs.
-        await _connection.EnablePageInstrumentationAsync(_targetSessionId, cancellationToken).ConfigureAwait(false);
-
-        if (createTarget)
-        {
-            await _connection.NavigateAsync(_targetSessionId, _url, cancellationToken).ConfigureAwait(false);
+            _connectionLock.Release();
         }
     }
 
@@ -280,8 +329,10 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         {
             while (true)
             {
-                var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
-                var completedTask = await Task.WhenAny(_host.Termination, connection.Completion, _completionSource.Task).ConfigureAwait(false);
+                // Don't hold _connectionLock while awaiting the connection completion task: reconnect and disposal need
+                // the same lock. Instead snapshot the stable completion task under the lock, then await the snapshot.
+                var connectionSnapshot = await GetConnectionSnapshotAsync().ConfigureAwait(false);
+                var completedTask = await Task.WhenAny(_host.Termination, connectionSnapshot.Completion, _completionSource.Task).ConfigureAwait(false);
 
                 if (completedTask == _completionSource.Task)
                 {
@@ -298,7 +349,7 @@ internal sealed class BrowserPageSession : IBrowserPageSession
                 Exception? connectionError = null;
                 try
                 {
-                    await connection.Completion.ConfigureAwait(false);
+                    await connectionSnapshot.Completion.ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -400,7 +451,34 @@ internal sealed class BrowserPageSession : IBrowserPageSession
         }
     }
 
+    private async Task<ConnectionSnapshot> GetConnectionSnapshotAsync()
+    {
+        await _connectionLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            var connection = _connection ?? throw new InvalidOperationException("Tracked browser debug connection is not available.");
+            return new ConnectionSnapshot(connection.Completion);
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
+
     private async Task DisposeConnectionAsync()
+    {
+        await _connectionLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            await DisposeConnectionCoreAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
+
+    private async Task DisposeConnectionCoreAsync()
     {
         var connection = _connection;
         _connection = null;
@@ -410,4 +488,6 @@ internal sealed class BrowserPageSession : IBrowserPageSession
             await connection.DisposeAsync().ConfigureAwait(false);
         }
     }
+
+    private sealed record ConnectionSnapshot(Task Completion);
 }

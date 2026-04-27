@@ -3,7 +3,7 @@ import { AzureEventHubsRole, createBuilder } from './.modules/aspire.js';
 const builder = await createBuilder();
 const eventHubs = await builder.addAzureEventHubs('eventhubs');
 
-await eventHubs.withEventHubsRoleAssignments(eventHubs, [AzureEventHubsRole.AzureEventHubsDataOwner]);
+await eventHubs.withRoleAssignments(eventHubs, [AzureEventHubsRole.AzureEventHubsDataOwner]);
 
 const hub = await eventHubs.addHub('orders', { hubName: 'orders-hub' });
 await hub.withProperties(async (configuredHub) => {
@@ -14,18 +14,18 @@ await hub.withProperties(async (configuredHub) => {
     const _partitionCount: number | undefined = await configuredHub.partitionCount.get();
 });
 
-const _hubParent = await hub.parent.get();
-const _hubConnectionString = await hub.connectionStringExpression.get();
+const _hubParent = await hub.parent();
+const _hubConnectionString = await hub.connectionStringExpression();
 
 const consumerGroup = await hub.addConsumerGroup('processors', { groupName: 'processor-group' });
-await consumerGroup.withEventHubsRoleAssignments(eventHubs, [AzureEventHubsRole.AzureEventHubsDataReceiver]);
+await consumerGroup.withRoleAssignments(eventHubs, [AzureEventHubsRole.AzureEventHubsDataReceiver]);
 
 await eventHubs.runAsEmulator({
     configureContainer: async (emulator) => {
         await emulator
             .withHostPort({ port: 5673 })
             .withConfigurationFile('./eventhubs.config.json')
-            .withEventHubsRoleAssignments(eventHubs, [AzureEventHubsRole.AzureEventHubsDataSender]);
+            .withRoleAssignments(eventHubs, [AzureEventHubsRole.AzureEventHubsDataSender]);
     }
 });
 

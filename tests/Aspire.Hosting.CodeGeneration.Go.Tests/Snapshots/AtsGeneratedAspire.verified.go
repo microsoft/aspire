@@ -97,6 +97,28 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 }
 
 // ============================================================================
+// Exported Values
+// ============================================================================
+
+var TestConfigs = struct {
+	Default *TestConfigDto
+	Profiles struct {
+		Development *TestConfigDto
+	}
+	Secure *TestConfigDto
+	UnicodeGreeting string
+}{
+	Default: &TestConfigDto{Name: "default", Port: 6379, Enabled: true, OptionalField: "cache"},
+	Profiles: struct {
+		Development *TestConfigDto
+	}{
+		Development: &TestConfigDto{Name: "development", Port: 5001, Enabled: false, OptionalField: nil},
+	},
+	Secure: &TestConfigDto{Name: "secure", Port: 6380, Enabled: true, OptionalField: nil},
+	UnicodeGreeting: "你好こんにちは",
+}
+
+// ============================================================================
 // Marker interfaces (from interface-metadata types)
 // ============================================================================
 
@@ -1296,6 +1318,68 @@ func (s *testEnvironmentContext) SetPriority(value float64) TestEnvironmentConte
 	return s
 }
 
+// TestMutableCollectionContext is the public interface for handle type TestMutableCollectionContext.
+type TestMutableCollectionContext interface {
+	handleReference
+	SetCounts(value *Dict[string, float64]) TestMutableCollectionContext
+	SetTags(value *List[string]) TestMutableCollectionContext
+	Counts() *Dict[string, float64]
+	Tags() *List[string]
+	Err() error
+}
+
+// testMutableCollectionContext is the unexported impl of TestMutableCollectionContext.
+type testMutableCollectionContext struct {
+	*resourceBuilderBase
+	counts *Dict[string, float64]
+	tags *List[string]
+}
+
+// newTestMutableCollectionContextFromHandle wraps an existing handle as TestMutableCollectionContext.
+func newTestMutableCollectionContextFromHandle(h *handle, c *client) TestMutableCollectionContext {
+	return &testMutableCollectionContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Counts gets the Counts property
+func (s *testMutableCollectionContext) Counts() *Dict[string, float64] {
+	if s.counts == nil {
+		s.counts = newDictWithGetter[string, float64](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts")
+	}
+	return s.counts
+}
+
+// SetCounts sets the Counts property
+func (s *testMutableCollectionContext) SetCounts(value *Dict[string, float64]) TestMutableCollectionContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if value != nil { reqArgs["value"] = serializeValue(value) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetTags sets the Tags property
+func (s *testMutableCollectionContext) SetTags(value *List[string]) TestMutableCollectionContext {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if value != nil { reqArgs["value"] = serializeValue(value) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// Tags gets the Tags property
+func (s *testMutableCollectionContext) Tags() *List[string] {
+	if s.tags == nil {
+		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags")
+	}
+	return s.tags
+}
+
 // TestRedisResource is the public interface for handle type TestRedisResource.
 type TestRedisResource interface {
 	handleReference
@@ -2207,6 +2291,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", func(h *handle, c *client) any {
 		return newTestEnvironmentContextFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", func(h *handle, c *client) any {
+		return newTestMutableCollectionContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", func(h *handle, c *client) any {
 		return newTestRedisResourceFromHandle(h, c)
