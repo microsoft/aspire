@@ -20,7 +20,7 @@ app.MapGet("/chat", async (string? message) =>
 
 app.MapGet("/research", async (string? message) =>
 {
-    return await InvokeAgentAsync("research-agent", message ?? "What are the latest .NET Aspire features?");
+    return await InvokeAgentAsync("research-agent", message ?? "What are the latest Aspire features?");
 });
 
 static async Task<IResult> InvokeAgentAsync(string agentResourceName, string message)
