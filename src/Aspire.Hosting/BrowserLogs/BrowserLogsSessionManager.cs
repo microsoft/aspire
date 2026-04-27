@@ -199,21 +199,43 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             }
         }
 
-        foreach (var session in sessionsToStop)
+        try
         {
-            await session.StopAsync(CancellationToken.None).ConfigureAwait(false);
+            // StopAsync can throw (for example OperationCanceledException from BrowserHostLease's release timeout).
+            // Catch per-session so one failure doesn't strand other sessions, and use try/finally below so the locks
+            // and session factory are always disposed.
+            foreach (var session in sessionsToStop)
+            {
+                try
+                {
+                    await session.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to stop tracked browser session during disposal.");
+                }
+            }
+
+            try
+            {
+                await Task.WhenAll(completionObservers).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Tracked browser session completion observer failed during disposal.");
+            }
         }
-
-        await Task.WhenAll(completionObservers).ConfigureAwait(false);
-
-        foreach (var (_, resourceState) in _resourceStates)
+        finally
         {
-            resourceState.Lock.Dispose();
-        }
+            foreach (var (_, resourceState) in _resourceStates)
+            {
+                resourceState.Lock.Dispose();
+            }
 
-        if (_sessionFactory is IAsyncDisposable asyncDisposableFactory)
-        {
-            await asyncDisposableFactory.DisposeAsync().ConfigureAwait(false);
+            if (_sessionFactory is IAsyncDisposable asyncDisposableFactory)
+            {
+                await asyncDisposableFactory.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 

@@ -69,7 +69,11 @@ internal enum BrowserPageSessionCompletionKind
 // releases a shared host, which keeps owned/adopted browser lifetime centralized in BrowserHostRegistry.
 internal sealed class BrowserHostLease : IAsyncDisposable
 {
-    private static readonly TimeSpan s_releaseTimeout = TimeSpan.FromSeconds(5);
+    // Lease release acquires the BrowserHostRegistry lock, which is held across CreateHostCoreAsync. Owned-browser
+    // startup waits up to s_browserEndpointTimeout (30s) for DevToolsActivePort, so the release timeout must exceed
+    // that worst case to avoid a release-cancellation that strands the registry reference count permanently
+    // incremented. We also swallow timeouts at the lease boundary so disposal of an owning session never throws.
+    private static readonly TimeSpan s_releaseTimeout = TimeSpan.FromSeconds(60);
 
     private readonly Func<CancellationToken, ValueTask> _releaseAsync;
     private int _disposed;
@@ -90,7 +94,16 @@ internal sealed class BrowserHostLease : IAsyncDisposable
         }
 
         using var releaseCts = new CancellationTokenSource(s_releaseTimeout);
-        await _releaseAsync(releaseCts.Token).ConfigureAwait(false);
+        try
+        {
+            await _releaseAsync(releaseCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (releaseCts.IsCancellationRequested)
+        {
+            // Release contended for the registry lock past the timeout. The registry will eventually release on its
+            // own DisposeAsync path; do not propagate to our caller (typically a session DisposeAsync) where it would
+            // mask other cleanup failures.
+        }
     }
 }
 

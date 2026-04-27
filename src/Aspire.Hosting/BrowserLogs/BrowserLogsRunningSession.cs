@@ -297,9 +297,18 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
             return;
         }
 
-        await DisposePageSessionAsync().ConfigureAwait(false);
-        await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);
-        _stopCts.Dispose();
+        try
+        {
+            await DisposePageSessionAsync().ConfigureAwait(false);
+            await DisposeBrowserHostLeaseAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            // Always dispose the stop CTS even if lease release threw. BrowserHostLease.DisposeAsync can propagate
+            // OperationCanceledException from its release timeout; without try/finally we leak the CTS and any
+            // registrations on it.
+            _stopCts.Dispose();
+        }
     }
 
     private async Task DisposePageSessionAsync()

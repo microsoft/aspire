@@ -77,6 +77,10 @@ internal sealed class OwnedBrowserHost : BrowserHost
     // Browser startup is a local process + file hand-off. Give Chromium enough time to initialize under CI/dev-machine
     // load, poll frequently enough for a responsive dashboard command, and cap shutdown so AppHost disposal cannot hang
     // forever on a stuck browser process.
+    // Browser launch races against itself: the OS spawns the process, the process starts up, picks a remote-debugging
+    // port, and writes DevToolsActivePort. 30 seconds covers cold-start cases (large profile, AV scan, slow disk) while
+    // still failing fast enough to surface a wedged launch. The 100 ms poll interval is short enough to feel instant
+    // for warm starts but long enough to avoid burning a core busy-spinning on the file system.
     private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan s_browserEndpointPollInterval = TimeSpan.FromMilliseconds(100);
 
@@ -308,6 +312,7 @@ internal sealed class OwnedBrowserHost : BrowserHost
         CancellationToken cancellationToken)
     {
         var timeoutAt = timeProvider.GetUtcNow() + s_browserEndpointTimeout;
+        logger.LogTrace("Waiting up to {Timeout} for tracked browser to publish DevToolsActivePort at '{DevToolsActivePortFilePath}'.", s_browserEndpointTimeout, devToolsActivePortFilePath);
 
         while (timeProvider.GetUtcNow() < timeoutAt)
         {

@@ -337,6 +337,9 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     private static string ResolveProfileDirectoryName(string userDataDirectory, string profile)
     {
         var localStatePath = Path.Combine(userDataDirectory, "Local State");
+        // Chromium writes a "Local State" JSON file at the user data root containing profile metadata (info_cache).
+        // ChromiumBrowserResolver uses it to map display names like "Personal" or shortcut names back to their on-disk
+        // profile directory ("Profile 1", "Profile 2", ...).
         if (File.Exists(localStatePath))
         {
             return ChromiumBrowserResolver.ResolveProfileDirectory(userDataDirectory, profile);
@@ -352,6 +355,10 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         // A request without an explicit profile can attach to any tracked browser for the same user data root. Once a
         // caller asks for a named profile, however, reusing a host launched for a different profile would put the session
         // in the wrong browser context, so fail instead of silently attaching to the wrong profile.
+        // Profile directory names are case-insensitive on Windows and macOS (default APFS) but case-sensitive on Linux.
+        // We compare with OrdinalIgnoreCase intentionally so a request for "default" attaches to a host that was
+        // launched with "Default": Chromium itself accepts either casing on Windows/macOS, and on Linux the user is
+        // expected to specify the literal directory name. We err on the side of attaching rather than rejecting.
         if (requestedProfileDirectoryName is null ||
             string.Equals(existingProfileDirectoryName, requestedProfileDirectoryName, StringComparison.OrdinalIgnoreCase))
         {
