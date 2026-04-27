@@ -4,11 +4,9 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <NoWarn>$(NoWarn);OPENAI001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.AI.Extensions.OpenAI" />
     <PackageReference Include="Azure.AI.Projects" />
     <PackageReference Include="Azure.Identity" />
   </ItemGroup>

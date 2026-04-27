@@ -468,7 +468,7 @@ public class PromptAgentTests
 
         Assert.IsAssignableFrom<IResourceWithConnectionString>(agent.Resource);
         Assert.IsAssignableFrom<IResourceWithEnvironment>(agent.Resource);
-        Assert.IsAssignableFrom<IComputeResource>(agent.Resource);
+        Assert.IsNotAssignableFrom<IComputeResource>(agent.Resource);
     }
 
     [Fact]

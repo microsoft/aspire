@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using OpenAI.Responses;
@@ -101,10 +100,6 @@ public sealed class WebSearchToolResource : FoundryToolResource
 /// <summary>
 /// A Foundry tool resource that enables an agent to generate and edit images.
 /// </summary>
-/// <remarks>
-/// This is an experimental feature and may change in future releases.
-/// </remarks>
-[Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport]
 public sealed class ImageGenerationToolResource : FoundryToolResource
 {
@@ -130,10 +125,8 @@ public sealed class ImageGenerationToolResource : FoundryToolResource
 /// by taking screenshots, moving the mouse, clicking, and typing.
 /// </summary>
 /// <remarks>
-/// This is an experimental feature and may change in future releases.
 /// The computer tool requires specifying the display dimensions and environment.
 /// </remarks>
-[Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport]
 public sealed class ComputerToolResource : FoundryToolResource
 {

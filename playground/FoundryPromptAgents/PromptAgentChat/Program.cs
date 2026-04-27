@@ -25,17 +25,11 @@ app.MapGet("/research", async (string? message) =>
 
 static async Task<IResult> InvokeAgentAsync(string agentResourceName, string message)
 {
-    var connectionString = Environment.GetEnvironmentVariable($"ConnectionStrings__{agentResourceName}")
-        ?? throw new InvalidOperationException($"ConnectionStrings__{agentResourceName} is not set.");
-
-    var agentIndex = connectionString.IndexOf("/agents/", StringComparison.OrdinalIgnoreCase);
-    if (agentIndex < 0)
-    {
-        throw new InvalidOperationException("Connection string doesn't contain '/agents/' segment.");
-    }
-
-    var projectEndpoint = connectionString[..agentIndex];
-    var agentName = connectionString[(agentIndex + "/agents/".Length)..];
+    var environmentPrefix = agentResourceName.Replace('-', '_').ToUpperInvariant();
+    var projectEndpoint = Environment.GetEnvironmentVariable($"{environmentPrefix}_PROJECTENDPOINT")
+        ?? throw new InvalidOperationException($"{environmentPrefix}_PROJECTENDPOINT is not set.");
+    var agentName = Environment.GetEnvironmentVariable($"{environmentPrefix}_AGENTNAME")
+        ?? throw new InvalidOperationException($"{environmentPrefix}_AGENTNAME is not set.");
 
     var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
     var agentRef = new AgentReference(name: agentName);

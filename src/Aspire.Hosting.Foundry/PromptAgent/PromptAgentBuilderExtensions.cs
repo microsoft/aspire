@@ -3,11 +3,9 @@
 
 #pragma warning disable OPENAI001 // Responses API is experimental
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
-using Aspire.Hosting.Lifecycle;
 using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.Identity;
@@ -68,9 +66,6 @@ public static class PromptAgentBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         var agent = new AzurePromptAgentResource(name, model.Resource.DeploymentName, project.Resource, instructions);
-
-        // Register the deployer that handles prompt agent deployment during aspire run
-        project.ApplicationBuilder.Services.TryAddEventingSubscriber<PromptAgentDeployer>();
 
         var agentBuilder = project.ApplicationBuilder.AddResource(agent)
             .WithReferenceRelationship(project)
@@ -148,7 +143,7 @@ public static class PromptAgentBuilderExtensions
         );
 
         // Add Foundry portal URL for the agent (populated after deployment when subscription info is available)
-        // The actual URL is set by the PromptAgentDeployer after provisioning completes.
+        // The actual URL is set after provisioning completes.
 
         return agentBuilder;
     }
@@ -249,7 +244,6 @@ public static class PromptAgentBuilderExtensions
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Adds an Image Generation tool to a Microsoft Foundry project.")]
     public static IResourceBuilder<ImageGenerationToolResource> AddImageGenerationTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
@@ -273,7 +267,6 @@ public static class PromptAgentBuilderExtensions
     /// <param name="displayHeight">The height of the display in pixels.</param>
     /// <param name="environment">The environment identifier. Defaults to "browser".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [Experimental("ASPIREFOUNDRY001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Adds a Computer Use tool to a Microsoft Foundry project.")]
     public static IResourceBuilder<ComputerToolResource> AddComputerUseTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
@@ -639,7 +632,7 @@ public static class PromptAgentBuilderExtensions
     /// <param name="strictModeEnabled">Whether to enable strict mode for parameter validation.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
     [AspireExport(Description = "Adds a function calling tool to a Microsoft Foundry project.")]
-    public static IResourceBuilder<FunctionToolResource> AddFunctionTool(
+    internal static IResourceBuilder<FunctionToolResource> AddFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
         string functionName,

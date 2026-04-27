@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Immutable;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -9,6 +10,8 @@ using Aspire.Hosting.Publishing;
 using Azure.AI.Projects;
 using Azure.AI.Projects.Agents;
 using Azure.Identity;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Foundry;
@@ -26,6 +29,7 @@ namespace Aspire.Hosting.Foundry;
 [AspireExport(ExposeProperties = true)]
 public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IResourceWithConnectionString
 {
+    private const string BeforeStartStepName = "before-start";
     private readonly List<FoundryToolResource> _tools = [];
 
     /// <summary>
@@ -52,13 +56,26 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
         Annotations.Add(new ManifestPublishingCallbackAnnotation(PublishAsync));
 
         // Set up pipeline steps for deploying this prompt agent
-        Annotations.Add(new PipelineStepAnnotation(async (ctx) =>
+        Annotations.Add(new PipelineStepAnnotation(_ =>
         {
             var steps = new List<PipelineStep>();
+
+            var beforeStartDeployStep = new PipelineStep
+            {
+                Name = $"deploy-{Name}-before-start",
+                Description = $"Deploys prompt agent {Name} before the application starts.",
+                Action = DeployBeforeStartAsync,
+                Tags = [WellKnownPipelineTags.DeployCompute],
+                RequiredBySteps = [BeforeStartStepName],
+                Resource = this,
+                DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName]
+            };
+            steps.Add(beforeStartDeployStep);
 
             var agentDeployStep = new PipelineStep
             {
                 Name = $"deploy-{Name}",
+                Description = $"Deploys prompt agent {Name}.",
                 Action = async (stepCtx) =>
                 {
                     var version = await DeployAsync(stepCtx, Project).ConfigureAwait(false);
@@ -73,7 +90,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
             };
             steps.Add(agentDeployStep);
 
-            return steps;
+            return Task.FromResult<IEnumerable<PipelineStep>>(steps);
         }));
     }
 
@@ -175,19 +192,9 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
     }
 
     /// <summary>
-    /// Deploys the prompt agent to the parent Microsoft Foundry project.
-    /// </summary>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The deployed agent version.</returns>
-    public async Task<ProjectsAgentVersion> DeployAsync(CancellationToken cancellationToken = default)
-    {
-        return await DeployAsync(Project, context: null, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
     /// Deploys the prompt agent to the given Microsoft Foundry project.
     /// </summary>
-    internal async Task<ProjectsAgentVersion> DeployAsync(AzureCognitiveServicesProjectResource project, PipelineStepContext? context, CancellationToken cancellationToken)
+    internal async Task<ProjectsAgentVersion> DeployAsync(AzureCognitiveServicesProjectResource project, PipelineStepContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -197,11 +204,11 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid endpoint.");
         }
 
-        var config = await ToPromptAgentConfigurationAsync(context, cancellationToken).ConfigureAwait(false);
+        var options = await ToProjectsAgentVersionCreationOptionsAsync(context, cancellationToken).ConfigureAwait(false);
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), new DefaultAzureCredential());
         var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
-            config.ToProjectsAgentVersionCreationOptions(),
+            options,
             cancellationToken: cancellationToken
         ).ConfigureAwait(false);
 
@@ -211,26 +218,156 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
     /// <summary>
     /// Builds the agent configuration, resolving all tool definitions at deploy time.
     /// </summary>
-    internal async Task<PromptAgentConfiguration> ToPromptAgentConfigurationAsync(PipelineStepContext? context, CancellationToken cancellationToken)
+    internal async Task<ProjectsAgentVersionCreationOptions> ToProjectsAgentVersionCreationOptionsAsync(PipelineStepContext? context, CancellationToken cancellationToken)
     {
-        var config = new PromptAgentConfiguration(Model, Instructions)
+        var definition = new DeclarativeAgentDefinition(Model)
         {
-            Description = Description,
-            Metadata = new Dictionary<string, string>(Metadata)
+            Instructions = Instructions
         };
 
         foreach (var tool in _tools)
         {
             var agentTool = await tool.ToAgentToolAsync(context, cancellationToken).ConfigureAwait(false);
-            config.Tools.Add(agentTool);
+            definition.Tools.Add(agentTool);
         }
 
         foreach (var customTool in CustomTools)
         {
             var agentTool = await customTool.ToAgentToolAsync(context, cancellationToken).ConfigureAwait(false);
-            config.Tools.Add(agentTool);
+            definition.Tools.Add(agentTool);
         }
 
-        return config;
+        var options = new ProjectsAgentVersionCreationOptions(definition)
+        {
+            Description = Description,
+        };
+
+        foreach (var kvp in Metadata)
+        {
+            options.Metadata[kvp.Key] = kvp.Value;
+        }
+
+        return options;
+    }
+
+    private async Task DeployBeforeStartAsync(PipelineStepContext context)
+    {
+        if (!context.ExecutionContext.IsRunMode)
+        {
+            return;
+        }
+
+        var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
+        var loggerService = context.Services.GetRequiredService<ResourceLoggerService>();
+        var logger = loggerService.GetLogger(this);
+
+        try
+        {
+            foreach (var tool in Tools)
+            {
+                await notificationService.PublishUpdateAsync(tool, s => s with
+                {
+                    State = new("Waiting", KnownResourceStateStyles.Info)
+                }).ConfigureAwait(false);
+            }
+
+            await notificationService.PublishUpdateAsync(this, s => s with
+            {
+                State = new("Waiting for project", KnownResourceStateStyles.Info)
+            }).ConfigureAwait(false);
+
+            await WaitForProjectAndToolsAsync(notificationService, context.CancellationToken).ConfigureAwait(false);
+
+            await notificationService.PublishUpdateAsync(this, s => s with
+            {
+                State = new("Deploying agent", KnownResourceStateStyles.Info)
+            }).ConfigureAwait(false);
+
+            logger.LogInformation("Deploying prompt agent '{AgentName}' to Foundry project '{ProjectName}'...", Name, Project.Name);
+
+            var version = await DeployAsync(Project, context, context.CancellationToken).ConfigureAwait(false);
+            Version.Set(version.Version);
+
+            logger.LogInformation("Successfully deployed prompt agent '{AgentName}' (version {Version})", Name, version.Version);
+
+            foreach (var tool in Tools)
+            {
+                await notificationService.PublishUpdateAsync(tool, s => s with
+                {
+                    State = new("Running", KnownResourceStateStyles.Success)
+                }).ConfigureAwait(false);
+            }
+
+            var configuration = context.Services.GetRequiredService<IConfiguration>();
+            var portalUrls = await BuildPortalUrlsAsync(configuration, context.CancellationToken).ConfigureAwait(false);
+
+            await notificationService.PublishUpdateAsync(this, s => s with
+            {
+                State = new("Running", KnownResourceStateStyles.Success),
+                Urls = portalUrls
+            }).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Failed to deploy prompt agent '{AgentName}'", Name);
+
+            await notificationService.PublishUpdateAsync(this, s => s with
+            {
+                State = new("Failed to deploy", KnownResourceStateStyles.Error)
+            }).ConfigureAwait(false);
+
+            throw;
+        }
+    }
+
+    private async Task WaitForProjectAndToolsAsync(ResourceNotificationService notificationService, CancellationToken cancellationToken)
+    {
+        if (Project is IAzureResource { ProvisioningTaskCompletionSource: { } projectProvisioning })
+        {
+            await projectProvisioning.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            await notificationService.WaitForResourceAsync(
+                Project.Name,
+                KnownResourceStates.Running,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        var toolConnectionProvisioningTasks = Tools
+            .Select(tool => tool switch
+            {
+                BingGroundingToolResource { Connection: IAzureResource bingConnection } => bingConnection.ProvisioningTaskCompletionSource?.Task,
+                AzureAISearchToolResource { Connection: IAzureResource searchConnection } => searchConnection.ProvisioningTaskCompletionSource?.Task,
+                _ => null
+            })
+            .OfType<Task>();
+
+        await Task.WhenAll(toolConnectionProvisioningTasks.Select(task => task.WaitAsync(cancellationToken))).ConfigureAwait(false);
+    }
+
+    private async Task<ImmutableArray<UrlSnapshot>> BuildPortalUrlsAsync(IConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var subscriptionId = configuration["Azure:SubscriptionId"];
+        var resourceGroupName = configuration["Azure:ResourceGroup"];
+        if (string.IsNullOrEmpty(subscriptionId) || string.IsNullOrEmpty(resourceGroupName))
+        {
+            return [];
+        }
+
+        var foundryAccountName = await Project.Parent.NameOutputReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        var projectNameOutput = await Project.NameOutputReference.GetValueAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(foundryAccountName) || string.IsNullOrEmpty(projectNameOutput))
+        {
+            return [];
+        }
+
+        var projectName = projectNameOutput.Contains('/')
+            ? projectNameOutput[(projectNameOutput.LastIndexOf('/') + 1)..]
+            : projectNameOutput;
+        var encodedSubscriptionId = AzureCognitiveServicesProjectResource.EncodeSubscriptionId(subscriptionId);
+        var portalUrl = $"https://ai.azure.com/nextgen/r/{encodedSubscriptionId},{resourceGroupName},,{foundryAccountName},{projectName}/build/agents/{Name}/build";
+
+        return [new UrlSnapshot(Name: "Foundry Portal", Url: portalUrl, IsInternal: false)];
     }
 }
