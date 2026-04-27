@@ -58,7 +58,7 @@ internal sealed class SkillDefinition
         skillContent: null,
         embeddedResourceRoot: CommonAgentApplicators.AspireifySkillResourceRoot,
         installExcludedRelativePaths: [],
-        isDefault: false);
+        isDefault: true);
 
     private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
     {

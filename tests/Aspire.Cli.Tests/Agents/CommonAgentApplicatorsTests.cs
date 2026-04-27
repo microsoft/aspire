@@ -54,10 +54,10 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void SkillDefinition_OnlyAspireIsDefault()
+    public void SkillDefinition_DefaultSkills()
     {
         Assert.True(SkillDefinition.Aspire.IsDefault);
-        Assert.False(SkillDefinition.Aspireify.IsDefault);
+        Assert.True(SkillDefinition.Aspireify.IsDefault);
         Assert.False(SkillDefinition.PlaywrightCli.IsDefault);
         Assert.False(SkillDefinition.DotnetInspect.IsDefault);
     }
