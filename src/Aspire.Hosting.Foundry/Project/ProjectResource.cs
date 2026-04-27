@@ -53,6 +53,7 @@ public class AzureCognitiveServicesProjectResource :
                         DefaultContainerRegistry is not null)
                     {
                         context.Model.Resources.Remove(DefaultContainerRegistry);
+                        DefaultContainerRegistry = null;
                     }
 
                     return Task.CompletedTask;
