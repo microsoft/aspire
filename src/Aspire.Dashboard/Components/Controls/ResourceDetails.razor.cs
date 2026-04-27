@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Dashboard.Components.Controls.PropertyValues;
 using Aspire.Dashboard.Components.Pages;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Resources;
@@ -76,6 +77,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private ResourceViewModel? _resource;
     private readonly List<DisplayedResourcePropertyViewModel> _displayedResourcePropertyViewModels = new();
     private readonly HashSet<string> _unmaskedItemNames = new();
+    private const string StateDescriptionPropertyKey = "resource-state-description";
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
@@ -157,7 +159,22 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
             _resource = Resource;
             _displayedResourcePropertyViewModels.Clear();
-            _displayedResourcePropertyViewModels.AddRange(_resource.Properties.Select(p => new DisplayedResourcePropertyViewModel(p.Value, Loc, TimeProvider)));
+            foreach (var property in _resource.Properties.Values)
+            {
+                var displayedProperty = property;
+
+                // An unresolved secret parameter has no value to hide, so keep the placeholder visible
+                // in the details grid instead of routing it through masking behavior.
+                if (_resource.HasMissingParameterValueState() &&
+                    property.KnownProperty?.Key == KnownProperties.Parameter.Value &&
+                    property.IsValueSensitive)
+                {
+                    displayedProperty = new ResourcePropertyViewModel(property.Name, property.Value, isValueSensitive: false, property.KnownProperty, property.Priority);
+                }
+
+                _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
+            }
+            AddStateDescriptionProperty(_resource);
 
             // Collapse details sections when they have no data.
             _isUrlsExpanded = GetUrls().Count > 0;
@@ -197,6 +214,22 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                     Parameters = { ["Resource"] = _resource }
                 },
             };
+
+            // For parameter resources whose value is unset, render the same "Value not set" affordance
+            // as the parameters grid so the details panel stays consistent with the grid.
+            if (_resource.HasMissingParameterValueState())
+            {
+                _valueComponents[KnownProperties.Parameter.Value] = new ComponentMetadata
+                {
+                    Type = typeof(ParameterValueDisplayCell),
+                    Parameters =
+                    {
+                        ["Resource"] = _resource,
+                        ["OnExecuteCommandAsync"] = (Func<ResourceViewModel, CommandViewModel, Task>)ExecuteParameterCommandAsync,
+                        ["IsCommandExecuting"] = IsCommandExecuting,
+                    }
+                };
+            }
 
             UpdateResourceActionsMenu();
         }
@@ -277,6 +310,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             showUrls: true);
     }
 
+    private async Task ExecuteParameterCommandAsync(ResourceViewModel resource, CommandViewModel command)
+    {
+        await CommandSelected.InvokeAsync(command);
+    }
+
     private IEnumerable<ResourceDetailRelationshipViewModel> GetRelationships()
     {
         if (ResourceByName == null)
@@ -332,6 +370,27 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private List<DisplayedUrl> GetUrls()
     {
         return ResourceUrlHelpers.GetUrls(Resource, includeInternalUrls: true, includeNonEndpointUrls: true);
+    }
+
+    private void AddStateDescriptionProperty(ResourceViewModel resource)
+    {
+        var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
+        var stateDescription = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc);
+
+        if (string.IsNullOrWhiteSpace(stateDescription) || string.Equals(stateDescription, stateViewModel.Text, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(
+            new ResourcePropertyViewModel(
+                name: StateDescriptionPropertyKey,
+                value: Value.ForString(stateDescription),
+                isValueSensitive: false,
+                knownProperty: new KnownProperty(StateDescriptionPropertyKey, _ => ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]),
+                priority: 1),
+            Loc,
+            TimeProvider));
     }
 
     private IEnumerable<DisplayedResourcePropertyViewModel> GetResourceProperties(bool ordered)

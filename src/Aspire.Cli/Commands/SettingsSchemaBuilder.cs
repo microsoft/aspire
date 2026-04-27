@@ -98,6 +98,11 @@ internal static class SettingsSchemaBuilder
                 continue;
             }
 
+            if (prop.GetCustomAttribute<HiddenFromConfigurationSchemaAttribute>() is not null)
+            {
+                continue;
+            }
+
             // Skip local-only properties when building global schema
             if (excludeLocalOnly && prop.GetCustomAttribute<LocalAspireJsonConfigurationPropertyAttribute>() is not null)
             {

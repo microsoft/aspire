@@ -56,6 +56,8 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         var normalized = System.Text.RegularExpressions.Regex.Replace(result.Output, @"\r?\n\s*", "");
 
         Assert.Contains("PRNumber", normalized);
+        Assert.Contains("LocalDir", normalized);
+        Assert.Contains("HiveLabel", normalized);
         Assert.Contains("InstallPath", normalized);
         Assert.Contains("OS", normalized);
         Assert.Contains("Architecture", normalized);
@@ -113,6 +115,28 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("987654321", result.Output);
+    }
+
+    [Fact]
+    public async Task LocalDir_WhatIf_UsesLocalDirectoryWithoutGh()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "local artifacts");
+        Directory.CreateDirectory(localDir);
+        await FakeArchiveHelper.CreateFakeNupkgAsync(localDir, "Aspire.Cli", "13.3.0-preview.1.12345.1");
+
+        var result = await cmd.ExecuteAsync(
+            "-LocalDir", localDir,
+            "-HiveLabel", "test-hive",
+            "-HiveOnly",
+            "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Installing from local directory", result.Output);
+        Assert.Contains(localDir, result.Output);
+        Assert.Contains("test-hive", result.Output);
+        Assert.DoesNotContain("Downloading CLI from GitHub", result.Output);
     }
 
     [Fact]

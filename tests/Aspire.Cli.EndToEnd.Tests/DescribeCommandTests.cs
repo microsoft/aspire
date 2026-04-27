@@ -19,7 +19,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
     public async Task DescribeCommandShowsRunningResources()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 
@@ -89,7 +89,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
     public async Task DescribeCommandResolvesReplicaNames()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

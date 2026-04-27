@@ -7,7 +7,7 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestPackagingService : IPackagingService
 {
-    public Func<CancellationToken, Task<IEnumerable<PackageChannel>>>? GetChannelsAsyncCallback { get; init; }
+    public Func<CancellationToken, Task<IEnumerable<PackageChannel>>>? GetChannelsAsyncCallback { get; set; }
 
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
     {
@@ -16,6 +16,8 @@ internal sealed class TestPackagingService : IPackagingService
             return GetChannelsAsyncCallback(cancellationToken);
         }
 
-        return Task.FromResult(Enumerable.Empty<PackageChannel>());
+        // Default: Return a fake channel with template packages
+        var testChannel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+        return Task.FromResult<IEnumerable<PackageChannel>>(new[] { testChannel });
     }
 }

@@ -181,6 +181,21 @@ public class Program
         return newPath;
     }
 
+    internal static void WarnIfGlobalSettingsContainAppHostPath(FileInfo globalSettingsFile, IStartupErrorWriter errorWriter)
+    {
+        if (ConfigurationHelper.TryLoadSettingsFile(globalSettingsFile.FullName, out var globalSettings) &&
+            AppHostPathConfigurationPolicy.TryFindAppHostPathKey(globalSettings, out var key))
+        {
+            var warning = string.Format(
+                CultureInfo.CurrentCulture,
+                ErrorStrings.GlobalAppHostPathIgnored,
+                globalSettingsFile.FullName,
+                key);
+
+            errorWriter.WriteMarkup(warning.EscapeMarkup(), KnownEmojis.Warning);
+        }
+    }
+
     /// <summary>
     /// Creates and configures an <see cref="ILoggerFactory"/> for the CLI application.
     /// Sets up OpenTelemetry logging, file logging, console logging, log-level filters,
@@ -280,6 +295,7 @@ public class Program
         ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile);
 
         TrySetLocaleOverride(LocaleHelpers.GetLocaleOverride(builder.Configuration), startupContext.Logger, startupContext.ErrorWriter);
+        WarnIfGlobalSettingsContainAppHostPath(globalSettingsFile, startupContext.ErrorWriter);
 
 #if !DEBUG
         // In release builds, limit shutdown wait time for telemetry flush to 200ms
@@ -441,6 +457,7 @@ public class Program
         // Environment checking services.
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();

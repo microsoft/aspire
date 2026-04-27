@@ -683,7 +683,7 @@ public static class AzureServiceBusExtensions
     /// <param name="roles">The Service Bus roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureServiceBusRole"/> value.</exception>
-    [AspireExport("withServiceBusRoleAssignments", Description = "Assigns Service Bus roles to a resource")]
+    [AspireExport("withServiceBusRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Service Bus roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureServiceBusResource> target,

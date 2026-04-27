@@ -187,7 +187,7 @@
     <value>Container runtime not installed</value>
   </data>
   <data name="ContainerRuntimeNotInstalledMessage" xml:space="preserve">
-    <value>Container runtime could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes.</value>
+    <value>Container runtime could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.</value>
   </data>
   <data name="DeveloperCertificateNotFullyTrustedTitle" xml:space="preserve">
     <value>Development certificate not fully trusted</value>

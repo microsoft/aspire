@@ -694,7 +694,8 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         using var app = builder.Build();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("App Service does not support resources with multiple external endpoints.", ex.Message);
     }
@@ -714,7 +715,8 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         using var app = builder.Build();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("App Service does not support resources with multiple external endpoints.", ex.Message);
     }

@@ -61,7 +61,7 @@ internal sealed class ConfigCommand : BaseCommand
                 Debug.Assert(cmd.Description is not null);
                 return cmd.Description.TrimEnd('.');
             },
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         return await subcommand.InteractiveExecuteAsync(cancellationToken);
     }
@@ -177,6 +177,18 @@ internal sealed class ConfigCommand : BaseCommand
 
         private async Task<int> ExecuteAsync(string key, string value, bool isGlobal, CancellationToken cancellationToken)
         {
+            if (AppHostPathConfigurationPolicy.IsLegacyAppHostPathKey(key))
+            {
+                InteractionService.DisplayError(ErrorStrings.LegacyAppHostPathCannotBeSetWithConfigCommand);
+                return ExitCodeConstants.InvalidCommand;
+            }
+
+            if (isGlobal && !AppHostPathConfigurationPolicy.IsGloballySettableKey(key))
+            {
+                InteractionService.DisplayError(ErrorStrings.GlobalAppHostPathCannotBeSetWithConfigCommand);
+                return ExitCodeConstants.InvalidCommand;
+            }
+
             try
             {
                 await ConfigurationService.SetConfigurationAsync(key, value, isGlobal, cancellationToken);

@@ -23,7 +23,7 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="secret">Optional flag indicating whether the parameter should be regarded as secret.</param>
     /// <returns>Resource builder for the parameter.</returns>
     /// <exception cref="DistributedApplicationException"></exception>
-    [AspireExport(Description = "Adds a parameter resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addParameter dispatcher export.")]
     public static IResourceBuilder<ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, [ResourceName] string name, bool secret = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -35,6 +35,24 @@ public static class ParameterResourceBuilderExtensions
                     parameterDefault => GetParameterValue(builder.Configuration, name, parameterDefault),
                     secret)
                 );
+    }
+
+    [AspireExport("addParameter", Description = "Adds a parameter resource")]
+    internal static IResourceBuilder<ParameterResource> AddParameterForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        string? value = null,
+        bool publishValueAsDefault = false,
+        bool secret = false)
+    {
+        if (value is null && publishValueAsDefault)
+        {
+            throw new ArgumentException("A parameter value is required when publishValueAsDefault is true.", nameof(publishValueAsDefault));
+        }
+
+        return value is null
+            ? builder.AddParameter(name, secret)
+            : builder.AddParameter(name, value, publishValueAsDefault, secret);
     }
 
     /// <summary>
@@ -49,7 +67,7 @@ public static class ParameterResourceBuilderExtensions
     /// <remarks>publishValueAsDefault and secret are mutually exclusive.</remarks>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters",
                                                      Justification = "third parameters are mutually exclusive.")]
-    [AspireExport("addParameterWithValue", Description = "Adds a parameter with a default value")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addParameter dispatcher export.")]
     public static IResourceBuilder<ParameterResource> AddParameter(this IDistributedApplicationBuilder builder, [ResourceName] string name, string value, bool publishValueAsDefault = false, bool secret = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -262,7 +280,7 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="environmentVariableName">Environment variable name to set when WithReference is used.</param>
     /// <returns>Resource builder for the parameter.</returns>
     /// <exception cref="DistributedApplicationException"></exception>
-    [AspireExport(Description = "Adds a connection string resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnectionString dispatcher export.")]
     public static IResourceBuilder<IResourceWithConnectionString> AddConnectionString(this IDistributedApplicationBuilder builder, [ResourceName] string name, string? environmentVariableName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -275,6 +293,24 @@ public static class ParameterResourceBuilderExtensions
                         throw new MissingParameterValueException($"Connection string parameter resource could not be used because connection string '{name}' is missing."),
                     environmentVariableName)
                 );
+    }
+
+    [AspireExport("addConnectionString", Description = "Adds a connection string resource")]
+    internal static IResourceBuilder<IResourceWithConnectionString> AddConnectionStringForPolyglot(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(string), typeof(ReferenceExpression))] object? environmentVariableNameOrExpression = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(name);
+
+        return environmentVariableNameOrExpression switch
+        {
+            null => ParameterResourceBuilderExtensions.AddConnectionString(builder, name),
+            string environmentVariableName => ParameterResourceBuilderExtensions.AddConnectionString(builder, name, environmentVariableName),
+            ReferenceExpression connectionStringExpression => ConnectionStringBuilderExtensions.AddConnectionString(builder, name, connectionStringExpression),
+            _ => throw new ArgumentException("Connection string must be omitted, an environment variable name, or a reference expression.", nameof(environmentVariableNameOrExpression))
+        };
     }
 
     /// <summary>

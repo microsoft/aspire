@@ -169,6 +169,11 @@ internal sealed partial class AzureKubernetesInfrastructure(
         var defaultConfig = new AksNodePoolConfig("workload", "Standard_D2s_v5", 1, 3, AksNodePoolMode.User);
         environment.NodePools.Add(defaultConfig);
 
+        if (appModel.Resources.TryGetByName("workload", out var existingResource) && existingResource is AksNodePoolResource existingPool)
+        {
+            return existingPool;
+        }
+
         var defaultPool = new AksNodePoolResource("workload", defaultConfig, environment);
         defaultPool.Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
         appModel.Resources.Add(defaultPool);

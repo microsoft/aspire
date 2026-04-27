@@ -3,6 +3,8 @@
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Cli.Tests.Utils;
 using Hex1b;
@@ -15,15 +17,15 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class CliE2ETestHelpers
 {
-    internal const string CliArchiveWorkflowRunIdEnvironmentVariableName = CliInstallStrategy.CliArchiveWorkflowRunIdEnvironmentVariableName;
+    internal const string CliArchiveDirEnvironmentVariableName = CliInstallStrategy.CliArchiveDirEnvironmentVariableName;
+    private static readonly Regex s_commitShaPattern = new("^[0-9a-fA-F]{40}$", RegexOptions.Compiled);
 
     /// <summary>
     /// Gets whether the tests are running in CI (GitHub Actions) vs locally.
     /// When running locally, some commands are replaced with echo stubs.
     /// </summary>
     internal static bool IsRunningInCI =>
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")) &&
-        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA"));
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_ACTIONS"));
 
     /// <summary>
     /// Gets the PR number from the GITHUB_PR_NUMBER environment variable.
@@ -44,32 +46,31 @@ internal static class CliE2ETestHelpers
         return prNumber;
     }
 
-    /// <summary>
-    /// Gets the commit SHA from the GITHUB_PR_HEAD_SHA environment variable.
-    /// This is the actual PR head commit, not the merge commit (GITHUB_SHA).
-    /// When running locally (not in CI), returns a dummy value for testing.
-    /// </summary>
-    /// <returns>The commit SHA, or a dummy value when running locally.</returns>
-    internal static string GetRequiredCommitSha()
-    {
-        var commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA");
+    internal static bool IsPullRequestContext =>
+        !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("GITHUB_PR_NUMBER")) ||
+        string.Equals(Environment.GetEnvironmentVariable("GITHUB_EVENT_NAME"), "pull_request", StringComparison.OrdinalIgnoreCase);
 
-        if (string.IsNullOrEmpty(commitSha))
+    internal static bool TryGetPullRequestHeadSha(out string commitSha)
+    {
+        commitSha = string.Empty;
+
+        if (!IsPullRequestContext)
         {
-            // Running locally - return dummy value
-            return "local0000";
+            return false;
         }
 
-        return commitSha;
-    }
+        commitSha = Environment.GetEnvironmentVariable("GITHUB_PR_HEAD_SHA") ?? string.Empty;
+        if (string.IsNullOrEmpty(commitSha))
+        {
+            throw new InvalidOperationException("GITHUB_PR_HEAD_SHA must be set when running CLI E2E tests in pull request context.");
+        }
 
-    /// <summary>
-    /// Gets the workflow run ID that produced the CLI archive for the current test run, if one was provided.
-    /// </summary>
-    /// <returns>The workflow run ID, or <see langword="null"/> when the current environment should resolve the PR run dynamically.</returns>
-    internal static string? GetCliArchiveWorkflowRunId()
-    {
-        return CliInstallStrategy.GetCliArchiveWorkflowRunId();
+        if (!s_commitShaPattern.IsMatch(commitSha))
+        {
+            throw new InvalidOperationException($"GITHUB_PR_HEAD_SHA must be a 40-character commit SHA, got: '{commitSha}'.");
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -172,6 +173,7 @@ internal static class CliE2ETestHelpers
         output.WriteLine($"Creating Docker test terminal:");
         output.WriteLine($"  Test name:      {testName}");
         output.WriteLine($"  Strategy:       {strategy}");
+        output.WriteLine($"  Expected ver:   {strategy.ExpectedVersion ?? "(not available)"}");
         output.WriteLine($"  Variant:        {variant}");
         output.WriteLine($"  Dockerfile:     {dockerfilePath}");
         output.WriteLine($"  Workspace:      {workspace?.WorkspaceRoot.FullName ?? "(none)"}");
@@ -527,6 +529,109 @@ internal static class CliE2ETestHelpers
 
         TestContext.Current.KeyValueStorage[$"CaptureFile:{Path.GetFileName(fileName)}"] = path;
     }
+
+    /// <summary>
+    /// Prepares local channel metadata for source-build E2E tests.
+    /// Validates that the expected packed Aspire.*.nupkg files exist and extracts the SDK version.
+    /// Returns <c>null</c> when the CLI install strategy does not use a local hive archive.
+    /// </summary>
+    /// <param name="repoRoot">The repo root directory containing artifacts/.</param>
+    /// <param name="strategy">The detected CLI install strategy.</param>
+    /// <param name="requiredPackagePrefixes">
+    /// Optional additional package name prefixes to validate beyond <c>Aspire.Hosting.</c>.
+    /// For example, <c>["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]</c>.
+    /// </param>
+    /// <returns>A <see cref="LocalChannelInfo"/> with the SDK version, or <c>null</c> when the strategy is not local hive.</returns>
+    internal static LocalChannelInfo? PrepareLocalChannel(
+        string repoRoot,
+        CliInstallStrategy strategy,
+        string[]? requiredPackagePrefixes = null)
+    {
+        if (strategy.Mode != CliInstallMode.LocalHive)
+        {
+            return null;
+        }
+
+        return PrepareLocalChannelCore(repoRoot, requiredPackagePrefixes);
+    }
+
+    private static LocalChannelInfo PrepareLocalChannelCore(
+        string repoRoot,
+        string[]? requiredPackagePrefixes)
+    {
+        var shippingPackagesDirectory = new[]
+        {
+            Path.Combine(repoRoot, "artifacts", "packages", "Debug", "Shipping"),
+            Path.Combine(repoRoot, "artifacts", "packages", "Release", "Shipping")
+        }
+        .FirstOrDefault(directory => Directory.Exists(directory) &&
+            Directory.EnumerateFiles(directory, "Aspire*.nupkg", SearchOption.TopDirectoryOnly).Any());
+
+        if (shippingPackagesDirectory is null)
+        {
+            throw new InvalidOperationException("Local source-built E2E tests require packed Aspire packages. Run './build.sh --bundle --pack' first.");
+        }
+
+        var allPackageFiles = Directory.EnumerateFiles(shippingPackagesDirectory, "Aspire*.nupkg", SearchOption.TopDirectoryOnly)
+            .Where(file => !file.EndsWith(".symbols.nupkg", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        var sdkVersion = allPackageFiles
+            .Select(Path.GetFileName)
+            .Where(static fileName => fileName is not null && Regex.IsMatch(fileName, @"^Aspire\.Hosting\.\d+\.\d+\.\d+.*\.nupkg$", RegexOptions.IgnoreCase))
+            .Select(static fileName => fileName!["Aspire.Hosting.".Length..^".nupkg".Length])
+            .OrderDescending(StringComparer.Ordinal)
+            .FirstOrDefault();
+
+        if (string.IsNullOrEmpty(sdkVersion))
+        {
+            throw new InvalidOperationException("Local source-built E2E tests could not determine the Aspire SDK version from packed packages.");
+        }
+
+        var packageFiles = allPackageFiles
+            .Where(file => file.EndsWith($"{sdkVersion}.nupkg", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (!packageFiles.Any(file => Path.GetFileName(file).StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new InvalidOperationException("Local source-built E2E tests require packed Aspire.Hosting packages. Run './build.sh --bundle --pack' first.");
+        }
+
+        if (requiredPackagePrefixes is not null)
+        {
+            foreach (var prefix in requiredPackagePrefixes)
+            {
+                if (!packageFiles.Any(file => Path.GetFileName(file).StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+                {
+                    throw new InvalidOperationException($"Local source-built E2E tests require packed {prefix.TrimEnd('.')} packages. Run './build.sh --bundle --pack' first.");
+                }
+            }
+        }
+
+        return new LocalChannelInfo(sdkVersion);
+    }
+
+    internal static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)
+    {
+        var configPath = Path.Combine(projectRoot, "aspire.config.json");
+        var config = File.Exists(configPath)
+            ? JsonNode.Parse(File.ReadAllText(configPath))?.AsObject() ?? new JsonObject()
+            : new JsonObject();
+
+        config["channel"] = "local";
+        config["sdk"] = new JsonObject
+        {
+            ["version"] = sdkVersion
+        };
+
+        File.WriteAllText(configPath, config.ToJsonString());
+    }
+
+    /// <summary>
+    /// Information about a local NuGet package channel for source-build E2E tests.
+    /// </summary>
+    /// <param name="SdkVersion">The Aspire SDK version extracted from the package filenames.</param>
+    internal sealed record LocalChannelInfo(string SdkVersion);
 
     /// <summary>
     /// Copies a directory to testresults/workspaces/{testName}/{label} for CI artifact upload.

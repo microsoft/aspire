@@ -8,7 +8,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
-using Aspire.TestUtilities;
 
 namespace Aspire.Cli.EndToEnd.Tests;
 
@@ -20,11 +19,11 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class ProjectReferenceTests(ITestOutputHelper output)
 {
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15831")]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15831")]
     public async Task TypeScriptAppHostWithProjectReferenceIntegration()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);

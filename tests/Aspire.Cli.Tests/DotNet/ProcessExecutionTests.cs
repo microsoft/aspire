@@ -30,18 +30,15 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         var stdoutBuilder = new StringBuilder();
         var stderrBuilder = new StringBuilder();
-        using var firstLineSeen = new ManualResetEventSlim();
-        using var releaseCallback = new ManualResetEventSlim();
+        var firstLineSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var releaseTask = Task.Run(async () =>
         {
-            if (!firstLineSeen.Wait(TimeSpan.FromSeconds(10)))
-            {
-                throw new TimeoutException("Timed out waiting for the first stdout line.");
-            }
+            await firstLineSeen.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
             await Task.Delay(TimeSpan.FromMilliseconds(500));
-            releaseCallback.Set();
+            releaseCallback.SetResult();
         });
 
         var isFirstLine = true;
@@ -55,9 +52,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
                     if (isFirstLine)
                     {
                         isFirstLine = false;
-                        firstLineSeen.Set();
+                        firstLineSeen.TrySetResult();
 
-                        if (!releaseCallback.Wait(TimeSpan.FromSeconds(20)))
+                        if (!releaseCallback.Task.Wait(TimeSpan.FromSeconds(20)))
                         {
                             throw new TimeoutException("Timed out waiting to release the blocked stdout callback.");
                         }
@@ -99,18 +96,15 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         var stdoutBuilder = new StringBuilder();
         var stderrBuilder = new StringBuilder();
-        using var firstLineSeen = new ManualResetEventSlim();
-        using var releaseCallback = new ManualResetEventSlim();
+        var firstLineSeen = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var releaseTask = Task.Run(async () =>
         {
-            if (!firstLineSeen.Wait(TimeSpan.FromSeconds(10)))
-            {
-                throw new TimeoutException("Timed out waiting for the initial stdout marker.");
-            }
+            await firstLineSeen.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
             await Task.Delay(TimeSpan.FromMilliseconds(6500));
-            releaseCallback.Set();
+            releaseCallback.SetResult();
         });
 
         using var execution = new ProcessExecution(
@@ -124,9 +118,9 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
                     if (line == "ready")
                     {
-                        firstLineSeen.Set();
+                        firstLineSeen.TrySetResult();
 
-                        if (!releaseCallback.Wait(TimeSpan.FromSeconds(20)))
+                        if (!releaseCallback.Task.Wait(TimeSpan.FromSeconds(20)))
                         {
                             throw new TimeoutException("Timed out waiting to release the blocked stdout callback.");
                         }

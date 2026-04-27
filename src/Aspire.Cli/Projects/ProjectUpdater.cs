@@ -20,13 +20,15 @@ namespace Aspire.Cli.Projects;
 
 internal interface IProjectUpdater
 {
-    Task<ProjectUpdateResult> UpdateProjectAsync(FileInfo projectFile, PackageChannel channel, CancellationToken cancellationToken = default);
+    Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default);
 }
 
 internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser) : IProjectUpdater
 {
-    public async Task<ProjectUpdateResult> UpdateProjectAsync(FileInfo projectFile, PackageChannel channel, CancellationToken cancellationToken = default)
+    public async Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default)
     {
+        var projectFile = context.AppHostFile;
+        var channel = context.Channel;
         logger.LogDebug("Fetching '{AppHostPath}' items and properties.", projectFile.FullName);
 
         var (updateSteps, fallbackUsed) = await interactionService.ShowStatusAsync(UpdateCommandStrings.AnalyzingProjectStatus, () => GetUpdateStepsAsync(projectFile, channel, cancellationToken));
@@ -34,7 +36,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         if (!updateSteps.Any())
         {
             logger.LogInformation("No updates required for project: {ProjectFile}", projectFile.FullName);
-            interactionService.DisplayMessage(KnownEmojis.CheckMark, UpdateCommandStrings.ProjectUpToDateMessage);
+            interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
             return new ProjectUpdateResult { UpdatedApplied = false };
         }
 
@@ -70,7 +72,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             interactionService.DisplayEmptyLine();
         }
 
-        if (!await interactionService.ConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, true, cancellationToken))
+        if (!await interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
         {
             return new ProjectUpdateResult { UpdatedApplied = false };
         }
@@ -106,16 +108,21 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
             interactionService.DisplayEmptyLine();
 
+            // Carry the recommended directory as the default on the binding.
+            // The original binding (from UpdateCommand) may not have a default because
+            // the recommended directory is computed here, after NuGet config discovery.
+            var nugetConfigDirBinding = context.NuGetConfigDirBinding.WithDefault(recommendedNuGetConfigFileDirectory);
+
             var selectedPathForNewNuGetConfigFile = await interactionService.PromptForFilePathAsync(
                 promptText: UpdateCommandStrings.WhichDirectoryNuGetConfigPrompt,
-                defaultValue: recommendedNuGetConfigFileDirectory.EscapeMarkup(),
+                binding: nugetConfigDirBinding,
                 validator: null,
                 directory: true,
                 required: true,
                 cancellationToken: cancellationToken);
 
             var nugetConfigDirectory = new DirectoryInfo(selectedPathForNewNuGetConfigFile);
-            await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, AnalyzeAndConfirmNuGetConfigChanges, cancellationToken: cancellationToken);
+            await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
         }
 
         interactionService.DisplayEmptyLine();
@@ -385,9 +392,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     internal static async Task UpdateSdkVersionInAppHostAsync(FileInfo projectFile, NuGetPackageCli package, IInteractionService interactionService, SdkMigrationInfo migrationInfo)
     {
-        if (string.Equals(projectFile.Extension, ".csproj", StringComparison.OrdinalIgnoreCase))
+        // Handles .cs|fs|vbproj files
+        if (ProjectFileExtensions.Supported.Contains(projectFile.Extension))
         {
-            await UpdateSdkVersionInCsprojAppHostAsync(projectFile, package);
+            await UpdateSdkVersionInProjectAppHostAsync(projectFile, package);
 
             // Display migration feedback messages
             if (migrationInfo.WillMigrateToNewFormat)
@@ -412,7 +420,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
     }
 
-    internal static async Task UpdateSdkVersionInCsprojAppHostAsync(FileInfo projectFile, NuGetPackageCli package)
+    internal static async Task UpdateSdkVersionInProjectAppHostAsync(FileInfo projectFile, NuGetPackageCli package)
     {
         var projectDocument = new XmlDocument();
         projectDocument.PreserveWhitespace = true;
@@ -915,7 +923,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
     }
 
-    private async Task<bool> AnalyzeAndConfirmNuGetConfigChanges(FileInfo targetFile, XmlDocument? originalDocument, XmlDocument proposedDocument, CancellationToken cancellationToken)
+    private async Task<bool> AnalyzeAndConfirmNuGetConfigChanges(UpdatePackagesContext context, XmlDocument? originalDocument, XmlDocument proposedDocument, CancellationToken cancellationToken)
     {
         interactionService.DisplayEmptyLine();
 
@@ -929,10 +937,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         DisplayNuGetConfigChanges(changes);
 
-        var shouldProceed = await interactionService.ConfirmAsync(
+        var shouldProceed = await interactionService.PromptConfirmAsync(
             UpdateCommandStrings.ApplyChangesToNuGetConfig,
-            defaultValue: true,
-            cancellationToken);
+            binding: context.ConfirmBinding,
+            cancellationToken: cancellationToken);
 
         return shouldProceed;
     }

@@ -9,13 +9,19 @@ namespace Aspire.Cli.Utils;
 
 internal static class VersionHelper
 {
-    public static bool IsPrChannel(string? channelName)
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="channelName"/> identifies a
+    /// locally-built channel — either a PR hive (<c>pr-*</c>) or a workflow-run hive (<c>run-*</c>).
+    /// </summary>
+    public static bool IsLocalBuildChannel(string? channelName)
     {
-        return channelName?.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) == true;
+        return channelName is not null &&
+            (channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) ||
+             channelName.StartsWith("run-", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
-    /// Finds the candidate that exactly matches the current CLI/SDK version when running against PR channels or PR hives.
+    /// Finds the candidate that exactly matches the current CLI/SDK version when running against local build channels or hives.
     /// </summary>
     public static bool TryGetCurrentCliVersionMatch<T>(
         IEnumerable<T> candidates,
@@ -27,7 +33,7 @@ internal static class VersionHelper
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(versionSelector);
 
-        if (!hasPrHives && !IsPrChannel(channelName))
+        if (!hasPrHives && !IsLocalBuildChannel(channelName))
         {
             match = default;
             return false;

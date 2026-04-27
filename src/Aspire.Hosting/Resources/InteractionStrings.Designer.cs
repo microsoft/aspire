@@ -88,7 +88,7 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Container runtime could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes..
+        ///   Looks up a localized string similar to Container runtime could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes..
         /// </summary>
         internal static string ContainerRuntimeNotInstalledMessage {
             get {

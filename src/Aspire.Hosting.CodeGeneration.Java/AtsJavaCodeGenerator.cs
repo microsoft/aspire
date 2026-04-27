@@ -1121,7 +1121,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 }
                 else
                 {
-                    callArguments.Add("null");
+                    callArguments.Add(GetOmittedOptionalArgument(parameter));
                 }
             }
 
@@ -1142,6 +1142,11 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 CreateMethodParameters(visibleParameters),
                 returnInfo.HasReturn);
         }
+    }
+
+    private static string GetOmittedOptionalArgument(AtsParameterInfo parameter)
+    {
+        return IsUnionType(parameter.Type) ? "(AspireUnion) null" : "null";
     }
 
     private void GenerateUnionOverloadsWithOptions(
@@ -1696,8 +1701,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            }");
         WriteLine("        }");
         WriteLine("        Map<String, Object> args = new HashMap<>();");
-        WriteLine("        args.put(\"options\", resolvedOptions);");
-        WriteLine($"        return ({builderClassName}) client.invokeCapability(\"Aspire.Hosting/createBuilderWithOptions\", args);");
+        WriteLine("        args.put(\"argsOrOptions\", resolvedOptions);");
+        WriteLine($"        return ({builderClassName}) client.invokeCapability(\"Aspire.Hosting/createBuilder\", args);");
         WriteLine("    }");
         WriteLine("}");
         WriteLine();

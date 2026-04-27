@@ -272,7 +272,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             cancellationToken);
 
         // Step 5: Install dependencies using GuestRuntime (best effort - don't block code generation)
-        await InstallDependenciesAsync(directory, rpcClient, treatMissingNodeToolAsWarning: true, cancellationToken: cancellationToken);
+        await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: true, cancellationToken: cancellationToken);
 
         return true;
     }
@@ -454,7 +454,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Step 7: Install dependencies (using GuestRuntime)
             // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-            var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingNodeToolAsWarning: false, cancellationToken: cancellationToken);
+            var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: false, cancellationToken: cancellationToken);
             if (installResult != 0)
             {
                 context.BackchannelCompletionSource?.TrySetException(
@@ -920,7 +920,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Step 5: Install dependencies if needed (using GuestRuntime)
             // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-            var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingNodeToolAsWarning: false, cancellationToken: cancellationToken);
+            var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: false, cancellationToken: cancellationToken);
             if (installResult != 0)
             {
                 context.BackchannelCompletionSource?.TrySetException(
@@ -1190,7 +1190,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         if (updates.Count == 0 && newSdkVersion is null)
         {
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark, UpdateCommandStrings.ProjectUpToDateMessage);
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
             return new UpdatePackagesResult { UpdatesApplied = false };
         }
 
@@ -1207,7 +1207,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _interactionService.DisplayEmptyLine();
 
         // Confirm with user
-        if (!await _interactionService.ConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, true, cancellationToken))
+        if (!await _interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
         {
             return new UpdatePackagesResult { UpdatesApplied = false };
         }
@@ -1376,16 +1376,23 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Ensures the GuestRuntime is created.
     /// </summary>
     private async Task EnsureRuntimeCreatedAsync(
+        DirectoryInfo directory,
         IAppHostRpcClient rpcClient,
         CancellationToken cancellationToken)
     {
         if (_guestRuntime is null)
         {
             var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(_resolvedLanguage.LanguageId, cancellationToken);
+            if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
+            {
+                var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory);
+                runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
+            }
+
             _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider);
 
-            _logger.LogDebug("Created GuestRuntime for {Language}: Execute={Command} {Args}",
-                _resolvedLanguage.LanguageId,
+            _logger.LogDebug("Created GuestRuntime for {RuntimeDisplayName}: Execute={Command} {Args}",
+                runtimeSpec.DisplayName,
                 runtimeSpec.Execute.Command,
                 string.Join(" ", runtimeSpec.Execute.Args));
         }
@@ -1401,10 +1408,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private async Task<int> InstallDependenciesAsync(
         DirectoryInfo directory,
         IAppHostRpcClient rpcClient,
-        bool treatMissingNodeToolAsWarning,
+        bool treatMissingJavaScriptToolAsWarning,
         CancellationToken cancellationToken)
     {
-        await EnsureRuntimeCreatedAsync(rpcClient, cancellationToken);
+        await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
 
         if (_guestRuntime is null)
         {
@@ -1440,9 +1447,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 _interactionService.DisplayError($"Failed to install {_resolvedLanguage?.DisplayName ?? "guest"} dependencies.");
             }
 
-            if (treatMissingNodeToolAsWarning && AutomaticNpmInstallWarning.IsMatch(lines))
+            if (treatMissingJavaScriptToolAsWarning && MissingJavaScriptToolWarning.IsMatch(lines))
             {
-                _interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.ProjectFilesCreatedButNodeToolsNotFound);
+                _interactionService.DisplayMessage(KnownEmojis.Warning, MissingJavaScriptToolWarning.GetMessage(directory, _resolvedLanguage));
                 return 0;
             }
         }
@@ -1462,7 +1469,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken)
     {
-        await EnsureRuntimeCreatedAsync(rpcClient, cancellationToken);
+        await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
 
         if (_guestRuntime is null)
         {
@@ -1484,7 +1491,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IAppHostRpcClient rpcClient,
         CancellationToken cancellationToken)
     {
-        await EnsureRuntimeCreatedAsync(rpcClient, cancellationToken);
+        await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
 
         if (_guestRuntime is null)
         {

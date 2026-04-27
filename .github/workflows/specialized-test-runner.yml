@@ -39,6 +39,7 @@ jobs:
       runsheet: ${{ steps.inject_properties.outputs.runsheet }}
       requiresNugets: ${{ steps.check_nugets.outputs.requiresNugets }}
       requiresCliArchive: ${{ steps.check_cli_archive.outputs.requiresCliArchive }}
+      requiresGitHubToken: ${{ steps.check_github_token.outputs.requiresGitHubToken }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -105,6 +106,16 @@ jobs:
             echo "requiresCliArchive=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Check if any test requires GitHub token
+        id: check_github_token
+        run: |
+          RUNSHEET='${{ steps.generate_tests_matrix.outputs.runsheet }}'
+          if echo "$RUNSHEET" | jq -e 'any(.[]; .requiresGitHubToken == true)' > /dev/null 2>&1; then
+            echo "requiresGitHubToken=true" >> $GITHUB_OUTPUT
+          else
+            echo "requiresGitHubToken=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Upload logs, and test results
         if: ${{ always() }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -136,16 +147,26 @@ jobs:
       fail-fast: false
       matrix:
         tests: ${{ fromJson(needs.generate_tests_matrix.outputs.runsheet) }}
-    if: ${{ github.repository_owner == 'microsoft' && !cancelled() && !failure() }}
+    # Allow tests to run even if build_cli_archives partially fails (e.g., one RID
+    # like osx-arm64 has an infra issue but linux-x64 succeeded). Tests that need
+    # a failed RID's archive will fail at the download step.
+    # We still require generate_tests_matrix and build_packages to succeed.
+    if: >-
+      ${{
+        github.repository_owner == 'microsoft' &&
+        !cancelled() &&
+        needs.generate_tests_matrix.result == 'success' &&
+        (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped')
+      }}
     uses: ./.github/workflows/run-tests.yml
     with:
       testShortName: ${{ matrix.tests.project }}
       properties: ${{ toJson(matrix.tests.properties) }}
       os: ${{ matrix.tests.os }}
-      testSessionTimeout: ${{ matrix.tests.testSessionTimeout }}
-      testHangTimeout: ${{ matrix.tests.testHangTimeout }}
+      mtpBaseArgs: ${{ matrix.tests.mtpBaseArgs }}
       extraTestArgs: ${{ inputs.extraTestArgs }}
       ignoreTestFailures: ${{ inputs.ignoreTestFailures }}
+
 
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
@@ -212,8 +233,9 @@ jobs:
       - name: Fail if any dependency failed
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
         # For example, one of setup_* jobs failing and the Integration test jobs getting 'skipped'
-        # Note: build_packages/build_cli_archives being skipped is expected when requiresNugets is false,
-        # so we check them separately.
+        # Note: build_packages being skipped is expected when requiresNugets is false.
+        # Note: build_cli_archives partial failures (e.g. one RID) are tolerated — tests
+        # that need the failed RID will fail individually at the download step.
         if: >-
           ${{
             always() && (
@@ -223,9 +245,7 @@ jobs:
               needs.run_tests.result == 'cancelled' ||
               needs.run_tests.result == 'skipped' ||
               (needs.build_packages.result == 'failure') ||
-              (needs.build_packages.result == 'cancelled') ||
-              (needs.build_cli_archives.result == 'failure') ||
-              (needs.build_cli_archives.result == 'cancelled')
+              (needs.build_packages.result == 'cancelled')
             )
           }}
         run: |

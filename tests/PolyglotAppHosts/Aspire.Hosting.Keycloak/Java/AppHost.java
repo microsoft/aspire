@@ -3,7 +3,7 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var adminUsername = builder.addParameter("keycloak-admin-user");
-        var adminPassword = builder.addParameter("keycloak-admin-password", true);
+        var adminPassword = builder.addParameter("keycloak-admin-password", new AddParameterOptions().secret(true));
         var keycloak = builder.addKeycloak("keycloak", new AddKeycloakOptions().port(8080.0));
         keycloak
             .withDataVolume("keycloak-data")
@@ -16,10 +16,10 @@ void main() throws Exception {
             .withRealmImport(".")
             .withEnabledFeatures(new String[] { "rolling-updates" })
             .withDisabledFeatures(new String[] { "scripts" })
-            .withOtlpExporterWithProtocol(OtlpProtocol.HTTP_PROTOBUF);
+            .withOtlpExporter(OtlpProtocol.HTTP_PROTOBUF);
         var consumer = builder.addContainer("consumer", "nginx");
-        consumer.withReference(keycloak);
-        consumer.withReference(keycloak2);
+        consumer.withReference(keycloak, new WithReferenceOptions());
+        consumer.withReference(keycloak2, new WithReferenceOptions());
         var _keycloakName = keycloak.name();
         var _keycloakEntrypoint = keycloak.entrypoint();
         var _keycloakShellExecution = keycloak.shellExecution();

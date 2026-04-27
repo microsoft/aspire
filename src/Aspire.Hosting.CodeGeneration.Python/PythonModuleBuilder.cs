@@ -1732,8 +1732,8 @@ internal sealed class PythonModuleBuilder
 
             def __enter__(self) -> DistributedApplicationBuilder:
                 self._handle = self._client.invoke_capability(
-                    'Aspire.Hosting/createBuilderWithOptions',
-                    {'options': self._options}
+                    'Aspire.Hosting/createBuilder',
+                    {'argsOrOptions': self._options}
                 )
                 return self
 

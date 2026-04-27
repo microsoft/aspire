@@ -85,11 +85,11 @@ internal sealed class SetupCommand : BaseCommand
                 break;
 
             case BundleExtractResult.AlreadyUpToDate:
-                InteractionService.DisplayMessage(KnownEmojis.CheckMark, "Bundle is already extracted and up to date. Use --force to re-extract.");
+                InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Bundle is already extracted and up to date. Use --force to re-extract.");
                 break;
 
             case BundleExtractResult.Extracted:
-                InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"Bundle extracted to {installPath}");
+                InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Bundle extracted to {installPath}");
                 break;
 
             case BundleExtractResult.ExtractionFailed:

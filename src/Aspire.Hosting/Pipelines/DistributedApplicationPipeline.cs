@@ -326,6 +326,14 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             }
         });
 
+        // Add the before-start step that runs during application startup
+        _steps.Add(new PipelineStep
+        {
+            Name = WellKnownPipelineSteps.BeforeStart,
+            Description = "Aggregation step for operations that run before the application starts.",
+            Action = _ => Task.CompletedTask
+        });
+
         // Add a "destroy" aggregation step for teardown operations
         _steps.Add(new PipelineStep
         {
@@ -439,6 +447,32 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         _configurationCallbacks.Add(callback);
     }
 
+    /// <summary>
+    /// Creates a clone of this pipeline whose built-in steps are independent
+    /// copies (with fresh <see cref="PipelineStep.DependsOnSteps"/> /
+    /// <see cref="PipelineStep.RequiredBySteps"/> lists). Configuration callbacks
+    /// are shallow-copied — the same delegates are reused.
+    /// </summary>
+    /// <remarks>
+    /// Used by <c>DistributedApplication</c> to run the BeforeStart phase against
+    /// a throwaway pipeline instance so that step-graph mutations performed by
+    /// <see cref="ResolveStepsAsync"/> (e.g. <see cref="NormalizeRequiredByToDependsOn"/>
+    /// appending entries to <see cref="PipelineStep.DependsOnSteps"/> on built-in
+    /// steps) do not leak into the singleton pipeline used later for publish.
+    /// </remarks>
+    internal DistributedApplicationPipeline Clone()
+    {
+        var clone = new DistributedApplicationPipeline();
+        clone._steps.Clear();
+        foreach (var step in _steps)
+        {
+            clone._steps.Add(step.Clone());
+        }
+        clone._configurationCallbacks.Clear();
+        clone._configurationCallbacks.AddRange(_configurationCallbacks);
+        return clone;
+    }
+
     public async Task ExecuteAsync(PipelineContext context)
     {
         var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
@@ -452,6 +486,37 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         // Build dependency graph and execute with readiness-based scheduler
         await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Executes a specific pipeline step and all its dependencies sequentially.
+    /// </summary>
+    /// <param name="stepName">The name of the step to execute.</param>
+    /// <param name="context">The pipeline context for execution.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    internal async Task ExecuteStepSequentiallyAsync(
+        string stepName,
+        PipelineContext context)
+    {
+        var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
+
+        if (allSteps.Count == 0)
+        {
+            return;
+        }
+
+        var allStepsByName = allSteps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+
+        if (!allStepsByName.TryGetValue(stepName, out var targetStep))
+        {
+            var availableSteps = string.Join(", ", allSteps.Select(s => $"'{s.Name}'"));
+            throw new InvalidOperationException(
+                $"Step '{stepName}' not found in pipeline. Available steps: {availableSteps}");
+        }
+
+        var stepsToExecute = ComputeTransitiveDependencies(targetStep, allStepsByName);
+
+        await ExecuteStepsSequentially(stepsToExecute, context).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -817,6 +882,61 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
             // Single failure - just rethrow
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Executes pipeline steps sequentially in topological order.
+    /// Each step waits for the previous step to complete before starting.
+    /// </summary>
+    private static async Task ExecuteStepsSequentially(
+        List<PipelineStep> steps,
+        PipelineContext context)
+    {
+        // Validate no cycles exist in the dependency graph
+        var stepsByName = steps.ToDictionary(s => s.Name, StringComparer.Ordinal);
+        ValidateDependencyGraph(steps, stepsByName);
+
+        // Compute parent/level hierarchy so reported steps render nested in the activity reporter,
+        // matching the behavior of ExecuteStepsAsTaskDag.
+        var stepHierarchyByName = GetStepHierarchyByStep(steps, stepsByName);
+
+        // Get topological order
+        var orderedSteps = GetTopologicalOrder(steps);
+
+        // Execute each step in order
+        foreach (var step in orderedSteps)
+        {
+            var activityReporter = context.Services.GetRequiredService<IPipelineActivityReporter>();
+            var stepHierarchy = stepHierarchyByName.GetValueOrDefault(step.Name);
+            var reportingStep = await activityReporter.CreateStepAsync(step.Name, stepHierarchy.ParentStepName, stepHierarchy.Level, context.CancellationToken).ConfigureAwait(false);
+
+            await using (reportingStep.ConfigureAwait(false))
+            {
+                var stepContext = new PipelineStepContext
+                {
+                    PipelineContext = context,
+                    ReportingStep = reportingStep
+                };
+
+                try
+                {
+                    PipelineLoggerProvider.CurrentStep = reportingStep;
+                    await ExecuteStepAsync(step, stepContext).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    stepContext.Logger.LogError(ex, "Step '{StepName}' failed.", step.Name);
+
+                    // Report the failure to the activity reporter before disposing
+                    await reportingStep.FailAsync(ex.Message).ConfigureAwait(false);
+                    throw;
+                }
+                finally
+                {
+                    PipelineLoggerProvider.CurrentStep = null;
+                }
+            }
         }
     }
 

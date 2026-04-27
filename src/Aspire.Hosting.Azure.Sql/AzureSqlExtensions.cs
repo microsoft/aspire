@@ -387,7 +387,7 @@ public static class AzureSqlExtensions
     /// </code>
     /// </example>
     [AspireExport(Description = "Configures the Azure SQL server to use a specific subnet for deployment scripts")]
-    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public static IResourceBuilder<AzureSqlServerResource> WithAdminDeploymentScriptSubnet(
         this IResourceBuilder<AzureSqlServerResource> builder,
         IResourceBuilder<AzureSubnetResource> subnet)
@@ -436,7 +436,7 @@ public static class AzureSqlExtensions
     /// </code>
     /// </example>
     [AspireExport(Description = "Configures the Azure SQL server to use a specific storage account for deployment scripts")]
-    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+    [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     public static IResourceBuilder<AzureSqlServerResource> WithAdminDeploymentScriptStorage(
         this IResourceBuilder<AzureSqlServerResource> builder,
         IResourceBuilder<AzureStorageResource> storage)

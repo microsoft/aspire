@@ -235,7 +235,7 @@ internal sealed class ExportCommand : BaseCommand
         var fullPath = Path.GetFullPath(outputPath);
         exportArchive.WriteToFile(fullPath);
 
-        _interactionService.DisplayMessage(KnownEmojis.CheckMark, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
+        _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
         return ExitCodeConstants.Success;
     }
 

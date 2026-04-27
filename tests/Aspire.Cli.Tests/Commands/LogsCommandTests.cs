@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -897,6 +898,78 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("late-hidden", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task LogsCommand_Follow_WhenBackchannelIsDisposed_ExitsSuccessfully()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateLogsTestServices(workspace, outputWriter, configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+            connection.GetResourceLogsHandler = static (_, _, cancellationToken) => ThrowObjectDisposedAfterLogAsync(cancellationToken);
+        }, errorTextWriter: errorWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("unexpected error occurred", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LogsCommand_Follow_WhenAppHostHasExited_WritesShutdownMessageToStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateLogsTestServices(workspace, outputWriter, configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, int.MaxValue);
+            connection.GetResourceLogsHandler = static (_, _, cancellationToken) => ThrowObjectDisposedAfterLogAsync(cancellationToken);
+        }, errorTextWriter: errorWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
+        Assert.Contains(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LogsCommand_Follow_WhenCanceledAndBackchannelIsDisposed_DoesNotWriteStatusToStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var errorWriter = new StringWriter();
+        using var provider = CreateLogsTestServices(workspace, outputWriter, configureConnection: connection =>
+        {
+            connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+            connection.GetResourceLogsHandler = static (_, _, cancellationToken) => ThrowObjectDisposedAfterCancellationAsync(cancellationToken);
+        }, errorTextWriter: errorWriter);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs --follow --format json");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+        await Task.Yield();
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.DoesNotContain(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
+    }
+
     private ServiceProvider CreateLogsTestServicesWithHidden(
         TemporaryWorkspace workspace,
         TestOutputTextWriter outputWriter,
@@ -963,7 +1036,9 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         TestOutputTextWriter outputWriter,
         Action<Dictionary<string, string?>>? configureOptions = null,
         bool disableAnsi = false,
-        IEnumerable<ResourceLogLine>? logLines = null)
+        IEnumerable<ResourceLogLine>? logLines = null,
+        Action<TestAppHostAuxiliaryBackchannel>? configureConnection = null,
+        StringWriter? errorTextWriter = null)
     {
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
@@ -1026,12 +1101,14 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
                 }
             ]
         };
+        configureConnection?.Invoke(connection);
         monitor.AddConnection("hash1", "socket.hash1", connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             options.OutputTextWriter = outputWriter;
+            options.ErrorTextWriter = errorTextWriter;
             options.DisableAnsi = disableAnsi;
 
             if (configureOptions is not null)
@@ -1041,6 +1118,15 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         });
 
         return services.BuildServiceProvider();
+    }
+
+    private static AppHostInformation CreateAppHostInfo(TemporaryWorkspace workspace, int processId)
+    {
+        return new AppHostInformation
+        {
+            AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
+            ProcessId = processId
+        };
     }
 
     private static async IAsyncEnumerable<ResourceSnapshot> WatchWithLateHidden([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -1059,5 +1145,38 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         {
             await tcs.Task.ConfigureAwait(false);
         }
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> ThrowObjectDisposedAfterLogAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceLogLine
+        {
+            ResourceName = "redis",
+            LineNumber = 1,
+            Content = "2025-01-15T10:30:00Z Ready to accept connections",
+            IsError = false
+        };
+
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> ThrowObjectDisposedAfterCancellationAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceLogLine
+        {
+            ResourceName = "redis",
+            LineNumber = 1,
+            Content = "2025-01-15T10:30:00Z Ready to accept connections",
+            IsError = false
+        };
+
+        var waitForCancellation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var registration = cancellationToken.Register(() => waitForCancellation.TrySetResult());
+        await waitForCancellation.Task;
+
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
     }
 }

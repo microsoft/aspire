@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "testFailurePatterns": [
+    {
+      "output": "ECONNRESET",
+      "reason": "Transient network connection reset"
+    },
+    {
+      "output": "ECONNREFUSED",
+      "reason": "Transient connection refused"
+    },
+    {
+      "output": "Could not resolve host",
+      "reason": "Transient DNS resolution failure"
+    },
+    {
+      "output": "The SSL connection could not be established",
+      "reason": "Transient SSL connection failure"
+    },
+    {
+      "output": "A connection attempt failed because the connected party did not properly respond after a period of time",
+      "reason": "Transient TCP connection timeout"
+    },
+    {
+      "output": "Operation timed out",
+      "reason": "Transient operation timeout"
+    },
+    {
+      "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}403 Forbidden" },
+      "reason": "MCR registry rate limiting (HTTP 403)"
+    },
+    {
+      "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}The request is blocked" },
+      "reason": "MCR registry request blocked (rate limiting)"
+    },
+    {
+      "output": "CONTAINER1016",
+      "reason": "Unable to access container registry during publish"
+    },
+    {
+      "output": "pull access denied for mcr.microsoft.com",
+      "reason": "MCR container pull denied (rate limiting)"
+    }
+  ],
+  "jobFailurePatterns": [
+    {
+      "jobName": { "regex": ".*windows.*" },
+      "output": "0xC0000142",
+      "reason": "Windows process initialization failure (0xC0000142)"
+    },
+    {
+      "output": "Could not resolve host",
+      "reason": "Transient DNS resolution failure in job log"
+    },
+    {
+      "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}403 Forbidden" },
+      "reason": "MCR registry rate limiting (HTTP 403)"
+    },
+    {
+      "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}The request is blocked" },
+      "reason": "MCR registry request blocked (rate limiting)"
+    }
+  ]
+}

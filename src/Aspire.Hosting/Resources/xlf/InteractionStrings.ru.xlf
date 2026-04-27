@@ -18,8 +18,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledMessage">
-        <source>Container runtime could not be found. See https://aka.ms/dotnet/aspire/containers for more details on supported container runtimes.</source>
-        <target state="translated">Не удалось найти среду выполнения контейнера. Дополнительные сведения о поддерживаемых средах выполнения контейнеров см. на странице https://aka.ms/dotnet/aspire/containers.</target>
+        <source>Container runtime could not be found. See https://aka.ms/aspire/containers for more details on supported container runtimes.</source>
+        <target state="translated">Не удалось найти среду выполнения контейнера. Дополнительные сведения о поддерживаемых средах выполнения контейнеров см. на странице https://aka.ms/aspire/containers.</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerRuntimeNotInstalledTitle">

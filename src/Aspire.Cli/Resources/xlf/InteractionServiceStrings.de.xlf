@@ -7,9 +7,19 @@
         <target state="needs-review-translation">Die Verbindung mit dem App-Host wurde getrennt: {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostConnectionLostGeneric">
+        <source>The connection to the application was lost.</source>
+        <target state="new">The connection to the application was lost.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
         <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">Die AppHost-Version ist nicht kompatibel. Aktualisieren Sie den AppHost oder die Aspire-CLI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostShutDown">
+        <source>The application shut down.</source>
+        <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
@@ -73,8 +83,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
-        <source>Interactive input is not supported in this environment. Use the --non-interactive flag or ensure the CLI is running in an interactive terminal.</source>
-        <target state="translated">Interaktive Eingaben werden in dieser Umgebung nicht unterstützt. Verwenden Sie das Flag „--non-interactive“, oder stellen Sie sicher, dass die CLI in einem interaktiven Terminal ausgeführt wird.</target>
+        <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
+        <target state="needs-review-translation">Interaktive Eingaben werden in dieser Umgebung nicht unterstützt. Verwenden Sie das Flag „--non-interactive“, oder stellen Sie sicher, dass die CLI in einem interaktiven Terminal ausgeführt wird.</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
@@ -91,6 +101,21 @@
         <source>No items available for selection: {0}</source>
         <target state="translated">Es sind keine Elemente zur Auswahl verfügbar: {0}</target>
         <note>{0} is the original selection prompt text.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveAvailableValues">
+        <source>Available values: {0}</source>
+        <target state="new">Available values: {0}</target>
+        <note>{0} is a comma-separated list of valid values</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveInvalidValue">
+        <source>The value '{0}' is not valid for {1}.</source>
+        <target state="new">The value '{0}' is not valid for {1}.</target>
+        <note>{0} is the provided value. {1} is the option/argument display name.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveOptionRequired">
+        <source>The {0} option must be specified when running in non-interactive mode.</source>
+        <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
+        <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
       </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>

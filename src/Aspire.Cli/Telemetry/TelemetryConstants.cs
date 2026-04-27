@@ -102,6 +102,28 @@ internal static class TelemetryConstants
         /// Tag for the operating system version.
         /// </summary>
         public const string OsVersion = "os.version";
+
+        /// <summary>
+        /// Tag for the app host language identifier.
+        /// </summary>
+        public const string AppHostLanguage = "aspire.cli.apphost.language";
+
+        /// <summary>
+        /// Tag indicating whether the app host was launched in detached mode.
+        /// </summary>
+        public const string AppHostDetached = "aspire.cli.apphost.detached";
+
+        /// <summary>
+        /// Tag indicating whether the app host was launched in isolated mode.
+        /// </summary>
+        public const string AppHostIsolated = "aspire.cli.apphost.isolated";
+
+        /// <summary>
+        /// Tag for the error type when the operation fails.
+        /// Set to the exception type name or a descriptive error category.
+        /// Absence of this tag indicates success.
+        /// </summary>
+        public const string ErrorType = "error.type";
     }
 
     /// <summary>
@@ -118,6 +140,11 @@ internal static class TelemetryConstants
         /// Activity name for ensuring the SDK is installed.
         /// </summary>
         public const string EnsureSdkInstalled = "aspire/cli/ensure_sdk_installed";
+
+        /// <summary>
+        /// Activity name for running an app host.
+        /// </summary>
+        public const string RunAppHost = "aspire/cli/run_apphost";
     }
 
     /// <summary>
