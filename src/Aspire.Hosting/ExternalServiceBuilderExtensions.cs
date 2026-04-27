@@ -195,7 +195,6 @@ public static class ExternalServiceBuilderExtensions
     /// <param name="builder">The external service resource builder.</param>
     /// <param name="path">The relative path to use for the HTTP health check.</param>
     /// <param name="statusCode">The expected HTTP status code for a healthy response. Defaults to <c>200</c>.</param>
-    /// <param name="endpointName">Unused for external services. External services expose a single URL and do not support endpoint selection.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
     /// <para>
@@ -204,19 +203,10 @@ public static class ExternalServiceBuilderExtensions
     /// A path for the health check request can be specified. The expected status code is set to <c>200</c> by default but a
     /// different one can be specified.
     /// </para>
-    /// <para>
-    /// The <paramref name="endpointName"/> parameter is accepted only so polyglot SDKs can reuse the same option shape as
-    /// other <c>withHttpHealthCheck</c> APIs. Supplying a value throws an <see cref="InvalidOperationException"/>.
-    /// </para>
     /// </remarks>
-    [AspireExport("withExternalServiceHttpHealthCheck", MethodName = "withHttpHealthCheck", Description = "Adds an HTTP health check to the external service")]
-    public static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null, string? endpointName = null)
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withHttpHealthCheck export wrapper.")]
+    public static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null)
     {
-        if (endpointName is not null)
-        {
-            throw new InvalidOperationException("External services do not support endpointName for HTTP health checks.");
-        }
-
         if (path is not null && !Uri.IsWellFormedUriString(path, UriKind.Relative))
         {
             throw new ArgumentException($"The path '{path}' is not a valid relative URL.", nameof(path));
@@ -277,6 +267,22 @@ public static class ExternalServiceBuilderExtensions
         builder.WithHealthCheck(healthCheckKey);
 
         return builder;
+    }
+
+    /// <summary>
+    /// Adds an HTTP health check to the external service for polyglot app hosts.
+    /// </summary>
+    [AspireExport("withExternalServiceHttpHealthCheck", MethodName = "withHttpHealthCheck", Description = "Adds an HTTP health check to the external service")]
+    internal static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheckExport(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null, string? endpointName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (endpointName is not null)
+        {
+            throw new InvalidOperationException("External services do not support endpointName for HTTP health checks.");
+        }
+
+        return builder.WithHttpHealthCheck(path, statusCode);
     }
 }
 

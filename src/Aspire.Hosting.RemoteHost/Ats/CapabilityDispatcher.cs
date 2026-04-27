@@ -742,7 +742,6 @@ internal sealed class CapabilityDispatcher
             return UnmarshalUnionArgument(
                 capability,
                 parameterName,
-                parameterType,
                 argNode,
                 context,
                 handles,
@@ -775,7 +774,6 @@ internal sealed class CapabilityDispatcher
     private object? UnmarshalUnionArgument(
         AtsCapabilityInfo capability,
         string parameterName,
-        Type parameterType,
         JsonNode? argNode,
         AtsMarshaller.UnmarshalContext context,
         HandleRegistry handles,
@@ -821,7 +819,11 @@ internal sealed class CapabilityDispatcher
         {
             try
             {
-                return _marshaller.UnmarshalFromJson(argNode, unionMemberType, context);
+                var unmarshalledValue = _marshaller.UnmarshalFromJson(argNode, unionMemberType, context);
+                if (unmarshalledValue is not null || argNode is null)
+                {
+                    return unmarshalledValue;
+                }
             }
             catch (CapabilityException ex) when (ex.Error.Code is AtsErrorCodes.InvalidArgument or AtsErrorCodes.TypeMismatch)
             {
@@ -829,7 +831,11 @@ internal sealed class CapabilityDispatcher
             }
         }
 
-        return _marshaller.UnmarshalFromJson(argNode, parameterType, context);
+        throw CapabilityException.TypeMismatch(
+            capability.CapabilityId,
+            parameterName,
+            DescribeUnionTypes(unionMemberTypes),
+            DescribeJsonNode(argNode));
     }
 
     private static IReadOnlyList<Type>? GetUnionMemberClrTypes(ParameterInfo parameter, AtsCapabilityInfo capability)
@@ -894,6 +900,23 @@ internal sealed class CapabilityDispatcher
     private static string DescribeUnionTypes(IReadOnlyList<Type> unionMemberTypes)
     {
         return string.Join(" | ", unionMemberTypes.Select(static type => type.Name));
+    }
+
+    private static string DescribeJsonNode(JsonNode? node)
+    {
+        return node switch
+        {
+            null => "null",
+            JsonValue v when v.TryGetValue<string>(out _) => "string",
+            JsonValue v when v.TryGetValue<bool>(out _) => "bool",
+            JsonValue v when v.TryGetValue<long>(out _) => "number",
+            JsonValue v when v.TryGetValue<double>(out _) => "number",
+            JsonValue => "value",
+            JsonArray => "array",
+            JsonObject obj when obj.ContainsKey("$handle") => "handle",
+            JsonObject => "object",
+            _ => node.GetType().Name
+        };
     }
 
     private static object ResolveContextTarget(

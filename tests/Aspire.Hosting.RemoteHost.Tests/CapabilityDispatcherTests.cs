@@ -937,6 +937,45 @@ public class CapabilityDispatcherTests
         Assert.Equal("union-resource", result.GetValue<string>());
     }
 
+    [Fact]
+    public void Invoke_UnionWithUnsupportedArray_ThrowsTypeMismatch()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonArray { 1, 2, 3 }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptUnion", args));
+
+        Assert.Equal(AtsErrorCodes.TypeMismatch, ex.Error.Code);
+        Assert.Equal("value", ex.Error.Details?.Parameter);
+        Assert.Equal("String | Int32", ex.Error.Details?.Expected);
+        Assert.Equal("array", ex.Error.Details?.Actual);
+    }
+
+    [Fact]
+    public void Invoke_UnionWithUnsupportedObject_ThrowsTypeMismatch()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestTypeCategoryCapabilities).Assembly);
+        var args = new JsonObject
+        {
+            ["value"] = new JsonObject
+            {
+                ["label"] = "unexpected"
+            }
+        };
+
+        var ex = Assert.Throws<CapabilityException>(() =>
+            dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/acceptUnion", args));
+
+        Assert.Equal(AtsErrorCodes.TypeMismatch, ex.Error.Code);
+        Assert.Equal("value", ex.Error.Details?.Parameter);
+        Assert.Equal("String | Int32", ex.Error.Details?.Expected);
+        Assert.Equal("object", ex.Error.Details?.Actual);
+    }
+
     // List operations tests
     [Fact]
     public void Invoke_ReturnsMutableListAsHandle()
