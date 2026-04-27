@@ -893,6 +893,7 @@
     "vscode-jsonrpc": "8.2.1",
     "ws": "8.20.0"
   },
+  "//resolutions": "Keep `resolutions` (yarn) and `overrides` (npm) in sync. The extension is built with both package managers, so any pinned version must be added to BOTH sections, and BOTH lockfiles (yarn.lock and package-lock.json) must be regenerated together when these pins change.",
   "resolutions": {
     "braces": "3.0.3",
     "serialize-javascript": "7.0.5",
@@ -906,6 +907,7 @@
     "postcss": "8.5.10",
     "uuid": "14.0.0"
   },
+  "//overrides": "Keep `overrides` (npm) and `resolutions` (yarn) in sync. See `//resolutions` above.",
   "overrides": {
     "serialize-javascript": "7.0.5",
     "flatted": "3.4.2",
