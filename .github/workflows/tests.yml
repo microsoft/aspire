@@ -335,7 +335,7 @@ jobs:
         id: generate_tests_matrix
         with:
           prepareEnvironment: 'false'
-          buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ steps.detect.outputs.run_all == ''true'' || steps.detect.outputs.run_cli_e2e == ''true'' }}'
+          buildArgs: '/p:IncludeTemplateTests=true /p:IncludeCliE2ETests=${{ github.event_name == ''pull_request'' || steps.detect.outputs.run_all == ''true'' || steps.detect.outputs.run_cli_e2e == ''true'' }}'
 
       - name: Split matrix by dependency type
         id: split_matrix
@@ -774,6 +774,7 @@ jobs:
     uses: ./.github/workflows/polyglot-validation.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux]
     if: |
+      github.event_name == 'pull_request' ||
       needs.setup_for_tests.outputs.run_all == 'true' ||
       needs.setup_for_tests.outputs.run_polyglot == 'true'
     with:
@@ -864,6 +865,7 @@ jobs:
     runs-on: windows-latest
     needs: setup_for_tests
     if: |
+      github.event_name == 'pull_request' ||
       needs.setup_for_tests.outputs.run_all == 'true' ||
       needs.setup_for_tests.outputs.run_extension == 'true'
     defaults:
