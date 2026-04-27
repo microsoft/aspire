@@ -232,20 +232,11 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Browser user data directory &apos;{0}&apos; is already in use by a non-debuggable browser. Close that browser, use &apos;{1}&apos;=&apos;{2}&apos;, or start the browser from Aspire first..
+        ///   Looks up a localized string similar to Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use &apos;{0}&apos; user data mode or run from a configured AppHost..
         /// </summary>
-        internal static string BrowserLogsNonDebuggableBrowserRunning {
+        internal static string BrowserLogsAppHostPathShaNotAvailable {
             get {
-                return ResourceManager.GetString("BrowserLogsNonDebuggableBrowserRunning", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Unable to resolve the user data directory for browser &apos;{0}&apos;. Specify a known browser such as &apos;msedge&apos; or &apos;chrome&apos; when using shared user data mode, or use the isolated user data mode..
-        /// </summary>
-        internal static string BrowserLogsUnableToResolveUserDataDirectory {
-            get {
-                return ResourceManager.GetString("BrowserLogsUnableToResolveUserDataDirectory", resourceCulture);
+                return ResourceManager.GetString("BrowserLogsAppHostPathShaNotAvailable", resourceCulture);
             }
         }
 
@@ -255,24 +246,6 @@ namespace Aspire.Hosting.Resources {
         internal static string BrowserLogsUserDataDirectoryNotFound {
             get {
                 return ResourceManager.GetString("BrowserLogsUserDataDirectoryNotFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Browser user data directory &apos;{0}&apos; was not found for browser &apos;{1}&apos;..
-        /// </summary>
-        internal static string BrowserLogsUserDataDirectoryNotFoundForBrowser {
-            get {
-                return ResourceManager.GetString("BrowserLogsUserDataDirectoryNotFoundForBrowser", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Google Chrome blocks remote debugging against its default user data directory &apos;{0}&apos;. Use &apos;{1}&apos;=&apos;{2}&apos; or select Microsoft Edge for shared browser state..
-        /// </summary>
-        internal static string BrowserLogsGoogleChromeDefaultUserDataDirectoryNotSupported {
-            get {
-                return ResourceManager.GetString("BrowserLogsGoogleChromeDefaultUserDataDirectoryNotSupported", resourceCulture);
             }
         }
 

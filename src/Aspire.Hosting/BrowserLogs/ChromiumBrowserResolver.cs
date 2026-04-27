@@ -17,26 +17,6 @@ namespace Aspire.Hosting;
 internal static class ChromiumBrowserResolver
 {
     /// <summary>
-    /// Returns whether the requested path is branded Google Chrome's default user data directory.
-    /// </summary>
-    internal static bool IsGoogleChromeDefaultUserDataDirectory(string browser, string browserExecutable, string userDataDirectory)
-    {
-        // Google Chrome rejects remote debugging against its real default profile root. Chromium builds can still use the
-        // same resolver path, so exclude Chromium aliases before comparing with Chrome's default user data directory.
-        if (GetBrowserKind(browser, browserExecutable) != BrowserKind.Chrome ||
-            MatchesBrowser(browser, browserExecutable, "chromium", "chromium-browser") ||
-            TryResolveUserDataDirectory(browser, browserExecutable) is not { } defaultUserDataDirectory)
-        {
-            return false;
-        }
-
-        var comparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        return comparer.Equals(NormalizePath(userDataDirectory), NormalizePath(defaultUserDataDirectory));
-
-        static string NormalizePath(string path) => Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
-    }
-
-    /// <summary>
     /// Resolves a logical browser name or explicit executable path to a runnable browser executable.
     /// </summary>
     internal static string? TryResolveExecutable(string browser)
@@ -64,53 +44,6 @@ internal static class ChromiumBrowserResolver
         }
 
         return PathLookupHelper.FindFullPathFromPath(browser);
-    }
-
-    /// <summary>
-    /// Resolves the browser's persistent user data root for shared browser-log sessions.
-    /// </summary>
-    internal static string? TryResolveUserDataDirectory(string browser, string browserExecutable)
-    {
-        var browserKind = GetBrowserKind(browser, browserExecutable);
-        if (browserKind == BrowserKind.Unknown)
-        {
-            return null;
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            return browserKind switch
-            {
-                BrowserKind.Edge => Path.Combine(home, "Library", "Application Support", "Microsoft Edge"),
-                BrowserKind.Chrome => Path.Combine(home, "Library", "Application Support", "Google", "Chrome"),
-                _ => null
-            };
-        }
-
-        if (OperatingSystem.IsWindows())
-        {
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return browserKind switch
-            {
-                BrowserKind.Edge => Path.Combine(localAppData, "Microsoft", "Edge", "User Data"),
-                BrowserKind.Chrome => Path.Combine(localAppData, "Google", "Chrome", "User Data"),
-                _ => null
-            };
-        }
-
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return browserKind switch
-        {
-            BrowserKind.Edge => Path.Combine(homeDirectory, ".config", "microsoft-edge"),
-            // Linux Chromium packages use a different root than Google Chrome even when the requested logical browser is
-            // "chrome" but the resolved executable is chromium/chromium-browser.
-            BrowserKind.Chrome => Path.Combine(
-                homeDirectory,
-                ".config",
-                MatchesBrowser(browser, browserExecutable, "chromium", "chromium-browser") ? "chromium" : "google-chrome"),
-            _ => null
-        };
     }
 
     /// <summary>
@@ -290,42 +223,6 @@ internal static class ChromiumBrowserResolver
         return null;
     }
 
-    /// <summary>
-    /// Classifies a browser from both the requested value and the resolved executable path.
-    /// </summary>
-    private static BrowserKind GetBrowserKind(string browser, string browserExecutable)
-    {
-        if (MatchesBrowser(browser, browserExecutable, "msedge", "edge", "microsoft-edge"))
-        {
-            return BrowserKind.Edge;
-        }
-
-        if (MatchesBrowser(browser, browserExecutable, "chrome", "google-chrome", "chromium", "chromium-browser"))
-        {
-            return BrowserKind.Chrome;
-        }
-
-        return BrowserKind.Unknown;
-    }
-
-    private static bool MatchesBrowser(string browser, string browserExecutable, params string[] names)
-    {
-        var browserLower = browser.ToLowerInvariant();
-        var executableLower = browserExecutable.ToLowerInvariant();
-
-        foreach (var name in names)
-        {
-            if (browserLower == name ||
-                Path.GetFileNameWithoutExtension(browserLower) == name ||
-                executableLower.Contains(name, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private static bool MatchesBrowserProfile(JsonProperty profileEntry, string profile)
     {
         return string.Equals(profileEntry.Name, profile, StringComparison.OrdinalIgnoreCase) ||
@@ -338,12 +235,5 @@ internal static class ChromiumBrowserResolver
         return profileElement.TryGetProperty(propertyName, out var propertyElement) &&
             propertyElement.ValueKind == JsonValueKind.String &&
             string.Equals(propertyElement.GetString(), profile, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private enum BrowserKind
-    {
-        Unknown,
-        Edge,
-        Chrome
     }
 }

@@ -9,21 +9,25 @@ namespace Aspire.Hosting;
 public enum BrowserUserDataMode
 {
     /// <summary>
-    /// Use the browser's real user data directory so the tracked session behaves like a persistent browser context
-    /// with real cookies, sessions, extensions, and profile selection.
+    /// Use a persistent Aspire-managed user data directory shared across all AppHosts on the machine. State such as
+    /// cookies, sign-ins, and extensions persist across runs and are visible to every AppHost using the same browser.
     /// </summary>
     /// <remarks>
-    /// Aspire can adopt a shared browser only when it previously launched that browser with remote debugging enabled.
-    /// If a normal non-debuggable browser is already using the selected user data directory, the tracked session fails
-    /// with guidance instead of opening a second browser against the same profile store. Google Chrome also blocks
-    /// remote debugging against its default user data directory; use Microsoft Edge or <see cref="Isolated"/> mode when
-    /// Chrome is selected.
+    /// The directory lives under a well-known path (for example <c>%LocalAppData%\Aspire\BrowserData\shared\&lt;browser&gt;</c>
+    /// on Windows). When multiple AppHosts run concurrently, the second AppHost adopts the existing browser via the
+    /// Chrome DevTools Protocol instead of launching a new one. The browser is never closed automatically when an
+    /// AppHost exits.
     /// </remarks>
     Shared,
 
     /// <summary>
-    /// Launch the tracked browser against a temporary user data directory, like a disposable persistent browser
-    /// context, so the session starts from clean state and does not affect the user's normal browser profiles.
+    /// Use a persistent Aspire-managed user data directory scoped to the current AppHost project. Each AppHost gets
+    /// its own state that persists across runs but is not shared with other AppHosts.
     /// </summary>
+    /// <remarks>
+    /// The directory is keyed on a stable hash of the AppHost project path (for example
+    /// <c>%LocalAppData%\Aspire\BrowserData\isolated\&lt;hash&gt;\&lt;browser&gt;</c> on Windows). The browser is never
+    /// closed automatically when the AppHost exits.
+    /// </remarks>
     Isolated,
 }

@@ -63,7 +63,7 @@ public class BrowserLogsSessionManagerTests
             File.WriteAllText(browserExecutable, string.Empty);
             var createdHosts = new List<TestBrowserHost>();
             await using var registry = new BrowserHostRegistry(
-                fileSystemService: null!,
+
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
                 createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
@@ -73,7 +73,7 @@ public class BrowserLogsSessionManagerTests
                     createdHosts.Add(host);
                     return Task.FromResult<IBrowserHost>(host);
                 });
-            var configuration = new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared);
+            var configuration = new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared, AppHostKey: null);
 
             var firstLease = await registry.AcquireAsync(configuration, CancellationToken.None);
             var secondLease = await registry.AcquireAsync(configuration, CancellationToken.None);
@@ -103,7 +103,7 @@ public class BrowserLogsSessionManagerTests
             File.WriteAllText(browserExecutable, string.Empty);
             var createdHosts = new List<TestBrowserHost>();
             var registry = new BrowserHostRegistry(
-                fileSystemService: null!,
+
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
                 createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
@@ -113,7 +113,7 @@ public class BrowserLogsSessionManagerTests
                     createdHosts.Add(host);
                     return Task.FromResult<IBrowserHost>(host);
                 });
-            var configuration = new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared);
+            var configuration = new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared, AppHostKey: null);
 
             var lease = await registry.AcquireAsync(configuration, CancellationToken.None);
 
@@ -137,19 +137,19 @@ public class BrowserLogsSessionManagerTests
             var browserExecutable = Path.Combine(userDataDirectory.FullName, "browser");
             File.WriteAllText(browserExecutable, string.Empty);
             await using var registry = new BrowserHostRegistry(
-                fileSystemService: null!,
+
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
                 createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
                 createHostAsync: (configuration, identity, _, _) => Task.FromResult<IBrowserHost>(new TestBrowserHost(identity, configuration.Profile)));
 
             var firstLease = await registry.AcquireAsync(
-                new BrowserConfiguration(browserExecutable, Profile: "Profile 1", BrowserUserDataMode.Shared),
+                new BrowserConfiguration(browserExecutable, Profile: "Profile 1", BrowserUserDataMode.Shared, AppHostKey: null),
                 CancellationToken.None);
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 registry.AcquireAsync(
-                    new BrowserConfiguration(browserExecutable, Profile: "Profile 2", BrowserUserDataMode.Shared),
+                    new BrowserConfiguration(browserExecutable, Profile: "Profile 2", BrowserUserDataMode.Shared, AppHostKey: null),
                     CancellationToken.None));
 
             await firstLease.DisposeAsync();
@@ -181,14 +181,14 @@ public class BrowserLogsSessionManagerTests
                 CancellationToken.None);
 
             await using var registry = new BrowserHostRegistry(
-                fileSystemService: null!,
+
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
                 createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
                 createHostAsync: null);
 
             var lease = await registry.AcquireAsync(
-                new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared),
+                new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared, AppHostKey: null),
                 CancellationToken.None);
 
             await serverTask.WaitAsync(TimeSpan.FromSeconds(5));
@@ -372,110 +372,6 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
-    public void BrowserEndpointDiscovery_DetectsWindowsLockfileAsNonDebuggableBrowser()
-    {
-        var userDataDirectory = Directory.CreateTempSubdirectory();
-        try
-        {
-            File.WriteAllText(Path.Combine(userDataDirectory.FullName, "lockfile"), string.Empty);
-
-            Assert.True(BrowserEndpointDiscovery.IsNonDebuggableBrowserRunning(userDataDirectory.FullName, isWindows: true));
-            Assert.False(BrowserEndpointDiscovery.IsNonDebuggableBrowserRunning(userDataDirectory.FullName, isWindows: false));
-        }
-        finally
-        {
-            userDataDirectory.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public void BrowserEndpointDiscovery_IgnoresPosixSingletonLockWithoutPidTarget()
-    {
-        var userDataDirectory = Directory.CreateTempSubdirectory();
-        try
-        {
-            File.WriteAllText(Path.Combine(userDataDirectory.FullName, "SingletonLock"), string.Empty);
-
-            Assert.False(BrowserEndpointDiscovery.IsNonDebuggableBrowserRunning(userDataDirectory.FullName, isWindows: false));
-        }
-        finally
-        {
-            userDataDirectory.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public void TryResolveUserDataDirectory_ReturnsExpectedPathForKnownBrowser()
-    {
-        var expectedPath = OperatingSystem.IsWindows()
-            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "User Data")
-            : OperatingSystem.IsMacOS()
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library", "Application Support", "Google", "Chrome")
-                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "google-chrome");
-
-        var browserExecutable = OperatingSystem.IsWindows()
-            ? "chrome.exe"
-            : OperatingSystem.IsMacOS()
-                ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-                : "google-chrome";
-
-        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("chrome", browserExecutable);
-
-        Assert.Equal(expectedPath, userDataDirectory);
-    }
-
-    [Fact]
-    public void IsGoogleChromeDefaultUserDataDirectory_ReturnsTrueForGoogleChromeDefaultPath()
-    {
-        var browserExecutable = OperatingSystem.IsWindows()
-            ? @"C:\Program Files\Google\Chrome\Application\chrome.exe"
-            : OperatingSystem.IsMacOS()
-                ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-                : "/usr/bin/google-chrome";
-        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("chrome", browserExecutable);
-
-        Assert.NotNull(userDataDirectory);
-        Assert.True(ChromiumBrowserResolver.IsGoogleChromeDefaultUserDataDirectory("chrome", browserExecutable, userDataDirectory));
-    }
-
-    [Fact]
-    public void IsGoogleChromeDefaultUserDataDirectory_ReturnsFalseForChromium()
-    {
-        var browserExecutable = OperatingSystem.IsWindows()
-            ? @"C:\Program Files\Chromium\Application\chrome.exe"
-            : OperatingSystem.IsMacOS()
-                ? "/Applications/Chromium.app/Contents/MacOS/Chromium"
-                : "/usr/bin/chromium";
-        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("chromium", browserExecutable);
-
-        Assert.NotNull(userDataDirectory);
-        Assert.False(ChromiumBrowserResolver.IsGoogleChromeDefaultUserDataDirectory("chromium", browserExecutable, userDataDirectory));
-    }
-
-    [Fact]
-    public void TryResolveUserDataDirectory_ReturnsNullForUnknownBrowser()
-    {
-        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("custom-browser", "/opt/custom-browser");
-
-        Assert.Null(userDataDirectory);
-    }
-
-    [Fact]
-    public void TryResolveUserDataDirectory_UsesChromiumPathOnLinux()
-    {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
-        var expectedPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config", "chromium");
-
-        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory("chrome", "/usr/bin/chromium");
-
-        Assert.Equal(expectedPath, userDataDirectory);
-    }
-
-    [Fact]
     public void ResolveProfileDirectory_MatchesDirectoryNameCaseInsensitively()
     {
         WithTempUserDataDirectory(userDataDirectory =>
@@ -561,14 +457,14 @@ public class BrowserLogsSessionManagerTests
         var resource = new BrowserLogsResource(
             "web-browser-logs",
             new TestResourceWithEndpoints("web"),
-            new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated),
+            new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated, AppHostKey: "test-apphost"),
             new BrowserConfigurationOverrides());
 
         await manager.DisposeAsync();
 
         await Assert.ThrowsAsync<ObjectDisposedException>(() => manager.StartSessionAsync(
             resource,
-            new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated),
+            new BrowserConfiguration("chrome", null, BrowserUserDataMode.Isolated, AppHostKey: "test-apphost"),
             resource.Name,
             new Uri("https://localhost"),
             CancellationToken.None));

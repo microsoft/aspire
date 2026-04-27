@@ -57,10 +57,12 @@ public static class BrowserLogsBuilderExtensions
     /// </param>
     /// <param name="userDataMode">
     /// Optional <see cref="BrowserUserDataMode"/> that selects whether the tracked browser launches against
-    /// the browser's real user data directory (<see cref="BrowserUserDataMode.Shared"/>, the default) or a
-    /// temporary user data directory (<see cref="BrowserUserDataMode.Isolated"/>). When not specified, the
-    /// tracked browser uses the configured value from <c>Aspire:Hosting:BrowserLogs</c> and otherwise
-    /// defaults to <see cref="BrowserUserDataMode.Shared"/>.
+    /// a persistent Aspire-managed user data directory shared across all AppHosts on the machine
+    /// (<see cref="BrowserUserDataMode.Shared"/>, the default) or a per-AppHost persistent user data directory
+    /// (<see cref="BrowserUserDataMode.Isolated"/>). Both modes use Aspire-managed paths under
+    /// <c>%LocalAppData%\Aspire\BrowserData</c> on Windows (or platform equivalents); the user's normal browser
+    /// profile is never used. When not specified, the tracked browser uses the configured value from
+    /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise defaults to <see cref="BrowserUserDataMode.Shared"/>.
     /// </param>
     /// <returns>A reference to the original <see cref="IResourceBuilder{T}"/> for further chaining.</returns>
     /// <remarks>

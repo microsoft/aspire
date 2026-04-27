@@ -79,7 +79,6 @@ internal sealed class OwnedBrowserHost : BrowserHost
     // forever on a stuck browser process.
     private static readonly TimeSpan s_browserEndpointTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan s_browserEndpointPollInterval = TimeSpan.FromMilliseconds(100);
-    private static readonly TimeSpan s_browserShutdownTimeout = TimeSpan.FromSeconds(5);
 
     private readonly BrowserLogsUserDataDirectory _userDataDirectory;
     private readonly IAsyncDisposable _processLifetime;
@@ -274,22 +273,18 @@ internal sealed class OwnedBrowserHost : BrowserHost
             return;
         }
 
-        // Remove the adoption sidecar before tearing down the process so a subsequent AppHost does not adopt a browser
-        // that is already exiting.
-        BrowserEndpointDiscovery.DeleteEndpointMetadata(_userDataDirectory.Path);
-
-        await _processLifetime.DisposeAsync().ConfigureAwait(false);
-
-        using var shutdownCts = new CancellationTokenSource(s_browserShutdownTimeout);
-        try
-        {
-            await _processTask.WaitAsync(shutdownCts.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-
-        _userDataDirectory.Dispose();
+        // Both Shared and Isolated point at a persistent Aspire-managed user data directory. AppHost shutdown does
+        // not close the browser, does not delete the adoption sidecar, and does not delete the user data directory.
+        // The next AppHost run reads the sidecar and connects to this browser via CDP. The user closes the browser
+        // when they are done with it.
+        //
+        // We deliberately do not dispose _processLifetime, which would terminate the browser process. The Process
+        // handle leaks until the AppHost exits; ProcessDisposable has no finalizer that would kill the process on
+        // GC, so the browser keeps running.
+        _ = _processLifetime;
+        _ = _processTask;
+        _ = _userDataDirectory;
+        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     private static async Task<int> WaitForProcessStartAsync(Task<int> processStarted, Task<ProcessResult> processTask, CancellationToken cancellationToken)

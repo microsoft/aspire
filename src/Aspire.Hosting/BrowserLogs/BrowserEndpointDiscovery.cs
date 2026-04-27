@@ -195,47 +195,6 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
     public static void DeleteEndpointMetadata(string userDataDirectory) =>
         TryDelete(GetEndpointMetadataFilePath(userDataDirectory));
 
-    public static bool IsNonDebuggableBrowserRunning(string userDataDirectory) =>
-        IsNonDebuggableBrowserRunning(userDataDirectory, OperatingSystem.IsWindows());
-
-    internal static bool IsNonDebuggableBrowserRunning(string userDataDirectory, bool isWindows)
-    {
-        // Chromium uses different singleton lock files by platform:
-        // - POSIX/macOS: SingletonLock is a symlink shaped like "<hostname>-<pid>".
-        // - Windows: lockfile is held open with FILE_FLAG_DELETE_ON_CLOSE and has no PID payload.
-        // See Chromium's process_singleton_posix.cc and process_singleton_win.cc for the platform-specific details.
-        var lockPath = Path.Combine(userDataDirectory, isWindows ? "lockfile" : "SingletonLock");
-        FileInfo lockFile;
-        try
-        {
-            lockFile = new FileInfo(lockPath);
-            // Broken Unix symlinks can report Exists=false while still exposing the host-pid LinkTarget we need.
-            if (!lockFile.Exists && string.IsNullOrWhiteSpace(lockFile.LinkTarget))
-            {
-                return false;
-            }
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
-
-        if (TryGetSingletonLockProcessId(lockFile) is { } pid)
-        {
-            return IsProcessAlive(pid);
-        }
-
-        // Chromium documents this singleton behavior in process_singleton_posix.cc:
-        // https://chromium.googlesource.com/chromium/src/+/main/chrome/browser/process_singleton_posix.cc
-        // On Windows the singleton is a locked file rather than a host-pid symlink, so the best available signal is the
-        // presence of the lock path. On Unix we avoid treating old broken symlinks as an active browser.
-        return isWindows;
-    }
-
     private static async Task<bool> ProbeBrowserEndpointAsync(Uri browserEndpoint, CancellationToken cancellationToken)
     {
         // BrowserHost.DebugEndpoint is a websocket URL. Chromium exposes the matching HTTP endpoint by swapping
@@ -265,37 +224,6 @@ internal sealed class BrowserEndpointDiscovery(ILogger<BrowserLogsSessionManager
         using var stream = await response.Content.ReadAsStreamAsync(probeCts.Token).ConfigureAwait(false);
         var version = await JsonSerializer.DeserializeAsync(stream, s_jsonContext.BrowserJsonVersionResponse, probeCts.Token).ConfigureAwait(false);
         return Uri.TryCreate(version?.WebSocketDebuggerUrl, UriKind.Absolute, out _);
-    }
-
-    private static int? TryGetSingletonLockProcessId(FileInfo singletonLock)
-    {
-        try
-        {
-            var linkTarget = singletonLock.LinkTarget;
-            if (string.IsNullOrWhiteSpace(linkTarget))
-            {
-                return null;
-            }
-
-            var separatorIndex = linkTarget.LastIndexOf('-');
-            if (separatorIndex < 0 || separatorIndex == linkTarget.Length - 1)
-            {
-                return null;
-            }
-
-            // The Chromium source describes the POSIX lock as a symlink to a non-existent destination shaped like
-            // "<hostname>-<pid>". The host segment can contain dashes, so parse from the final dash instead of splitting
-            // on every dash.
-            return int.TryParse(linkTarget.AsSpan(separatorIndex + 1), NumberStyles.None, CultureInfo.InvariantCulture, out var pid) ? pid : null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
     }
 
     private static bool IsProcessAlive(int processId)

@@ -177,25 +177,13 @@
     <value>Unable to locate browser '{0}'. Specify an installed Chromium-based browser or an explicit executable path.</value>
     <comment>{0} is the requested browser name or path.</comment>
   </data>
-  <data name="BrowserLogsNonDebuggableBrowserRunning" xml:space="preserve">
-    <value>Browser user data directory '{0}' is already in use by a non-debuggable browser. Close that browser, use '{1}'='{2}', or start the browser from Aspire first.</value>
-    <comment>{0} is the user data directory, {1} is the user data mode configuration key, {2} is Isolated.</comment>
-  </data>
-  <data name="BrowserLogsUnableToResolveUserDataDirectory" xml:space="preserve">
-    <value>Unable to resolve the user data directory for browser '{0}'. Specify a known browser such as 'msedge' or 'chrome' when using shared user data mode, or use the isolated user data mode.</value>
-    <comment>{0} is the requested browser name or path.</comment>
+  <data name="BrowserLogsAppHostPathShaNotAvailable" xml:space="preserve">
+    <value>Cannot resolve the isolated browser user data directory because the AppHost path identifier is not available. Use '{0}' user data mode or run from a configured AppHost.</value>
+    <comment>{0} is the Isolated user data mode value.</comment>
   </data>
   <data name="BrowserLogsUserDataDirectoryNotFound" xml:space="preserve">
     <value>Browser user data directory '{0}' was not found.</value>
     <comment>{0} is the user data directory.</comment>
-  </data>
-  <data name="BrowserLogsUserDataDirectoryNotFoundForBrowser" xml:space="preserve">
-    <value>Browser user data directory '{0}' was not found for browser '{1}'.</value>
-    <comment>{0} is the user data directory, {1} is the browser name.</comment>
-  </data>
-  <data name="BrowserLogsGoogleChromeDefaultUserDataDirectoryNotSupported" xml:space="preserve">
-    <value>Google Chrome blocks remote debugging against its default user data directory '{0}'. Use '{1}'='{2}' or select Microsoft Edge for shared browser state.</value>
-    <comment>{0} is the user data directory, {1} is the user data mode configuration key, {2} is Isolated.</comment>
   </data>
   <data name="BrowserLogsTrackedBrowserProfileConflict" xml:space="preserve">
     <value>A tracked browser is already running for user data directory '{0}' with profile '{1}'. The requested profile is '{2}'. Close the existing tracked browser session or use isolated user data mode.</value>

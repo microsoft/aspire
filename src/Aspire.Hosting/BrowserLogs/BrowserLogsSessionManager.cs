@@ -27,7 +27,6 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     private int _disposing;
 
     public BrowserLogsSessionManager(
-        IFileSystemService fileSystemService,
         ResourceLoggerService resourceLoggerService,
         ResourceNotificationService resourceNotificationService,
         TimeProvider timeProvider,
@@ -37,7 +36,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceNotificationService,
             timeProvider,
             logger,
-            new BrowserLogsRunningSessionFactory(fileSystemService, logger, timeProvider))
+            new BrowserLogsRunningSessionFactory(logger, timeProvider))
     {
     }
 

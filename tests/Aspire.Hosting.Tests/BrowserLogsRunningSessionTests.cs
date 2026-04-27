@@ -23,7 +23,7 @@ public class BrowserLogsRunningSessionTests
 
             TestBrowserHost? host = null;
             await using var registry = new BrowserHostRegistry(
-                fileSystemService: null!,
+
                 NullLogger<BrowserLogsSessionManager>.Instance,
                 TimeProvider.System,
                 createUserDataDirectory: (configuration, _) => BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory.FullName, configuration.Profile),
@@ -39,7 +39,7 @@ public class BrowserLogsRunningSessionTests
             var logs = await ConsoleLoggingTestHelpers.CaptureLogsAsync(resourceLoggerService, resourceName, targetLogCount: 5, () =>
             {
                 session = BrowserLogsRunningSession.StartAsync(
-                    new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared),
+                    new BrowserConfiguration(browserExecutable, Profile: null, BrowserUserDataMode.Shared, AppHostKey: null),
                     resourceName,
                     "session-0001",
                     new Uri("https://localhost:5001/"),

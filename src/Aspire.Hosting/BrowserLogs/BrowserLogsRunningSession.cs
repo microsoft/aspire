@@ -45,9 +45,9 @@ internal sealed class BrowserLogsRunningSessionFactory : IBrowserLogsRunningSess
     private readonly ILogger<BrowserLogsSessionManager> _logger;
     private readonly TimeProvider _timeProvider;
 
-    public BrowserLogsRunningSessionFactory(IFileSystemService fileSystemService, ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
+    public BrowserLogsRunningSessionFactory(ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
     {
-        _browserHostRegistry = new BrowserHostRegistry(fileSystemService, logger, timeProvider);
+        _browserHostRegistry = new BrowserHostRegistry(logger, timeProvider);
         _logger = logger;
         _timeProvider = timeProvider;
     }

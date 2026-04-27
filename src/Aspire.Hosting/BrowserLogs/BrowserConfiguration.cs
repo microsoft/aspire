@@ -15,10 +15,11 @@ namespace Aspire.Hosting;
 /// does that imply?". The later user-data-directory decision belongs to <see cref="BrowserHostRegistry"/>, where
 /// the resolved browser executable path is available.
 /// </remarks>
-internal readonly record struct BrowserConfiguration(string Browser, string? Profile, BrowserUserDataMode UserDataMode)
+internal readonly record struct BrowserConfiguration(string Browser, string? Profile, BrowserUserDataMode UserDataMode, string? AppHostKey)
 {
     /// <summary>
-    /// The default mode matches a normal browser launch by using the browser's real user data directory.
+    /// The default mode points at an Aspire-managed persistent user data directory shared across every Aspire
+    /// AppHost on the machine, so cookies, sign-ins, and extensions persist between runs.
     /// </summary>
     internal const BrowserUserDataMode DefaultUserDataMode = BrowserUserDataMode.Shared;
 
@@ -74,7 +75,13 @@ internal readonly record struct BrowserConfiguration(string Browser, string? Pro
                     BrowserUserDataMode.Shared));
         }
 
-        return new BrowserConfiguration(resolvedBrowser, resolvedProfile, resolvedUserDataMode);
+        // Stable per-AppHost key sourced from DistributedApplicationBuilder. Only Isolated mode actually needs it
+        // (its user-data path includes the AppHost segment), but it is always captured here so the registry never
+        // has to re-read configuration. Same SHA value is used by FileDeploymentStateManager for analogous
+        // per-AppHost persistent state.
+        var appHostKey = configuration["AppHost:PathSha256"];
+
+        return new BrowserConfiguration(resolvedBrowser, resolvedProfile, resolvedUserDataMode, appHostKey);
     }
 
     /// <summary>

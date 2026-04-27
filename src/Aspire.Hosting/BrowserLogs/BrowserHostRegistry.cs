@@ -18,7 +18,6 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     private readonly BrowserEndpointDiscovery _endpointDiscovery;
     private readonly Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory> _createUserDataDirectory;
     private readonly Func<BrowserConfiguration, BrowserHostIdentity, BrowserLogsUserDataDirectory, CancellationToken, Task<IBrowserHost>> _createHostAsync;
-    private readonly IFileSystemService _fileSystemService;
     private readonly Dictionary<BrowserHostIdentity, BrowserHostEntry> _hosts = new();
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly object _lockLifetimeGate = new();
@@ -29,13 +28,12 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
     private int _disposed;
     private bool _lockDisposed;
 
-    public BrowserHostRegistry(IFileSystemService fileSystemService, ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
-        : this(fileSystemService, logger, timeProvider, createUserDataDirectory: null, createHostAsync: null)
+    public BrowserHostRegistry(ILogger<BrowserLogsSessionManager> logger, TimeProvider timeProvider)
+        : this(logger, timeProvider, createUserDataDirectory: null, createHostAsync: null)
     {
     }
 
     internal BrowserHostRegistry(
-        IFileSystemService fileSystemService,
         ILogger<BrowserLogsSessionManager> logger,
         TimeProvider timeProvider,
         Func<BrowserConfiguration, string, BrowserLogsUserDataDirectory>? createUserDataDirectory,
@@ -44,7 +42,6 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         _endpointDiscovery = new BrowserEndpointDiscovery(logger);
         _createUserDataDirectory = createUserDataDirectory ?? CreateUserDataDirectory;
         _createHostAsync = createHostAsync ?? CreateHostCoreAsync;
-        _fileSystemService = fileSystemService;
         _logger = logger;
         _timeProvider = timeProvider;
     }
@@ -296,38 +293,22 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
         BrowserLogsUserDataDirectory userDataDirectory,
         CancellationToken cancellationToken)
     {
-        if (configuration.UserDataMode == BrowserUserDataMode.Shared)
+        // Both Shared and Isolated point at an Aspire-managed persistent user data directory, so the same
+        // adoption-or-launch decision applies to both:
+        //
+        // 1. If a previous AppHost run for this identity wrote an adoption sidecar and the recorded process is
+        //    still alive with a live /json/version endpoint, connect to that browser via CDP.
+        // 2. Otherwise, launch a new debug-enabled browser against the same user data directory and write the
+        //    sidecar so the next AppHost run can connect.
+        //
+        // Aspire never points at the user's real browser profile, so a "non-debuggable browser is using this
+        // user data dir" failure mode no longer applies.
+        if (await _endpointDiscovery.TryReadAndValidateAsync(identity, userDataDirectory.ProfileDirectoryName, cancellationToken).ConfigureAwait(false) is { } metadata)
         {
-            // Shared mode has three outcomes, in this order:
-            //
-            // 1. Adopt a browser that Aspire previously launched for this user data root and profile. The endpoint file
-            //    must validate against this browser identity, which protects us from stale metadata left behind by a
-            //    different browser or profile. Real browser sessions can leave sidecar files behind if they are closed
-            //    externally or crash, so the file is only useful after the process and /json/version endpoint respond.
-            // 2. If the profile is locked but no valid Aspire endpoint exists, fail with guidance. That means a normal
-            //    browser is using the profile without remote debugging, so we cannot attach and must not start a second
-            //    browser against the same locked user data directory. On real Chromium profiles that second launch tends
-            //    to hand off to the already-running browser or fail before writing a usable DevTools endpoint.
-            // 3. If nothing is running, fall through and start an owned debug-enabled browser.
-            if (await _endpointDiscovery.TryReadAndValidateAsync(identity, userDataDirectory.ProfileDirectoryName, cancellationToken).ConfigureAwait(false) is { } metadata)
-            {
-                var endpoint = new Uri(metadata.Endpoint, UriKind.Absolute);
-                _logger.LogInformation("Adopting tracked browser host '{BrowserExecutable}' at '{Endpoint}'.", identity.ExecutablePath, endpoint);
-                userDataDirectory.Dispose();
-                return new AdoptedBrowserHost(identity, endpoint, configuration.Browser, _logger, _timeProvider);
-            }
-
-            if (BrowserEndpointDiscovery.IsNonDebuggableBrowserRunning(identity.UserDataRootPath))
-            {
-                userDataDirectory.Dispose();
-                throw new InvalidOperationException(
-                    string.Format(
-                        CultureInfo.CurrentCulture,
-                        MessageStrings.BrowserLogsNonDebuggableBrowserRunning,
-                        identity.UserDataRootPath,
-                        BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
-                        BrowserUserDataMode.Isolated));
-            }
+            var endpoint = new Uri(metadata.Endpoint, UriKind.Absolute);
+            _logger.LogInformation("Adopting tracked browser host '{BrowserExecutable}' at '{Endpoint}'.", identity.ExecutablePath, endpoint);
+            userDataDirectory.Dispose();
+            return new AdoptedBrowserHost(identity, endpoint, configuration.Browser, _logger, _timeProvider);
         }
 
         _logger.LogInformation("Starting tracked browser host '{BrowserExecutable}'.", identity.ExecutablePath);
@@ -336,40 +317,34 @@ internal sealed class BrowserHostRegistry : IAsyncDisposable
 
     private BrowserLogsUserDataDirectory CreateUserDataDirectory(BrowserConfiguration configuration, string browserExecutable)
     {
-        if (configuration.UserDataMode == BrowserUserDataMode.Isolated)
-        {
-            // Isolated mode never reuses the user's normal profile. Each host gets a temp user data directory that can
-            // be safely deleted when the last lease releases the owned browser.
-            return BrowserLogsUserDataDirectory.CreateTemporary(_fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-browser-logs"));
-        }
+        // Both modes use a persistent Aspire-managed user data directory. The mode picks the path scope:
+        //   Shared   -> machine-wide, shared across every Aspire AppHost
+        //   Isolated -> per-AppHost (keyed on AppHost:PathSha256)
+        //
+        // The directory is created on demand and never deleted by AppHost shutdown. The browser process is left
+        // running across AppHost runs and adopted via the endpoint sidecar.
+        var path = BrowserUserDataPathResolver.Resolve(configuration);
 
-        // Shared mode is a persistent browser context over the browser's real user data root, so user state,
-        // extensions, and profiles are available. Chromium puts singleton locks, DevToolsActivePort, and our Aspire
-        // endpoint sidecar at that root; named profiles are subdirectories selected by command-line argument. The later
-        // endpoint/probe logic decides whether that root is reusable, adoptable, or locked.
-        var userDataDirectory = ChromiumBrowserResolver.TryResolveUserDataDirectory(configuration.Browser, browserExecutable)
-            ?? throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUnableToResolveUserDataDirectory, configuration.Browser));
-
-        if (!Directory.Exists(userDataDirectory))
-        {
-            throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, MessageStrings.BrowserLogsUserDataDirectoryNotFoundForBrowser, userDataDirectory, configuration.Browser));
-        }
-
-        if (ChromiumBrowserResolver.IsGoogleChromeDefaultUserDataDirectory(configuration.Browser, browserExecutable, userDataDirectory))
-        {
-            throw new InvalidOperationException(
-                string.Format(
-                    CultureInfo.CurrentCulture,
-                    MessageStrings.BrowserLogsGoogleChromeDefaultUserDataDirectoryNotSupported,
-                    userDataDirectory,
-                    BrowserLogsBuilderExtensions.UserDataModeConfigurationKey,
-                    BrowserUserDataMode.Isolated));
-        }
-
+        // Profile resolution requires Local State to exist (Chromium writes it on first launch). Skip resolution
+        // when the directory is fresh and treat the supplied profile as the literal --profile-directory value;
+        // Chromium creates the sub-directory on first use.
         var profileDirectoryName = configuration.Profile is { } profile
-            ? ChromiumBrowserResolver.ResolveProfileDirectory(userDataDirectory, profile)
+            ? ResolveProfileDirectoryName(path, profile)
             : null;
-        return BrowserLogsUserDataDirectory.CreatePersistent(userDataDirectory, profileDirectoryName);
+        return BrowserLogsUserDataDirectory.CreatePersistent(path, profileDirectoryName);
+    }
+
+    private static string ResolveProfileDirectoryName(string userDataDirectory, string profile)
+    {
+        var localStatePath = Path.Combine(userDataDirectory, "Local State");
+        if (File.Exists(localStatePath))
+        {
+            return ChromiumBrowserResolver.ResolveProfileDirectory(userDataDirectory, profile);
+        }
+
+        // Fresh user data directory: no Local State to map display names through. Use the supplied profile string
+        // as the literal directory name. Chromium creates it on launch.
+        return profile;
     }
 
     private static void ValidateProfileCompatibility(BrowserHostIdentity identity, string? existingProfileDirectoryName, string? requestedProfileDirectoryName)
