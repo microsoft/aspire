@@ -2562,6 +2562,10 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         // would mutate built-in steps' DependsOnSteps via NormalizeRequiredByToDependsOn,
         // and a later resource removal (e.g. an unused default container registry) would
         // then cause the next ResolveStepsAsync to fail with "depends on unknown step".
+        await Task.CompletedTask;
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WithResourceFilter_OnlyExecutesMatchingResourceSteps()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
@@ -2754,6 +2758,15 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var deployStep = resolved.Single(s => s.Name == WellKnownPipelineSteps.Deploy);
         Assert.DoesNotContain("transient-step", deployStep.DependsOnSteps);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithNoResourceFilter_ExecutesAllSteps_AllResourcesIncluded()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
         var executedSteps = new List<string>();
         var apiResource = builder.AddResource(new CustomResource("api"));
         var workerResource = builder.AddResource(new CustomResource("worker"));
