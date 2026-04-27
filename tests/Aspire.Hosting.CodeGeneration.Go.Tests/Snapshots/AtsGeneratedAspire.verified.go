@@ -780,7 +780,7 @@ type TestDatabaseResource interface {
 	WithConfig(config *TestConfigDto) TestDatabaseResource
 	WithCorrelationId(correlationId string) TestDatabaseResource
 	WithCreatedAt(createdAt string) TestDatabaseResource
-	WithDataVolume(options ...*WithDataVolumeOptions) TestDatabaseResource
+	WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestDatabaseResource
 	WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource
 	WithEndpoints(endpoints []string) TestDatabaseResource
 	WithEnvironmentVariables(variables map[string]string) TestDatabaseResource
@@ -900,14 +900,14 @@ func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResou
 }
 
 // WithDataVolume adds a data volume
-func (s *testDatabaseResource) WithDataVolume(options ...*WithDataVolumeOptions) TestDatabaseResource {
+func (s *testDatabaseResource) WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithDataVolumeOptions{}
+		merged := &TestDatabaseResourceWithDataVolumeOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -1311,7 +1311,7 @@ type TestRedisResource interface {
 	WithConnectionStringDirect(connectionString string) TestRedisResource
 	WithCorrelationId(correlationId string) TestRedisResource
 	WithCreatedAt(createdAt string) TestRedisResource
-	WithDataVolume(options ...*WithDataVolumeOptions) TestRedisResource
+	WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestRedisResource
 	WithDependency(dependency ResourceWithConnectionString) TestRedisResource
 	WithEndpoints(endpoints []string) TestRedisResource
 	WithEnvironmentVariables(variables map[string]string) TestRedisResource
@@ -1578,14 +1578,14 @@ func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
 }
 
 // WithDataVolume adds a data volume with persistence
-func (s *testRedisResource) WithDataVolume(options ...*WithDataVolumeOptions) TestRedisResource {
+func (s *testRedisResource) WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"builder": s.handle.ToJSON(),
 	}
 	if len(options) > 0 {
-		merged := &WithDataVolumeOptions{}
+		merged := &TestDatabaseResourceWithDataVolumeOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
@@ -2126,13 +2126,13 @@ func (o *WaitForReadyAsyncOptions) ToMap() map[string]any {
 	return m
 }
 
-// WithDataVolumeOptions carries optional parameters for WithDataVolume.
-type WithDataVolumeOptions struct {
+// TestDatabaseResourceWithDataVolumeOptions carries optional parameters for WithDataVolume.
+type TestDatabaseResourceWithDataVolumeOptions struct {
 	Name *string `json:"name,omitempty"`
 	IsReadOnly *bool `json:"isReadOnly,omitempty"`
 }
 
-func (o *WithDataVolumeOptions) ToMap() map[string]any {
+func (o *TestDatabaseResourceWithDataVolumeOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Name != nil { m["name"] = serializeValue(o.Name) }
@@ -2229,7 +2229,7 @@ type distributedApplication struct { *resourceBuilderBase }
 func (b *iDistributedApplicationBuilder) Build() (DistributedApplication, error) {
 	if b.err != nil { return nil, b.err }
 	result, err := b.client.invokeCapability(context.Background(), "Aspire.Hosting/build", map[string]any{
-		"builder": b.handle.ToJSON(),
+		"context": b.handle.ToJSON(),
 	})
 	if err != nil { return nil, err }
 	app, ok := result.(DistributedApplication)
