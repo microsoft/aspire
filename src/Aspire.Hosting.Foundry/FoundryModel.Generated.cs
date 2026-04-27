@@ -54,6 +54,11 @@ public partial class FoundryModel
         public static readonly FoundryModel ClaudeOpus46 = new() { Name = "claude-opus-4-6", Version = "1", Format = "Anthropic" };
 
         /// <summary>
+        /// Claude Opus 4.7 is our most capable generally available model, advancing performance across coding, enterprise workflows, and long-running agentic tasks.
+        /// </summary>
+        public static readonly FoundryModel ClaudeOpus47 = new() { Name = "claude-opus-4-7", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
         /// Claude Sonnet 4.5 is Anthropic's most capable model for complex agents and an industry leader for coding and computer use.
         /// </summary>
         public static readonly FoundryModel ClaudeSonnet45 = new() { Name = "claude-sonnet-4-5", Version = "20250929", Format = "Anthropic" };
@@ -1275,6 +1280,11 @@ public partial class FoundryModel
         public static readonly FoundryModel AzureContentUnderstandingRead = new() { Name = "Azure-Content-Understanding-Read", Version = "1", Format = "Microsoft" };
 
         /// <summary>
+        /// PII Redaction for Conversation automatically detects and masks sensitive information such as names, addresses, phone numbers, credit card details, and other personally identifiable information (PII) in meeting transcripts.
+        /// </summary>
+        public static readonly FoundryModel AzureLanguageConversationalPiiRedaction = new() { Name = "Azure-Language-Conversational-PII-redaction", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
         /// Language detection quickly and accurately identifies the language of any text, supporting over 100 languages and dialects, including the ISO 15924 standard for a select number of languages.
         /// </summary>
         public static readonly FoundryModel AzureLanguageLanguageDetection = new() { Name = "Azure-Language-Language-detection", Version = "1", Format = "Microsoft" };
@@ -1288,6 +1298,11 @@ public partial class FoundryModel
         /// Transcribes streaming or recorded audio into readable text across 140+ languages and dialects. Accuracy can be further optimized with custom models for your specialized use cases.
         /// </summary>
         public static readonly FoundryModel AzureSpeechSpeechToText = new() { Name = "Azure-Speech-Speech-to-text", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// Translates streaming or recorded audio into text or audio across 140+ languages and dialects. Accuracy can be further optimized with custom models for your specialized use cases.
+        /// </summary>
+        public static readonly FoundryModel AzureSpeechSpeechTranslation = new() { Name = "Azure-Speech-Speech-Translation", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>Text-to-speech enables your applications, tools, or devices to convert text into natural synthesized speech. It leverages advanced out-of-the-box [prebuilt neural voices](<see href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?t">https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?t</see></para>
@@ -2816,6 +2831,11 @@ public partial class FoundryModel
         public static readonly FoundryModel Gpt54Pro = new() { Name = "gpt-5.4-pro", Version = "2026-03-05", Format = "OpenAI" };
 
         /// <summary>
+        /// GPT‑5.5 is OpenAI’s most capable frontier model, built to deliver faster, more reliable results for complex professional work.
+        /// </summary>
+        public static readonly FoundryModel Gpt55 = new() { Name = "gpt-5.5", Version = "2026-04-24", Format = "OpenAI" };
+
+        /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
         public static readonly FoundryModel GptAudio = new() { Name = "gpt-audio", Version = "2025-08-28", Format = "OpenAI" };
@@ -2844,6 +2864,11 @@ public partial class FoundryModel
         /// An efficient AI solution for diverse text and image tasks, including high quality, and editing scenarios
         /// </summary>
         public static readonly FoundryModel GptImage15 = new() { Name = "gpt-image-1.5", Version = "2025-12-16", Format = "OpenAI" };
+
+        /// <summary>
+        /// An efficient AI solution for diverse text and image tasks, including high quality, and editing scenarios
+        /// </summary>
+        public static readonly FoundryModel GptImage2 = new() { Name = "gpt-image-2", Version = "2026-04-21", Format = "OpenAI" };
 
         /// <summary>
         /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
