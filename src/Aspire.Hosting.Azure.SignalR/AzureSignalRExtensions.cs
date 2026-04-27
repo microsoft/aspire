@@ -211,7 +211,7 @@ public static class AzureSignalRExtensions
     /// <param name="roles">The Azure SignalR roles to be assigned (for example, <see cref="AzureSignalRRole.SignalRContributor"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureSignalRRole"/> value.</exception>
-    [AspireExport("withSignalRRoleAssignments", Description = "Assigns Azure SignalR roles to a resource")]
+    [AspireExport("withSignalRRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Azure SignalR roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureSignalRResource> target,

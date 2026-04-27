@@ -48,6 +48,8 @@ internal interface IBrowserPageSession : IAsyncDisposable
     // Completes when this page target is no longer available: the tab was closed/crashed, CDP reported a detach,
     // or the host terminated. Host-level reconnects should reattach and preserve this session when possible.
     Task<BrowserPageSessionResult> Completion { get; }
+
+    Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(CancellationToken cancellationToken);
 }
 
 // Normalized page-session completion signal consumed by BrowserLogsRunningSession so manager state is independent of

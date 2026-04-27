@@ -889,33 +889,13 @@ public static class AtsCapabilityScanner
             return;
         }
 
-        // Collect all MethodName values that have collisions and their colliding CapabilityIds.
-        var collidingMethodNames = new Dictionary<string, List<string>>();
-
-        foreach (var g in collisionGroups)
-        {
-            var methodName = g.Key.MethodName;
-            var capIds = g.Select(x => x.Capability.CapabilityId).Distinct().ToList();
-
-            if (!collidingMethodNames.TryGetValue(methodName, out var existingIds))
-            {
-                existingIds = [];
-                collidingMethodNames[methodName] = existingIds;
-            }
-
-            foreach (var id in capIds)
-            {
-                if (!existingIds.Contains(id))
-                {
-                    existingIds.Add(id);
-                }
-            }
-        }
-
         var capabilitiesToRemove = new HashSet<string>();
 
-        foreach (var (methodName, capIds) in collidingMethodNames)
+        foreach (var collisionGroup in collisionGroups)
         {
+            var methodName = collisionGroup.Key.MethodName;
+            var targetTypeId = collisionGroup.Key.Target;
+            var capIds = collisionGroup.Select(x => x.Capability.CapabilityId).Distinct().ToList();
             capIds.Sort(StringComparer.Ordinal);
 
             var conflictingIdsStr = string.Join(", ", capIds);
@@ -926,7 +906,7 @@ public static class AtsCapabilityScanner
                 capabilitiesToRemove.Add(capIds[i]);
 
                 diagnostics.Add(AtsDiagnostic.Warning(
-                    $"Method '{methodName}' has collisions ({conflictingIdsStr}). '{capIds[i]}' was removed. Use [AspireExport(MethodName = \"uniqueName\")] to set an explicit name.",
+                    $"Method '{methodName}' on target '{targetTypeId}' has collisions ({conflictingIdsStr}). '{capIds[i]}' was removed. Use [AspireExport(MethodName = \"uniqueName\")] to set an explicit name.",
                     capIds[i]));
             }
         }
@@ -1518,21 +1498,24 @@ public static class AtsCapabilityScanner
 
                 // Get custom method name from attribute if specified
                 var customMethodName = memberExportAttr?.Id;
+                var methodNameOverride = memberExportAttr?.MethodName;
+                var propertyDescription = memberExportAttr?.Description ?? $"Gets the {property.Name} property";
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
                 if (property.CanRead)
                 {
                     var camelCaseName = ToCamelCase(property.Name);
-                    var getMethodName = customMethodName ?? $"{typeName}.{camelCaseName}";
+                    var getterMethodName = methodNameOverride ?? camelCaseName;
+                    var getMethodName = customMethodName ?? $"{typeName}.{getterMethodName}";
                     var getCapabilityId = $"{package}/{getMethodName}";
 
                     capabilities.Add(new AtsCapabilityInfo
                     {
                         CapabilityId = getCapabilityId,
-                        MethodName = camelCaseName,
+                        MethodName = getterMethodName,
                         OwningTypeName = typeName,
-                        Description = $"Gets the {property.Name} property",
+                        Description = propertyDescription,
                         Parameters = [
                            new AtsParameterInfo
                             {
@@ -1562,7 +1545,10 @@ public static class AtsCapabilityScanner
                 // Naming: {TypeName}.set{PropertyName} (keep "set" prefix, PascalCase property name)
                 if (property.CanWrite)
                 {
-                    var setMethodName = $"set{property.Name}";
+                    var setterMethodNameSuffix = methodNameOverride is { Length: > 0 }
+                        ? char.ToUpperInvariant(methodNameOverride[0]) + methodNameOverride[1..]
+                        : property.Name;
+                    var setMethodName = $"set{setterMethodNameSuffix}";
                     var setCapabilityId = $"{package}/{typeName}.{setMethodName}";
 
                     capabilities.Add(new AtsCapabilityInfo
@@ -1661,6 +1647,7 @@ public static class AtsCapabilityScanner
             {
                 // Get custom method name from attribute if specified
                 var customMethodName = memberExportAttr?.Id;
+                var methodNameOverride = memberExportAttr?.MethodName;
 
                 // Generate method capability
                 // If explicit [AspireExport("id")] with custom Id, use that directly (like static exports)
@@ -1737,7 +1724,7 @@ public static class AtsCapabilityScanner
                 var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
                 // Get simple method name (without type prefix)
-                var simpleMethodName = customMethodName ?? ToCamelCase(method.Name);
+                var simpleMethodName = methodNameOverride ?? customMethodName ?? ToCamelCase(method.Name);
 
                 capabilities.Add(new AtsCapabilityInfo
                 {

@@ -156,6 +156,11 @@ public class BrowserLogsRunningSessionTests
 
         public int DisposeCount { get; private set; }
 
+        public Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new BrowserLogsCaptureScreenshotResult { Data = Convert.ToBase64String([0x89, 0x50, 0x4e, 0x47]) });
+        }
+
         public ValueTask RaiseEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
         {
             return eventHandler(protocolEvent);

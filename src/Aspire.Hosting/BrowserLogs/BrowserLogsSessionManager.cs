@@ -22,6 +22,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     private readonly ResourceNotificationService _resourceNotificationService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
+    private readonly IBrowserLogsArtifactWriter _artifactWriter;
     private readonly IBrowserLogsRunningSessionFactory _sessionFactory;
     private readonly ConcurrentDictionary<string, ResourceSessionState> _resourceStates = new(StringComparer.Ordinal);
     private int _disposing;
@@ -36,6 +37,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceNotificationService,
             timeProvider,
             logger,
+            new BrowserLogsArtifactWriter(timeProvider),
             new BrowserLogsRunningSessionFactory(logger, timeProvider))
     {
     }
@@ -45,12 +47,14 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         ResourceNotificationService resourceNotificationService,
         TimeProvider timeProvider,
         ILogger<BrowserLogsSessionManager> logger,
+        IBrowserLogsArtifactWriter? artifactWriter,
         IBrowserLogsRunningSessionFactory sessionFactory)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourceNotificationService = resourceNotificationService;
         _timeProvider = timeProvider;
         _logger = logger;
+        _artifactWriter = artifactWriter ?? new BrowserLogsArtifactWriter(timeProvider);
         _sessionFactory = sessionFactory;
     }
 
@@ -144,6 +148,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             // inspect the exact target that is producing resource logs.
             resourceState.ActiveSessions[session.SessionId] = new ActiveBrowserSession(
                 session.SessionId,
+                configuration.AppHostKey,
                 configuration.Browser,
                 session.BrowserExecutable,
                 configuration.Profile,
@@ -170,6 +175,74 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         {
             resourceState.Lock.Release();
         }
+
+        void ThrowIfDisposing()
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposing) != 0, this);
+        }
+    }
+
+    public async Task<BrowserLogsScreenshotCaptureResult> CaptureScreenshotAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
+        ThrowIfDisposing();
+
+        var resourceState = _resourceStates.GetOrAdd(resourceName, static _ => new ResourceSessionState());
+        ActiveBrowserSession? activeSession;
+
+        await resourceState.Lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ThrowIfDisposing();
+
+            activeSession = resourceState.LastSessionId is { } lastSessionId &&
+                resourceState.ActiveSessions.TryGetValue(lastSessionId, out var lastSession)
+                    ? lastSession
+                    : resourceState.ActiveSessions.Count == 0
+                        ? null
+                        : resourceState.ActiveSessions.Values.MaxBy(static session => session.StartedAt);
+
+            if (activeSession is null)
+            {
+                throw new InvalidOperationException("No active tracked browser session is available to capture.");
+            }
+        }
+        finally
+        {
+            resourceState.Lock.Release();
+        }
+
+        var screenshotBytes = await activeSession.Session.CaptureScreenshotAsync(cancellationToken).ConfigureAwait(false);
+        var artifact = await _artifactWriter.WriteArtifactAsync(
+            activeSession.AppHostKey,
+            resourceName,
+            artifactType: "screenshot",
+            fileExtension: ".png",
+            mimeType: "image/png",
+            content: screenshotBytes,
+            cancellationToken).ConfigureAwait(false);
+
+        var processDescription = FormatProcessId(activeSession.ProcessId);
+        _resourceLoggerService.GetLogger(resourceName).LogInformation(
+            "[{SessionId}] Captured browser screenshot artifact '{ArtifactPath}' ({SizeBytes} bytes) from target '{TargetId}' at '{TargetUrl}' using '{Browser}' ({BrowserHostOwnership}, {ProcessDescription}).",
+            activeSession.SessionId,
+            artifact.FilePath,
+            artifact.SizeBytes,
+            activeSession.TargetId,
+            activeSession.TargetUrl,
+            activeSession.Browser,
+            activeSession.BrowserHostOwnership,
+            processDescription);
+
+        return new BrowserLogsScreenshotCaptureResult(
+            activeSession.SessionId,
+            activeSession.Browser,
+            activeSession.BrowserExecutable,
+            activeSession.BrowserHostOwnership,
+            activeSession.ProcessId,
+            activeSession.TargetId,
+            activeSession.TargetUrl,
+            artifact);
 
         void ThrowIfDisposing()
         {
@@ -519,6 +592,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
 
     private sealed record ActiveBrowserSession(
         string SessionId,
+        string? AppHostKey,
         string Browser,
         string BrowserExecutable,
         string? Profile,

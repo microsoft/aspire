@@ -25,6 +25,8 @@ internal interface IBrowserLogsRunningSession
 
     Task StartCompletionObserver(Func<int?, Exception?, Task> onCompleted);
 
+    Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken);
+
     Task StopAsync(CancellationToken cancellationToken);
 }
 
@@ -171,6 +173,21 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         return ObserveCompletionAsync(onCompleted);
     }
 
+    public async Task<byte[]> CaptureScreenshotAsync(CancellationToken cancellationToken)
+    {
+        var pageSession = _pageSession ?? throw new InvalidOperationException("Browser page session is not available.");
+        var result = await pageSession.CaptureScreenshotAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            return Convert.FromBase64String(result.Data!);
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidOperationException("Tracked browser screenshot capture returned invalid image data.", ex);
+        }
+    }
+
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _stopCts.Cancel();
@@ -304,9 +321,8 @@ internal sealed class BrowserLogsRunningSession : IBrowserLogsRunningSession
         }
         finally
         {
-            // Always dispose the stop CTS even if lease release threw. BrowserHostLease.DisposeAsync can propagate
-            // OperationCanceledException from its release timeout; without try/finally we leak the CTS and any
-            // registrations on it.
+            // Always dispose the stop CTS even if page or lease cleanup fails; otherwise the CTS and any registrations
+            // on it leak until process exit.
             _stopCts.Dispose();
         }
     }

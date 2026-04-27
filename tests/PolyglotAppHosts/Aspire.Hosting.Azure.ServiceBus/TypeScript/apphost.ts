@@ -39,12 +39,12 @@ const subscription = await topic.addServiceBusSubscription("audit", {
     subscriptionName: "audit-sub",
 });
 
-const _queueParent = await queue.parent.get();
-const _queueConnectionString = await queue.connectionStringExpression.get();
-const _topicParent = await topic.parent.get();
-const _topicConnectionString = await topic.connectionStringExpression.get();
-const _subscriptionParent = await subscription.parent.get();
-const _subscriptionConnectionString = await subscription.connectionStringExpression.get();
+const _queueParent = await queue.parent();
+const _queueConnectionString = await queue.connectionStringExpression();
+const _topicParent = await topic.parent();
+const _topicConnectionString = await topic.connectionStringExpression();
+const _subscriptionParent = await subscription.parent();
+const _subscriptionConnectionString = await subscription.connectionStringExpression();
 
 // ── DTO types ───────────────────────────────────────────────────────────────
 const filter: AzureServiceBusCorrelationFilter = {
@@ -105,13 +105,14 @@ await subscription.withProperties(async (s) => {
     const _lock: number = await s.lockDuration.get();
 
     // Add rules using AspireList.add() and the DTO types
-    await s.rules.add({
+    const rules = await s.rules();
+    await rules.add({
         name: "order-filter",
         filterType: AzureServiceBusFilterType.CorrelationFilter,
         correlationFilter: filter,
     });
 
-    await s.rules.add({
+    await rules.add({
         name: "sql-filter",
         filterType: AzureServiceBusFilterType.SqlFilter,
     });
@@ -119,16 +120,16 @@ await subscription.withProperties(async (s) => {
 
 // ── 7. withRoleAssignments — enum-based role assignment shim ───────────────
 // On the parent ServiceBus resource (all 3 roles)
-await serviceBus.withServiceBusRoleAssignments(serviceBus, [
+await serviceBus.withRoleAssignments(serviceBus, [
     AzureServiceBusRole.AzureServiceBusDataOwner,
     AzureServiceBusRole.AzureServiceBusDataSender,
     AzureServiceBusRole.AzureServiceBusDataReceiver,
 ]);
 
 // On child resources
-await queue.withServiceBusRoleAssignments(serviceBus, [AzureServiceBusRole.AzureServiceBusDataReceiver]);
-await topic.withServiceBusRoleAssignments(serviceBus, [AzureServiceBusRole.AzureServiceBusDataSender]);
-await subscription.withServiceBusRoleAssignments(serviceBus, [AzureServiceBusRole.AzureServiceBusDataReceiver]);
+await queue.withRoleAssignments(serviceBus, [AzureServiceBusRole.AzureServiceBusDataReceiver]);
+await topic.withRoleAssignments(serviceBus, [AzureServiceBusRole.AzureServiceBusDataSender]);
+await subscription.withRoleAssignments(serviceBus, [AzureServiceBusRole.AzureServiceBusDataReceiver]);
 
 // ── 8. Verify enum values are accessible ────────────────────────────────────
 const _sqlFilter = AzureServiceBusFilterType.SqlFilter;

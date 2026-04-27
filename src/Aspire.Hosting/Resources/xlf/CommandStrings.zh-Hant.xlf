@@ -2,6 +2,16 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../CommandStrings.resx">
     <body>
+      <trans-unit id="CaptureScreenshotDescription">
+        <source>Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</source>
+        <target state="new">Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CaptureScreenshotName">
+        <source>Capture screenshot</source>
+        <target state="new">Capture screenshot</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeleteParameterDescription">
         <source>Delete parameter value</source>
         <target state="translated">刪除參數值</target>

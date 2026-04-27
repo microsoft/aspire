@@ -27,7 +27,7 @@ void main() throws Exception {
         // ---- WithCreationScript: custom database creation SQL ----
         db.withCreationScript("CREATE DATABASE \"testdb\"");
         // ---- WithPassword / WithUserName: credential configuration ----
-        var customPassword = builder.addParameter("pg-password", true);
+        var customPassword = builder.addParameter("pg-password", new AddParameterOptions().secret(true));
         var customUser = builder.addParameter("pg-user");
         var pg2 = builder.addPostgres("pg2");
         pg2.withPassword(customPassword);

@@ -8,7 +8,7 @@ void main() throws Exception {
         var rabbitmq2 = builder.addRabbitMQ("messaging2");
         rabbitmq2.withLifetime(ContainerLifetime.PERSISTENT);
         rabbitmq2.withDataVolume();
-        rabbitmq2.withManagementPluginWithPort(15673.0);
+        rabbitmq2.withManagementPlugin(15673.0);
         // ---- Property access on RabbitMQServerResource ----
         var _endpoint = rabbitmq.primaryEndpoint();
         var _mgmtEndpoint = rabbitmq.managementEndpoint();

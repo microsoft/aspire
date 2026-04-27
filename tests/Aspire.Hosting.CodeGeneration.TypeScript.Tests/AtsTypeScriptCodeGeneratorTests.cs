@@ -1121,7 +1121,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var capabilities = ScanCapabilitiesFromHostingAssembly();
 
         var getValueAsync = capabilities.FirstOrDefault(c =>
-            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValue" &&
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/getValueAsync" &&
             c.TargetTypeId == AtsConstants.ReferenceExpressionTypeId);
 
         Assert.NotNull(getValueAsync);
@@ -1390,33 +1390,32 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void Generate_ListProperty_GeneratesAspireListGetter()
+    public void Generate_ListProperty_GeneratesGetterOnlyMethods()
     {
         // Verify that List properties on [AspireExport(ExposeProperties = true)] types
-        // generate AspireList getters (same pattern as Dictionary properties with AspireDict)
+        // generate zero-argument methods (same pattern as Dictionary properties with AspireDict)
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
         var code = files["aspire.ts"];
 
         // TestCollectionContext has both Items (List) and Metadata (Dictionary)
-        // Both should use the same getter pattern with lazy initialization
+        // Both should use the same getter-only method pattern with lazy initialization.
 
-        // Check for AspireList getter pattern
+        // Check for AspireList getter-only method pattern.
         Assert.Contains("private _items?: AspireList<string>;", code);
-        Assert.Contains("get items(): AspireList<string>", code);
+        Assert.Contains("async items(): Promise<AspireList<string>>", code);
         Assert.Contains("this._items = new AspireList<string>(", code);
 
-        // Check for AspireDict getter pattern (existing behavior)
+        // Check for AspireDict getter-only method pattern.
         Assert.Contains("private _metadata?: AspireDict<string, string>;", code);
-        Assert.Contains("get metadata(): AspireDict<string, string>", code);
+        Assert.Contains("async metadata(): Promise<AspireDict<string, string>>", code);
         Assert.Contains("this._metadata = new AspireDict<string, string>(", code);
     }
 
     [Fact]
-    public void Generate_ListProperty_DoesNotUseAsyncGetterPattern()
+    public void Generate_ListProperty_DoesNotUsePropertyObjectPattern()
     {
-        // Verify that List properties do NOT use the old async getter pattern
-        // (args = { get: async () => ... }) but instead use proper TypeScript getters
+        // Verify that getter-only List properties do not use the old property object pattern.
         var atsContext = CreateContextFromTestAssembly();
         var files = _generator.GenerateDistributedApplication(atsContext);
         var code = files["aspire.ts"];
@@ -1424,6 +1423,31 @@ public class AtsTypeScriptCodeGeneratorTests
         // Should NOT contain the old pattern for items
         Assert.DoesNotContain("items = {", code);
         Assert.DoesNotContain("items = {\n        get: async", code);
+    }
+
+    [Fact]
+    public void Generate_OptionalOptionsProperty_UsesDistinctOptionsBagParameter()
+    {
+        var code = GenerateTwoPassCode();
+
+        Assert.DoesNotContain("= options?.options;", code);
+        Assert.Contains("addProject(name: string, projectPath: string, options?: AddProjectOptions)", code);
+        Assert.Contains("let launchProfileOrOptions = options?.launchProfileOrOptions;", code);
+    }
+
+    [Fact]
+    public void Generate_MutableCollectionProperties_UsePropertyAccessors()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var code = files["aspire.ts"];
+
+        Assert.Contains("readonly tags: AspireList<string>;", code);
+        Assert.Contains("get tags(): AspireList<string> {", code);
+        Assert.Contains("readonly counts: AspireDict<string, number>;", code);
+        Assert.Contains("get counts(): AspireDict<string, number> {", code);
+        Assert.DoesNotContain("async tags(): Promise<AspireList<string>>", code);
+        Assert.DoesNotContain("async counts(): Promise<AspireDict<string, number>>", code);
     }
 
     [Fact]
