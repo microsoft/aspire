@@ -151,7 +151,7 @@
   </data>
   <data name="StateColumnResourceContainerRuntimeUnhealthy" xml:space="preserve">
     <value>Container runtime was found but appears to be unhealthy. Ensure that it is running.
-For more information, see https://aka.ms/dotnet/aspire/container-runtime-unhealthy</value>
+For more information, see https://aka.ms/aspire/container-runtime-unhealthy</value>
     <comment>Contains a new line</comment>
   </data>
   <data name="StateColumnResourceNotStarted" xml:space="preserve">

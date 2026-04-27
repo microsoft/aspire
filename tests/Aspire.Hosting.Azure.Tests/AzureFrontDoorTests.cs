@@ -125,11 +125,9 @@ public class AzureFrontDoorTests
 
         using var app = builder.Build();
 
-        await ExecuteBeforeStartHooksAsync(app, default);
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => GetManifestWithBicep(frontDoor.Resource));
-
-        Assert.Contains("does not have an external HTTP or HTTPS endpoint", exception.Message);
+        Assert.Contains("does not have an external HTTP or HTTPS endpoint", exception.ToString());
     }
 
     [Fact]
@@ -158,7 +156,7 @@ public class AzureFrontDoorTests
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var frontDoor = builder.AddAzureFrontDoor("frontdoor");
 
-        Assert.Throws<ArgumentNullException>(() => frontDoor.WithOrigin((IResourceBuilder<IResourceWithEndpoints>)null!));
+        Assert.Throws<ArgumentNullException>(() => frontDoor.WithOrigin((IResourceBuilder<ProjectResource>)null!));
     }
 
     [Fact]

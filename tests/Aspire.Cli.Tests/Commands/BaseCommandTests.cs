@@ -36,4 +36,51 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         var expected = expectErrorConsole ? ConsoleOutput.Error : ConsoleOutput.Standard;
         Assert.Equal(expected, testInteractionService.Console);
     }
+
+    [Fact]
+    public async Task BaseCommand_WithNoUpdateNotification_DoesNotDisplayTrailingBlankLine()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var testNotifier = new TestCliUpdateNotifier();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.True(testNotifier.NotifyWasCalled);
+        Assert.Equal(0, testInteractionService.DisplayEmptyLineCount);
+    }
+
+    [Fact]
+    public async Task BaseCommand_WithUpdateNotification_DoesNotDisplayTrailingBlankLine()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            IsUpdateAvailableCallback = () => true,
+            NotifyIfUpdateAvailableCallback = () => testInteractionService.DisplayVersionUpdateNotification("13.3.0-preview.1", "aspire update")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, testInteractionService.DisplayEmptyLineCount);
+    }
 }

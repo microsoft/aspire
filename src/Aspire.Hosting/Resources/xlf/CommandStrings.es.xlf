@@ -12,6 +12,16 @@
         <target state="translated">Eliminar parámetro</target>
         <note />
       </trans-unit>
+      <trans-unit id="OpenTrackedBrowserDescription">
+        <source>Open the app in a tracked browser session and stream browser logs to this resource.</source>
+        <target state="new">Open the app in a tracked browser session and stream browser logs to this resource.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OpenTrackedBrowserName">
+        <source>Open tracked browser</source>
+        <target state="new">Open tracked browser</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RebuildDescription">
         <source>Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</source>
         <target state="new">Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</target>

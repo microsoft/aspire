@@ -1801,6 +1801,28 @@ public class CapabilityDispatcherTests
         Assert.DoesNotContain("on resource", capabilityException.Message);
     }
 
+    [Fact]
+    public void Invoke_StaticMethodTakingRawResource_UnwrapsBuilderHandle()
+    {
+        var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(TestRawResourceCapabilities).Assembly]);
+
+        var resource = new TestConnectionStringResource("mydb");
+        var builder = new TestResourceBuilder<TestConnectionStringResource>(resource);
+        var handleId = handles.Register(builder, "Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.TestConnectionStringResource");
+
+        var args = new JsonObject
+        {
+            ["resource"] = new JsonObject { ["$handle"] = handleId },
+            ["key"] = "Host"
+        };
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/findConnectionPropertyKey", args);
+
+        Assert.NotNull(result);
+        Assert.Equal("Host", result.GetValue<string>());
+    }
+
     private static CapabilityDispatcher CreateDispatcher(params System.Reflection.Assembly[] assemblies)
     {
         var handles = new HandleRegistry();
@@ -1907,7 +1929,7 @@ internal static class TestGenericPolyglotErrorCapabilities
     public static void WithHttpEndpoint<T>(IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
         throw new DistributedApplicationException(
-            $"Endpoint with name 'http' already exists on resource '{builder.Resource.Name}'. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking");
+            $"Endpoint with name 'http' already exists on resource '{builder.Resource.Name}'. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/aspire/networking");
     }
 }
 
@@ -2251,5 +2273,43 @@ internal sealed class TestResourceWithMethods : Resource
     public string Greet(string prefix)
     {
         return $"{prefix}, {Name}!";
+    }
+}
+
+/// <summary>
+/// Test resource implementing IResourceWithConnectionString for testing
+/// extension methods that take a raw resource type (not wrapped in IResourceBuilder).
+/// </summary>
+internal sealed class TestConnectionStringResource : Resource, IResourceWithConnectionString
+{
+    public TestConnectionStringResource(string name) : base(name) { }
+
+    public ReferenceExpression ConnectionStringExpression =>
+        ReferenceExpression.Create($"Host=localhost;Database={Name}");
+
+    public IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties()
+    {
+        yield return new("Host", ReferenceExpression.Create($"localhost"));
+        yield return new("Database", ReferenceExpression.Create($"{Name}"));
+    }
+}
+
+/// <summary>
+/// Test capabilities for static methods that take raw resource types (not builder-wrapped).
+/// Exercises the builder-to-resource unwrapping path in RegisterFromCapability.
+/// </summary>
+internal static class TestRawResourceCapabilities
+{
+    [AspireExport(Description = "Finds a matching connection property key")]
+    public static string FindConnectionPropertyKey(this IResourceWithConnectionString resource, string key)
+    {
+        foreach (var prop in resource.GetConnectionProperties())
+        {
+            if (string.Equals(prop.Key, key, StringComparison.OrdinalIgnoreCase))
+            {
+                return prop.Key;
+            }
+        }
+        return string.Empty;
     }
 }

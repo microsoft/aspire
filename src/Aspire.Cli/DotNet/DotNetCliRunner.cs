@@ -37,7 +37,7 @@ internal interface IDotNetCliRunner
     Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddPackageAsync(FileInfo projectFilePath, string packageName, string packageVersion, string? nugetSource, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
-    Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProject, ProcessInvocationOptions options, CancellationToken cancellationToken);
@@ -394,7 +394,7 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         var isSingleFileAppHost = projectFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase);
-        
+
         // If we are a single file app host then we use the build command instead of msbuild command.
         var cliArgsList = new List<string> { isSingleFileAppHost ? "build" : "msbuild" };
 
@@ -981,7 +981,7 @@ internal sealed class DotNetCliRunner(
         return result;
     }
 
-    public async Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public async Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -1006,7 +1006,7 @@ internal sealed class DotNetCliRunner(
 
                 // Build a cache key using the main discriminators, including CLI version.
                 var cliVersion = VersionHelper.GetDefaultTemplateVersion();
-                rawKey = $"query={query}|prerelease={prerelease}|take={take}|skip={skip}|nugetConfigHash={nugetConfigHash}|cliVersion={cliVersion}";
+                rawKey = $"query={query}|exactMatch={exactMatch}|prerelease={prerelease}|take={take}|skip={skip}|nugetConfigHash={nugetConfigHash}|cliVersion={cliVersion}";
                 var cached = await _diskCache.GetAsync(rawKey, cancellationToken).ConfigureAwait(false);
                 if (cached is not null)
                 {
@@ -1033,13 +1033,23 @@ internal sealed class DotNetCliRunner(
             "package",
             "search",
             query,
-            "--take",
-            take.ToString(CultureInfo.InvariantCulture),
-            "--skip",
-            skip.ToString(CultureInfo.InvariantCulture),
             "--format",
             "json"
         ];
+
+        if (exactMatch) // search for all versions that match the query exactly
+        {
+            cliArgs.Add("--exact-match");
+        }
+        else // 'exact-match' flag causes the take and skip arguments to be ignored
+        {
+            cliArgs.AddRange([
+                "--take",
+                take.ToString(CultureInfo.InvariantCulture),
+                "--skip",
+                skip.ToString(CultureInfo.InvariantCulture),
+            ]);
+        }
 
         if (nugetConfigFile is not null)
         {
@@ -1228,7 +1238,7 @@ internal sealed class DotNetCliRunner(
         // Parse output - skip header lines (Project(s) and ----------)
         var projects = new List<FileInfo>();
         var startParsing = false;
-        
+
         foreach (var line in stdoutLines)
         {
             if (string.IsNullOrWhiteSpace(line))

@@ -162,8 +162,6 @@ internal sealed class AddCommand : BaseCommand
                 throw new EmptyChoicesException(AddCommandStrings.NoIntegrationPackagesFound);
             }
 
-            var version = parseResult.GetValue(s_versionOption);
-
             var packagesWithShortName = packagesWithChannels.Select(GenerateFriendlyName).OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer());
 
             if (!packagesWithShortName.Any())
@@ -172,7 +170,15 @@ internal sealed class AddCommand : BaseCommand
                 return ExitCodeConstants.FailedToAddPackage;
             }
 
-            var filteredPackagesWithShortName = packagesWithShortName.Where(p => p.FriendlyName == integrationName || p.Package.Id == integrationName);
+            var filteredPackagesWithShortName = packagesWithShortName
+                .Where(p => p.FriendlyName == integrationName || p.Package.Id == integrationName);
+
+            var version = parseResult.GetValue(s_versionOption);
+
+            if (!filteredPackagesWithShortName.Any() && integrationName is not null && version is not null && !_hostEnvironment.SupportsInteractiveInput)
+            {
+                throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, integrationName));
+            }
 
             if (!filteredPackagesWithShortName.Any() && integrationName is not null)
             {
@@ -199,12 +205,10 @@ internal sealed class AddCommand : BaseCommand
             // the version. If there is more than one match then we prompt.
             var selectedNuGetPackage = filteredPackagesWithShortName.Count() switch
             {
-                0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(packagesWithShortName, integrationName, cancellationToken),
-                1 => filteredPackagesWithShortName.First().Package.Version == version
-                    ? filteredPackagesWithShortName.First()
-                    : await GetPackageByInteractiveFlow(filteredPackagesWithShortName, null, cancellationToken),
-                > 1 => await GetPackageByInteractiveFlow(filteredPackagesWithShortName, version, cancellationToken),
-                _ => throw new InvalidOperationException(AddCommandStrings.UnexpectedNumberOfPackagesFound)
+                0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(effectiveAppHostProjectFile.Directory!, packagesWithShortName, integrationName, version, cancellationToken),
+                1 when filteredPackagesWithShortName.First().Package.Version == version
+                    => filteredPackagesWithShortName.First(),
+                _ => await GetPackageByInteractiveFlow(effectiveAppHostProjectFile.Directory!, filteredPackagesWithShortName, version, cancellationToken)
             };
 
             // When installing from a PR channel, ensure the project has access to
@@ -213,7 +217,7 @@ internal sealed class AddCommand : BaseCommand
             // WITHOUT package source mapping restrictions, so that transitive deps
             // (including RID-specific and stable-versioned packages) can still resolve
             // from NuGet.org via the normal NuGet source hierarchy.
-            if (string.IsNullOrEmpty(source) && VersionHelper.IsPrChannel(selectedNuGetPackage.Channel.Name))
+            if (string.IsNullOrEmpty(source) && VersionHelper.IsLocalBuildChannel(selectedNuGetPackage.Channel.Name))
             {
                 var mappings = selectedNuGetPackage.Channel.Mappings;
                 if (mappings is { Length: > 0 })
@@ -313,7 +317,24 @@ internal sealed class AddCommand : BaseCommand
         }
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, CancellationToken cancellationToken)
+    private static async Task<IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> GetAllPackageVersions(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, CancellationToken cancellationToken)
+    {
+        var distinctPackageIds = possiblePackages.DistinctBy(package => package.Package.Id);
+        var channels = possiblePackages.Select(package => package.Channel).Distinct();
+
+        var versions = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
+        foreach (var channel in channels)
+        {
+            foreach (var package in distinctPackageIds)
+            {
+                var packages = await channel.GetPackageVersionsAsync(package.Package.Id, workingDirectory, cancellationToken);
+                versions.AddRange(packages.Select(p => (FriendlyName: package.FriendlyName, Package: p, Channel: channel)));
+            }
+        }
+        return versions;
+    }
+
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, CancellationToken cancellationToken)
     {
         var distinctPackages = possiblePackages.DistinctBy(p => p.Package.Id);
 
@@ -331,16 +352,30 @@ internal sealed class AddCommand : BaseCommand
 
         // If any of the package versions are an exact match for the preferred version
         // then we can skip the version prompt and just use that version.
-        if (packageVersions.Any(p => p.Package.Version == preferredVersion))
+        if (!string.IsNullOrEmpty(preferredVersion))
         {
-            var preferredVersionPackage = packageVersions.First(p => p.Package.Version == preferredVersion);
-            return preferredVersionPackage;
+            if (packageVersions.Any(p => p.Package.Version == preferredVersion))
+            {
+                var preferredVersionPackage = packageVersions.First(p => p.Package.Version == preferredVersion);
+                return preferredVersionPackage;
+            }
+
+            var allVersions = await InteractionService.ShowStatusAsync(
+                string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SearchingForSpecifiedPackageVersion, selectedPackage.Package.Id, preferredVersion),
+                async () => await GetAllPackageVersions(workingDirectory, packageVersions, cancellationToken));
+            var matchedPreferredVersionPackage = allVersions.FirstOrDefault(packageVersion => packageVersion.Package.Version == preferredVersion);
+            if (matchedPreferredVersionPackage.Package is not null)
+            {
+                return matchedPreferredVersionPackage;
+            }
+
+            throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionNotFoundForPackage, selectedPackage.Package.Id, preferredVersion));
         }
 
         // When PR hives are present, prefer the package that exactly matches the installed
         // CLI/SDK version so template- and add-generated projects stay on the same build.
         var prChannelPackageVersions = packageVersions
-            .Where(p => VersionHelper.IsPrChannel(p.Channel.Name))
+            .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
             .ToArray();
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(
@@ -370,14 +405,14 @@ internal sealed class AddCommand : BaseCommand
         return version;
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? searchTerm, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? searchTerm, string? preferredVersion, CancellationToken cancellationToken)
     {
         if (searchTerm is not null)
         {
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, searchTerm));
         }
 
-        return await GetPackageByInteractiveFlow(possiblePackages, null, cancellationToken);
+        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, cancellationToken);
     }
 
     internal static (string FriendlyName, NuGetPackage Package, PackageChannel Channel) GenerateFriendlyName((NuGetPackage Package, PackageChannel Channel) packageWithChannel)

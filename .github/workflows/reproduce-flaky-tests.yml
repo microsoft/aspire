@@ -195,6 +195,8 @@ jobs:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+          # Skip default quarantine/outerloop exclusion filters so the target test can run
+          SkipDefaultTestFilters: true
         run: |
           PASS=0
           FAIL=0
@@ -213,10 +215,7 @@ jobs:
             # Run test (capture output for zero-test detection)
             ITER_OUTPUT="${{ github.workspace }}/iter-output-$i.log"
             set +e  # Disable errexit so pipefail doesn't abort before PIPESTATUS capture
-            ${{ env.DOTNET_SCRIPT }} test "${{ env.TEST_PROJECT_PATH }}" \
-              /p:ContinuousIntegrationBuild=true \
-              /p:_NonQuarantinedTestRunAdditionalArgs="" \
-              -tl:false \
+            ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" \
               --no-restore \
               --no-build \
               -- \
@@ -229,7 +228,7 @@ jobs:
 
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
             if [ "$RESULT" -eq 0 ]; then
-              if ! grep -qE "Total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
+              if ! grep -qiE "total:\s*[1-9]" "$ITER_OUTPUT" 2>/dev/null; then
                 echo "::error::Iteration $i: Zero tests executed. Verify TEST_FILTER and quarantine settings."
                 RESULT=8
               fi
@@ -265,6 +264,8 @@ jobs:
           ASPIRE__TEST__DCPLOGBASEPATH: ${{ github.workspace }}/testresults/dcp
           NUGET_PACKAGES: ${{ github.workspace }}/.packages
           TESTCONTAINERS_HUB_IMAGE_NAME_PREFIX: 'netaspireci.azurecr.io'
+          # Skip default quarantine/outerloop exclusion filters so the target test can run
+          SkipDefaultTestFilters: true
         run: |
           $pass = 0
           $fail = 0
@@ -280,10 +281,7 @@ jobs:
 
             # Run test (capture output for zero-test detection)
             $iterOutput = Join-Path "${{ github.workspace }}" "iter-output-$i.log"
-            & ${{ env.DOTNET_SCRIPT }} test "${{ env.TEST_PROJECT_PATH }}" `
-              /p:ContinuousIntegrationBuild=true `
-              /p:_NonQuarantinedTestRunAdditionalArgs="" `
-              -tl:false `
+            & ${{ env.DOTNET_SCRIPT }} test --project "${{ env.TEST_PROJECT_PATH }}" `
               --no-restore `
               --no-build `
               -- `
@@ -296,7 +294,7 @@ jobs:
             # Detect zero-test runs (--ignore-exit-code 8 in Testing.props masks exit code 8)
             if ($result -eq 0) {
               $content = Get-Content $iterOutput -Raw -ErrorAction SilentlyContinue
-              if (-not ($content -match 'Total:\s*[1-9]')) {
+              if (-not ($content -match '(?i)total:\s*[1-9]')) {
                 Write-Host "::error::Iteration ${i}: Zero tests executed. Verify TEST_FILTER and quarantine settings."
                 $result = 8
               }

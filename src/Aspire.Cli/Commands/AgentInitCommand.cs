@@ -234,7 +234,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                         foreach (var mcp in mcpApplicators)
                         {
                             await mcp.ApplyAsync(ct);
-                            _interactionService.DisplayMessage(KnownEmojis.CheckMark, mcp.Description);
+                            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, mcp.Description);
                         }
                     },
                     promptGroup: McpInitPromptGroup.AdditionalOptions);
@@ -318,7 +318,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 switch (status)
                 {
                     case PlaywrightInstallStatus.Installed:
-                        _interactionService.DisplayMessage(KnownEmojis.CheckMark, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
+                        _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, AgentCommandStrings.InitCommand_InstalledPlaywrightCli);
                         break;
                     case PlaywrightInstallStatus.InstalledWithWarnings:
                         _interactionService.DisplayMessage(KnownEmojis.Warning, message!);
@@ -428,7 +428,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 .Replace(Path.DirectorySeparatorChar, '/')
                 .Replace(Path.AltDirectorySeparatorChar, '/');
             var displayPath = isUserLevel ? $"~/{displayRelativeSkillPath}" : displayRelativeSkillPath;
-            _interactionService.DisplayMessage(KnownEmojis.CheckMark,
+            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkill, skill.Name, displayPath));
             return true;
         }

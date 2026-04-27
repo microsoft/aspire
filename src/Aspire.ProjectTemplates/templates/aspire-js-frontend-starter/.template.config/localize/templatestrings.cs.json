@@ -7,7 +7,7 @@
   "symbols/Framework/choices/net9.0/description": "Cílit na net9.0",
   "symbols/Framework/choices/net10.0/description": "Cíl net10.0",
   "symbols/UseRedisCache/displayName": "Po_užít Redis pro ukládání do mezipaměti (vyžaduje Docker)",
-  "symbols/UseRedisCache/description": "Nakonfiguruje, jestli se má aplikace nastavit tak, aby pro ukládání do mezipaměti používala Redis. K místnímu spouštění se vyžaduje podporovaný modul runtime kontejneru. Další podrobnosti najdete na https://aka.ms/dotnet/aspire/containers.",
+  "symbols/UseRedisCache/description": "Nakonfiguruje, jestli se má aplikace nastavit tak, aby pro ukládání do mezipaměti používala Redis. K místnímu spouštění se vyžaduje podporovaný modul runtime kontejneru. Další podrobnosti najdete na https://aka.ms/aspire/containers.",
   "symbols/appHostHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP v launchSettings.json projektu AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP OTLP v launchSettings.json projektu AppHost.",
   "symbols/appHostResourceHttpPort/description": "Číslo portu, který se má použít pro koncový bod HTTP služby prostředků v launchSettings.json projektu AppHost.",

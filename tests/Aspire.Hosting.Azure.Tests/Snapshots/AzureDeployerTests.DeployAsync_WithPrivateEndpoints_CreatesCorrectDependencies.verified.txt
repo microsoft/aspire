@@ -5,7 +5,7 @@ PIPELINE DEPENDENCY GRAPH DIAGNOSTICS
 This diagnostic output shows the complete pipeline dependency graph structure.
 Use this to understand step relationships and troubleshoot execution issues.
 
-Total steps defined: 44
+Total steps defined: 48
 
 Analysis for full pipeline execution (showing all steps and their relationships)
 
@@ -14,55 +14,68 @@ EXECUTION ORDER
 This shows the order in which steps would execute, respecting all dependencies.
 Steps with no dependencies run first, followed by steps that depend on them.
 
-  1. process-parameters
-  2. build-prereq
-  3. check-container-runtime
-  4. deploy-prereq
-  5. build-api
-  6. build
-  7. validate-azure-login
-  8. create-provisioning-context
-  9. provision-api-identity
- 10. provision-cosmos
- 11. provision-api-roles-cosmos
- 12. provision-sql-nsg
- 13. provision-vnet
- 14. provision-privatelink-file-core-windows-net
- 15. provision-sql-store
- 16. provision-pe-subnet-files-pe
- 17. provision-privatelink-database-windows-net
- 18. provision-sql
- 19. provision-pe-subnet-sql-pe
- 20. provision-api-roles-sql
- 21. provision-env-acr
- 22. provision-env
- 23. provision-privatelink-documents-azure-com
- 24. provision-pe-subnet-cosmos-pe
- 25. login-to-acr-env-acr
- 26. push-prereq
- 27. push-api
- 28. provision-api-containerapp
- 29. print-api-summary
- 30. provision-sql-admin-identity
- 31. provision-sql-admin-identity-roles-sql-store
- 32. provision-azure-bicep-resources
- 33. print-dashboard-url-env
- 34. deploy
- 35. deploy-api
- 36. destroy-prereq
- 37. destroy-azure-azure634f9
- 38. destroy
- 39. diagnostics
- 40. publish-prereq
- 41. publish-azure634f9
- 42. publish
- 43. publish-manifest
- 44. push
+  1. azure-prepare-resources
+  2. prepare-azure-container-apps-env
+  3. validate-azure-container-apps
+  4. before-start
+  5. process-parameters
+  6. build-prereq
+  7. check-container-runtime
+  8. deploy-prereq
+  9. build-api
+ 10. build
+ 11. validate-azure-login
+ 12. create-provisioning-context
+ 13. provision-api-identity
+ 14. provision-cosmos
+ 15. provision-api-roles-cosmos
+ 16. provision-sql-nsg
+ 17. provision-vnet
+ 18. provision-privatelink-file-core-windows-net
+ 19. provision-sql-store
+ 20. provision-pe-subnet-files-pe
+ 21. provision-privatelink-database-windows-net
+ 22. provision-sql
+ 23. provision-pe-subnet-sql-pe
+ 24. provision-api-roles-sql
+ 25. provision-env-acr
+ 26. provision-env
+ 27. provision-privatelink-documents-azure-com
+ 28. provision-pe-subnet-cosmos-pe
+ 29. login-to-acr-env-acr
+ 30. push-prereq
+ 31. push-api
+ 32. provision-api-containerapp
+ 33. print-api-summary
+ 34. provision-sql-admin-identity
+ 35. provision-sql-admin-identity-roles-sql-store
+ 36. provision-azure-bicep-resources
+ 37. print-dashboard-url-env
+ 38. deploy
+ 39. deploy-api
+ 40. destroy-prereq
+ 41. destroy-azure-azure634f9
+ 42. destroy
+ 43. diagnostics
+ 44. publish-prereq
+ 45. publish-azure634f9
+ 46. publish
+ 47. publish-manifest
+ 48. push
 
 DETAILED STEP ANALYSIS
 ======================
 Shows each step's dependencies, associated resources, tags, and descriptions.
 ✓ = dependency exists, ? = dependency missing
+
+Step: azure-prepare-resources
+    Description: Prepares the Azure resources.
+    Dependencies: none
+    Resource: azure634f9 (AzureEnvironmentResource)
+
+Step: before-start
+    Description: Aggregation step for operations that run before the application starts.
+    Dependencies: ✓ azure-prepare-resources, ✓ prepare-azure-container-apps-env, ✓ validate-azure-container-apps
 
 Step: build
     Description: Aggregation step for all build operations. All build steps should be required by this step.
@@ -122,6 +135,11 @@ Step: login-to-acr-env-acr
     Dependencies: ✓ provision-env-acr
     Resource: env-acr (AzureContainerRegistryResource)
     Tags: acr-login
+
+Step: prepare-azure-container-apps-env
+    Description: Prepares Azure Container Apps deployment targets for env.
+    Dependencies: ✓ azure-prepare-resources
+    Resource: env (AzureContainerAppEnvironmentResource)
 
 Step: print-api-summary
     Description: Prints the deployment summary and URL for api.
@@ -289,6 +307,9 @@ Step: push-prereq
     Description: Prerequisite step that runs before any push operations.
     Dependencies: ✓ login-to-acr-env-acr
 
+Step: validate-azure-container-apps
+    Dependencies: none
+
 Step: validate-azure-login
     Description: Validates Azure CLI authentication before deployment.
     Dependencies: ✓ deploy-prereq
@@ -305,6 +326,20 @@ EXECUTION SIMULATION ("What If" Analysis):
 Shows what steps would run for each possible target step and in what order.
 Steps at the same level can run concurrently.
 ─────────────────────────────────────────────────────────────────────────────
+If targeting 'azure-prepare-resources':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] azure-prepare-resources
+
+If targeting 'before-start':
+  Direct dependencies: azure-prepare-resources, prepare-azure-container-apps-env, validate-azure-container-apps
+  Total steps: 4
+  Execution order:
+    [0] azure-prepare-resources | validate-azure-container-apps (parallel)
+    [1] prepare-azure-container-apps-env
+    [2] before-start
+
 If targeting 'build':
   Direct dependencies: build-api
   Total steps: 6
@@ -423,6 +458,13 @@ If targeting 'login-to-acr-env-acr':
     [3] create-provisioning-context
     [4] provision-env-acr
     [5] login-to-acr-env-acr
+
+If targeting 'prepare-azure-container-apps-env':
+  Direct dependencies: azure-prepare-resources
+  Total steps: 2
+  Execution order:
+    [0] azure-prepare-resources
+    [1] prepare-azure-container-apps-env
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-containerapp
@@ -767,6 +809,12 @@ If targeting 'push-prereq':
     [4] provision-env-acr
     [5] login-to-acr-env-acr
     [6] push-prereq
+
+If targeting 'validate-azure-container-apps':
+  Direct dependencies: none
+  Total steps: 1
+  Execution order:
+    [0] validate-azure-container-apps
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

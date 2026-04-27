@@ -22,4 +22,7 @@ internal sealed class CallbackNuGetPackageCache(
 
     public Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
         => Task.FromResult<IEnumerable<NuGetPackage>>([]);
+
+    public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+        => Task.FromResult<IEnumerable<NuGetPackage>>([]);
 }

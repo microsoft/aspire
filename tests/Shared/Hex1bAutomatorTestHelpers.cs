@@ -474,15 +474,16 @@ internal static class Hex1bAutomatorTestHelpers
             return successSearcher.Search(s).Count > 0;
         }, timeout: effectiveTimeout, description: $"agent init prompt or success prompt [{counter.Value} OK] $");
 
-        await auto.WaitAsync(500);
+        if (!agentInitFound)
+        {
+            counter.Increment();
+            return;
+        }
 
-        // Type 'n' + Enter unconditionally:
-        // - Agent init: declines the prompt, CLI exits, success prompt appears
-        // - No agent init: 'n' runs at bash (command not found), produces error prompt
+        await auto.WaitAsync(500);
         await auto.TypeAsync("n");
         await auto.EnterAsync();
 
-        // Wait for the aspire command's success prompt
         await auto.WaitUntilAsync(s =>
         {
             var successSearcher = new CellPatternSearcher()
@@ -491,11 +492,6 @@ internal static class Hex1bAutomatorTestHelpers
             return successSearcher.Search(s).Count > 0;
         }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ after agent init");
 
-        // Increment counter correctly for both cases
-        if (!agentInitFound)
-        {
-            counter.Increment();
-        }
         counter.Increment();
     }
 
@@ -645,7 +641,7 @@ internal static class Hex1bAutomatorTestHelpers
     }
 
     /// <summary>
-    /// Runs <c>aspire init --language csharp</c> and handles the NuGet.config and agent init prompts.
+    /// Runs <c>aspire init --language csharp</c> and handles the NuGet.config, URLs, and agent init prompts.
     /// </summary>
     internal static async Task AspireInitAsync(
         this Hex1bTerminalAutomator auto,
@@ -654,6 +650,9 @@ internal static class Hex1bAutomatorTestHelpers
         var waitingForNuGetConfigPrompt = new CellPatternSearcher()
             .Find("NuGet.config");
 
+        var waitingForUrlsPrompt = new CellPatternSearcher()
+            .Find("Use *.dev.localhost URLs");
+
         var waitingForInitComplete = new CellPatternSearcher()
             .Find("Aspire initialization complete");
 
@@ -661,13 +660,21 @@ internal static class Hex1bAutomatorTestHelpers
         await auto.EnterAsync();
 
         // NuGet.config prompt may or may not appear depending on environment.
-        // Wait for either the NuGet.config prompt or init completion.
+        // Wait for either the NuGet.config prompt or the URLs prompt.
         await auto.WaitUntilAsync(
             s => waitingForNuGetConfigPrompt.Search(s).Count > 0
+                || waitingForUrlsPrompt.Search(s).Count > 0,
+            timeout: TimeSpan.FromMinutes(2),
+            description: "NuGet.config prompt or URLs prompt");
+        await auto.EnterAsync(); // Dismiss NuGet.config prompt if present
+
+        // Wait for the URLs prompt (if NuGet.config appeared first) or init completion.
+        await auto.WaitUntilAsync(
+            s => waitingForUrlsPrompt.Search(s).Count > 0
                 || waitingForInitComplete.Search(s).Count > 0,
             timeout: TimeSpan.FromMinutes(2),
-            description: "NuGet.config prompt or init completion");
-        await auto.EnterAsync(); // Dismiss NuGet.config prompt if present
+            description: "URLs prompt or init completion");
+        await auto.EnterAsync(); // Dismiss URLs prompt (accept default "No")
 
         await auto.WaitUntilAsync(
             s => waitingForInitComplete.Search(s).Count > 0,

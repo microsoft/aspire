@@ -18,7 +18,7 @@ public sealed class ListStepsTests(ITestOutputHelper output)
     public async Task DoListStepsShowsPipelineSteps()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

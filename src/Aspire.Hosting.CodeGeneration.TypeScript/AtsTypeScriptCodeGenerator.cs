@@ -1357,7 +1357,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             c.CapabilityKind != AtsCapabilityKind.PropertyGetter &&
             c.CapabilityKind != AtsCapabilityKind.PropertySetter))
         {
-            var (requiredParams, optionalParams) = SeparateParameters(capability.Parameters);
+            var targetParamName = capability.TargetParameterName ?? "builder";
+            var userParams = capability.Parameters.Where(p => p.Name != targetParamName).ToList();
+            var (requiredParams, optionalParams) = SeparateParameters(userParams);
             var hasOptionals = optionalParams.Count > 0;
             var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
             var optionsInterfaceName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);
@@ -1397,7 +1399,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         foreach (var capability in capabilities)
         {
-            var (requiredParams, optionalParams) = SeparateParameters(capability.Parameters);
+            var targetParamName = capability.TargetParameterName ?? "builder";
+            var userParams = capability.Parameters.Where(p => p.Name != targetParamName).ToList();
+            var (requiredParams, optionalParams) = SeparateParameters(userParams);
             var hasOptionals = optionalParams.Count > 0;
             var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
             var optionsInterfaceName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);
@@ -1581,9 +1585,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         var methodName = capability.MethodName;
         var internalMethodName = $"_{methodName}Internal";
+        var targetParamName = capability.TargetParameterName ?? "builder";
+        var userParams = capability.Parameters.Where(p => p.Name != targetParamName).ToList();
 
         // Separate required and optional parameters
-        var (requiredParams, optionalParams) = SeparateParameters(capability.Parameters);
+        var (requiredParams, optionalParams) = SeparateParameters(userParams);
         var hasOptionals = optionalParams.Count > 0;
         var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
         var optionsTypeName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);
@@ -1603,16 +1609,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         // Build parameter list for internal method (all params positional for callback registration)
         var internalParamDefs = new List<string>();
-        foreach (var param in capability.Parameters)
+        foreach (var param in userParams)
         {
             var tsType = MapParameterToTypeScript(param);
             var optional = param.IsOptional || param.IsNullable ? "?" : "";
             internalParamDefs.Add($"{param.Name}{optional}: {tsType}");
         }
         var internalParamsString = string.Join(", ", internalParamDefs);
-
-        // Use the actual target parameter name from the capability (e.g., "resource" for withReference)
-        var targetParamName = capability.TargetParameterName ?? "builder";
 
         // Determine return type - for factory methods returning a different builder type,
         // use the return type's class name instead of the receiver's.
@@ -1655,14 +1658,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             }
 
             // Handle callback registration if any
-            var callbackParams2 = capability.Parameters.Where(p => p.IsCallback).ToList();
+            var callbackParams2 = userParams.Where(p => p.IsCallback).ToList();
             foreach (var callbackParam in callbackParams2)
             {
                 GenerateCallbackRegistration(callbackParam);
             }
 
             // Resolve any promise-like handle parameters before building rpcArgs
-            GeneratePromiseResolution(capability.Parameters);
+            GeneratePromiseResolution(userParams);
 
             // Build args object with conditional inclusion
             GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams);
@@ -1695,14 +1698,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteLine();
 
         // Handle callback registration if any
-        var callbackParams = capability.Parameters.Where(p => p.IsCallback).ToList();
+        var callbackParams = userParams.Where(p => p.IsCallback).ToList();
         foreach (var callbackParam in callbackParams)
         {
             GenerateCallbackRegistration(callbackParam);
         }
 
         // Resolve any promise-like handle parameters before building rpcArgs
-        GeneratePromiseResolution(capability.Parameters);
+        GeneratePromiseResolution(userParams);
 
         // Build args object with conditional inclusion
         GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams);
@@ -1742,7 +1745,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
 
         // Forward all params to internal method
-        var allParamNames = capability.Parameters.Select(p => p.Name);
+        var allParamNames = userParams.Select(p => p.Name);
         var internalCall = $"this.{internalMethodName}({string.Join(", ", allParamNames)})";
 
         // For build(), flush pending promises before invoking the internal method.
@@ -1974,9 +1977,11 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         foreach (var capability in capabilities)
         {
             var methodName = capability.MethodName;
+            var targetParamName = capability.TargetParameterName ?? "builder";
+            var userParams = capability.Parameters.Where(p => p.Name != targetParamName).ToList();
 
             // Separate required and optional parameters
-            var (requiredParams, optionalParams) = SeparateParameters(capability.Parameters);
+            var (requiredParams, optionalParams) = SeparateParameters(userParams);
             var hasOptionals = optionalParams.Count > 0;
             var hasDirectOptionsParameter = TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam);
             var optionsTypeName = hasDirectOptionsParameter ? MapParameterToTypeScript(directOptionsParam!) : ResolveOptionsInterfaceName(capability);

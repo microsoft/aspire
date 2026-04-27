@@ -152,10 +152,10 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Theory]
-    [InlineData("dev")]
-    [InlineData("staging")]
-    [InlineData("release")]
-    public async Task QualityVariants_AreRecognized(string quality)
+    [InlineData("dev", "from the daily channel")]
+    [InlineData("staging", "from the staging channel")]
+    [InlineData("release", "from the stable channel")]
+    public async Task QualityVariants_AreRecognized(string quality, string expectedSource)
     {
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
@@ -163,6 +163,10 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("What if", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(expectedSource, result.Output);
+        Assert.DoesNotContain("dotnet", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ga/daily", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("rc/daily", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

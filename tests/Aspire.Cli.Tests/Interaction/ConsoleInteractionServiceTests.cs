@@ -16,9 +16,16 @@ namespace Aspire.Cli.Tests.Interaction;
 
 public class ConsoleInteractionServiceTests
 {
+    private static readonly DirectoryInfo s_tempRoot = Directory.CreateTempSubdirectory();
+    private static readonly DirectoryInfo s_runtimeDirectory = s_tempRoot.CreateSubdirectory("runtimes");
+    private static readonly DirectoryInfo s_logsDirectory = s_tempRoot.CreateSubdirectory("logs");
+
+    private static CliExecutionContext CreateExecutionContext(bool debugMode = false) =>
+        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, "test.log", debugMode: debugMode);
+
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null)
     {
-        executionContext ??= new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console);
         return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
     }
@@ -126,32 +133,6 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
-    public void DisplayMarkdown_WithBasicMarkdown_ConvertsToSpectreMarkup()
-    {
-        // Arrange
-        var output = new StringBuilder();
-        var console = AnsiConsole.Create(new AnsiConsoleSettings
-        {
-            Ansi = AnsiSupport.No,
-            ColorSystem = ColorSystemSupport.NoColors,
-            Out = new AnsiConsoleOutput(new StringWriter(output))
-        });
-        
-        var interactionService = CreateInteractionService(console);
-        var markdown = "# Header\nThis is **bold** and *italic* text with `code`.";
-
-        // Act
-        var exception = Record.Exception(() => interactionService.DisplayMarkdown(markdown));
-
-        // Assert
-        Assert.Null(exception);
-        var outputString = output.ToString();
-        // Should contain converted markup, but due to Ansi = No, the actual markup tags won't appear in output
-        // Just verify it doesn't throw and produces some output
-        Assert.NotEmpty(outputString.Trim());
-    }
-
-    [Fact]
     public void DisplayMarkdown_WithPlainText_DoesNotThrow()
     {
         // Arrange
@@ -194,6 +175,38 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public void DisplayMarkdown_WithTable_RendersReadableInteractiveOutput()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var executionContext = CreateExecutionContext();
+        var interactionService = CreateInteractionService(console, executionContext);
+        var markdown = """
+            | Setting | Environment variable | Purpose |
+            | ------- | -------------------- | ------- |
+            | `Azure:SubscriptionId` | `Azure__SubscriptionId` | Target Azure subscription |
+            """;
+
+        interactionService.DisplayMarkdown(markdown);
+
+        var outputString = output.ToString().Replace("\r\n", "\n");
+
+        Assert.Contains("Setting", outputString);
+        Assert.Contains("Environment variable", outputString);
+        Assert.Contains("Purpose", outputString);
+        Assert.Contains("Azure:SubscriptionId", outputString);
+        Assert.Contains("Azure__SubscriptionId", outputString);
+        Assert.Contains("Target Azure subscription", outputString);
+        Assert.True(outputString.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length >= 3);
+    }
+
+    [Fact]
     public async Task ShowStatusAsync_InDebugMode_DisplaysSubtleMessageInsteadOfSpinner()
     {
         // Arrange
@@ -205,7 +218,7 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
 
-        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", debugMode: true);
+        var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
         var statusText = "Processing request...";
         var result = "test result";
@@ -232,7 +245,7 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
 
-        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", debugMode: true);
+        var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
         var statusText = "Processing synchronous request...";
         var actionCalled = false;
@@ -585,7 +598,7 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
 
-        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", debugMode: true);
+        var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
 
         // Status text with brackets that would be interpreted as Spectre markup if not escaped
@@ -613,7 +626,7 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
 
-        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", debugMode: true);
+        var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
 
         // Status text with brackets that would be interpreted as Spectre markup if not escaped
@@ -640,7 +653,7 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
 
-        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", debugMode: true);
+        var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
 
         // Status text with intentional Spectre emoji markup
@@ -668,7 +681,7 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
 
-        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", debugMode: true);
+        var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
 
         // Dynamic content with invalid brackets when interpreted as markup
@@ -695,7 +708,7 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
 
-        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", debugMode: true);
+        var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
 
         // Status text with brackets that would be invalid markup if not escaped
@@ -724,7 +737,7 @@ public class ConsoleInteractionServiceTests
             Out = new AnsiConsoleOutput(new StringWriter(output))
         });
 
-        var executionContext = new CliExecutionContext(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", debugMode: true);
+        var executionContext = CreateExecutionContext(debugMode: true);
         var interactionService = CreateInteractionService(console, executionContext);
 
         // Status text with brackets that would be invalid markup if not escaped

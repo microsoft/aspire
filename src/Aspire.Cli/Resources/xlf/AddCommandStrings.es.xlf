@@ -57,6 +57,11 @@
         <target state="translated">Buscando integraciones de Aspire...</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchingForSpecifiedPackageVersion">
+        <source>Searching for version '{1}' of {0}...</source>
+        <target state="new">Searching for version '{1}' of {0}...</target>
+        <note>{0} is the package name, {1} is the requested version.</note>
+      </trans-unit>
       <trans-unit id="SelectAVersionOfPackage">
         <source>Select a version of {0}:</source>
         <target state="translated">Seleccione una versión de {0}:</target>
@@ -71,6 +76,16 @@
         <source>The NuGet source to use for the integration</source>
         <target state="needs-review-translation">El origen de NuGet que se utilizará para la integración.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SpecifiedVersionNotFoundForPackage">
+        <source>The requested version '{1}' was not found for package '{0}'.</source>
+        <target state="new">The requested version '{1}' was not found for package '{0}'.</target>
+        <note>{0} is the package name, {1} is the requested version.</note>
+      </trans-unit>
+      <trans-unit id="SpecifiedVersionRequiresExactPackageMatch">
+        <source>When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</source>
+        <target state="new">When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</target>
+        <note>{0} is the integration name provided by the user.</note>
       </trans-unit>
       <trans-unit id="StoppedRunningInstance" translate="yes" xml:space="preserve">
           <source>Stopped a running Aspire AppHost instance to allow package modification.</source>

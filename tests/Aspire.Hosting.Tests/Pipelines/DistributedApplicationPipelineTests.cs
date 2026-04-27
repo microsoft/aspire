@@ -1558,7 +1558,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         await pipeline.ExecuteAsync(context).DefaultTimeout();
 
         Assert.True(callbackExecuted);
-        Assert.Equal(15, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, check-container-runtime, push, push-prereq, publish, publish-prereq, diagnostics, destroy, destroy-prereq + step1, step2
+        Assert.Equal(16, capturedSteps.Count); // Default steps: deploy, deploy-prereq, process-parameters, build, build-prereq, check-container-runtime, push, push-prereq, publish, publish-prereq, diagnostics, before-start, destroy, destroy-prereq + step1, step2
         Assert.Contains(capturedSteps, s => s.Name == "deploy");
         Assert.Contains(capturedSteps, s => s.Name == "process-parameters");
         Assert.Contains(capturedSteps, s => s.Name == "deploy-prereq");
@@ -1569,6 +1569,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         Assert.Contains(capturedSteps, s => s.Name == "publish");
         Assert.Contains(capturedSteps, s => s.Name == "publish-prereq");
         Assert.Contains(capturedSteps, s => s.Name == "diagnostics");
+        Assert.Contains(capturedSteps, s => s.Name == "before-start");
         Assert.Contains(capturedSteps, s => s.Name == "destroy");
         Assert.Contains(capturedSteps, s => s.Name == "destroy-prereq");
         Assert.Contains(capturedSteps, s => s.Name == "step1");
@@ -2524,5 +2525,83 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
         var ordered2 = DistributedApplicationPipeline.GetTopologicalOrder(steps);
 
         Assert.Equal(ordered1.Select(s => s.Name), ordered2.Select(s => s.Name));
+    }
+
+    [Fact]
+    public void Clone_ProducesIndependentBuiltInSteps()
+    {
+        var original = new DistributedApplicationPipeline();
+        var clone = original.Clone();
+
+        var originalDeploy = original.GetType()
+            .GetField("_steps", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .GetValue(original) as List<PipelineStep>;
+        var cloneDeploy = clone.GetType()
+            .GetField("_steps", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .GetValue(clone) as List<PipelineStep>;
+
+        Assert.NotNull(originalDeploy);
+        Assert.NotNull(cloneDeploy);
+        Assert.Equal(originalDeploy!.Count, cloneDeploy!.Count);
+
+        // The PipelineStep instances must be distinct between pipelines so that mutations
+        // on the clone don't bleed into the original (and vice-versa).
+        for (var i = 0; i < originalDeploy.Count; i++)
+        {
+            Assert.Equal(originalDeploy[i].Name, cloneDeploy[i].Name);
+            Assert.NotSame(originalDeploy[i], cloneDeploy[i]);
+            Assert.NotSame(originalDeploy[i].DependsOnSteps, cloneDeploy[i].DependsOnSteps);
+            Assert.NotSame(originalDeploy[i].RequiredBySteps, cloneDeploy[i].RequiredBySteps);
+        }
+    }
+
+    [Fact]
+    public async Task Clone_ResolveStepsOnClone_DoesNotMutateOriginalPipeline()
+    {
+        // Regression test for the bug where running BeforeStart on the singleton pipeline
+        // would mutate built-in steps' DependsOnSteps via NormalizeRequiredByToDependsOn,
+        // and a later resource removal (e.g. an unused default container registry) would
+        // then cause the next ResolveStepsAsync to fail with "depends on unknown step".
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithTestAndResourceLogging(testOutputHelper);
+        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
+
+        // A resource that emits a step required by the built-in 'deploy' aggregation step.
+        builder.AddResource(new CustomResource("transient-resource"))
+            .WithPipelineStepFactory(_ =>
+            {
+                var step = new PipelineStep
+                {
+                    Name = "transient-step",
+                    Action = _ => Task.CompletedTask,
+                };
+                step.RequiredBy(WellKnownPipelineSteps.Deploy);
+                return step;
+            });
+
+        var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var context = CreateDeployingContext(app);
+
+        var pipeline = new DistributedApplicationPipeline();
+
+        // Resolve on a clone — this would normally append "transient-step" to the
+        // built-in 'deploy' step's DependsOnSteps. With cloning, that mutation is
+        // contained to the clone.
+        var cloned = pipeline.Clone();
+        await cloned.ResolveStepsAsync(context).DefaultTimeout();
+
+        // Now simulate the bug scenario: the resource that produced the transient step
+        // is removed from the model (analogous to AzureContainerAppEnvironment removing
+        // its unused default container registry).
+        var transient = model.Resources.Single(r => r.Name == "transient-resource");
+        model.Resources.Remove(transient);
+
+        // The original pipeline must still resolve cleanly — no stale "transient-step"
+        // edge should be lingering on the built-in 'deploy' step.
+        var resolved = await pipeline.ResolveStepsAsync(context).DefaultTimeout();
+
+        var deployStep = resolved.Single(s => s.Name == WellKnownPipelineSteps.Deploy);
+        Assert.DoesNotContain("transient-step", deployStep.DependsOnSteps);
     }
 }

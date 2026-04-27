@@ -72,8 +72,6 @@ internal abstract class BaseCommand : Command
                 }
             }
 
-            InteractionService.DisplayEmptyLine();
-
             return exitCode;
         });
     }

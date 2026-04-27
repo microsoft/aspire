@@ -10,40 +10,570 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 public class CliInstallStrategyTests
 {
     [Fact]
-    public void GetPullRequestInstallArgs_UsesPrNumberWhenWorkflowRunIdIsMissing()
+    public void GetPullRequestInstallArgs_ReturnsPrNumber()
     {
-        using var environment = new EnvironmentVariableScope(
-            (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, null));
-
         Assert.Equal("123", AspireCliShellCommandHelpers.GetPullRequestInstallArgs(123));
     }
 
     [Fact]
-    public void GetPullRequestInstallArgs_AppendsWorkflowRunIdWhenProvided()
+    public void GetLocalArchiveInstallCommand_FormatsCorrectly()
     {
-        using var environment = new EnvironmentVariableScope(
-            (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, "987654321"));
-
-        Assert.Equal("123 --run-id 987654321", AspireCliShellCommandHelpers.GetPullRequestInstallArgs(123));
+        var command = AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand("/tmp/cli-archives", "/opt/aspire-scripts/get-aspire-cli-pr.sh");
+        Assert.Equal("/opt/aspire-scripts/get-aspire-cli-pr.sh --local-dir '/tmp/cli-archives'", command);
     }
 
     [Fact]
-    public void ConfigureContainer_AddsWorkflowRunIdForPullRequestStrategy()
+    public void Detect_ReturnsLocalArchive_WhenArchiveDirIsSet()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", null),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", null),
+                ("GITHUB_PR_HEAD_SHA", null),
+                (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, tempDir.FullName),
+                ("CI", null),
+                ("GITHUB_ACTIONS", null));
+
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.LocalArchive, strategy.Mode);
+            Assert.Equal(tempDir.FullName, strategy.ArchiveDir);
+        }
+        finally
+        {
+            tempDir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Detect_ReturnsLocalArchive_WhenBothPrMetadataAndArchiveDirAreSet()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", null),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", "16131"),
+                ("GITHUB_PR_HEAD_SHA", "52669a7cac3d4f10c6269909fc38e77124ed177c"),
+                (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, tempDir.FullName),
+                ("CI", null),
+                ("GITHUB_ACTIONS", null));
+
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.LocalArchive, strategy.Mode);
+            Assert.Equal(tempDir.FullName, strategy.ArchiveDir);
+        }
+        finally
+        {
+            tempDir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void Detect_FallsBackToDevQuality_WhenNoArchiveContextInCI()
     {
         using var environment = new EnvironmentVariableScope(
             ("ASPIRE_E2E_ARCHIVE", null),
             ("ASPIRE_E2E_QUALITY", null),
             ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", "true"));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.InstallScript, strategy.Mode);
+    }
+
+    [Fact]
+    public void ConfigureContainer_MountsArchiveDirForLocalArchive()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", null),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", null),
+                ("GITHUB_PR_HEAD_SHA", null),
+                (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, tempDir.FullName));
+
+            var strategy = CliInstallStrategy.Detect();
+            var options = new DockerContainerOptions();
+
+            strategy.ConfigureContainer(options);
+
+            Assert.Contains($"{tempDir.FullName}:/tmp/aspire-cli-archives:ro", options.Volumes);
+        }
+        finally
+        {
+            tempDir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void ConfigureContainer_AddsPrMetadataForPullRequest()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
             ("GITHUB_PR_NUMBER", "16131"),
             ("GITHUB_PR_HEAD_SHA", "52669a7cac3d4f10c6269909fc38e77124ed177c"),
-            (CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName, "24404068249"));
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null));
 
         var strategy = CliInstallStrategy.Detect();
         var options = new DockerContainerOptions();
 
         strategy.ConfigureContainer(options);
 
-        Assert.Equal("24404068249", options.Environment[CliE2ETestHelpers.CliArchiveWorkflowRunIdEnvironmentVariableName]);
+        Assert.Equal("16131", options.Environment["GITHUB_PR_NUMBER"]);
+        Assert.Equal("52669a7cac3d4f10c6269909fc38e77124ed177c", options.Environment["GITHUB_PR_HEAD_SHA"]);
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_WhenEnvironmentVariableIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Null(strategy.Version);
+        Assert.Null(strategy.NupkgSourcePath);
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_WithVersion()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", "9.5.0"),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+        Assert.Equal("9.5.0", strategy.Version);
+        Assert.Null(strategy.NupkgSourcePath);
+    }
+
+    [Fact]
+    public void Detect_DotnetToolLocalSource_WithVersionAndPath()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", tempDir.FullName),
+                ("ASPIRE_E2E_DOTNET_TOOL", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", "13.3.0-preview.1.25175.1"),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", null),
+                ("GITHUB_PR_HEAD_SHA", null),
+                ("CI", null),
+                ("GITHUB_ACTIONS", null));
+
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+            Assert.Equal("13.3.0-preview.1.25175.1", strategy.Version);
+            Assert.Equal(tempDir.FullName, strategy.NupkgSourcePath);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Detect_DotnetToolLocalSource_ThrowsWithoutVersion()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", tempDir.FullName),
+                ("ASPIRE_E2E_DOTNET_TOOL", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", null),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", null),
+                ("GITHUB_PR_HEAD_SHA", null),
+                ("CI", null),
+                ("GITHUB_ACTIONS", null));
+
+            Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.Detect());
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Detect_DotnetTool_TakesPriorityOverQuality()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", "dev"),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+    }
+
+    [Fact]
+    public void ConfigureContainer_MountsNupkgSourceForDotnetToolLocalSource()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            var strategy = CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName, "13.3.0");
+            var options = new DockerContainerOptions();
+
+            strategy.ConfigureContainer(options);
+
+            Assert.Contains(options.Volumes, v => v.Contains("/tmp/aspire-nupkg-source:ro"));
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ConfigureContainer_NoVolumeForDotnetToolPublishedFeed()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool("9.5.0");
+        var options = new DockerContainerOptions();
+
+        strategy.ConfigureContainer(options);
+
+        Assert.DoesNotContain(options.Volumes, v => v.Contains("aspire-nupkg-source"));
+    }
+
+    [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithVersionOnly()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool("9.5.0");
+        var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+        Assert.Equal("dotnet tool install --global Aspire.Cli --version 9.5.0", command);
+    }
+
+    [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithLocalSource()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+
+        try
+        {
+            var strategy = CliInstallStrategy.FromDotnetToolLocalSource(tempDir.FullName, "13.3.0");
+            var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+            Assert.Equal("dotnet tool install --global Aspire.Cli --version 13.3.0 --add-source /tmp/aspire-nupkg-source", command);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetDotnetToolInstallCommandInDocker_WithoutVersion()
+    {
+        var strategy = CliInstallStrategy.FromDotnetTool();
+        var command = AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy);
+
+        Assert.Equal("dotnet tool install --global Aspire.Cli", command);
+    }
+
+    [Fact]
+    public void Detect_ReturnsLocalArchive_WhenArchiveDirIsSetInCIWithoutPrMetadata()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+                ("ASPIRE_E2E_DOTNET_TOOL", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", null),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", null),
+                ("GITHUB_PR_HEAD_SHA", null),
+                (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, tempDir.FullName),
+                ("CI", "true"),
+                ("GITHUB_ACTIONS", "true"));
+
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.LocalArchive, strategy.Mode);
+            Assert.Equal(tempDir.FullName, strategy.ArchiveDir);
+        }
+        finally
+        {
+            tempDir.Delete(true);
+        }
+    }
+
+    [Fact]
+    public void FromLocalArchive_ThrowsWhenDirectoryDoesNotExist()
+    {
+        Assert.Throws<DirectoryNotFoundException>(() =>
+            CliInstallStrategy.FromLocalArchive("/nonexistent/cli-archives-path"));
+    }
+
+    [Fact]
+    public void FromLocalArchive_ExtractsExpectedVersionFromNupkg()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0-preview.1.12345.1.nupkg"), "");
+
+            var strategy = CliInstallStrategy.FromLocalArchive(tempDir.FullName);
+
+            Assert.Equal("13.3.0-preview.1.12345.1", strategy.ExpectedVersion);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FromLocalArchive_ThrowsWhenNupkgVersionIsMalformed()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0;bad.nupkg"), "");
+
+            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
+
+            Assert.Contains("Invalid Aspire.Cli nupkg version", exception.Message);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void FromLocalArchive_ThrowsWhenMultipleCliNupkgsArePresent()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.3.0.nupkg"), "");
+            File.WriteAllText(Path.Combine(tempDir.FullName, "Aspire.Cli.13.4.0.nupkg"), "");
+
+            var exception = Assert.Throws<InvalidOperationException>(() => CliInstallStrategy.FromLocalArchive(tempDir.FullName));
+
+            Assert.Contains("Found 2 Aspire.Cli nupkg files", exception.Message);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Detect_ReturnsDotnetToolLocalSource_WhenBothToolSourceAndArchiveDirAreSet()
+    {
+        var nupkgDir = Directory.CreateTempSubdirectory("aspire-test-nupkg-");
+        var archiveDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            using var environment = new EnvironmentVariableScope(
+                ("ASPIRE_E2E_ARCHIVE", null),
+                ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", nupkgDir.FullName),
+                ("ASPIRE_E2E_DOTNET_TOOL", null),
+                ("ASPIRE_E2E_QUALITY", null),
+                ("ASPIRE_E2E_VERSION", "10.0.0-dev.12345.1"),
+                ("ASPIRE_E2E_PREINSTALLED", null),
+                ("GITHUB_PR_NUMBER", null),
+                ("GITHUB_PR_HEAD_SHA", null),
+                (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, archiveDir.FullName),
+                ("CI", null),
+                ("GITHUB_ACTIONS", null));
+
+            var strategy = CliInstallStrategy.Detect();
+
+            Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+            Assert.Equal(nupkgDir.FullName, strategy.NupkgSourcePath);
+            Assert.Equal("10.0.0-dev.12345.1", strategy.Version);
+        }
+        finally
+        {
+            nupkgDir.Delete(recursive: true);
+            archiveDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Detect_ReturnsDotnetTool_WhenBothToolFlagAndPrMetadataAreSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", "true"),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", null),
+            ("GITHUB_PR_NUMBER", "16131"),
+            ("GITHUB_PR_HEAD_SHA", "abc123"),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.DotnetTool, strategy.Mode);
+    }
+
+    [Fact]
+    public void FromDotnetToolLocalSource_ThrowsWhenDirectoryDoesNotExist()
+    {
+        Assert.Throws<DirectoryNotFoundException>(() =>
+            CliInstallStrategy.FromDotnetToolLocalSource("/nonexistent/nupkg-path", "1.0.0"));
+    }
+
+    [Fact]
+    public void FromPullRequest_ThrowsWhenPrMetadataIsMissing()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null));
+
+        Assert.Throws<InvalidOperationException>(CliInstallStrategy.FromPullRequest);
+    }
+
+    [Fact]
+    public void TryGetPullRequestHeadSha_ReturnsFalseOutsidePrContext()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("GITHUB_EVENT_NAME", null),
+            ("GITHUB_SHA", "52669a7cac3d4f10c6269909fc38e77124ed177c"));
+
+        var result = CliE2ETestHelpers.TryGetPullRequestHeadSha(out var commitSha);
+
+        Assert.False(result);
+        Assert.Equal(string.Empty, commitSha);
+    }
+
+    [Fact]
+    public void TryGetPullRequestHeadSha_ThrowsInPrContextWithoutHeadSha()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", "16131"),
+            ("GITHUB_PR_HEAD_SHA", null),
+            ("GITHUB_EVENT_NAME", null));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CliE2ETestHelpers.TryGetPullRequestHeadSha(out _));
+
+        Assert.Contains("GITHUB_PR_HEAD_SHA must be set", exception.Message);
+    }
+
+    [Fact]
+    public void TryGetPullRequestHeadSha_ThrowsInPrContextWithInvalidHeadSha()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", "abc123"),
+            ("GITHUB_EVENT_NAME", "pull_request"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CliE2ETestHelpers.TryGetPullRequestHeadSha(out _));
+
+        Assert.Contains("40-character commit SHA", exception.Message);
+    }
+
+    [Fact]
+    public void TryGetPullRequestHeadSha_ReturnsHeadShaInPrContext()
+    {
+        const string expectedSha = "52669a7cac3d4f10c6269909fc38e77124ed177c";
+        using var environment = new EnvironmentVariableScope(
+            ("GITHUB_PR_NUMBER", "16131"),
+            ("GITHUB_PR_HEAD_SHA", expectedSha),
+            ("GITHUB_EVENT_NAME", null));
+
+        var result = CliE2ETestHelpers.TryGetPullRequestHeadSha(out var commitSha);
+
+        Assert.True(result);
+        Assert.Equal(expectedSha, commitSha);
+    }
+
+    [Fact]
+    public void Detect_ReturnsPreinstalled_WhenPreinstalledIsSet()
+    {
+        using var environment = new EnvironmentVariableScope(
+            ("ASPIRE_E2E_ARCHIVE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL_SOURCE", null),
+            ("ASPIRE_E2E_DOTNET_TOOL", null),
+            ("ASPIRE_E2E_QUALITY", null),
+            ("ASPIRE_E2E_VERSION", null),
+            ("ASPIRE_E2E_PREINSTALLED", "true"),
+            ("GITHUB_PR_NUMBER", null),
+            ("GITHUB_PR_HEAD_SHA", null),
+            (CliE2ETestHelpers.CliArchiveDirEnvironmentVariableName, null),
+            ("CI", null),
+            ("GITHUB_ACTIONS", null));
+
+        var strategy = CliInstallStrategy.Detect();
+
+        Assert.Equal(CliInstallMode.Preinstalled, strategy.Mode);
     }
 
     private sealed class EnvironmentVariableScope : IDisposable

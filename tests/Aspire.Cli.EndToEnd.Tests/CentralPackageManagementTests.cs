@@ -21,7 +21,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
     public async Task AspireUpdateRemovesAppHostPackageVersionFromDirectoryPackagesProps()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -124,7 +124,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
     public async Task AspireAddPackageVersionToDirectoryPackagesProps()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
@@ -170,59 +170,39 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
             </Project>
             """);
 
-        var waitingForVersionSelection = new CellPatternSearcher()
-            .Find("Select a version of");
-        var versionSelectionShown = false;
-
-        await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
+        await auto.TypeAsync("aspire add Aspire.Hosting.Redis --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilAsync(s =>
-        {
-            if (waitingForVersionSelection.Search(s).Count > 0)
-            {
-                versionSelectionShown = true;
-                return true;
-            }
-
-            var successPromptSearcher = new CellPatternSearcher()
-                .FindPattern(counter.Value.ToString())
-                .RightText(" OK] $ ");
-
-            return successPromptSearcher.Search(s).Count > 0;
-        }, timeout: TimeSpan.FromSeconds(180), description: "version selection prompt or success prompt");
-
-        if (versionSelectionShown)
-        {
-            // PR hives can surface multiple channels in CI. Accept the default implicit-channel version
-            // so this test validates CPM behavior without pinning a specific package version.
-            await auto.EnterAsync();
-        }
 
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the AppHost project does not end up with a version-pinned Redis PackageReference.
         {
             var appHostProject = XDocument.Load(appHostCsprojPath);
-            var hasVersionPinnedRedisReference = false;
+            var directoryPackagesProps = XDocument.Load(directoryPackagesPropsPath);
 
-            foreach (var element in appHostProject.Descendants())
+            static IEnumerable<XElement> FindRedisProperties(XDocument document, string propertyName)
             {
-                if (element.Name.LocalName == "PackageReference" &&
-                    string.Equals((string?)element.Attribute("Include"), "Aspire.Hosting.Redis", StringComparison.Ordinal) &&
-                    element.Attribute("Version") is not null)
-                {
-                    hasVersionPinnedRedisReference = true;
-                    break;
-                }
+                return document.Descendants()
+                    .Where(element => element.Name.LocalName == propertyName)
+                    .Where(element => string.Equals((string?)element.Attribute("Include"), "Aspire.Hosting.Redis", StringComparison.Ordinal));
             }
 
-            if (hasVersionPinnedRedisReference)
+            var projectHasRedisVersionPin = FindRedisProperties(appHostProject, "PackageReference")
+                .Any(element => element.Attribute("Version") is not null);
+            var directoryPackagesHasRedisVersionPin = FindRedisProperties(directoryPackagesProps, "PackageVersion")
+                .Single().Attribute("Version") is not null;
+
+            if (projectHasRedisVersionPin)
             {
                 throw new InvalidOperationException($"File {appHostCsprojPath} unexpectedly contains a version-pinned PackageReference for Aspire.Hosting.Redis");
             }
+            if (!directoryPackagesHasRedisVersionPin)
+            {
+                throw new InvalidOperationException($"File {directoryPackagesPropsPath} unexpectedly does not contain the central PackageVersion for Aspire.Hosting.Redis");
+            }
         }
 
-        // Verify dotnet restore succeeds (would fail with NU1009 if AppHost.csproj contained a version)
+        // Verify dotnet restore succeeds (would fail with NU1008 if AppHost.csproj contained a version)
         await auto.TypeAsync($"dotnet restore \"{containerAppHostCsprojPath}\"");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));

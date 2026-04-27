@@ -16,6 +16,7 @@ using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.Markdown;
 using Aspire.Hosting;
 using Spectre.Console;
 using StreamJsonRpc;

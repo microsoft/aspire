@@ -47,6 +47,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
+    <PackageReference Include="Markdig" />
     <PackageReference Include="Spectre.Console" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
@@ -226,6 +227,12 @@
     <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <!-- Markdown content is stored as a separate file to avoid the C# preprocessor
+         erroring on # characters (CS1024). Uses .txt extension to avoid markdown linters. -->
+    <EmbeddedResource Include="Commands\MarkdownShowcase.txt" LogicalName="MarkdownShowcase.txt" />
   </ItemGroup>
 
   <ItemGroup>

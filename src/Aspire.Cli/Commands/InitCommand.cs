@@ -134,8 +134,12 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
 
         // Get the language selection (from command line, config, or prompt).
+        // Do not save yet – for the no-solution C# path the aspire-apphost-singlefile
+        // template will write aspire.config.json and a
+        // pre-create write would cause a file-collision that makes dotnet new fail.
         var explicitLanguage = parseResult.GetValue(_languageOption);
-        var selectedProject = await _languageService.GetOrPromptForProjectAsync(explicitLanguage, saveSelection: true, cancellationToken);
+        var projectSelection = await _languageService.GetOrPromptForProjectSelectionAsync(explicitLanguage, saveLanguageSelection: false, cancellationToken);
+        var selectedProject = projectSelection.Project;
 
         // For non-C# languages, skip solution detection and create polyglot apphost.
         if (selectedProject.LanguageId != KnownLanguageId.CSharp)
@@ -156,6 +160,11 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
                 return polyglotResult;
+            }
+
+            if (projectSelection.ShouldPersistSelection)
+            {
+                await _languageService.SetLanguageAsync(selectedProject, cancellationToken: cancellationToken);
             }
 
             return await _agentInitCommand.PromptAndChainAsync(InteractionService, polyglotResult, _executionContext.WorkingDirectory, agentInitBinding, cancellationToken);
@@ -196,6 +205,13 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
         {
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
             return initResult;
+        }
+
+        // Persist prompted language selections after creation succeeds. This is delayed so
+        // the single-file C# template can create aspire.config.json before the language is merged.
+        if (projectSelection.ShouldPersistSelection)
+        {
+            await _languageService.SetLanguageAsync(selectedProject, cancellationToken: cancellationToken);
         }
 
         return await _agentInitCommand.PromptAndChainAsync(InteractionService, initResult, workspaceRoot, agentInitBinding, cancellationToken);
@@ -258,7 +274,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         if (initContext.AlreadyHasAppHost)
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMark, InitCommandStrings.SolutionAlreadyInitialized);
+            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, InitCommandStrings.SolutionAlreadyInitialized);
             return ExitCodeConstants.Success;
         }
 
@@ -595,7 +611,7 @@ internal sealed class InitCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
             if (File.Exists(appHostPath))
             {
-                InteractionService.DisplayMessage(KnownEmojis.CheckMark, $"{appHostFileName} already exists in this directory.");
+                InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists in this directory.");
                 return ExitCodeConstants.Success;
             }
         }

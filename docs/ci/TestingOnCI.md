@@ -12,6 +12,8 @@ The CI test infrastructure uses a unified matrix generation system that:
 4. Expands the matrix for specific CI platforms (GitHub Actions, Azure DevOps)
 5. Runs tests in parallel across multiple operating systems
 
+For how MTP diagnostic arguments (hang dump, crash dump, etc.) flow through this pipeline, see [MTP Args Pipeline](mtp-args-pipeline.md).
+
 ## Architecture
 
 ```text
@@ -56,7 +58,7 @@ This invokes `eng/TestEnumerationRunsheetBuilder/TestEnumerationRunsheetBuilder.
 - Writes a `.tests-metadata.json` file to `artifacts/helix/` containing:
   - `projectName`, `shortName`, `testProjectPath`
   - `supportedOSes` array (e.g., `["windows", "linux", "macos"]`)
-  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `enablePlaywrightInstall`
+  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `requiresGitHubToken`, `enablePlaywrightInstall`
   - `testSessionTimeout`, `testHangTimeout` values
   - `uncollectedTestsSessionTimeout`, `uncollectedTestsHangTimeout` values
   - `splitTests` flag
@@ -84,7 +86,7 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
    - **Regular tests**: One entry per project
    - **Partition-based splits**: One entry per partition + one for `uncollected:*`
    - **Class-based splits**: One entry per test class
-6. Outputs `artifacts/canonical-test-matrix.json` in canonical format (entries with a `properties` sub-object containing boolean flags like `requiresNugets`, `requiresCliArchive`)
+6. Outputs `artifacts/canonical-test-matrix.json` in canonical format (entries with a `properties` sub-object containing boolean flags like `requiresNugets`, `requiresCliArchive`, `requiresGitHubToken`)
 
 **Canonical format:**
 ```json
@@ -131,7 +133,7 @@ Each CI platform has a thin script that transforms the canonical matrix:
 **GitHub Actions** (`eng/scripts/expand-test-matrix-github.ps1`):
 - Expands each entry for every OS in its `supportedOSes` array
 - Maps OS names to GitHub runners (`linux` → `ubuntu-latest`, etc.)
-- Preserves dependency metadata within the `properties` sub-object (including `requiresNugets`, `requiresCliArchive`), and custom runner overrides on each expanded entry
+- Preserves dependency metadata within the `properties` sub-object (including `requiresNugets`, `requiresCliArchive`, `requiresGitHubToken`), and custom runner overrides on each expanded entry
 - Applies overflow splitting for the `no_nugets` category (threshold: 250 entries) to stay under the GitHub Actions 256-job-per-matrix limit
 - Outputs a single `all_tests` matrix, which `.github/workflows/tests.yml` further splits by dependency type and OS using `eng/scripts/split-test-matrix-by-deps.ps1`
 
@@ -270,6 +272,18 @@ For tests that need native CLI archives (e.g., CLI end-to-end tests):
 ```
 
 These tests wait for both the `build_packages` job and the Linux CLI archive job before running. Today that lane is Linux-only, so it depends on `build_cli_archive_linux` instead of every CLI archive build. The workflow also sets `GH_TOKEN`, `GITHUB_PR_NUMBER`, and `GITHUB_PR_HEAD_SHA` environment variables for CLI E2E test scenarios.
+
+## Requiring GitHub Token
+
+For tests that need access to the GitHub API (e.g., downloading PR artifacts, querying PR metadata):
+
+```xml
+<PropertyGroup>
+  <RequiresGitHubToken>true</RequiresGitHubToken>
+</PropertyGroup>
+```
+
+This makes the `GH_TOKEN` environment variable available to the test runner. The token is the automatic `github.token` provided by GitHub Actions. Note that `RequiresCliArchive` also implies `GH_TOKEN` availability for backward compatibility.
 
 ## Enabling Playwright
 

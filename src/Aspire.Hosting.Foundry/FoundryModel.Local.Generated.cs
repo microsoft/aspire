@@ -264,13 +264,13 @@ public partial class FoundryModel
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>License:</b> apache-2.0</para>
+        ///           <b>License:</b> MIT</para>
         ///       </description>
         ///     </item>
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Model Description:</b> This is a conversion of the nemotron-speech-streaming-en-0.6b for local inference.</para>
+        ///           <b>Model Description:</b> This is an optimized version of the nemotron-speech-streaming-en-0.6b model for local inference.</para>
         ///       </description>
         ///     </item>
         ///     <item>
@@ -286,7 +286,7 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">nemotron-speech-streaming-en-0.6b</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel NemotronSpeechStreamingEn06b = new() { Name = "nemotron-speech-streaming-en-0.6b", Version = "1", Format = "Microsoft" };
+        public static readonly FoundryModel NemotronSpeechStreamingEn06b = new() { Name = "nemotron-speech-streaming-en-0.6b", Version = "2", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Phi-3-Mini-128K-Instruct to enable local inference. This model uses RTN quantization.</para>
@@ -1142,6 +1142,226 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel Qwen38b = new() { Name = "qwen3-8b", Version = "2", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>
+        ///     <b>Qwen3 Embedding 0.6B Cuda Gpu</b>
+        ///   </para>
+        ///   <para>This is the GPU (NVIDIA CUDA)-optimized variant of qwen3-embedding-0.6b, a text embedding model from the Qwen3 family developed by Alibaba Cloud and optimized by Microsoft.</para>
+        ///   <para>
+        ///     <b>Model Details</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Type</b>: Text Embedding (ONNX)</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Parameters</b>: 0.6 billion</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Context Length</b>: 32K tokens</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Embedding Dimension</b>: Up to 1024</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Quantization</b>: KLD Gradient quantization</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Target Device</b>: GPU (NVIDIA CUDA)</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Execution Provider</b>: CUDAExecutionProvider</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Supported Languages</b>: 100+</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Intended Use</b>
+        ///   </para>
+        ///   <para>This model is optimized for local execution on devices with GPU (NVIDIA CUDA) hardware acceleration using Foundry Local.</para>
+        ///   <para>
+        ///     <b>Capabilities</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>Text retrieval and semantic search</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Code retrieval</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Text classification and clustering</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Bitext mining</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Multilingual and cross-lingual retrieval</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>License</b>
+        ///   </para>
+        ///   <para>This model is licensed under Apache 2.0. See <see href="https://huggingface.co/Qwen/Qwen3-Embedding-0.6B/blob/main/LICENSE">license details</see>.</para>
+        ///   <para>
+        ///     <b>Source</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>HuggingFace: <see href="https://huggingface.co/Qwen/Qwen3-Embedding-0.6B">Qwen3-Embedding-0.6B</see></para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Qwen3Embedding06b = new() { Name = "qwen3-embedding-0.6b", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>
+        ///     <b>Qwen3 Embedding 8B Cuda Gpu</b>
+        ///   </para>
+        ///   <para>This is the GPU (NVIDIA CUDA)-optimized variant of qwen3-embedding-8b, a text embedding model from the Qwen3 family developed by Alibaba Cloud and optimized by Microsoft.</para>
+        ///   <para>
+        ///     <b>Model Details</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Type</b>: Text Embedding (ONNX)</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Parameters</b>: 8 billion</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Context Length</b>: 32K tokens</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Embedding Dimension</b>: Up to 4096</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Quantization</b>: KLD Gradient quantization</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Target Device</b>: GPU (NVIDIA CUDA)</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Execution Provider</b>: CUDAExecutionProvider</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Supported Languages</b>: 100+</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Intended Use</b>
+        ///   </para>
+        ///   <para>This model is optimized for local execution on devices with GPU (NVIDIA CUDA) hardware acceleration using Foundry Local.</para>
+        ///   <para>
+        ///     <b>Capabilities</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>Text retrieval and semantic search</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Code retrieval</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Text classification and clustering</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Bitext mining</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Multilingual and cross-lingual retrieval</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>License</b>
+        ///   </para>
+        ///   <para>This model is licensed under Apache 2.0. See <see href="https://huggingface.co/Qwen/Qwen3-Embedding-8B/blob/main/LICENSE">license details</see>.</para>
+        ///   <para>
+        ///     <b>Source</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>HuggingFace: <see href="https://huggingface.co/Qwen/Qwen3-Embedding-8B">Qwen3-Embedding-8B</see></para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Qwen3Embedding8b = new() { Name = "qwen3-embedding-8b", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Qwen3-VL-2B-Instruct to enable local inference. This model uses RTN quantization.</para>

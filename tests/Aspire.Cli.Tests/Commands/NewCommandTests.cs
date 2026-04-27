@@ -499,7 +499,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
             options.DotNetCliRunnerFactory = (sp) => {
                 var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) => {
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) => {
                     return (0, Array.Empty<NuGetPackage>());
                 };
                 return runner;
@@ -609,7 +609,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     private static TestDotNetCliRunner CreateTestRunnerWithStandardPackages()
     {
         var runner = new TestDotNetCliRunner();
-        runner.SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+        runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
         {
             var package = new NuGetPackage()
             {
@@ -1127,7 +1127,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
-                SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
+                SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
                 {
                     var package = new NuGetPackage
                     {
@@ -1202,7 +1202,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
-                SearchPackagesAsyncCallback = (dir, query, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
+                SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
                 {
                     var package = new NuGetPackage
                     {

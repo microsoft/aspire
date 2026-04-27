@@ -731,8 +731,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             LogAppBuilding(this);
 
-            // AddResource(resource) validates that a name is unique but it's possible to add resources directly to the resource collection.
-            // Validate names for duplicates while building the application.
+            // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
+            // could have a different implementation that doesn't. Validate as a safety net.
             foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
                 .Where(g => g.Count() > 1)
                 .Select(g => g.Key))
@@ -765,11 +765,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         ArgumentNullException.ThrowIfNull(resource);
 
         ValidateResourceName(resource);
-
-        if (Resources.FirstOrDefault(r => string.Equals(r.Name, resource.Name, StringComparisons.ResourceName)) is { } existingResource)
-        {
-            throw new DistributedApplicationException($"Cannot add resource of type '{resource.GetType()}' with name '{resource.Name}' because resource of type '{existingResource.GetType()}' with that name already exists. Resource names are case-insensitive.");
-        }
 
         Resources.Add(resource);
         return CreateResourceBuilder(resource);

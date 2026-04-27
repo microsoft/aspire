@@ -20,7 +20,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
     public async Task CreateAndRunAspireStarterProject()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         var workspace = TemporaryWorkspace.Create(output);
 

@@ -16,10 +16,18 @@ public sealed class OtelLogsTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task OtelLogsReturnsStructuredLogsFromStarterApp()
+    public Task OtelLogsReturnsStructuredLogsFromStarterApp()
+        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: false);
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task OtelLogsReturnsStructuredLogsFromStarterAppIsolated()
+        => OtelLogsReturnsStructuredLogsFromStarterAppCore(isolated: true);
+
+    private async Task OtelLogsReturnsStructuredLogsFromStarterAppCore(bool isolated)
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var strategy = CliInstallStrategy.Detect();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
 
         using var workspace = TemporaryWorkspace.Create(output);
 
@@ -42,7 +50,7 @@ public sealed class OtelLogsTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background
-        await auto.AspireStartAsync(counter);
+        await auto.AspireStartAsync(counter, isolated: isolated);
 
         // Wait for the apiservice resource to be running before querying logs
         await auto.TypeAsync("aspire wait apiservice --status up --timeout 300");

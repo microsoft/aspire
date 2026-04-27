@@ -78,7 +78,7 @@ public partial class MobileNavMenu : ComponentBase
             Loc[nameof(Resources.Layout.MainLayoutAspireRepoLink)],
             async () =>
             {
-                await JS.InvokeVoidAsync("open", ["https://aka.ms/dotnet/aspire/repo", "_blank"]);
+                await JS.InvokeVoidAsync("open", ["https://aka.ms/aspire/repo", "_blank"]);
             },
             new AspireIcons.Size24.GitHub()
         );

@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -380,8 +381,9 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         var target = effectiveConsole == ConsoleOutput.Error ? _errorConsole : _outConsole;
-        var spectreMarkup = MarkdownToSpectreConverter.ConvertToSpectre(markdown);
-        target.MarkupLine(spectreMarkup);
+        var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
+        target.Write(renderable);
+        target.WriteLine();
     }
 
     private bool ShouldDisplayMarkdownAsPlainText(ConsoleOutput effectiveConsole)
@@ -419,7 +421,7 @@ internal class ConsoleInteractionService : IInteractionService
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
     {
-        DisplayMessage(KnownEmojis.CheckMark, message, allowMarkup);
+        DisplayMessage(KnownEmojis.CheckMarkButton, message, allowMarkup);
     }
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)

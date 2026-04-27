@@ -97,6 +97,10 @@ public sealed class ScriptHostFixture : IAsyncLifetime
         {
             // Already disposed
         }
+        catch (HttpListenerException)
+        {
+            // The listener may already be torn down while another process has reused the probed port.
+        }
 
         if (_serverTask is not null)
         {
@@ -114,7 +118,19 @@ public sealed class ScriptHostFixture : IAsyncLifetime
             }
         }
 
-        _listener?.Close();
+        try
+        {
+            _listener?.Close();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Already disposed
+        }
+        catch (HttpListenerException)
+        {
+            // Closing only releases cleanup state; the server loop has already been canceled.
+        }
+
         _cts?.Dispose();
     }
 

@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure resource that can be connected to via a private endpoint.
 /// </summary>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public interface IAzurePrivateEndpointTarget : IResource
 {
     /// <summary>

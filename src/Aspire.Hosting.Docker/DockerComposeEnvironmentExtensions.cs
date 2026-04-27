@@ -79,8 +79,11 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder"> The Docker compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="ComposeFile"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts because <see cref="ComposeFile"/> and its nested types are not exported to ATS.</remarks>
-    [AspireExportIgnore(Reason = "ComposeFile and its nested types are not exported to ATS.")]
+    /// <remarks>
+    /// This callback runs after the Docker Compose model has been generated and before it is written to disk.
+    /// Use it to customize the generated <see cref="ComposeFile"/> for the environment.
+    /// </remarks>
+    [AspireExport(Description = "Configures the generated Docker Compose file before it is written to disk")]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureComposeFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<ComposeFile> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
