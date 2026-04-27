@@ -336,7 +336,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         _steps.Add(new PipelineStep
         {
-            Name = "validate-compute-environment-bindings",
+            Name = "validate-compute-environments",
             Description = "Validates compute resource bindings before startup.",
             Action = static context =>
             {
