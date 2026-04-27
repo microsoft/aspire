@@ -28,6 +28,8 @@ func main() {
 		WaitForCompletion(apiTidy).
 		WithReference(cache).
 		WaitFor(cache).
+		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Env: aspire.StringPtr("PORT")}).
+		WithExternalHttpEndpoints().
 		WithOtlpExporter()
 
 	if err := builder.Err(); err != nil {
