@@ -343,7 +343,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                 4242,
                 "target-0002",
                 new Uri("https://localhost:8443/"),
-                new ResourceCommandArtifact(
+                new BrowserLogsArtifact(
                     "web-browser-logs",
                     "screenshot",
                     Path.Combine(AppContext.BaseDirectory, "artifacts", "screenshot.png"),
@@ -434,7 +434,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
                     sp.GetRequiredService<ResourceNotificationService>(),
                     sp.GetRequiredService<TimeProvider>(),
                     sp.GetRequiredService<ILogger<BrowserLogsSessionManager>>(),
-                    new ResourceCommandArtifactWriter(sp.GetRequiredService<TimeProvider>(), () => artifactDirectory.FullName),
+                    new BrowserLogsArtifactWriter(sp.GetRequiredService<TimeProvider>(), () => artifactDirectory.FullName),
                     sessionFactory));
 
             var web = builder.AddResource(new TestHttpResource("web"))
@@ -1346,7 +1346,7 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
             1001,
             "target-1",
             new Uri("https://localhost:5001/"),
-            new ResourceCommandArtifact(
+            new BrowserLogsArtifact(
                 "web-browser-logs",
                 "screenshot",
                 Path.Combine(AppContext.BaseDirectory, "screenshot.png"),

@@ -18,4 +18,4 @@ internal sealed record BrowserLogsScreenshotCaptureResult(
     int? ProcessId,
     string TargetId,
     Uri TargetUrl,
-    ApplicationModel.ResourceCommandArtifact Artifact);
+    BrowserLogsArtifact Artifact);

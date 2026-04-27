@@ -3,13 +3,13 @@
 
 using System.Globalization;
 
-namespace Aspire.Hosting.ApplicationModel;
+namespace Aspire.Hosting;
 
-// Writes durable resource-command artifacts outside of command output so commands can return concise, agent-friendly
+// Writes durable browser-log command artifacts outside of command output so commands can return concise, agent-friendly
 // summaries while large payloads stay on disk.
-internal interface IResourceCommandArtifactWriter
+internal interface IBrowserLogsArtifactWriter
 {
-    Task<ResourceCommandArtifact> WriteArtifactAsync(
+    Task<BrowserLogsArtifact> WriteArtifactAsync(
         string? appHostKey,
         string resourceName,
         string artifactType,
@@ -19,18 +19,18 @@ internal interface IResourceCommandArtifactWriter
         CancellationToken cancellationToken);
 }
 
-internal sealed class ResourceCommandArtifactWriter : IResourceCommandArtifactWriter
+internal sealed class BrowserLogsArtifactWriter : IBrowserLogsArtifactWriter
 {
     private const int AppHostKeySegmentLength = 16;
     private readonly Func<string> _rootDirectoryFactory;
     private readonly TimeProvider _timeProvider;
 
-    public ResourceCommandArtifactWriter(TimeProvider timeProvider)
+    public BrowserLogsArtifactWriter(TimeProvider timeProvider)
         : this(timeProvider, GetAspireCommandArtifactRoot)
     {
     }
 
-    internal ResourceCommandArtifactWriter(TimeProvider timeProvider, Func<string> rootDirectoryFactory)
+    internal BrowserLogsArtifactWriter(TimeProvider timeProvider, Func<string> rootDirectoryFactory)
     {
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(rootDirectoryFactory);
@@ -39,7 +39,7 @@ internal sealed class ResourceCommandArtifactWriter : IResourceCommandArtifactWr
         _rootDirectoryFactory = rootDirectoryFactory;
     }
 
-    public async Task<ResourceCommandArtifact> WriteArtifactAsync(
+    public async Task<BrowserLogsArtifact> WriteArtifactAsync(
         string? appHostKey,
         string resourceName,
         string artifactType,
@@ -87,10 +87,10 @@ internal sealed class ResourceCommandArtifactWriter : IResourceCommandArtifactWr
                 await stream.WriteAsync(content, cancellationToken).ConfigureAwait(false);
             }
 
-            return new ResourceCommandArtifact(resourceName, artifactType, filePath, mimeType, content.Length, createdAt);
+            return new BrowserLogsArtifact(resourceName, artifactType, filePath, mimeType, content.Length, createdAt);
         }
 
-        throw new IOException($"Unable to create a unique resource command artifact file under '{directory}'.");
+        throw new IOException($"Unable to create a unique browser-log command artifact file under '{directory}'.");
     }
 
     private static string GetAppHostSegment(string? appHostKey)
@@ -158,7 +158,7 @@ internal sealed class ResourceCommandArtifactWriter : IResourceCommandArtifactWr
     }
 }
 
-internal sealed record ResourceCommandArtifact(
+internal sealed record BrowserLogsArtifact(
     string ResourceName,
     string ArtifactType,
     string FilePath,

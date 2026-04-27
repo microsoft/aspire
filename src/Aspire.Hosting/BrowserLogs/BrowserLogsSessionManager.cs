@@ -22,7 +22,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
     private readonly ResourceNotificationService _resourceNotificationService;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<BrowserLogsSessionManager> _logger;
-    private readonly IResourceCommandArtifactWriter _artifactWriter;
+    private readonly IBrowserLogsArtifactWriter _artifactWriter;
     private readonly IBrowserLogsRunningSessionFactory _sessionFactory;
     private readonly ConcurrentDictionary<string, ResourceSessionState> _resourceStates = new(StringComparer.Ordinal);
     private int _disposing;
@@ -37,7 +37,7 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             resourceNotificationService,
             timeProvider,
             logger,
-            new ResourceCommandArtifactWriter(timeProvider),
+            new BrowserLogsArtifactWriter(timeProvider),
             new BrowserLogsRunningSessionFactory(logger, timeProvider))
     {
     }
@@ -47,14 +47,14 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
         ResourceNotificationService resourceNotificationService,
         TimeProvider timeProvider,
         ILogger<BrowserLogsSessionManager> logger,
-        IResourceCommandArtifactWriter? artifactWriter,
+        IBrowserLogsArtifactWriter? artifactWriter,
         IBrowserLogsRunningSessionFactory sessionFactory)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourceNotificationService = resourceNotificationService;
         _timeProvider = timeProvider;
         _logger = logger;
-        _artifactWriter = artifactWriter ?? new ResourceCommandArtifactWriter(timeProvider);
+        _artifactWriter = artifactWriter ?? new BrowserLogsArtifactWriter(timeProvider);
         _sessionFactory = sessionFactory;
     }
 
