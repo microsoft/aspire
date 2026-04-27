@@ -90,7 +90,7 @@ with create_builder() as builder:
     docker_container.with_http_endpoint_callback(update_existing_http_endpoint, name="http", create_if_not_exists=False)
     endpoint = docker_container.get_endpoint("http")
     expr = "expression"
-    built_connection_string = builder.add_connection_string("connection-string", expr)
+    built_connection_string = builder.add_connection_string("connection-string", environment_variable_name_or_expression=expr)
     built_connection_string.with_connection_property("Key", "Value")
     built_connection_string.with_connection_property_value("Key", "Value")
     container.with_reference(endpoint)

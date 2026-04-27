@@ -2161,12 +2161,12 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(ParameterResource, result)
 
-    def add_connection_string(self, name: str, *, connection_string: str | ReferenceExpression | None = None) -> AbstractResourceWithConnectionString:
+    def add_connection_string(self, name: str, *, env_var_name_or_expression: str | ReferenceExpression | None = None) -> AbstractResourceWithConnectionString:
         """Adds a connection string resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
-        if connection_string is not None:
-            rpc_args['connectionString'] = connection_string
+        if env_var_name_or_expression is not None:
+            rpc_args['environmentVariableNameOrExpression'] = env_var_name_or_expression
         result = self._client.invoke_capability(
             'Aspire.Hosting/addConnectionString',
             rpc_args,

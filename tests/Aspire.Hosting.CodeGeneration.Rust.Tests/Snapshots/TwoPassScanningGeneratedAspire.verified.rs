@@ -8826,12 +8826,12 @@ impl IDistributedApplicationBuilder {
     }
 
     /// Adds a connection string resource
-    pub fn add_connection_string(&self, name: &str, connection_string: Option<Value>) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
+    pub fn add_connection_string(&self, name: &str, environment_variable_name_or_expression: Option<Value>) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
-        if let Some(ref v) = connection_string {
-            args.insert("connectionString".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        if let Some(ref v) = environment_variable_name_or_expression {
+            args.insert("environmentVariableNameOrExpression".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/addConnectionString", args)?;
         let handle: Handle = serde_json::from_value(result)?;

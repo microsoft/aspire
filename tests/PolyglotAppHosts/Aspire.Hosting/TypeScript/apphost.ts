@@ -123,7 +123,7 @@ await dockerContainer.withHttpEndpointCallback(async (updateContext) => {
 const endpoint = await dockerContainer.getEndpoint("http");
 const expr = refExpr`Host=${endpoint}`;
 
-const builtConnectionString = await builder.addConnectionString("customcs", { connectionString: expr });
+const builtConnectionString = await builder.addConnectionString("customcs", { environmentVariableNameOrExpression: expr });
 
 await builtConnectionString.withConnectionProperty("Host", expr);
 await builtConnectionString.withConnectionProperty("Mode", "Development");

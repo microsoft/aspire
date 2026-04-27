@@ -45,6 +45,11 @@ public static class ParameterResourceBuilderExtensions
         bool publishValueAsDefault = false,
         bool secret = false)
     {
+        if (value is null && publishValueAsDefault)
+        {
+            throw new ArgumentException("A parameter value is required when publishValueAsDefault is true.", nameof(publishValueAsDefault));
+        }
+
         return value is null
             ? builder.AddParameter(name, secret)
             : builder.AddParameter(name, value, publishValueAsDefault, secret);
@@ -294,17 +299,17 @@ public static class ParameterResourceBuilderExtensions
     internal static IResourceBuilder<IResourceWithConnectionString> AddConnectionStringForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
-        [AspireUnion(typeof(string), typeof(ReferenceExpression))] object? connectionString = null)
+        [AspireUnion(typeof(string), typeof(ReferenceExpression))] object? environmentVariableNameOrExpression = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
 
-        return connectionString switch
+        return environmentVariableNameOrExpression switch
         {
             null => ParameterResourceBuilderExtensions.AddConnectionString(builder, name),
             string environmentVariableName => ParameterResourceBuilderExtensions.AddConnectionString(builder, name, environmentVariableName),
             ReferenceExpression connectionStringExpression => ConnectionStringBuilderExtensions.AddConnectionString(builder, name, connectionStringExpression),
-            _ => throw new ArgumentException("Connection string must be omitted, an environment variable name, or a reference expression.", nameof(connectionString))
+            _ => throw new ArgumentException("Connection string must be omitted, an environment variable name, or a reference expression.", nameof(environmentVariableNameOrExpression))
         };
     }
 

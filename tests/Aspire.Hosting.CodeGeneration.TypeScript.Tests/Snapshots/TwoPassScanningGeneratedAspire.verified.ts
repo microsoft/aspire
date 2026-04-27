@@ -573,7 +573,7 @@ export interface TestNestedDto {
 // ============================================================================
 
 export interface AddConnectionStringOptions {
-    connectionString?: string | ReferenceExpression;
+    environmentVariableNameOrExpression?: string | ReferenceExpression;
 }
 
 export interface AddContainerFilesOptions {
@@ -5572,9 +5572,9 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
 
     /** Adds a connection string resource */
     /** @internal */
-    async _addConnectionStringInternal(name: string, connectionString?: string | ReferenceExpression): Promise<ResourceWithConnectionString> {
+    async _addConnectionStringInternal(name: string, environmentVariableNameOrExpression?: string | ReferenceExpression): Promise<ResourceWithConnectionString> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        if (connectionString !== undefined) rpcArgs.connectionString = connectionString;
+        if (environmentVariableNameOrExpression !== undefined) rpcArgs.environmentVariableNameOrExpression = environmentVariableNameOrExpression;
         const result = await this._client.invokeCapability<IResourceWithConnectionStringHandle>(
             'Aspire.Hosting/addConnectionString',
             rpcArgs
@@ -5583,8 +5583,8 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     addConnectionString(name: string, options?: AddConnectionStringOptions): ResourceWithConnectionStringPromise {
-        const connectionString = options?.connectionString;
-        return new ResourceWithConnectionStringPromiseImpl(this._addConnectionStringInternal(name, connectionString), this._client);
+        const environmentVariableNameOrExpression = options?.environmentVariableNameOrExpression;
+        return new ResourceWithConnectionStringPromiseImpl(this._addConnectionStringInternal(name, environmentVariableNameOrExpression), this._client);
     }
 
     /** Adds a .NET project resource */

@@ -11671,12 +11671,12 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (ParameterResource) getClient().invokeCapability("Aspire.Hosting/addParameterWithGeneratedValue", reqArgs);
     }
 
-    public IResourceWithConnectionString addConnectionString(String name, String connectionString) {
-        return addConnectionString(name, AspireUnion.of(connectionString));
+    public IResourceWithConnectionString addConnectionString(String name, String environmentVariableNameOrExpression) {
+        return addConnectionString(name, AspireUnion.of(environmentVariableNameOrExpression));
     }
 
-    public IResourceWithConnectionString addConnectionString(String name, ReferenceExpression connectionString) {
-        return addConnectionString(name, AspireUnion.of(connectionString));
+    public IResourceWithConnectionString addConnectionString(String name, ReferenceExpression environmentVariableNameOrExpression) {
+        return addConnectionString(name, AspireUnion.of(environmentVariableNameOrExpression));
     }
 
     public IResourceWithConnectionString addConnectionString(String name) {
@@ -11684,12 +11684,12 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a connection string resource */
-    public IResourceWithConnectionString addConnectionString(String name, AspireUnion connectionString) {
+    public IResourceWithConnectionString addConnectionString(String name, AspireUnion environmentVariableNameOrExpression) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
-        if (connectionString != null) {
-            reqArgs.put("connectionString", AspireClient.serializeValue(connectionString));
+        if (environmentVariableNameOrExpression != null) {
+            reqArgs.put("environmentVariableNameOrExpression", AspireClient.serializeValue(environmentVariableNameOrExpression));
         }
         return (IResourceWithConnectionString) getClient().invokeCapability("Aspire.Hosting/addConnectionString", reqArgs);
     }

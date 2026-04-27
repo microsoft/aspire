@@ -9876,13 +9876,13 @@ func (s *IDistributedApplicationBuilder) AddParameterWithGeneratedValue(name str
 }
 
 // AddConnectionString adds a connection string resource
-func (s *IDistributedApplicationBuilder) AddConnectionString(name string, connectionString any) (*IResourceWithConnectionString, error) {
+func (s *IDistributedApplicationBuilder) AddConnectionString(name string, environmentVariableNameOrExpression any) (*IResourceWithConnectionString, error) {
 	reqArgs := map[string]any{
 		"builder": SerializeValue(s.Handle()),
 	}
 	reqArgs["name"] = SerializeValue(name)
-	if connectionString != nil {
-		reqArgs["connectionString"] = SerializeValue(connectionString)
+	if environmentVariableNameOrExpression != nil {
+		reqArgs["environmentVariableNameOrExpression"] = SerializeValue(environmentVariableNameOrExpression)
 	}
 	result, err := s.Client().InvokeCapability("Aspire.Hosting/addConnectionString", reqArgs)
 	if err != nil {
