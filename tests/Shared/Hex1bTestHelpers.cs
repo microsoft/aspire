@@ -33,19 +33,19 @@ internal enum AspireTemplate
     Starter,
 
     /// <summary>
-    /// Starter App (ASP.NET Core/React).
+    /// Starter App (ASP.NET Core/React, C# AppHost).
     /// Prompts: template, project name, output path, URLs, Redis. No test project prompt.
     /// </summary>
     JsReact,
 
     /// <summary>
-    /// Starter App (Express/React).
+    /// Starter App (Express/React, TypeScript AppHost).
     /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     ExpressReact,
 
     /// <summary>
-    /// Starter App (FastAPI/React).
+    /// Starter App (FastAPI/React, TypeScript AppHost).
     /// Prompts: template, project name, output path, URLs, Redis. No test project prompt.
     /// </summary>
     PythonReact,
@@ -431,7 +431,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.JsReact:
                 var jsReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (ASP.NET Core/React)");
+                    .Find("> Starter App (ASP.NET Core/React, C# AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .WaitUntil(s => jsReactSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
@@ -439,7 +439,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.ExpressReact:
                 var expressReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (Express/React)");
+                    .Find("> Starter App (Express/React, TypeScript AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)
                     .WaitUntil(s => expressReactSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
@@ -448,7 +448,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.PythonReact:
                 var pythonReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (FastAPI/React)");
+                    .Find("> Starter App (FastAPI/React, TypeScript AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)

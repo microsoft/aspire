@@ -525,7 +525,7 @@ internal static class Hex1bAutomatorTestHelpers
             case AspireTemplate.JsReact:
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (ASP.NET Core/React)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (ASP.NET Core/React, C# AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "JS React template selected");
                 await auto.EnterAsync();
@@ -535,7 +535,7 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.DownAsync();
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (Express/React)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (Express/React, TypeScript AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Express React template selected");
                 await auto.EnterAsync();
@@ -546,7 +546,7 @@ internal static class Hex1bAutomatorTestHelpers
                 await auto.DownAsync();
                 await auto.DownAsync();
                 await auto.WaitUntilAsync(
-                    s => new CellPatternSearcher().Find("> Starter App (FastAPI/React)").Search(s).Count > 0,
+                    s => new CellPatternSearcher().Find("> Starter App (FastAPI/React, TypeScript AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
                     description: "Python React template selected");
                 await auto.EnterAsync();
