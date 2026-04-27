@@ -43,6 +43,26 @@ public class AzureCognitiveServicesProjectResource :
             var model = factoryContext.PipelineContext.Model;
             var steps = new List<PipelineStep>();
 
+            var removeDefaultContainerRegistryStep = new PipelineStep
+            {
+                Name = $"prepare-foundry-project-{name}",
+                Description = $"Prepares Microsoft Foundry project {name} for deployment.",
+                Action = context =>
+                {
+                    if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
+                        DefaultContainerRegistry is not null)
+                    {
+                        context.Model.Resources.Remove(DefaultContainerRegistry);
+                    }
+
+                    return Task.CompletedTask;
+                },
+                Resource = this,
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+            steps.Add(removeDefaultContainerRegistryStep);
+
             var computeUrls = new PipelineStep
             {
                 Name = $"compute-endpoints-{name}",

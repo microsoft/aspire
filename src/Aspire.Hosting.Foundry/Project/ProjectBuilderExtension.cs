@@ -54,46 +54,6 @@ public static class AzureCognitiveServicesProjectExtensions
     }
 
     /// <summary>
-    /// Associates a container registry with the Microsoft Foundry project resource for
-    /// publishing and locating hosted agents.
-    /// </summary>
-    [AspireExport(Description = "Associates a container registry with a Microsoft Foundry project resource.")]
-    public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithContainerRegistry(
-        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        IResourceBuilder<AzureContainerRegistryResource> registryBuilder)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(registryBuilder);
-
-        return builder.WithContainerRegistry(registryBuilder.Resource);
-    }
-
-    /// <summary>
-    /// Associates a container registry with the Microsoft Foundry project resource for
-    /// publishing and locating hosted agents.
-    /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts. Use the resource-builder overload instead.</remarks>
-    [AspireExportIgnore(Reason = "IContainerRegistry is not ATS-compatible. Use the resource-builder overload instead.")]
-    public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithContainerRegistry(
-        this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        IContainerRegistry registry)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(registry);
-
-        // Remove the default registry from the model if one was auto-created
-        if (builder.Resource.DefaultContainerRegistry is not null)
-        {
-            builder.ApplicationBuilder.Resources.Remove(builder.Resource.DefaultContainerRegistry);
-            builder.Resource.DefaultContainerRegistry = null;
-        }
-
-        // This will be queried during the "publish" phase
-        builder.Resource.Annotations.Add(new ContainerRegistryReferenceAnnotation(registry));
-        return builder;
-    }
-
-    /// <summary>
     /// Adds a reference to a Microsoft Foundry project resource to the destination resource.
     /// </summary>
     /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
