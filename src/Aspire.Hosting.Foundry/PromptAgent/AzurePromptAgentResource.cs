@@ -24,7 +24,7 @@ namespace Aspire.Hosting.Foundry;
 /// using the Foundry project endpoint and agent name.
 /// </remarks>
 [AspireExport(ExposeProperties = true)]
-public class AzurePromptAgentResource : Resource, IComputeResource, IResourceWithEnvironment, IResourceWithConnectionString
+public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IResourceWithConnectionString
 {
     private readonly List<FoundryToolResource> _tools = [];
 
