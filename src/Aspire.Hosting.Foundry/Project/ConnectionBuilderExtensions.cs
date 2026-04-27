@@ -76,7 +76,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds CosmosDB to a project as a connection
     /// </summary>
-    [AspireExport("addCosmosConnectionFromResource", Description = "Adds an Azure Cosmos DB connection to a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Raw AzureCosmosDBResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureCosmosDBResource db)
@@ -102,7 +102,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds CosmosDB to a project as a connection
     /// </summary>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnection dispatcher export.")]
+    [AspireExport("addCosmosConnection", Description = "Adds an Azure Cosmos DB connection to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureCosmosDBResource> db)
@@ -114,7 +114,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// Adds an Azure Storage account to a project as a connection.
     /// </summary>
     /// <returns></returns>
-    [AspireExport("addStorageConnectionFromResource", Description = "Adds an Azure Storage connection to a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Raw AzureStorageResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureStorageResource storage)
@@ -141,7 +141,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds an Azure Storage account to a project as a connection.
     /// </summary>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnection dispatcher export.")]
+    [AspireExport("addStorageConnection", Description = "Adds an Azure Storage connection to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureStorageResource> storage)
@@ -154,7 +154,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// Adds a container registry connection to the Microsoft Foundry project.
     /// </summary>
     /// <returns></returns>
-    [AspireExport("addContainerRegistryConnectionFromResource", Description = "Adds an Azure Container Registry connection to a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Raw AzureContainerRegistryResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureContainerRegistryResource registry)
@@ -186,7 +186,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// Adds a container registry connection to the Microsoft Foundry project.
     /// </summary>
     /// <returns></returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnection dispatcher export.")]
+    [AspireExport("addContainerRegistryConnection", Description = "Adds an Azure Container Registry connection to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureContainerRegistryResource> registry)
@@ -244,7 +244,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// As such, we recommend adding this connection *before* any others, so that those connections
     /// can leverage the Key Vault connection for secret storage.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addConnection dispatcher export.")]
+    [AspireExport("addKeyVaultConnection", Description = "Adds an Azure Key Vault connection to a Microsoft Foundry project.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureKeyVaultResource> keyVault)
