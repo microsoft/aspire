@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using System.Xml.Linq;
 using Aspire.TypeSystem;
 
@@ -994,6 +995,11 @@ public static class AtsCapabilityScanner
 
         foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
+            if (HasExportIgnoreAttribute(prop))
+            {
+                continue;
+            }
+
             // Only include public readable properties (DTOs are public API)
             if (!prop.CanRead)
             {
@@ -1125,10 +1131,19 @@ public static class AtsCapabilityScanner
                 return;
             }
 
+            var pathSegments = BuildExportedValuePath(declaringType, valueAttr, memberName);
+            if (!IsValidExportedValuePath(pathSegments, out var invalidSegment))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"Skipping [AspireValue] on '{declaringType.FullName}.{memberName}'. Exported value path segment '{invalidSegment}' is not a valid guest SDK identifier.",
+                    $"{declaringType.FullName}.{memberName}"));
+                return;
+            }
+
             exportedValues.Add(new AtsExportedValueInfo
             {
-                OwningAssemblyName = declaringType.Assembly.GetName().Name ?? declaringType.Assembly.FullName ?? declaringType.Name ?? memberName,
-                PathSegments = BuildExportedValuePath(declaringType, valueAttr, memberName),
+                OwningAssemblyName = declaringType.Assembly.GetName().Name ?? declaringType.Assembly.FullName ?? string.Empty,
+                PathSegments = pathSegments,
                 Type = typeRef!,
                 Value = SerializeExportedValue(getValue(), memberType),
                 Description = GetXmlDocSummary(xmlDoc, docMemberName)
@@ -1188,6 +1203,11 @@ public static class AtsCapabilityScanner
         {
             foreach (var property in typeRef.ClrType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
+                if (HasExportIgnoreAttribute(property))
+                {
+                    continue;
+                }
+
                 if (!property.CanRead || property.GetIndexParameters().Length != 0)
                 {
                     continue;
@@ -1230,6 +1250,44 @@ public static class AtsCapabilityScanner
 
         pathSegments.Add(valueAttr.Name ?? memberName);
         return pathSegments;
+    }
+
+    private static bool IsValidExportedValuePath(IReadOnlyList<string> pathSegments, [System.Diagnostics.CodeAnalysis.NotNullWhen(false)] out string? invalidSegment)
+    {
+        foreach (var pathSegment in pathSegments)
+        {
+            if (!IsValidExportedValuePathSegment(pathSegment))
+            {
+                invalidSegment = pathSegment;
+                return false;
+            }
+        }
+
+        invalidSegment = null;
+        return true;
+    }
+
+    private static bool IsValidExportedValuePathSegment(string pathSegment)
+    {
+        if (string.IsNullOrWhiteSpace(pathSegment) || !(IsAsciiLetter(pathSegment[0]) || pathSegment[0] == '_'))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < pathSegment.Length; i++)
+        {
+            if (!(IsAsciiLetter(pathSegment[i]) || char.IsAsciiDigit(pathSegment[i]) || pathSegment[i] == '_'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiLetter(char value)
+    {
+        return value is >= 'A' and <= 'Z' or >= 'a' and <= 'z';
     }
 
     private static List<AtsExportedValueInfo> DeduplicateExportedValues(
@@ -3036,7 +3094,29 @@ public static class AtsCapabilityScanner
     private static readonly ConcurrentDictionary<Type, byte> s_assemblyExportedTypeCache = new();
     private static readonly JsonSerializerOptions s_exportedValueSerializerOptions = new()
     {
-        Converters = { new JsonStringEnumConverter() }
+        Converters = { new JsonStringEnumConverter() },
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver
+        {
+            Modifiers =
+            {
+                typeInfo =>
+                {
+                    if (typeInfo.Kind != JsonTypeInfoKind.Object)
+                    {
+                        return;
+                    }
+
+                    for (var i = typeInfo.Properties.Count - 1; i >= 0; i--)
+                    {
+                        if (typeInfo.Properties[i].AttributeProvider is PropertyInfo propertyInfo &&
+                            HasExportIgnoreAttribute(propertyInfo))
+                        {
+                            typeInfo.Properties.RemoveAt(i);
+                        }
+                    }
+                }
+            }
+        }
     };
 
     private static AssemblyExportedTypeCache CreateAssemblyExportedTypeCache(IEnumerable<Assembly> assemblies)

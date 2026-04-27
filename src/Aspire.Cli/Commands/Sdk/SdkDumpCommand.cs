@@ -389,7 +389,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Handle Types:  {0}", capabilities.HandleTypes.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   DTO Types:     {0}", capabilities.DtoTypes.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Enum Types:    {0}", capabilities.EnumTypes.Count));
-        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Exported Values:{0,3}", capabilities.ExportedValues.Count));
+        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Exported Values:  {0}", capabilities.ExportedValues.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Capabilities:  {0}", capabilities.Capabilities.Count));
         if (errorCount > 0 || warningCount > 0)
         {

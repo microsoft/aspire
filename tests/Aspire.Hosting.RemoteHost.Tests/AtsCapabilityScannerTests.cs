@@ -4,6 +4,7 @@
 using System.Collections;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.TypeSystem;
 using Xunit;
@@ -458,6 +459,37 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_ExportedDtoValueWithIgnoredMutableProperty_IsIncluded()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var exportedValue = Assert.Single(result.ExportedValues,
+            value => string.Join(".", value.PathSegments) == "IgnoredPropertyValues.IgnoredPropertyExportedValues.Value");
+        var valueObject = Assert.IsType<JsonObject>(exportedValue.Value);
+        Assert.True(valueObject.ContainsKey(nameof(ExportedDtoWithIgnoredMutableProperty.Name)));
+        Assert.False(valueObject.ContainsKey(nameof(ExportedDtoWithIgnoredMutableProperty.Items)));
+    }
+
+    [Fact]
+    public void ScanAssembly_InvalidExportedValuePath_EmitsWarningAndSkipsValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments).Contains("Invalid-Values", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments).Contains("123Name", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("path segment 'Invalid-Values'", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValuePaths.BadCatalog");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("path segment '123Name'", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValuePaths.BadName");
+    }
+
+    [Fact]
     public void ScanAssembly_DuplicateExportedValuePath_EmitsWarningAndSkipsLaterValue()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
@@ -544,6 +576,34 @@ public class AtsCapabilityScannerTests
     private sealed class InvalidExportedDto
     {
         public List<string> Items { get; set; } = [];
+    }
+
+    private static class IgnoredPropertyExportedValues
+    {
+        [AspireValue("IgnoredPropertyValues")]
+        public static ExportedDtoWithIgnoredMutableProperty Value { get; } = new()
+        {
+            Name = "valid",
+            Items = ["ignored"]
+        };
+    }
+
+    [AspireDto]
+    private sealed class ExportedDtoWithIgnoredMutableProperty
+    {
+        public string Name { get; init; } = "";
+
+        [AspireExportIgnore]
+        public List<string> Items { get; init; } = [];
+    }
+
+    private static class InvalidExportedValuePaths
+    {
+        [AspireValue("Invalid-Values")]
+        public static string BadCatalog { get; } = "bad";
+
+        [AspireValue("InvalidValues", Name = "123Name")]
+        public static string BadName { get; } = "bad";
     }
 
     private static class DuplicateExportedValues
