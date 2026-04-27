@@ -593,6 +593,78 @@ export interface TestNestedDto {
 }
 
 // ============================================================================
+// Exported Values
+// ============================================================================
+
+export namespace TestConfigs {
+    export const Default = { name: "default", port: 6379, enabled: true, optionalField: "cache" } as TestConfigDto;
+
+    export namespace Profiles {
+        export const Development = { name: "development", port: 5001, enabled: false, optionalField: null } as TestConfigDto;
+
+    }
+
+    export const Secure = { name: "secure", port: 6380, enabled: true, optionalField: null } as TestConfigDto;
+
+    export const UnicodeGreeting = "你好こんにちは";
+
+}
+
+export namespace WellKnownPipelineSteps {
+    /** The well-known step for building resources. */
+    export const Build = "build";
+
+    /** The prerequisite step that runs before any build operations. */
+    export const BuildPrereq = "build-prereq";
+
+    /** Aggregation step for all deploy operations. All deploy steps should be required by this step. */
+    export const Deploy = "deploy";
+
+    /** The prerequisite step that runs before any deploy operations. */
+    export const DeployPrereq = "deploy-prereq";
+
+    /** Aggregation step for all destroy operations. All destroy steps should be required by this step. */
+    export const Destroy = "destroy";
+
+    /** The prerequisite step that runs before any destroy operations. */
+    export const DestroyPrereq = "destroy-prereq";
+
+    /** The diagnostic step that dumps dependency graph information for troubleshooting. */
+    export const Diagnostics = "diagnostics";
+
+    /** The step that prompts for parameter values before build, publish, or deployment operations. */
+    export const ProcessParameters = "process-parameters";
+
+    /** Aggregation step for all publish operations. All publish steps should be required by this step. */
+    export const Publish = "publish";
+
+    /** The prerequisite step that runs before any publish operations. */
+    export const PublishPrereq = "publish-prereq";
+
+    /** The meta-step that coordinates all push operations. All push steps should be required by this step. */
+    export const Push = "push";
+
+    /** The prerequisite step that runs before any push operations. */
+    export const PushPrereq = "push-prereq";
+
+}
+
+export namespace WellKnownPipelineTags {
+    /** Tag for steps that build compute resources. */
+    export const BuildCompute = "build-compute";
+
+    /** Tag for steps that deploy to compute infrastructure. */
+    export const DeployCompute = "deploy-compute";
+
+    /** Tag for steps that provision infrastructure resources. */
+    export const ProvisionInfrastructure = "provision-infra";
+
+    /** Tag for steps that push container images to a registry. */
+    export const PushContainerImage = "push-container-image";
+
+}
+
+// ============================================================================
 // Options Interfaces
 // ============================================================================
 

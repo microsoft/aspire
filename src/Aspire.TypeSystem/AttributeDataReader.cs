@@ -15,6 +15,7 @@ public static class AttributeDataReader
     private const string AspireExportAttributeFullName = HostingTypeNames.AspireExportAttribute;
     private const string AspireExportIgnoreAttributeFullName = HostingTypeNames.AspireExportIgnoreAttribute;
     private const string AspireDtoAttributeFullName = HostingTypeNames.AspireDtoAttribute;
+    private const string AspireValueAttributeFullName = HostingTypeNames.AspireValueAttribute;
     private const string AspireUnionAttributeFullName = HostingTypeNames.AspireUnionAttribute;
     private const string ObsoleteAttributeFullName = "System.ObsoleteAttribute";
 
@@ -71,6 +72,20 @@ public static class AttributeDataReader
     /// </summary>
     public static bool HasAspireDtoData(Type type)
         => HasAttribute(type.GetCustomAttributesData(), AspireDtoAttributeFullName);
+
+    // --- AspireValue lookup ---
+
+    /// <summary>
+    /// Gets <see cref="AspireValueData"/> from the specified <paramref name="field"/>, if present.
+    /// </summary>
+    public static AspireValueData? GetAspireValueData(FieldInfo field)
+        => FindSingleAttribute<AspireValueData>(field.GetCustomAttributesData(), AspireValueAttributeFullName, ParseAspireValueData);
+
+    /// <summary>
+    /// Gets <see cref="AspireValueData"/> from the specified <paramref name="property"/>, if present.
+    /// </summary>
+    public static AspireValueData? GetAspireValueData(PropertyInfo property)
+        => FindSingleAttribute<AspireValueData>(property.GetCustomAttributesData(), AspireValueAttributeFullName, ParseAspireValueData);
 
     // --- AspireUnion lookup ---
 
@@ -271,6 +286,38 @@ public static class AttributeDataReader
         };
     }
 
+    private static AspireValueData ParseAspireValueData(CustomAttributeData data)
+    {
+        string? catalogName = null;
+        string? name = null;
+
+        if (data.ConstructorArguments.Count == 1 &&
+            data.ConstructorArguments[0].Value is string catalogNameValue)
+        {
+            catalogName = catalogNameValue;
+        }
+
+        for (var i = 0; i < data.NamedArguments.Count; i++)
+        {
+            var named = data.NamedArguments[i];
+            switch (named.MemberName)
+            {
+                case nameof(AspireValueData.Name):
+                    name = named.TypedValue.Value as string;
+                    break;
+                case nameof(AspireValueData.CatalogName):
+                    catalogName = named.TypedValue.Value as string;
+                    break;
+            }
+        }
+
+        return new AspireValueData
+        {
+            CatalogName = catalogName ?? throw new InvalidOperationException("AspireValueAttribute requires a catalog name."),
+            Name = name
+        };
+    }
+
     private static ObsoleteData ParseObsoleteData(CustomAttributeData data)
     {
         string? message = null;
@@ -346,6 +393,22 @@ public sealed class AspireUnionData
     /// Gets the CLR types that form the union.
     /// </summary>
     public required Type[] Types { get; init; }
+}
+
+/// <summary>
+/// Name-based adapter for [AspireValue] attribute data, parsed from <see cref="CustomAttributeData"/>.
+/// </summary>
+public sealed class AspireValueData
+{
+    /// <summary>
+    /// Gets the root name of the generated value catalog.
+    /// </summary>
+    public required string CatalogName { get; init; }
+
+    /// <summary>
+    /// Gets an optional override for the exported value name.
+    /// </summary>
+    public string? Name { get; init; }
 }
 
 /// <summary>

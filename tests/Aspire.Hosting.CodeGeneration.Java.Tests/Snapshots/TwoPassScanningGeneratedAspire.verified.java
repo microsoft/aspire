@@ -16556,6 +16556,32 @@ public class TestConfigDto {
     }
 }
 
+// ===== TestConfigs.java =====
+// TestConfigs.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+public final class TestConfigs {
+    private TestConfigs() { }
+
+    public static final TestConfigDto Default = new TestConfigDto() {{ setName("default"); setPort(6379); setEnabled(true); setOptionalField("cache"); }};
+
+    public static final class Profiles {
+        private Profiles() { }
+
+        public static final TestConfigDto Development = new TestConfigDto() {{ setName("development"); setPort(5001); setEnabled(false); setOptionalField(null); }};
+
+    }
+
+    public static final TestConfigDto Secure = new TestConfigDto() {{ setName("secure"); setPort(6380); setEnabled(true); setOptionalField(null); }};
+
+    public static final String UnicodeGreeting = "你好こんにちは";
+
+}
+
 // ===== TestDatabaseResource.java =====
 // TestDatabaseResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -22349,6 +22375,80 @@ public enum WaitBehavior implements WireValueEnum {
     }
 }
 
+// ===== WellKnownPipelineSteps.java =====
+// WellKnownPipelineSteps.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+public final class WellKnownPipelineSteps {
+    private WellKnownPipelineSteps() { }
+
+    /** The well-known step for building resources. */
+    public static final String Build = "build";
+
+    /** The prerequisite step that runs before any build operations. */
+    public static final String BuildPrereq = "build-prereq";
+
+    /** Aggregation step for all deploy operations. All deploy steps should be required by this step. */
+    public static final String Deploy = "deploy";
+
+    /** The prerequisite step that runs before any deploy operations. */
+    public static final String DeployPrereq = "deploy-prereq";
+
+    /** Aggregation step for all destroy operations. All destroy steps should be required by this step. */
+    public static final String Destroy = "destroy";
+
+    /** The prerequisite step that runs before any destroy operations. */
+    public static final String DestroyPrereq = "destroy-prereq";
+
+    /** The diagnostic step that dumps dependency graph information for troubleshooting. */
+    public static final String Diagnostics = "diagnostics";
+
+    /** The step that prompts for parameter values before build, publish, or deployment operations. */
+    public static final String ProcessParameters = "process-parameters";
+
+    /** Aggregation step for all publish operations. All publish steps should be required by this step. */
+    public static final String Publish = "publish";
+
+    /** The prerequisite step that runs before any publish operations. */
+    public static final String PublishPrereq = "publish-prereq";
+
+    /** The meta-step that coordinates all push operations. All push steps should be required by this step. */
+    public static final String Push = "push";
+
+    /** The prerequisite step that runs before any push operations. */
+    public static final String PushPrereq = "push-prereq";
+
+}
+
+// ===== WellKnownPipelineTags.java =====
+// WellKnownPipelineTags.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+public final class WellKnownPipelineTags {
+    private WellKnownPipelineTags() { }
+
+    /** Tag for steps that build compute resources. */
+    public static final String BuildCompute = "build-compute";
+
+    /** Tag for steps that deploy to compute infrastructure. */
+    public static final String DeployCompute = "deploy-compute";
+
+    /** Tag for steps that provision infrastructure resources. */
+    public static final String ProvisionInfrastructure = "provision-infra";
+
+    /** Tag for steps that push container images to a registry. */
+    public static final String PushContainerImage = "push-container-image";
+
+}
+
 // ===== WireValueEnum.java =====
 // WireValueEnum.java - GENERATED CODE - DO NOT EDIT
 
@@ -23183,6 +23283,7 @@ public final class WithVolumeOptions {
 .modules/TestCallbackContext.java
 .modules/TestCollectionContext.java
 .modules/TestConfigDto.java
+.modules/TestConfigs.java
 .modules/TestDatabaseResource.java
 .modules/TestDeeplyNestedDto.java
 .modules/TestEnvironmentContext.java
@@ -23196,6 +23297,8 @@ public final class WithVolumeOptions {
 .modules/UpdateCommandStateContext.java
 .modules/UrlDisplayLocation.java
 .modules/WaitBehavior.java
+.modules/WellKnownPipelineSteps.java
+.modules/WellKnownPipelineTags.java
 .modules/WireValueEnum.java
 .modules/WithBrowserLogsOptions.java
 .modules/WithContainerCertificatePathsOptions.java

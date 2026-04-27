@@ -13,6 +13,37 @@ public class TestConfigDto
     public int Port { get; set; }
     public bool Enabled { get; set; }
     public string? OptionalField { get; set; }
+
+    [AspireValue("TestConfigs")]
+    public static readonly TestConfigDto Default = new()
+    {
+        Name = "default",
+        Port = 6379,
+        Enabled = true,
+        OptionalField = "cache"
+    };
+
+    [AspireValue("TestConfigs")]
+    public static TestConfigDto Secure { get; } = new()
+    {
+        Name = "secure",
+        Port = 6380,
+        Enabled = true
+    };
+
+    [AspireValue("TestConfigs")]
+    public static string UnicodeGreeting { get; } = "你好こんにちは";
+
+    public static class Profiles
+    {
+        [AspireValue("TestConfigs")]
+        public static readonly TestConfigDto Development = new()
+        {
+            Name = "development",
+            Port = 5001,
+            Enabled = false
+        };
+    }
 }
 
 /// <summary>

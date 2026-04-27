@@ -1,7 +1,7 @@
 # Aspire Python validation AppHost
 # Mirrors the top-level TypeScript playground surface with Python-style members.
 
-from aspire_app import ReferenceExpression, create_builder
+from aspire_app import AksNodeVmSizes, AzureServiceTags, ReferenceExpression, WellKnownPipelineSteps, WellKnownPipelineTags, create_builder
 
 
 with create_builder() as builder:
@@ -128,6 +128,12 @@ with create_builder() as builder:
     container.with_reference("https://example.com/", name="external-uri")
     built_connection_string.with_connection_property("Host", expr)
     built_connection_string.with_connection_property("Mode", "Development")
+    vnet = builder.add_azure_virtual_network("vnet", address_prefix="10.0.0.0/16")
+    subnet = vnet.add_subnet("web", "10.0.1.0/24")
+    subnet.allow_inbound(port="443", from_=AzureServiceTags.AzureLoadBalancer)
+    subnet.deny_inbound(from_=AzureServiceTags.Internet)
+    aks = builder.add_azure_kubernetes_environment("aks")
+    aks.add_node_pool("system", vm_size=AksNodeVmSizes.StandardDSv5.StandardD2sV5)
     # builder-level pipeline APIs
     pipeline = builder.pipeline
 
@@ -137,13 +143,14 @@ with create_builder() as builder:
     pipeline.add_step(
         "custom-builder-step",
         configure_builder_step,
-        depends_on=["build"],
-        required_by=["publish"],
+        depends_on=[WellKnownPipelineSteps.Build],
+        required_by=[WellKnownPipelineSteps.Publish],
     )
 
     def configure_builder_pipeline(config_context):
         config_context.log.info("Builder pipeline configuration logger")
-        _all_steps = config_context.steps
+        builder_pipeline = config_context.pipeline
+        _all_steps = list(builder_pipeline.steps())
         _builder_tagged_steps = config_context.get_steps("custom-build")
 
     pipeline.configure(configure_builder_pipeline)
@@ -152,18 +159,18 @@ with create_builder() as builder:
         config_context.log.info("Pipeline configuration logger")
         config_pipeline = config_context.pipeline
         all_steps = list(config_pipeline.steps())
-        tagged_steps = list(config_pipeline.steps_by_tag("custom-build"))
+        tagged_steps = list(config_pipeline.steps_by_tag(WellKnownPipelineTags.BuildCompute))
         _step_name = all_steps[0].name
         _description = all_steps[0].description
         all_steps[0].add_tag("validated")
         all_steps[0].depends_on("restore")
-        tagged_steps[0].required_by("publish")
-        all_steps[0].depends_on("build")
+        tagged_steps[0].required_by(WellKnownPipelineSteps.Publish)
+        all_steps[0].depends_on(WellKnownPipelineSteps.Build)
 
     def capture_resource_pipeline(config_context):
         config_pipeline = config_context.pipeline
         _resource_steps = list(config_pipeline.steps())
-        _tagged_steps = list(config_pipeline.steps_by_tag("custom-build"))
+        _tagged_steps = list(config_pipeline.steps_by_tag(WellKnownPipelineTags.BuildCompute))
     # withEnvironment - EndpointReference
     container.with_environment("MY_ENDPOINT", endpoint)
     # withEnvironment - ParameterResource
@@ -231,9 +238,9 @@ with create_builder() as builder:
     container.with_pipeline_step_factory(
         "custom-build-step",
         lambda *_args, **_kwargs: None,
-        depends_on=["build"],
-        required_by=["deploy"],
-        tags=["custom-build"],
+        depends_on=[WellKnownPipelineSteps.Build],
+        required_by=[WellKnownPipelineSteps.Deploy],
+        tags=[WellKnownPipelineTags.BuildCompute],
         description="Custom pipeline step",
     )
     container.with_pipeline_configuration(configure_resource_pipeline)

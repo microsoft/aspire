@@ -13,10 +13,7 @@ void main() throws Exception {
                 var _capacity = deployment.skuCapacity();
             });
 
-        var model = new FoundryModel();
-        model.setName("gpt-4.1-mini");
-        model.setVersion("1");
-        model.setFormat("OpenAI");
+        var model = FoundryModels.OpenAI.Gpt41Mini;
 
         var _chatFromModel = foundry.addDeployment("chat-from-model", model);
 
@@ -81,7 +78,7 @@ void main() throws Exception {
         var builderProjectFoundry = builder.addFoundry("builder-project-foundry");
         var builderProject = builderProjectFoundry.addProject("builder-project");
         var _builderProjectModel = builderProject.addModelDeployment("builder-project-model", "Phi-4-mini", new AddModelDeploymentOptions().modelVersion("1").format("Microsoft"));
-        var _projectModel = project.addModelDeployment("project-model", model);
+        var _projectModel = project.addModelDeployment("project-model", FoundryModels.Microsoft.Phi4);
         var hostedAgent = builder.addExecutable(
             "hosted-agent",
             "node",

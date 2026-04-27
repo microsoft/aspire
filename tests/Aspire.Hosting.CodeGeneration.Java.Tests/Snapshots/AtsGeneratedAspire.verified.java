@@ -1599,6 +1599,32 @@ public class TestConfigDto {
     }
 }
 
+// ===== TestConfigs.java =====
+// TestConfigs.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+public final class TestConfigs {
+    private TestConfigs() { }
+
+    public static final TestConfigDto Default = new TestConfigDto() {{ setName("default"); setPort(6379); setEnabled(true); setOptionalField("cache"); }};
+
+    public static final class Profiles {
+        private Profiles() { }
+
+        public static final TestConfigDto Development = new TestConfigDto() {{ setName("development"); setPort(5001); setEnabled(false); setOptionalField(null); }};
+
+    }
+
+    public static final TestConfigDto Secure = new TestConfigDto() {{ setName("secure"); setPort(6380); setEnabled(true); setOptionalField(null); }};
+
+    public static final String UnicodeGreeting = "你好こんにちは";
+
+}
+
 // ===== TestDatabaseResource.java =====
 // TestDatabaseResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -3271,6 +3297,7 @@ public final class WithOptionalStringOptions {
 .modules/TestCallbackContext.java
 .modules/TestCollectionContext.java
 .modules/TestConfigDto.java
+.modules/TestConfigs.java
 .modules/TestDatabaseResource.java
 .modules/TestDeeplyNestedDto.java
 .modules/TestEnvironmentContext.java

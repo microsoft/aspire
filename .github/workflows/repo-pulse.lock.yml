@@ -28,7 +28,7 @@
 # recently filed issues, PRs awaiting review, and activity highlights.
 # The goal is to give the team a live pulse of what's happening in the
 # repo without creating a new issue every day.
-# 
+#
 # Data is collected in `pre-agent-steps` using `gh api`. The agent reads
 # the resulting JSON files and renders the issue body.
 #
@@ -1242,4 +1242,3 @@ jobs:
             /tmp/gh-aw/safe-output-items.jsonl
             /tmp/gh-aw/temporary-id-map.json
           if-no-files-found: ignore
-

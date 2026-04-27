@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // GENERATED CODE - DO NOT EDIT
 
 package aspire
@@ -83,6 +83,28 @@ func (d *TestDeeplyNestedDto) ToMap() map[string]any {
 		"NestedData": SerializeValue(d.NestedData),
 		"MetadataArray": SerializeValue(d.MetadataArray),
 	}
+}
+
+// ============================================================================
+// Exported Values
+// ============================================================================
+
+var TestConfigs = struct {
+	Default *TestConfigDto
+	Profiles struct {
+		Development *TestConfigDto
+	}
+	Secure *TestConfigDto
+	UnicodeGreeting string
+}{
+	Default: &TestConfigDto{Name: "default", Port: 6379, Enabled: true, OptionalField: "cache"},
+	Profiles: struct {
+		Development *TestConfigDto
+	}{
+		Development: &TestConfigDto{Name: "development", Port: 5001, Enabled: false, OptionalField: nil},
+	},
+	Secure: &TestConfigDto{Name: "secure", Port: 6380, Enabled: true, OptionalField: nil},
+	UnicodeGreeting: "你好こんにちは",
 }
 
 // ============================================================================

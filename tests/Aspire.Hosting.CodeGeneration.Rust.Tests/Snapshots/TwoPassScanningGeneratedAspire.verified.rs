@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -925,6 +925,125 @@ impl TestDeeplyNestedDto {
         map.insert("NestedData".to_string(), serde_json::to_value(&self.nested_data).unwrap_or(Value::Null));
         map.insert("MetadataArray".to_string(), serde_json::to_value(&self.metadata_array).unwrap_or(Value::Null));
         map
+    }
+}
+
+// ============================================================================
+// Exported Values
+// ============================================================================
+
+pub mod test_configs {
+    use super::*;
+
+    pub fn default() -> TestConfigDto {
+        serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"default","Port":6379,"Enabled":true,"OptionalField":"cache"}))
+            .expect("generated exported value should deserialize")
+    }
+    pub mod profiles {
+        use super::*;
+
+        pub fn development() -> TestConfigDto {
+            serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"development","Port":5001,"Enabled":false,"OptionalField":null}))
+                .expect("generated exported value should deserialize")
+        }
+    }
+    pub fn secure() -> TestConfigDto {
+        serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"secure","Port":6380,"Enabled":true,"OptionalField":null}))
+            .expect("generated exported value should deserialize")
+    }
+    pub fn unicode_greeting() -> String {
+        serde_json::from_value::<String>(serde_json::json!("你好こんにちは"))
+            .expect("generated exported value should deserialize")
+    }
+}
+
+pub mod well_known_pipeline_steps {
+    use super::*;
+
+    /// The well-known step for building resources.
+    pub fn build() -> String {
+        serde_json::from_value::<String>(serde_json::json!("build"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any build operations.
+    pub fn build_prereq() -> String {
+        serde_json::from_value::<String>(serde_json::json!("build-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Aggregation step for all deploy operations. All deploy steps should be required by this step.
+    pub fn deploy() -> String {
+        serde_json::from_value::<String>(serde_json::json!("deploy"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any deploy operations.
+    pub fn deploy_prereq() -> String {
+        serde_json::from_value::<String>(serde_json::json!("deploy-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Aggregation step for all destroy operations. All destroy steps should be required by this step.
+    pub fn destroy() -> String {
+        serde_json::from_value::<String>(serde_json::json!("destroy"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any destroy operations.
+    pub fn destroy_prereq() -> String {
+        serde_json::from_value::<String>(serde_json::json!("destroy-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The diagnostic step that dumps dependency graph information for troubleshooting.
+    pub fn diagnostics() -> String {
+        serde_json::from_value::<String>(serde_json::json!("diagnostics"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The step that prompts for parameter values before build, publish, or deployment operations.
+    pub fn process_parameters() -> String {
+        serde_json::from_value::<String>(serde_json::json!("process-parameters"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Aggregation step for all publish operations. All publish steps should be required by this step.
+    pub fn publish() -> String {
+        serde_json::from_value::<String>(serde_json::json!("publish"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any publish operations.
+    pub fn publish_prereq() -> String {
+        serde_json::from_value::<String>(serde_json::json!("publish-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The meta-step that coordinates all push operations. All push steps should be required by this step.
+    pub fn push() -> String {
+        serde_json::from_value::<String>(serde_json::json!("push"))
+            .expect("generated exported value should deserialize")
+    }
+    /// The prerequisite step that runs before any push operations.
+    pub fn push_prereq() -> String {
+        serde_json::from_value::<String>(serde_json::json!("push-prereq"))
+            .expect("generated exported value should deserialize")
+    }
+}
+
+pub mod well_known_pipeline_tags {
+    use super::*;
+
+    /// Tag for steps that build compute resources.
+    pub fn build_compute() -> String {
+        serde_json::from_value::<String>(serde_json::json!("build-compute"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Tag for steps that deploy to compute infrastructure.
+    pub fn deploy_compute() -> String {
+        serde_json::from_value::<String>(serde_json::json!("deploy-compute"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Tag for steps that provision infrastructure resources.
+    pub fn provision_infrastructure() -> String {
+        serde_json::from_value::<String>(serde_json::json!("provision-infra"))
+            .expect("generated exported value should deserialize")
+    }
+    /// Tag for steps that push container images to a registry.
+    pub fn push_container_image() -> String {
+        serde_json::from_value::<String>(serde_json::json!("push-container-image"))
+            .expect("generated exported value should deserialize")
     }
 }
 

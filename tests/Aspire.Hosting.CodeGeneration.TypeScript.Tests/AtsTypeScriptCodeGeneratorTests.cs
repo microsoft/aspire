@@ -58,6 +58,23 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_IncludesExportedValues()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Contains(atsContext.ExportedValues, value => string.Join(".", value.PathSegments) == "TestConfigs.Profiles.Development");
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("export namespace TestConfigs", aspireTs);
+        Assert.Contains("export const Default", aspireTs);
+        Assert.Contains("export namespace Profiles", aspireTs);
+        Assert.Contains("export const Development", aspireTs);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithHostingTypes_KeepsReferenceExpressionInBaseTs()
     {
         var atsContext = CreateContextFromBothAssemblies();

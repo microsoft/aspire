@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -134,6 +134,35 @@ impl TestDeeplyNestedDto {
         map.insert("NestedData".to_string(), serde_json::to_value(&self.nested_data).unwrap_or(Value::Null));
         map.insert("MetadataArray".to_string(), serde_json::to_value(&self.metadata_array).unwrap_or(Value::Null));
         map
+    }
+}
+
+// ============================================================================
+// Exported Values
+// ============================================================================
+
+pub mod test_configs {
+    use super::*;
+
+    pub fn default() -> TestConfigDto {
+        serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"default","Port":6379,"Enabled":true,"OptionalField":"cache"}))
+            .expect("generated exported value should deserialize")
+    }
+    pub mod profiles {
+        use super::*;
+
+        pub fn development() -> TestConfigDto {
+            serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"development","Port":5001,"Enabled":false,"OptionalField":null}))
+                .expect("generated exported value should deserialize")
+        }
+    }
+    pub fn secure() -> TestConfigDto {
+        serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"secure","Port":6380,"Enabled":true,"OptionalField":null}))
+            .expect("generated exported value should deserialize")
+    }
+    pub fn unicode_greeting() -> String {
+        serde_json::from_value::<String>(serde_json::json!("你好こんにちは"))
+            .expect("generated exported value should deserialize")
     }
 }
 
