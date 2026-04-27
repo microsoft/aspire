@@ -31,14 +31,14 @@ await sqlChained.addDatabase("db1");
 await sqlChained.addDatabase("db2", { databaseName: "customdb2" });
 
 // ---- Property access on SqlServerServerResource ----
-const _endpoint = await sqlServer.primaryEndpoint.get();
-const _host = await sqlServer.host.get();
-const _port = await sqlServer.port.get();
-const _uri = await sqlServer.uriExpression.get();
-const _jdbc = await sqlServer.jdbcConnectionString.get();
-const _userName = await sqlServer.userNameReference.get();
+const _endpoint = await sqlServer.primaryEndpoint();
+const _host = await sqlServer.host();
+const _port = await sqlServer.port();
+const _uri = await sqlServer.uriExpression();
+const _jdbc = await sqlServer.jdbcConnectionString();
+const _userName = await sqlServer.userNameReference();
 
 // Build and run the app
-const _cstr = await sqlServer.connectionStringExpression.get();
+const _cstr = await sqlServer.connectionStringExpression();
 const _databases = sqlServer.databases;
 await builder.build().run();

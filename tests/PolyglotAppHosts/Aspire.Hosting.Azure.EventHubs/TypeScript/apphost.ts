@@ -14,8 +14,8 @@ await hub.withProperties(async (configuredHub) => {
     const _partitionCount: number | undefined = await configuredHub.partitionCount.get();
 });
 
-const _hubParent = await hub.parent.get();
-const _hubConnectionString = await hub.connectionStringExpression.get();
+const _hubParent = await hub.parent();
+const _hubConnectionString = await hub.connectionStringExpression();
 
 const consumerGroup = await hub.addConsumerGroup('processors', { groupName: 'processor-group' });
 await consumerGroup.withRoleAssignments(eventHubs, [AzureEventHubsRole.AzureEventHubsDataReceiver]);

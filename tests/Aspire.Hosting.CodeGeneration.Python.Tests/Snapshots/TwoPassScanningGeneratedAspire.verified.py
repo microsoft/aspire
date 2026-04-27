@@ -3016,64 +3016,65 @@ class CommandLineArgsCallbackContext:
         return self._handle
 
     @_cached_property
-    def args(self) -> AspireList[typing.Any]:
-        """Gets the Args property"""
+    def args(self) -> CommandLineArgsEditor:
+        """Gets the command-line argument editor"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.args',
             {'context': self._handle}
         )
-        return typing.cast(AspireList[typing.Any], result)
+        return typing.cast(CommandLineArgsEditor, result)
 
-    def cancel(self) -> None:
-        """Cancel the operation."""
-        token: CancellationToken = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.cancellationToken',
+    @_cached_property
+    def log(self) -> LogFacade:
+        """Gets the callback logger facade"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.log',
             {'context': self._handle}
         )
-        token.cancel()
+        return typing.cast(LogFacade, result)
 
-    @_uncached_property
+    @_cached_property
+    def resource(self) -> AbstractResource:
+        """Gets the resource associated with this callback"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @_cached_property
     def execution_context(self) -> DistributedApplicationExecutionContext:
-        """Gets the ExecutionContext property"""
+        """Gets the execution context for this callback invocation"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.executionContext',
             {'context': self._handle}
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
 
-    @execution_context.setter
-    def execution_context(self, value: DistributedApplicationExecutionContext) -> None:
-        """Sets the ExecutionContext property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.setExecutionContext',
-            {'context': self._handle, 'value': value}
-        )
+
+class CommandLineArgsEditor:
+    """Type class for CommandLineArgsEditor."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"CommandLineArgsEditor(handle={self._handle.handle_id})"
 
     @_uncached_property
-    def logger(self) -> AbstractLogger:
-        """Gets the Logger property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.logger',
-            {'context': self._handle}
-        )
-        return typing.cast(AbstractLogger, result)
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
 
-    @logger.setter
-    def logger(self, value: AbstractLogger) -> None:
-        """Sets the Logger property"""
+    def add(self, value: str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue) -> None:
+        """Adds a command-line argument"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['value'] = value
         self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.setLogger',
-            {'context': self._handle, 'value': value}
+            'Aspire.Hosting.ApplicationModel/add',
+            rpc_args
         )
-
-    @_cached_property
-    def resource(self) -> AbstractResource:
-        """Gets the Resource property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.resource',
-            {'context': self._handle}
-        )
-        return typing.cast(AbstractResource, result)
 
 
 class ConnectionStringAvailableEvent:
@@ -4071,42 +4072,26 @@ class EnvironmentCallbackContext:
         return self._handle
 
     @_cached_property
-    def env_vars(self) -> AspireDict[str, str | ReferenceExpression]:
-        """Gets the EnvironmentVariables property"""
+    def env(self) -> EnvironmentEditor:
+        """Gets the environment variable editor"""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environmentVariables',
+            'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environment',
             {'context': self._handle}
         )
-        return typing.cast(AspireDict[str, str | ReferenceExpression], result)
+        return typing.cast(EnvironmentEditor, result)
 
-    def cancel(self) -> None:
-        """Cancel the operation."""
-        token: CancellationToken = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.cancellationToken',
-            {'context': self._handle}
-        )
-        token.cancel()
-
-    @_uncached_property
-    def logger(self) -> AbstractLogger:
-        """Gets the Logger property"""
+    @_cached_property
+    def log(self) -> LogFacade:
+        """Gets the callback logger facade"""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.logger',
+            'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.log',
             {'context': self._handle}
         )
-        return typing.cast(AbstractLogger, result)
-
-    @logger.setter
-    def logger(self, value: AbstractLogger) -> None:
-        """Sets the Logger property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.setLogger',
-            {'context': self._handle, 'value': value}
-        )
+        return typing.cast(LogFacade, result)
 
     @_cached_property
     def resource(self) -> AbstractResource:
-        """Gets the Resource property"""
+        """Gets the resource associated with this callback"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.resource',
             {'context': self._handle}
@@ -4115,12 +4100,38 @@ class EnvironmentCallbackContext:
 
     @_cached_property
     def execution_context(self) -> DistributedApplicationExecutionContext:
-        """Gets the ExecutionContext property"""
+        """Gets the execution context for this callback invocation"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.executionContext',
             {'context': self._handle}
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
+
+
+class EnvironmentEditor:
+    """Type class for EnvironmentEditor."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"EnvironmentEditor(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def set(self, name: str, value: str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue) -> None:
+        """Sets an environment variable"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['name'] = name
+        rpc_args['value'] = value
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/set',
+            rpc_args
+        )
 
 
 class EventingSubscriberRegistrationContext:
@@ -4312,6 +4323,58 @@ class InitializeResourceEvent:
         return typing.cast(AbstractServiceProvider, result)
 
 
+class LogFacade:
+    """Type class for LogFacade."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"LogFacade(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def info(self, message: str) -> None:
+        """Writes an informational log message"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['message'] = message
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/info',
+            rpc_args
+        )
+
+    def warning(self, message: str) -> None:
+        """Writes a warning log message"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['message'] = message
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/warning',
+            rpc_args
+        )
+
+    def error(self, message: str) -> None:
+        """Writes an error log message"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['message'] = message
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/error',
+            rpc_args
+        )
+
+    def debug(self, message: str) -> None:
+        """Writes a debug log message"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['message'] = message
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/debug',
+            rpc_args
+        )
+
+
 class PipelineConfigurationContext:
     """Type class for PipelineConfigurationContext."""
 
@@ -4327,56 +4390,23 @@ class PipelineConfigurationContext:
         """The underlying object reference handle."""
         return self._handle
 
-    @_uncached_property
-    def services(self) -> AbstractServiceProvider:
-        """Gets the Services property"""
+    @_cached_property
+    def pipeline(self) -> PipelineEditor:
+        """Gets the pipeline editor"""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineConfigurationContext.services',
+            'Aspire.Hosting.Pipelines/PipelineConfigurationContext.pipeline',
             {'context': self._handle}
         )
-        return typing.cast(AbstractServiceProvider, result)
+        return typing.cast(PipelineEditor, result)
 
-    @services.setter
-    def services(self, value: AbstractServiceProvider) -> None:
-        """Sets the Services property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineConfigurationContext.setServices',
-            {'context': self._handle, 'value': value}
-        )
-
-    @_uncached_property
-    def steps(self) -> typing.Iterable[PipelineStep]:
-        """Gets the Steps property"""
+    @_cached_property
+    def log(self) -> LogFacade:
+        """Gets the callback logger facade"""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineConfigurationContext.steps',
+            'Aspire.Hosting.Pipelines/PipelineConfigurationContext.log',
             {'context': self._handle}
         )
-        return typing.cast(typing.Iterable[PipelineStep], result)
-
-    @steps.setter
-    def steps(self, value: typing.Iterable[PipelineStep]) -> None:
-        """Sets the Steps property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineConfigurationContext.setSteps',
-            {'context': self._handle, 'value': value}
-        )
-
-    @_uncached_property
-    def model(self) -> DistributedApplicationModel:
-        """Gets the Model property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineConfigurationContext.model',
-            {'context': self._handle}
-        )
-        return typing.cast(DistributedApplicationModel, result)
-
-    @model.setter
-    def model(self, value: DistributedApplicationModel) -> None:
-        """Sets the Model property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineConfigurationContext.setModel',
-            {'context': self._handle, 'value': value}
-        )
+        return typing.cast(LogFacade, result)
 
     def get_steps(self, tag: str) -> typing.Iterable[PipelineStep]:
         """Gets pipeline steps with the specified tag"""
@@ -4458,6 +4488,41 @@ class PipelineContext:
         return typing.cast(PipelineSummary, result)
 
 
+class PipelineEditor:
+    """Type class for PipelineEditor."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"PipelineEditor(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def steps(self) -> typing.Iterable[PipelineStep]:
+        """Gets all configured pipeline steps"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/steps',
+            rpc_args,
+        )
+        return result
+
+    def steps_by_tag(self, tag: str) -> typing.Iterable[PipelineStep]:
+        """Gets pipeline steps with the specified tag"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['tag'] = tag
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/stepsByTag',
+            rpc_args,
+        )
+        return result
+
+
 class PipelineStep:
     """Type class for PipelineStep."""
 
@@ -4473,107 +4538,23 @@ class PipelineStep:
         """The underlying object reference handle."""
         return self._handle
 
-    @_uncached_property
+    @_cached_property
     def name(self) -> str:
-        """Gets the Name property"""
+        """Gets the unique name of the step"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.name',
             {'context': self._handle}
         )
         return typing.cast(str, result)
 
-    @name.setter
-    def name(self, value: str) -> None:
-        """Sets the Name property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.setName',
-            {'context': self._handle, 'value': value}
-        )
-
-    @_uncached_property
+    @_cached_property
     def description(self) -> str:
-        """Gets the Description property"""
+        """Gets the human-readable description of the step"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.description',
             {'context': self._handle}
         )
         return typing.cast(str, result)
-
-    @description.setter
-    def description(self, value: str) -> None:
-        """Sets the Description property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.setDescription',
-            {'context': self._handle, 'value': value}
-        )
-
-    @_uncached_property
-    def depends_on_steps(self) -> AspireList[str]:
-        """Gets the DependsOnSteps property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps',
-            {'context': self._handle}
-        )
-        return typing.cast(AspireList[str], result)
-
-    @depends_on_steps.setter
-    def depends_on_steps(self, value: AspireList[str]) -> None:
-        """Sets the DependsOnSteps property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.setDependsOnSteps',
-            {'context': self._handle, 'value': value}
-        )
-
-    @_uncached_property
-    def required_by_steps(self) -> AspireList[str]:
-        """Gets the RequiredBySteps property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps',
-            {'context': self._handle}
-        )
-        return typing.cast(AspireList[str], result)
-
-    @required_by_steps.setter
-    def required_by_steps(self, value: AspireList[str]) -> None:
-        """Sets the RequiredBySteps property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.setRequiredBySteps',
-            {'context': self._handle, 'value': value}
-        )
-
-    @_uncached_property
-    def tags(self) -> AspireList[str]:
-        """Gets the Tags property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.tags',
-            {'context': self._handle}
-        )
-        return typing.cast(AspireList[str], result)
-
-    @tags.setter
-    def tags(self, value: AspireList[str]) -> None:
-        """Sets the Tags property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.setTags',
-            {'context': self._handle, 'value': value}
-        )
-
-    @_uncached_property
-    def resource(self) -> AbstractResource:
-        """Gets the Resource property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.resource',
-            {'context': self._handle}
-        )
-        return typing.cast(AbstractResource, result)
-
-    @resource.setter
-    def resource(self, value: AbstractResource) -> None:
-        """Sets the Resource property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.setResource',
-            {'context': self._handle, 'value': value}
-        )
 
     def depends_on(self, step_name: str) -> None:
         """Adds a dependency on another step by name"""
@@ -4590,6 +4571,15 @@ class PipelineStep:
         rpc_args['stepName'] = step_name
         self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/requiredBy',
+            rpc_args
+        )
+
+    def add_tag(self, tag: str) -> None:
+        """Adds a tag to the step"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['tag'] = tag
+        self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/addTag',
             rpc_args
         )
 
@@ -5148,7 +5138,7 @@ class ResourceUrlsCallbackContext:
 
     @_cached_property
     def resource(self) -> AbstractResource:
-        """Gets the Resource property"""
+        """Gets the resource associated with these URLs"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.resource',
             {'context': self._handle}
@@ -5156,47 +5146,89 @@ class ResourceUrlsCallbackContext:
         return typing.cast(AbstractResource, result)
 
     @_cached_property
-    def urls(self) -> AspireList[ResourceUrlAnnotation]:
-        """Gets the Urls property"""
+    def urls(self) -> ResourceUrlsEditor:
+        """Gets the URL editor"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.urls',
             {'context': self._handle}
         )
-        return typing.cast(AspireList[ResourceUrlAnnotation], result)
+        return typing.cast(ResourceUrlsEditor, result)
 
-    def cancel(self) -> None:
-        """Cancel the operation."""
-        token: CancellationToken = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.cancellationToken',
-            {'context': self._handle}
-        )
-        token.cancel()
-
-    @_uncached_property
-    def logger(self) -> AbstractLogger:
-        """Gets the Logger property"""
+    @_cached_property
+    def log(self) -> LogFacade:
+        """Gets the callback logger facade"""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.logger',
+            'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.log',
             {'context': self._handle}
         )
-        return typing.cast(AbstractLogger, result)
-
-    @logger.setter
-    def logger(self, value: AbstractLogger) -> None:
-        """Sets the Logger property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.setLogger',
-            {'context': self._handle, 'value': value}
-        )
+        return typing.cast(LogFacade, result)
 
     @_cached_property
     def execution_context(self) -> DistributedApplicationExecutionContext:
-        """Gets the ExecutionContext property"""
+        """Gets the execution context for this callback invocation"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.executionContext',
             {'context': self._handle}
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
+
+    def get_endpoint(self, name: str) -> EndpointReference:
+        """Gets an endpoint reference from the associated resource"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['name'] = name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/getEndpoint',
+            rpc_args,
+        )
+        return typing.cast(EndpointReference, result)
+
+
+class ResourceUrlsEditor:
+    """Type class for ResourceUrlsEditor."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ResourceUrlsEditor(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def execution_context(self) -> DistributedApplicationExecutionContext:
+        """Gets the execution context for this URL editor"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext',
+            {'context': self._handle}
+        )
+        return typing.cast(DistributedApplicationExecutionContext, result)
+
+    def add(self, url: str | ReferenceExpression, *, display_text: str | None = None) -> None:
+        """Adds a displayed URL"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['url'] = url
+        if display_text is not None:
+            rpc_args['displayText'] = display_text
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.add',
+            rpc_args
+        )
+
+    def add_for_endpoint(self, endpoint: EndpointReference, url: str | ReferenceExpression, *, display_text: str | None = None) -> None:
+        """Adds a displayed URL for a specific endpoint"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        rpc_args['endpoint'] = endpoint
+        rpc_args['url'] = url
+        if display_text is not None:
+            rpc_args['displayText'] = display_text
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint',
+            rpc_args
+        )
 
 
 class TestCallbackContext:
@@ -5354,6 +5386,56 @@ class TestEnvironmentContext:
         """Sets the Priority property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority',
+            {'context': self._handle, 'value': value}
+        )
+
+
+class TestMutableCollectionContext:
+    """Type class for TestMutableCollectionContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"TestMutableCollectionContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_uncached_property
+    def tags(self) -> AspireList[str]:
+        """Gets the Tags property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
+
+    @tags.setter
+    def tags(self, value: AspireList[str]) -> None:
+        """Sets the Tags property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def counts(self) -> AspireDict[str, int]:
+        """Gets the Counts property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireDict[str, int], result)
+
+    @counts.setter
+    def counts(self, value: AspireDict[str, int]) -> None:
+        """Sets the Counts property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts',
             {'context': self._handle, 'value': value}
         )
 
@@ -5682,10 +5764,6 @@ class AbstractResourceWithConnectionString(AbstractResource, AbstractExpressionV
     @abc.abstractmethod
     def with_connection_property(self, name: str, value: str | ReferenceExpression) -> typing.Self:
         """Adds a connection property with a string or reference expression value"""
-
-    @abc.abstractmethod
-    def with_connection_property_value(self, name: str, value: str) -> typing.Self:
-        """Adds a connection property with a string value"""
 
     @abc.abstractmethod
     def get_connection_property(self, key: str) -> ReferenceExpression:
@@ -10369,7 +10447,6 @@ class TestRedisResourceKwargs(ContainerResourceKwargs, total=False):
     """TestRedisResource options."""
 
     connection_property: tuple[str, str | ReferenceExpression]
-    connection_property_value: tuple[str, str]
     on_connection_string_available: typing.Callable[[ConnectionStringAvailableEvent], None]
     persistence: TestPersistenceMode | typing.Literal[True]
     connection_string: ReferenceExpression
@@ -10391,18 +10468,6 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         rpc_args['value'] = value
         result = self._client.invoke_capability(
             'Aspire.Hosting/withConnectionProperty',
-            rpc_args,
-        )
-        self._handle = self._wrap_builder(result)
-        return self
-
-    def with_connection_property_value(self, name: str, value: str) -> typing.Self:
-        """Adds a connection property with a string value"""
-        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['name'] = name
-        rpc_args['value'] = value
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/withConnectionPropertyValue',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -10569,14 +10634,6 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withConnectionProperty', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'connection_property'. Expected: (str, str | ReferenceExpression)")
-        if _connection_property_value := kwargs.pop("connection_property_value", None):
-            if _validate_tuple_types(_connection_property_value, (str, str)):
-                rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(tuple[str, str], _connection_property_value)[0]
-                rpc_args["value"] = typing.cast(tuple[str, str], _connection_property_value)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withConnectionPropertyValue', rpc_args))
-            else:
-                raise TypeError("Invalid type for option 'connection_property_value'. Expected: (str, str)")
         if _on_connection_string_available := kwargs.pop("on_connection_string_available", None):
             if _validate_type(_on_connection_string_available, typing.Callable[[ConnectionStringAvailableEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10768,12 +10825,10 @@ def create_builder(
 
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression", lambda handle, _: ReferenceExpression(handle))
 _register_handle_wrapper("System.Private.CoreLib/System.Threading.CancellationToken", CancellationToken)
-_register_handle_wrapper("Aspire.Hosting/List<string>", AspireList)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,any>", AspireDict)
-_register_handle_wrapper("Aspire.Hosting/List<any>", AspireList)
-_register_handle_wrapper("Aspire.Hosting/Dict<string,string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression>", AspireDict)
-_register_handle_wrapper("Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation>", AspireList)
+_register_handle_wrapper("Aspire.Hosting/List<string>", AspireList)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
+_register_handle_wrapper("Aspire.Hosting/Dict<string,number>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", AbstractAspireStore)
 _register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", AbstractConfiguration)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", AbstractDistributedApplicationEventing)
@@ -10791,6 +10846,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterRe
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", BeforeResourceStartedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent", BeforeStartEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext", CommandLineArgsCallbackContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor", CommandLineArgsEditor)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", ConnectionStringAvailableEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", ContainerImagePushOptions)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext", ContainerImagePushOptionsCallbackContext)
@@ -10805,11 +10861,14 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Endpoin
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", EndpointReferenceExpression)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext", EndpointUpdateContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext", EnvironmentCallbackContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor", EnvironmentEditor)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext", EventingSubscriberRegistrationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext", ExecuteCommandContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent", InitializeResourceEvent)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade", LogFacade)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", PipelineConfigurationContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", PipelineContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineEditor", PipelineEditor)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep", PipelineStep)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext", PipelineStepContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext", PipelineStepFactoryContext)
@@ -10822,9 +10881,11 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resourc
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent", ResourceReadyEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", ResourceStoppedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", ResourceUrlsCallbackContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor", ResourceUrlsEditor)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", TestCallbackContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", TestCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", TestEnvironmentContext)
+_register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", TestMutableCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", TestResourceContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", UpdateCommandStateContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resource", _BaseResource)

@@ -24,13 +24,13 @@ const taggedContainer = await builder.addContainer("mytaggedcontainer", {
 const dockerContainer = await builder.addDockerfile("dockerapp", "./app");
 
 const configureDockerfileBuilder = async (dockerfileContext: DockerfileBuilderCallbackContext) => {
-    const _dockerfileResource = await dockerfileContext.resource.get();
-    const dockerfileServices = await dockerfileContext.services.get();
+    const _dockerfileResource = await dockerfileContext.resource();
+    const dockerfileServices = await dockerfileContext.services();
     const dockerfileLoggerFactory = await dockerfileServices.getLoggerFactory();
     const dockerfileLogger = await dockerfileLoggerFactory.createLogger("ValidationAppHost.DockerfileBuilder");
     await dockerfileLogger.logInformation("Configuring Dockerfile builder");
 
-    const dockerfileBuilder = await dockerfileContext.builder.get();
+    const dockerfileBuilder = await dockerfileContext.builder();
     await dockerfileBuilder.arg("BASE_IMAGE", { defaultValue: "mcr.microsoft.com/dotnet/runtime:8.0" });
     await dockerfileBuilder.addContainerFilesStages(_dockerfileResource, { logger: dockerfileLogger });
 
@@ -131,15 +131,16 @@ await container.withReference(endpoint);
 await container.withReference("https://example.com/", { name: "external-uri" });
 
 const envConnectionString = await builder.addConnectionString("envcs");
+const expressionConnectionString = await builder.addConnectionString("exprcs", { environmentVariableNameOrExpression: expr });
 
 // ===================================================================
 // Application pipeline on builder
 // ===================================================================
 
-const pipeline = await builder.pipeline.get();
+const pipeline = await builder.pipeline();
 
 await pipeline.addStep("custom-builder-step", async (stepContext) => {
-    const summary = await stepContext.summary.get();
+    const summary = await stepContext.summary();
     await summary.add("BuilderPipelineStep", "Validated");
 }, {
     dependsOn: ["build"],
@@ -147,7 +148,8 @@ await pipeline.addStep("custom-builder-step", async (stepContext) => {
 });
 
 await pipeline.configure(async (configContext) => {
-    const _allSteps = await configContext.steps.get();
+    const builderPipeline = await configContext.pipeline();
+    const _allSteps = await builderPipeline.steps();
     const _builderTaggedSteps = await configContext.getSteps("custom-build");
 });
 
@@ -167,6 +169,41 @@ await container.withEnvironment("MY_GENERATED_PARAM", generatedParam);
 
 // withEnvironment — with connection string resource
 await container.withEnvironment("MY_CONN", envConnectionString);
+await container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
+
+// callback editors/facades
+await container.withEnvironmentCallback(async (context) => {
+    const environment = await context.environment();
+    const environmentLog = await context.log();
+    const _environmentResource = await context.resource();
+    const environmentExecutionContext = await context.executionContext();
+    const _environmentIsRunMode: boolean = await environmentExecutionContext.isRunMode();
+    await environmentLog.warning("Environment callback logger");
+    await environment.set("MY_CALLBACK_ENDPOINT", endpoint);
+});
+
+await container.withArgsCallback(async (context) => {
+    const args = await context.args();
+    const argsLog = await context.log();
+    const _argsResource = await context.resource();
+    const argsExecutionContext = await context.executionContext();
+    const _argsIsRunMode: boolean = await argsExecutionContext.isRunMode();
+    await argsLog.error("Args callback logger");
+    await args.add("--validation-callback");
+    await args.add(expr);
+});
+
+await container.withUrls(async (context) => {
+    const _urlsResource = await context.resource();
+    const urlsLog = await context.log();
+    const urlsExecutionContext = await context.executionContext();
+    const _urlsIsRunMode: boolean = await urlsExecutionContext.isRunMode();
+    const callbackEndpoint = await context.getEndpoint("http");
+    const urls = await context.urls();
+    await urlsLog.debug("URLs callback logger");
+    await urls.add(refExpr`https://${callbackEndpoint}`);
+    await urls.addForEndpoint(callbackEndpoint, "/details", { displayText: "Details" });
+});
 
 // withConnectionProperty — with ReferenceExpression
 await builtConnectionString.withConnectionProperty("Endpoint", expr);
@@ -258,25 +295,25 @@ await tool.publishAsDockerFile(async (_container) => {
 
 await container.withPipelineStepFactory("custom-build-step", async (stepContext) => {
     const pipelineContext = await stepContext.pipelineContext.get();
-    const pipelineModel = await pipelineContext.model.get();
+    const pipelineModel = await pipelineContext.model();
     const _pipelineResources = await pipelineModel.getResources();
     const _pipelineContainer = await pipelineModel.findResourceByName("mycontainer");
-    const pipelineServices = await pipelineContext.services.get();
+    const pipelineServices = await pipelineContext.services();
     const pipelineLoggerFactory = await pipelineServices.getLoggerFactory();
     const pipelineFactoryLogger = await pipelineLoggerFactory.createLogger("ValidationAppHost.PipelineContext");
     await pipelineFactoryLogger.logInformation("Pipeline factory context logger");
-    const pipelineLogger = await pipelineContext.logger.get();
+    const pipelineLogger = await pipelineContext.logger();
     await pipelineLogger.logDebug("Pipeline context logger");
-    const pipelineSummary = await pipelineContext.summary.get();
+    const pipelineSummary = await pipelineContext.summary();
     await pipelineSummary.add("PipelineContext", "Validated");
     await pipelineSummary.addMarkdown("PipelineMarkdown", "**Validated**");
 
-    const executionContext = await stepContext.executionContext.get();
-    const _isPublishMode: boolean = await executionContext.isPublishMode.get();
-    const stepServices = await stepContext.services.get();
-    const stepLogger = await stepContext.logger.get();
+    const executionContext = await stepContext.executionContext();
+    const _isPublishMode: boolean = await executionContext.isPublishMode();
+    const stepServices = await stepContext.services();
+    const stepLogger = await stepContext.logger();
     await stepLogger.logInformation("Pipeline step context logger");
-    const stepSummary = await stepContext.summary.get();
+    const stepSummary = await stepContext.summary();
     await stepSummary.add("PipelineStepContext", "Validated");
     const reportingStep = await stepContext.reportingStep.get();
     await reportingStep.logStep("information", "Reporting step log");
@@ -289,14 +326,14 @@ await container.withPipelineStepFactory("custom-build-step", async (stepContext)
     await markdownTask.completeTaskMarkdown("**Markdown task complete**", { completionState: "completed-with-warning" });
     await reportingStep.completeStep("Reporting step complete");
     await reportingStep.completeStepMarkdown("**Reporting step markdown complete**", { completionState: "completed-with-warning" });
-    const stepModel = await stepContext.model.get();
+    const stepModel = await stepContext.model();
     const _stepResources = await stepModel.getResources();
     const _stepContainer = await stepModel.findResourceByName("mycontainer");
     const stepLoggerFactory = await stepServices.getLoggerFactory();
     const stepFactoryLogger = await stepLoggerFactory.createLogger("ValidationAppHost.PipelineStepContext");
     await stepFactoryLogger.logDebug("Pipeline step factory logger");
-    const cancellationToken = await stepContext.cancellationToken.get();
-    const cacheUriExpression = await cache.uriExpression.get();
+    const cancellationToken = await stepContext.cancellationToken();
+    const cacheUriExpression = await cache.uriExpression();
     const _cacheUri = await cacheUriExpression.getValue(cancellationToken);
 }, {
     dependsOn: ["build"],
@@ -306,40 +343,34 @@ await container.withPipelineStepFactory("custom-build-step", async (stepContext)
 });
 
 await container.withPipelineConfiguration(async (configContext) => {
-    const configServices = await configContext.services.get();
-    const configModel = await configContext.model.get();
-    const _configResources = await configModel.getResources();
-    const _configContainer = await configModel.findResourceByName("mycontainer");
-    const configLoggerFactory = await configServices.getLoggerFactory();
-    const configLogger = await configLoggerFactory.createLogger("ValidationAppHost.PipelineConfigurationContext");
-    await configLogger.logInformation("Pipeline configuration logger");
+    const configLog = await configContext.log();
+    await configLog.info("Pipeline configuration logger");
 
-    const allSteps = await configContext.steps.get();
-    const taggedSteps = await configContext.getSteps("custom-build");
+    const configPipeline = await configContext.pipeline();
+    const allSteps = await configPipeline.steps();
+    const taggedSteps = await configPipeline.stepsByTag("custom-build");
 
-    const _stepName: string = await allSteps[0].name.get();
-    const _description: string = await allSteps[0].description.get();
+    const _stepName: string = await allSteps[0].name();
+    const _description: string = await allSteps[0].description();
 
-    await allSteps[0].tags.add("validated");
-    await allSteps[0].dependsOnSteps.add("restore");
-    await taggedSteps[0].requiredBySteps.add("publish");
+    await allSteps[0].addTag("validated");
+    await allSteps[0].dependsOn("restore");
     await taggedSteps[0].requiredBy("publish");
     await allSteps[0].dependsOn("build");
 });
 
 await container.withPipelineConfiguration(async (configContext) => {
-    const _configServices = await configContext.services.get();
-    const _configModel = await configContext.model.get();
-    const _resourceSteps = await configContext.steps.get();
-    const _taggedSteps = await configContext.getSteps("custom-build");
+    const configPipeline = await configContext.pipeline();
+    const _resourceSteps = await configPipeline.steps();
+    const _taggedSteps = await configPipeline.stepsByTag("custom-build");
 });
 
 // ===================================================================
 // Builder, eventing, logging, model, notification, and user secrets
 // ===================================================================
 
-const _appHostDirectory: string = await builder.appHostDirectory.get();
-const hostEnvironment = await builder.environment.get();
+const _appHostDirectory: string = await builder.appHostDirectory();
+const hostEnvironment = await builder.environment();
 const _isDevelopment: boolean = await hostEnvironment.isDevelopment();
 const _isProduction: boolean = await hostEnvironment.isProduction();
 const _isStaging: boolean = await hostEnvironment.isStaging();
@@ -352,24 +383,24 @@ const _configSection = await builderConfiguration.getSection("MyConfig");
 const _configChildren = await builderConfiguration.getChildren();
 const _configExists: boolean = await builderConfiguration.exists("MyConfig:Key");
 
-const builderExecutionContext = await builder.executionContext.get();
-const executionContextServiceProvider = await builderExecutionContext.serviceProvider.get();
+const builderExecutionContext = await builder.executionContext();
+const executionContextServiceProvider = await builderExecutionContext.serviceProvider();
 const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
 
 await builder.addEventingSubscriber(async (registrationContext) => {
-    const subscriberExecutionContext = await registrationContext.executionContext.get();
-    const _subscriberIsRunMode: boolean = await subscriberExecutionContext.isRunMode.get();
-    const _subscriberCancellationToken = await registrationContext.cancellationToken.get();
+    const subscriberExecutionContext = await registrationContext.executionContext();
+    const _subscriberIsRunMode: boolean = await subscriberExecutionContext.isRunMode();
+    const _subscriberCancellationToken = await registrationContext.cancellationToken();
 
     await registrationContext.onBeforeStart(async (beforeStartEvent) => {
-        const subscriberServices = await beforeStartEvent.services.get();
+        const subscriberServices = await beforeStartEvent.services();
         const aspireStore = await subscriberServices.getAspireStore();
         const _contentBackedFilename = await aspireStore.getFileNameWithContent("validation-apphost.ts", "apphost.ts");
     });
 
     await registrationContext.onAfterResourcesCreated(async (afterResourcesCreatedEvent) => {
-        const afterResourcesCreatedServices = await afterResourcesCreatedEvent.services.get();
-        const afterResourcesCreatedModel = await afterResourcesCreatedEvent.model.get();
+        const afterResourcesCreatedServices = await afterResourcesCreatedEvent.services();
+        const afterResourcesCreatedModel = await afterResourcesCreatedEvent.model();
         const _afterResourcesCreatedEventing = await afterResourcesCreatedServices.getEventing();
         const _afterResourcesCreatedResources = await afterResourcesCreatedModel.getResources();
     });
@@ -409,8 +440,8 @@ const _certificateTrustData = await executionConfiguration.getCertificateTrustDa
 const _httpsCertificateData = await executionConfiguration.getHttpsCertificateData();
 
 const beforeStartSubscription = await builder.subscribeBeforeStart(async (beforeStartEvent) => {
-    const beforeStartServices = await beforeStartEvent.services.get();
-    const beforeStartModel = await beforeStartEvent.model.get();
+    const beforeStartServices = await beforeStartEvent.services();
+    const beforeStartModel = await beforeStartEvent.model();
     const _beforeStartResources = await beforeStartModel.getResources();
     const _beforeStartContainer = await beforeStartModel.findResourceByName("mycontainer");
 
@@ -436,8 +467,8 @@ const beforeStartSubscription = await builder.subscribeBeforeStart(async (before
     await beforeStartNotificationService.publishResourceUpdate(container, { state: "Validated", stateStyle: "info" });
 
     const userSecretsManager = await beforeStartServices.getUserSecretsManager();
-    const _userSecretsAvailable: boolean = await userSecretsManager.isAvailable.get();
-    const _userSecretsFilePath: string = await userSecretsManager.filePath.get();
+    const _userSecretsAvailable: boolean = await userSecretsManager.isAvailable();
+    const _userSecretsFilePath: string = await userSecretsManager.filePath();
     const _secretSet: boolean = await userSecretsManager.trySetSecret("Validation:Key", "value");
     await userSecretsManager.getOrSetSecret(container, "Validation:GeneratedKey", "generated-value");
     const _generatedSecretValue: string = await builderConfiguration.getConfigValue("Validation:GeneratedKey");
@@ -447,8 +478,8 @@ const beforeStartSubscription = await builder.subscribeBeforeStart(async (before
 });
 
 const afterResourcesCreatedSubscription = await builder.subscribeAfterResourcesCreated(async (afterResourcesCreatedEvent) => {
-    const afterResourcesCreatedServices = await afterResourcesCreatedEvent.services.get();
-    const afterResourcesCreatedModel = await afterResourcesCreatedEvent.model.get();
+    const afterResourcesCreatedServices = await afterResourcesCreatedEvent.services();
+    const afterResourcesCreatedModel = await afterResourcesCreatedEvent.model();
     const _afterResources = await afterResourcesCreatedModel.getResources();
     const _afterResourcesContainer = await afterResourcesCreatedModel.findResourceByName("mycontainer");
     const afterResourcesCreatedLoggerFactory = await afterResourcesCreatedServices.getLoggerFactory();
@@ -456,39 +487,39 @@ const afterResourcesCreatedSubscription = await builder.subscribeAfterResourcesC
     await afterResourcesCreatedLogger.logInformation("AfterResourcesCreated");
 });
 
-const builderEventing = await builder.eventing.get();
+const builderEventing = await builder.eventing();
 await builderEventing.unsubscribe(beforeStartSubscription);
 await builderEventing.unsubscribe(afterResourcesCreatedSubscription);
 
 await container.onBeforeResourceStarted(async (beforeResourceStartedEvent) => {
-    const _resource = await beforeResourceStartedEvent.resource.get();
-    const services = await beforeResourceStartedEvent.services.get();
+    const _resource = await beforeResourceStartedEvent.resource();
+    const services = await beforeResourceStartedEvent.services();
     const loggerFactory = await services.getLoggerFactory();
     const logger = await loggerFactory.createLogger("ValidationAppHost.BeforeResourceStarted");
     await logger.logInformation("BeforeResourceStarted");
 });
 
 await container.onResourceStopped(async (resourceStoppedEvent) => {
-    const _resource = await resourceStoppedEvent.resource.get();
-    const services = await resourceStoppedEvent.services.get();
+    const _resource = await resourceStoppedEvent.resource();
+    const services = await resourceStoppedEvent.services();
     const loggerFactory = await services.getLoggerFactory();
     const logger = await loggerFactory.createLogger("ValidationAppHost.ResourceStopped");
     await logger.logWarning("ResourceStopped");
 });
 
 await builtConnectionString.onConnectionStringAvailable(async (connectionStringAvailableEvent) => {
-    const _resource = await connectionStringAvailableEvent.resource.get();
-    const services = await connectionStringAvailableEvent.services.get();
+    const _resource = await connectionStringAvailableEvent.resource();
+    const services = await connectionStringAvailableEvent.services();
     const notifications = await services.getResourceNotificationService();
     const _connectionState = await notifications.tryGetResourceState("customcs");
 });
 
 await container.onInitializeResource(async (initializeResourceEvent) => {
-    const _resource = await initializeResourceEvent.resource.get();
-    const _initializeEventing = await initializeResourceEvent.eventing.get();
-    const initializeLogger = await initializeResourceEvent.logger.get();
-    const initializeNotifications = await initializeResourceEvent.notifications.get();
-    const initializeServices = await initializeResourceEvent.services.get();
+    const _resource = await initializeResourceEvent.resource();
+    const _initializeEventing = await initializeResourceEvent.eventing();
+    const initializeLogger = await initializeResourceEvent.logger();
+    const initializeNotifications = await initializeResourceEvent.notifications();
+    const initializeServices = await initializeResourceEvent.services();
     await initializeLogger.logDebug("InitializeResource");
     await initializeNotifications.waitForDependencies(container);
     const _initializeModel = await initializeServices.getDistributedApplicationModel();
@@ -496,16 +527,16 @@ await container.onInitializeResource(async (initializeResourceEvent) => {
 });
 
 await container.onResourceEndpointsAllocated(async (resourceEndpointsAllocatedEvent) => {
-    const _resource = await resourceEndpointsAllocatedEvent.resource.get();
-    const services = await resourceEndpointsAllocatedEvent.services.get();
+    const _resource = await resourceEndpointsAllocatedEvent.resource();
+    const services = await resourceEndpointsAllocatedEvent.services();
     const loggerFactory = await services.getLoggerFactory();
     const logger = await loggerFactory.createLogger("ValidationAppHost.ResourceEndpointsAllocated");
     await logger.logInformation("ResourceEndpointsAllocated");
 });
 
 await container.onResourceReady(async (resourceReadyEvent) => {
-    const _resource = await resourceReadyEvent.resource.get();
-    const services = await resourceReadyEvent.services.get();
+    const _resource = await resourceReadyEvent.resource();
+    const services = await resourceReadyEvent.services();
     const loggerFactory = await services.getLoggerFactory();
     const logger = await loggerFactory.createLogger("ValidationAppHost.ResourceReady");
     await logger.logInformation("ResourceReady");

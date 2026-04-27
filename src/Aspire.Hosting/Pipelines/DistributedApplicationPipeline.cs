@@ -694,6 +694,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             var configContext = new PipelineConfigurationContext
             {
+                Logger = pipelineContext.Logger,
                 Services = pipelineContext.Services,
                 Steps = allSteps.AsReadOnly(),
                 Model = pipelineContext.Model
