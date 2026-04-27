@@ -198,7 +198,9 @@ internal sealed class BrowserLogsSessionManager : IBrowserLogsSessionManager, IA
             activeSession = resourceState.LastSessionId is { } lastSessionId &&
                 resourceState.ActiveSessions.TryGetValue(lastSessionId, out var lastSession)
                     ? lastSession
-                    : resourceState.ActiveSessions.Values.MaxBy(static session => session.StartedAt);
+                    : resourceState.ActiveSessions.Count == 0
+                        ? null
+                        : resourceState.ActiveSessions.Values.MaxBy(static session => session.StartedAt);
 
             if (activeSession is null)
             {
