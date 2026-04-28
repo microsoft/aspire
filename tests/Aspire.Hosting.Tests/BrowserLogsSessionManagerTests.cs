@@ -470,6 +470,34 @@ public class BrowserLogsSessionManagerTests
     }
 
     [Fact]
+    public void GetAvailableProfiles_FallsBackToDirectoriesWhenLocalStateIsInvalid()
+    {
+        WithTempUserDataDirectory(userDataDirectory =>
+        {
+            Directory.CreateDirectory(Path.Combine(userDataDirectory, "Default"));
+            Directory.CreateDirectory(Path.Combine(userDataDirectory, "Profile 1"));
+            File.WriteAllText(Path.Combine(userDataDirectory, "Local State"), "{");
+
+            var profiles = ChromiumBrowserResolver.GetAvailableProfiles(userDataDirectory);
+
+            Assert.Collection(
+                profiles,
+                profile =>
+                {
+                    Assert.Equal("Default", profile.DirectoryName);
+                    Assert.Null(profile.DisplayName);
+                    Assert.Null(profile.ShortcutName);
+                },
+                profile =>
+                {
+                    Assert.Equal("Profile 1", profile.DirectoryName);
+                    Assert.Null(profile.DisplayName);
+                    Assert.Null(profile.ShortcutName);
+                });
+        });
+    }
+
+    [Fact]
     public void ResolveProfileDirectory_ThrowsWhenDisplayNameIsAmbiguous()
     {
         WithTempUserDataDirectory(userDataDirectory =>

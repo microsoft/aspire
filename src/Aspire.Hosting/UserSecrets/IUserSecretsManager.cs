@@ -41,8 +41,14 @@ public interface IUserSecretsManager
     /// </summary>
     /// <param name="name">The name of the secret.</param>
     /// <returns>True if the secret was deleted successfully; otherwise, false.</returns>
+    /// <remarks>
+    /// The default implementation returns <see langword="false"/> so existing implementations remain compatible.
+    /// </remarks>
     [AspireExport(Description = "Attempts to delete a user secret value")]
-    bool TryDeleteSecret(string name);
+    bool TryDeleteSecret(string name)
+    {
+        return false;
+    }
 
     /// <summary>
     /// Gets a secret value if it exists in configuration, or sets it using the value generator if it doesn't.

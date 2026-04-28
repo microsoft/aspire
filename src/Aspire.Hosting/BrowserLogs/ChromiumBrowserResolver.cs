@@ -176,9 +176,16 @@ internal static class ChromiumBrowserResolver
             //
             // The directory key is what Chromium accepts in --profile-directory. The display name is friendlier but
             // not unique, so the picker shows both when they differ and we persist the stable directory name.
-            using var localStateStream = File.OpenRead(localStatePath);
-            using var localStateDocument = JsonDocument.Parse(localStateStream);
-            AddProfilesFromLocalState(localStateDocument.RootElement, userDataDirectory, profiles);
+            try
+            {
+                using var localStateStream = File.OpenRead(localStatePath);
+                using var localStateDocument = JsonDocument.Parse(localStateStream);
+                AddProfilesFromLocalState(localStateDocument.RootElement, userDataDirectory, profiles);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                // Fall back to profile directory names below. This can happen while Chromium is writing Local State.
+            }
         }
 
         // Local State can be missing (new/empty user data directory), stale, or temporarily unreadable while Chromium
