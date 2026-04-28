@@ -139,8 +139,8 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
         // OwningComputeEnvironment should be set
         Assert.Same(enva.Resource, enva.Resource.KubernetesEnvironment.OwningComputeEnvironment);
         Assert.Same(envb.Resource, envb.Resource.KubernetesEnvironment.OwningComputeEnvironment);
-        Assert.True(enva.Resource.TryGetLastAnnotation<KubernetesEnvironmentAnnotation>(out var envaKubernetesEnvironment));
-        Assert.True(envb.Resource.TryGetLastAnnotation<KubernetesEnvironmentAnnotation>(out var envbKubernetesEnvironment));
+        Assert.True(enva.Resource.TryGetLastAnnotation<KubernetesEnvironmentAnnotation>(out var _));
+        Assert.True(envb.Resource.TryGetLastAnnotation<KubernetesEnvironmentAnnotation>(out var _));
 
         await using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
