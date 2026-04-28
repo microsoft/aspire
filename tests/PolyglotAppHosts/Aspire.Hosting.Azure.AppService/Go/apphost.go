@@ -20,10 +20,9 @@ func main() {
 		WithDashboard().
 		WithDashboard(&aspire.WithDashboardOptions{Enable: aspire.BoolPtr(false)}).
 		WithAzureApplicationInsights().
-		WithAzureApplicationInsightsLocation("westus").
-		WithAzureApplicationInsightsLocationParameter(applicationInsightsLocation).
-		WithAzureApplicationInsightsResource(existingApplicationInsights).
-		WithDeploymentSlotParameter(deploymentSlot).
+		WithAzureApplicationInsights(&aspire.WithAzureApplicationInsightsOptions{ApplicationInsights: existingApplicationInsights}).
+		WithDeploymentSlot(applicationInsightsLocation).
+		WithDeploymentSlot(deploymentSlot).
 		WithDeploymentSlot("staging")
 	if environment.Err() != nil {
 		log.Fatalf(aspire.FormatError(environment.Err()))
@@ -46,7 +45,7 @@ func main() {
 		log.Fatalf(aspire.FormatError(worker.Err()))
 	}
 
-	api := builder.AddProject("api", "../Fake.Api/Fake.Api.csproj", "https").
+	api := builder.AddProject("api", "../Fake.Api/Fake.Api.csproj", &aspire.AddProjectOptions{LaunchProfileOrOptions: "https"}).
 		PublishAsAzureAppServiceWebsite(&aspire.PublishAsAzureAppServiceWebsiteOptions{
 			Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.WebSite) {}}).
 		SkipEnvironmentVariableNameChecks()

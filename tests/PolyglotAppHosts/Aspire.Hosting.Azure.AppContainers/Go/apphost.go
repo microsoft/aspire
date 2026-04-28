@@ -77,11 +77,13 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// Test PublishAsConfiguredAzureContainerAppJob (with callback)
+	// Test PublishAsAzureContainerAppJob (with callback)
 	processor := builder.AddContainer("processor", "myregistry/processor:latest").
-		PublishAsConfiguredAzureContainerAppJob(
-			func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
-				// Configure the container app job here
+		PublishAsAzureContainerAppJob(
+			&aspire.PublishAsAzureContainerAppJobOptions{
+				Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
+					// Configure the container app job here
+				},
 			})
 	if err := processor.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
@@ -94,10 +96,10 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	// Test PublishAsConfiguredScheduledAzureContainerAppJob (with callback)
+	// Test PublishAsScheduledAzureContainerAppJob (with callback)
 	reporter := builder.AddContainer("reporter", "myregistry/reporter:latest").
-		PublishAsConfiguredScheduledAzureContainerAppJob("0 */6 * * *",
-			&aspire.PublishAsConfiguredScheduledAzureContainerAppJobOptions{
+		PublishAsScheduledAzureContainerAppJob("0 */6 * * *",
+			&aspire.PublishAsScheduledAzureContainerAppJobOptions{
 				Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
 					// Configure the scheduled job here
 				},

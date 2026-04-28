@@ -42,12 +42,14 @@ func main() {
 	}
 
 	// AddProject (pre-existing)
-	project := builder.AddProject("myproject", "./src/MyProject", "https")
+	project := builder.AddProject("myproject", "./src/MyProject", &aspire.AddProjectOptions{
+		LaunchProfileOrOptions: "https",
+	})
 	if err = project.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	projectWithoutLunchProfile := builder.AddProjectWithoutLaunchProfile("myproject-noprofile", "./src/MyProject")
-	if err = projectWithoutLunchProfile.Err(); err != nil {
+	projectWithoutLaunchProfile := builder.AddProject("myproject-noprofile", "./src/MyProject")
+	if err = projectWithoutLaunchProfile.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 	// ATS exports ReferenceEnvironmentInjectionFlags as a DTO-shaped object in TypeScript.
@@ -132,18 +134,8 @@ func main() {
 	}
 	expr := aspire.RefExpr("Host=%v", endpoint)
 
-	builtConnectionString := builder.AddConnectionStringBuilder("customcs",
-		func(csBuilder aspire.ReferenceExpressionBuilder) {
-			_, _ = csBuilder.IsEmpty()
-			_ = csBuilder.AppendLiteral("Host=")
-			_ = csBuilder.AppendValueProvider(endpoint)
-			_ = csBuilder.AppendLiteral(";Key=")
-			_ = csBuilder.AppendValueProvider(secretParam)
-			_ = csBuilder.Build()
-		})
-
-	builtConnectionString.WithConnectionProperty("Host", expr)
-	builtConnectionString.WithConnectionPropertyValue("Mode", "Development")
+	_ = builder.AddConnectionString("customcs",
+		&aspire.AddConnectionStringOptions{EnvironmentVariableNameOrExpression: expr})
 
 	envConnectionString := builder.AddConnectionString("envcs")
 
@@ -159,14 +151,11 @@ func main() {
 
 	// WithEnvironment — with ParameterResource
 	container.WithEnvironmentParameter("MY_PARAM", configParam)
+	container.WithEnvironmentParameter("MY_SECRET_PARAM", secretParam)
 	container.WithEnvironmentParameter("MY_GENERATED_PARAM", generatedParam)
 
 	// WithEnvironment — with connection string resource
 	container.WithEnvironmentConnectionString("MY_CONN", envConnectionString)
-
-	// WithConnectionProperty
-	builtConnectionString.WithConnectionProperty("Endpoint", expr)
-	builtConnectionString.WithConnectionPropertyValue("Protocol", "https")
 
 	// ExcludeFromManifest
 	container.ExcludeFromManifest()
@@ -239,7 +228,7 @@ func main() {
 	}
 
 	// publishAsDockerFile
-	tool.PublishAsDockerFile()
+	tool.PublishAsDockerFile(func(_ aspire.ContainerResource) {})
 
 	// ===================================================================
 	// Pipeline step factory
@@ -298,33 +287,27 @@ func main() {
 		})
 
 	_ = container.WithPipelineConfiguration(func(configContext aspire.PipelineConfigurationContext) {
-		configServices := configContext.Services()
-		configModel := configContext.Model()
-		_, _ = configModel.GetResources()
-		_ = configModel.FindResourceByName("mycontainer")
-		configLoggerFactory := configServices.GetLoggerFactory()
-		configLogger := configLoggerFactory.CreateLogger("ValidationAppHost.PipelineConfigurationContext")
-		_ = configLogger.LogInformation("Pipeline configuration logger")
-		allSteps, _ := configContext.Steps()
-		taggedSteps, _ := configContext.GetStepsByTag("custom-build")
+		configLog := configContext.Log()
+		_ = configLog.Info("Pipeline configuration logger")
+		configPipeline := configContext.Pipeline()
+		allSteps, _ := configPipeline.Steps()
+		taggedSteps, _ := configPipeline.StepsByTag(aspire.WellKnownPipelineTags.BuildCompute)
 		if len(allSteps) > 0 {
 			_, _ = allSteps[0].Name()
 			_, _ = allSteps[0].Description()
-			_ = allSteps[0].Tags().Add("validated")
-			_ = allSteps[0].DependsOnSteps().Add("restore")
+			_ = allSteps[0].AddTag("validated")
+			_ = allSteps[0].DependsOn("restore")
 			_ = allSteps[0].DependsOn("build")
 		}
 		if len(taggedSteps) > 0 {
-			_ = taggedSteps[0].RequiredBySteps().Add("publish")
-			_ = taggedSteps[0].RequiredBy("publish")
+			_ = taggedSteps[0].RequiredBy(aspire.WellKnownPipelineSteps.Publish)
 		}
 	})
 
 	_ = container.WithPipelineConfiguration(func(configContext aspire.PipelineConfigurationContext) {
-		_ = configContext.Services()
-		_ = configContext.Model()
-		_, _ = configContext.Steps()
-		_, _ = configContext.GetStepsByTag("custom-build")
+		configPipeline := configContext.Pipeline()
+		_, _ = configPipeline.Steps()
+		_, _ = configPipeline.StepsByTag(aspire.WellKnownPipelineTags.BuildCompute)
 	})
 
 	// ===================================================================
@@ -419,13 +402,6 @@ func main() {
 		_ = logger.LogWarning("ResourceStopped")
 	})
 
-	_ = builtConnectionString.OnConnectionStringAvailable(func(e aspire.ConnectionStringAvailableEvent) {
-		_ = e.Resource()
-		services := e.Services()
-		notifications := services.GetResourceNotificationService()
-		_, _ = notifications.TryGetResourceState("customcs")
-	})
-
 	_ = container.OnInitializeResource(func(e aspire.InitializeResourceEvent) {
 		_ = e.Resource()
 		_ = e.Eventing()
@@ -466,10 +442,10 @@ func main() {
 	_ = container.AsHttp2Service()
 	_ = container.WithArgs([]string{"--verbose"})
 	_ = container.WithParentRelationship(exe)
-	_ = projectWithoutLunchProfile.WithParentRelationship(project)
+	_ = projectWithoutLaunchProfile.WithParentRelationship(project)
 	_ = container.WithExplicitStart()
 	_ = container.WithUrl("http://localhost:8080")
-	_ = container.WithUrlExpression(expr)
+	_ = container.WithUrl(expr)
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {

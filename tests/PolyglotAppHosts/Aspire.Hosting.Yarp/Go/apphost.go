@@ -17,7 +17,7 @@ func main() {
 
 	backend := builder.AddContainer("backend", "nginx")
 	backend.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.Float64Ptr(80)})
-	backendService := builder.AddProject("backend-service", "./src/BackendService", "http")
+	backendService := builder.AddProject("backend-service", "./src/BackendService", &aspire.AddProjectOptions{LaunchProfileOrOptions: "http"})
 	externalBackend := builder.AddExternalService("external-backend", "https://example.com")
 
 	proxy := builder.AddYarp("proxy").
@@ -118,7 +118,7 @@ func main() {
 			WithTransformResponseTrailerRemove("X-Remove-Trailer")
 		_ = route.WithTransformResponseTrailersAllowed([]string{"X-Response-Trailer"})
 
-		fromEndpointRoute := config.AddRouteFromEndpoint("/from-endpoint/{**catchall}", endpoint).
+		fromEndpointRoute := config.AddRoute("/from-endpoint/{**catchall}", endpoint).
 			WithMatch(&aspire.YarpRouteMatch{
 				Path:    "/from-endpoint/{**catchall}",
 				Methods: []string{"GET", "POST"},
@@ -132,7 +132,7 @@ func main() {
 			log.Fatalf(aspire.FormatError(err))
 		}
 
-		fromResourceRoute := config.AddRouteFromResource("/from-resource/{**catchall}", backendService).
+		fromResourceRoute := config.AddRoute("/from-resource/{**catchall}", backendService).
 			WithTransform(map[string]string{
 				"PathPrefix": "/resource",
 			})
@@ -140,7 +140,7 @@ func main() {
 			log.Fatalf(aspire.FormatError(err))
 		}
 
-		fromExternalRoute := config.AddRouteFromExternalService("/from-external/{**catchall}", externalBackend).
+		fromExternalRoute := config.AddRoute("/from-external/{**catchall}", externalBackend).
 			WithTransform(map[string]string{
 				"PathPrefix": "/external",
 			})
@@ -165,7 +165,7 @@ func main() {
 			log.Fatalf(aspire.FormatError(err))
 		}
 
-		catchAllEndpointRoute := config.AddCatchAllRouteFromEndpoint(endpoint).
+		catchAllEndpointRoute := config.AddCatchAllRoute(endpoint).
 			WithTransform(map[string]string{
 				"PathPrefix": "/catchall-endpoint",
 			})
@@ -173,7 +173,7 @@ func main() {
 			log.Fatalf(aspire.FormatError(err))
 		}
 
-		catchAllResourceRoute := config.AddCatchAllRouteFromResource(backendService).
+		catchAllResourceRoute := config.AddCatchAllRoute(backendService).
 			WithTransform(map[string]string{
 				"PathPrefix": "/catchall-resource",
 			})
@@ -181,7 +181,7 @@ func main() {
 			log.Fatalf(aspire.FormatError(err))
 		}
 
-		catchAllExternalRoute := config.AddCatchAllRouteFromExternalService(externalBackend).
+		catchAllExternalRoute := config.AddCatchAllRoute(externalBackend).
 			WithTransform(map[string]string{
 				"PathPrefix": "/catchall-external",
 			})

@@ -39,7 +39,7 @@ func main() {
 	}
 	githubModel.WithApiKey(apiKey)
 
-	githubModel.EnableHealthCheck()
+	githubModel.WithHealthCheck()
 
 	container := builder.AddContainer("my-service", "mcr.microsoft.com/dotnet/samples:latest")
 	container.WithReference(githubModel)

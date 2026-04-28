@@ -37,18 +37,19 @@ func main() {
 		log.Fatalf(aspire.FormatError(container.Err()))
 	}
 
-	// 5) AddContainerWithPartitionKeyPaths (IEnumerable<string> export)
-	_ = db.AddContainerWithPartitionKeyPaths("events", []string{"/tenantId", "/eventId"},
-		&aspire.AddContainerWithPartitionKeyPathsOptions{
+	// 5) AddContainer (IEnumerable<string> export)
+	_ = db.AddContainer("events", []string{"/tenantId", "/eventId"},
+		&aspire.AzureCosmosDBDatabaseResourceAddContainerOptions{
 			ContainerName: aspire.StringPtr("events-container"),
 		})
 
 	// 6) WithAccessKeyAuthentication
 	cosmos.WithAccessKeyAuthentication()
 
-	// 7) WithAccessKeyAuthenticationWithKeyVault
+	// 7) WithAccessKeyAuthentication with Key Vault
 	keyVault := builder.AddAzureKeyVault("kv")
-	cosmos.WithAccessKeyAuthenticationWithKeyVault(keyVault)
+	var keyVaultResource aspire.AzureKeyVaultResource = keyVault
+	cosmos.WithAccessKeyAuthentication(&aspire.WithAccessKeyAuthenticationOptions{KeyVaultBuilder: &keyVaultResource})
 
 	// 8) RunAsEmulator + emulator container configuration methods
 	cosmosEmulator := builder.AddAzureCosmosDB("cosmos-emulator")

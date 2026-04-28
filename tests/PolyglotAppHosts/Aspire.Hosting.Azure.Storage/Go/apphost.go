@@ -22,7 +22,7 @@ func main() {
 		log.Fatalf(aspire.FormatError(storage.Err()))
 	}
 
-	storage.WithStorageRoleAssignments(storage, []aspire.AzureStorageRole{
+	storage.WithRoleAssignments(storage, []aspire.AzureStorageRole{
 		aspire.AzureStorageRoleStorageBlobDataContributor,
 		aspire.AzureStorageRoleStorageQueueDataContributor,
 	})

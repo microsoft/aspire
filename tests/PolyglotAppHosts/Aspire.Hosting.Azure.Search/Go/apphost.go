@@ -13,7 +13,7 @@ func main() {
 	}
 
 	search := builder.AddAzureSearch("resource")
-	search.WithSearchRoleAssignments(search, []aspire.AzureSearchRole{
+	search.WithRoleAssignments(search, []aspire.AzureSearchRole{
 		aspire.AzureSearchRoleSearchServiceContributor,
 		aspire.AzureSearchRoleSearchIndexDataReader})
 	if search.Err() != nil {

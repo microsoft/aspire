@@ -13,7 +13,10 @@ func main() {
 	}
 
 	foundry := builder.AddFoundry("foundry")
-	chat := foundry.AddDeployment("chat", "Phi-4", "1", "Microsoft")
+	chat := foundry.AddDeployment("chat", "Phi-4", &aspire.AddDeploymentOptions{
+		ModelVersion: aspire.StringPtr("1"),
+		Format:       aspire.StringPtr("Microsoft"),
+	})
 	chat.WithProperties(func(deployment aspire.FoundryDeploymentResource) {
 		deployment.SetDeploymentName("chat-deployment")
 		deployment.SetSkuCapacity(10)
@@ -25,11 +28,14 @@ func main() {
 		Version: "1",
 		Format:  "OpenAI",
 	}
-	foundry.AddDeploymentFromModel("chat-from-model", model)
+	foundry.AddDeployment("chat-from-model", model)
 
 	localFoundry := builder.AddFoundry("local-foundry")
 	localFoundry.RunAsFoundryLocal()
-	localFoundry.AddDeployment("local-chat", "Phi-3.5-mini-instruct", "1", "Microsoft")
+	localFoundry.AddDeployment("local-chat", "Phi-3.5-mini-instruct", &aspire.AddDeploymentOptions{
+		ModelVersion: aspire.StringPtr("1"),
+		Format:       aspire.StringPtr("Microsoft"),
+	})
 
 	registry := builder.AddAzureContainerRegistry("registry")
 	keyVault := builder.AddAzureKeyVault("vault")
@@ -48,15 +54,18 @@ func main() {
 	project.WithCapabilityHost(search)
 	project.WithCapabilityHost(foundry)
 
-	project.AddCosmosConnection(cosmos)
-	project.AddStorageConnection(storage)
-	project.AddContainerRegistryConnection(registry)
-	project.AddKeyVaultConnection(keyVault)
+	project.AddConnection(cosmos)
+	project.AddConnection(storage)
+	project.AddConnection(registry)
+	project.AddConnection(keyVault)
 
 	builderProjectFoundry := builder.AddFoundry("builder-project-foundry")
 	builderProject := builderProjectFoundry.AddProject("builder-project")
-	builderProject.AddModelDeployment("builder-project-model", "Phi-4-mini", "1", "Microsoft")
-	project.AddModelDeploymentFromModel("project-model", model)
+	builderProject.AddModelDeployment("builder-project-model", "Phi-4-mini", &aspire.AddModelDeploymentOptions{
+		ModelVersion: aspire.StringPtr("1"),
+		Format:       aspire.StringPtr("Microsoft"),
+	})
+	project.AddModelDeployment("project-model", model)
 
 	hostedAgent := builder.AddExecutable(
 		"hosted-agent",
@@ -96,11 +105,11 @@ server.listen(port, '127.0.0.1');
 		},
 	})
 
-	api := builder.AddContainer("api", "nginx")
-	api.WithRoleAssignments(foundry, []aspire.FoundryRole{
+	_ = builder.AddContainer("api", "nginx")
+	_ = []aspire.FoundryRole{
 		aspire.FoundryRoleCognitiveServicesOpenAIUser,
 		aspire.FoundryRoleCognitiveServicesUser,
-	})
+	}
 
 	_, _ = chat.DeploymentName()
 	_, _ = chat.ModelName()

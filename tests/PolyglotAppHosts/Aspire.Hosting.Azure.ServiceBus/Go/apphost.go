@@ -134,20 +134,20 @@ func main() {
 
 	// ── 7. WithRoleAssignments — enum-based role assignment shim ───────────────
 	// On the parent ServiceBus resource (all 3 roles)
-	serviceBus.WithServiceBusRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
+	serviceBus.WithRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
 		aspire.AzureServiceBusRoleAzureServiceBusDataOwner,
 		aspire.AzureServiceBusRoleAzureServiceBusDataSender,
 		aspire.AzureServiceBusRoleAzureServiceBusDataReceiver,
 	})
 
 	// On child resources
-	queue.WithServiceBusRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
+	queue.WithRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
 		aspire.AzureServiceBusRoleAzureServiceBusDataReceiver,
 	})
-	topic.WithServiceBusRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
+	topic.WithRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
 		aspire.AzureServiceBusRoleAzureServiceBusDataSender,
 	})
-	subscription.WithServiceBusRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
+	subscription.WithRoleAssignments(serviceBus, []aspire.AzureServiceBusRole{
 		aspire.AzureServiceBusRoleAzureServiceBusDataReceiver,
 	})
 

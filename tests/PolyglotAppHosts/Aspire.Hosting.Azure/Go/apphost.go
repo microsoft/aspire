@@ -32,7 +32,7 @@ func main() {
 	}
 
 	connectionString := builder.AddConnectionString("azure-validation", &aspire.AddConnectionStringOptions{
-		EnvironmentVariableName: aspire.StringPtr("AZURE_VALIDATION_CONNECTION_STRING"),
+		EnvironmentVariableNameOrExpression: "AZURE_VALIDATION_CONNECTION_STRING",
 	})
 	if connectionString.Err() != nil {
 		log.Fatalf(aspire.FormatError(connectionString.Err()))
@@ -119,13 +119,13 @@ output inlineUrl string = 'https://inline.example.com'
 	_, _ = infrastructureOutput.ValueExpression()
 
 	infra.WithParameter("empty")
-	infra.WithParameterStringValue("plain", "value")
-	infra.WithParameterStringValues("list", []string{"one", "two"})
-	infra.WithParameterFromParameter("fromParam", existingName)
-	infra.WithParameterFromConnectionString("fromConnection", connectionString)
-	infra.WithParameterFromOutput("fromOutput", infrastructureOutput)
-	infra.WithParameterFromReferenceExpression("fromExpression", aspire.RefExpr("https://{0}", endpoint))
-	infra.WithParameterFromEndpoint("fromEndpoint", endpoint)
+	infra.WithParameter("plain", &aspire.WithParameterOptions{Value: "value"})
+	infra.WithParameter("list", &aspire.WithParameterOptions{Value: []string{"one", "two"}})
+	infra.WithParameter("fromParam", &aspire.WithParameterOptions{Value: existingName})
+	infra.WithParameter("fromConnection", &aspire.WithParameterOptions{Value: connectionString})
+	infra.WithParameter("fromOutput", &aspire.WithParameterOptions{Value: infrastructureOutput})
+	infra.WithParameter("fromExpression", &aspire.WithParameterOptions{Value: aspire.RefExpr("https://{0}", endpoint)})
+	infra.WithParameter("fromEndpoint", &aspire.WithParameterOptions{Value: endpoint})
 	_ = infra.PublishAsConnectionString()
 	_ = infra.ClearDefaultRoleAssignments()
 	_, _ = infra.GetBicepIdentifier()
@@ -149,13 +149,13 @@ output inlineUrl string = 'https://inline.example.com'
 	})
 
 	identity.WithParameter("identityEmpty")
-	identity.WithParameterStringValue("identityPlain", "value")
-	identity.WithParameterStringValues("identityList", []string{"a", "b"})
-	identity.WithParameterFromParameter("identityFromParam", existingName)
-	identity.WithParameterFromConnectionString("identityFromConnection", connectionString)
-	identity.WithParameterFromOutput("identityFromOutput", infrastructureOutput)
-	identity.WithParameterFromReferenceExpression("identityFromExpression", aspire.RefExpr("{0}", location))
-	identity.WithParameterFromEndpoint("identityFromEndpoint", endpoint)
+	identity.WithParameter("identityPlain", &aspire.WithParameterOptions{Value: "value"})
+	identity.WithParameter("identityList", &aspire.WithParameterOptions{Value: []string{"a", "b"}})
+	identity.WithParameter("identityFromParam", &aspire.WithParameterOptions{Value: existingName})
+	identity.WithParameter("identityFromConnection", &aspire.WithParameterOptions{Value: connectionString})
+	identity.WithParameter("identityFromOutput", &aspire.WithParameterOptions{Value: infrastructureOutput})
+	identity.WithParameter("identityFromExpression", &aspire.WithParameterOptions{Value: aspire.RefExpr("{0}", location)})
+	identity.WithParameter("identityFromEndpoint", &aspire.WithParameterOptions{Value: endpoint})
 	_ = identity.PublishAsConnectionString()
 	_ = identity.ClearDefaultRoleAssignments()
 	_, _ = identity.GetBicepIdentifier()

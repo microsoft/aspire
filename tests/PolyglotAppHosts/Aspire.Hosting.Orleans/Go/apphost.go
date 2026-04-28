@@ -13,7 +13,7 @@ func main() {
 	}
 
 	provider := builder.AddConnectionString("provider", &aspire.AddConnectionStringOptions{
-		EnvironmentVariableName: aspire.StringPtr("ORLEANS_PROVIDER_CONNECTION_STRING"),
+		EnvironmentVariableNameOrExpression: "ORLEANS_PROVIDER_CONNECTION_STRING",
 	})
 
 	orleans := builder.AddOrleans("orleans").
@@ -33,13 +33,13 @@ func main() {
 	orleansClient := orleans.AsClient()
 
 	silo := builder.AddContainer("silo", "redis")
-	silo.WithOrleansReference(orleans)
+	silo.WithReference(orleansClient)
 	if err = silo.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
 	client := builder.AddContainer("client", "redis")
-	client.WithOrleansClientReference(orleansClient)
+	client.WithReference(orleansClient)
 	if err = client.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}

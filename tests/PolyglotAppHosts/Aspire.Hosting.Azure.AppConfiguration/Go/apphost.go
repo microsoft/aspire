@@ -17,7 +17,7 @@ func main() {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
-	appConfig.WithAppConfigurationRoleAssignments(appConfig, []aspire.AzureAppConfigurationRole{
+	appConfig.WithRoleAssignments(appConfig, []aspire.AzureAppConfigurationRole{
 		aspire.AzureAppConfigurationRoleAppConfigurationDataOwner,
 		aspire.AzureAppConfigurationRoleAppConfigurationDataReader,
 	})

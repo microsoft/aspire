@@ -28,12 +28,13 @@ func main() {
 		WithDisabledFeatures([]string{"admin-fine-grained-authz"}).
 		WithOtlpExporter()
 
+	protocol := aspire.OtlpProtocolHttpProtobuf
 	keycloak2 := builder.AddKeycloak("keycloak2").
 		WithDataBindMount(".").
 		WithRealmImport(".").
 		WithEnabledFeatures([]string{"rolling-updates"}).
 		WithDisabledFeatures([]string{"scripts"}).
-		WithOtlpExporterWithProtocol(aspire.OtlpProtocolHttpProtobuf)
+		WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &protocol})
 
 	builder.AddContainer("consumer", "nginx").
 		WithReference(keycloak).

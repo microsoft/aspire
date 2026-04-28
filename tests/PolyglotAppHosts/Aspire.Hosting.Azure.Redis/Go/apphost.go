@@ -16,6 +16,7 @@ func main() {
 	if keyVault.Err() != nil {
 		log.Fatalf(aspire.FormatError(keyVault.Err()))
 	}
+	var keyVaultResource aspire.AzureKeyVaultResource = keyVault
 
 	cache := builder.AddAzureManagedRedis("cache")
 	if cache.Err() != nil {
@@ -33,7 +34,7 @@ func main() {
 	}
 
 	accessKeyCache.WithAccessKeyAuthentication()
-	accessKeyCache.WithAccessKeyAuthenticationWithKeyVault(keyVault)
+	accessKeyCache.WithAccessKeyAuthentication(&aspire.WithAccessKeyAuthenticationOptions{KeyVaultBuilder: &keyVaultResource})
 	if accessKeyCache.Err() != nil {
 		log.Fatalf(aspire.FormatError(accessKeyCache.Err()))
 	}
