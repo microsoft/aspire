@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -31,6 +32,7 @@ internal sealed class InitCommand : BaseCommand
     private readonly ISolutionLocator _solutionLocator;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly IDotNetCliRunner _runner;
+    private readonly ICertificateService _certificateService;
 
     private readonly Option<string?> _languageOption;
 
@@ -43,7 +45,8 @@ internal sealed class InitCommand : BaseCommand
         CliExecutionContext executionContext,
         IInteractionService interactionService,
         AgentInitCommand agentInitCommand,
-        IDotNetCliRunner runner)
+        IDotNetCliRunner runner,
+        ICertificateService certificateService)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _executionContext = executionContext;
@@ -51,6 +54,7 @@ internal sealed class InitCommand : BaseCommand
         _solutionLocator = solutionLocator;
         _agentInitCommand = agentInitCommand;
         _runner = runner;
+        _certificateService = certificateService;
 
         _languageOption = new Option<string?>("--language")
         {
@@ -94,6 +98,22 @@ internal sealed class InitCommand : BaseCommand
         if (projectSelection.ShouldPersistSelection)
         {
             await _languageService.SetLanguageAsync(selectedProject, cancellationToken: cancellationToken);
+        }
+
+        // Trust the dev certificate so the first `aspire start` doesn't hit cert errors.
+        // The skeleton AppHost / aspire.config.json profiles default to HTTPS, and the
+        // aspireify skill guidance prefers HTTPS for service endpoints. Best-effort —
+        // ignore failures since `aspire doctor` / `aspire certs trust` provide a fallback.
+        if (isCSharp)
+        {
+            try
+            {
+                _ = await _certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+            }
+            catch (CertificateServiceException)
+            {
+                // Non-fatal: surface via aspire doctor / aspire certs trust.
+            }
         }
 
         // Step 4: Chain to aspire agent init for MCP server + skill configuration.
@@ -203,6 +223,27 @@ internal sealed class InitCommand : BaseCommand
         {
             InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostDirName}/ already exists — skipping.");
             return ExitCodeConstants.Success;
+        }
+
+        // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
+        // `dotnet new` does not install templates implicitly, so on a fresh machine
+        // (or after a CLI update) the template will be missing. Install first.
+        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
+        var installResult = await InteractionService.ShowStatusAsync(
+            "Installing Aspire project templates...",
+            () => _runner.InstallTemplateAsync(
+                packageName: "Aspire.ProjectTemplates",
+                version: aspireVersion,
+                nugetConfigFile: null,
+                nugetSource: null,
+                force: true,
+                options: new ProcessInvocationOptions(),
+                cancellationToken: cancellationToken));
+
+        if (installResult.ExitCode != 0)
+        {
+            InteractionService.DisplayError($"Failed to install Aspire.ProjectTemplates (exit code {installResult.ExitCode}).");
+            return ExitCodeConstants.FailedToInstallTemplates;
         }
 
         // Use the aspire-apphost template to generate a correct AppHost project

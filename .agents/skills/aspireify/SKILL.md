@@ -432,23 +432,25 @@ var web = builder.AddCSharpApp("web", "../src/Web")
 builder.Build().Run();
 ```
 
-#### C# AppHost — full project mode (`apphost.cs` + `.csproj`)
+#### C# AppHost — full project mode (`Program.cs` + `.csproj`)
 
-Edit `apphost.cs`:
+In full project mode the AppHost has a `.csproj`, so prefer typed project references via `AddProject<T>()` — they give compile-time safety, auto-restart on rebuild, and the typed `Projects.*` namespace. Reserve `AddCSharpApp("name", "../path")` for cases where a project reference isn't possible (e.g., the service uses an SDK that can't be referenced from `Aspire.AppHost.Sdk`, or the AppHost is single-file mode).
+
+Edit the AppHost's `Program.cs`:
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var api = builder.AddCSharpApp("api", "../src/Api");
+var api = builder.AddProject<Projects.Api>("api");
 
-var web = builder.AddCSharpApp("web", "../src/Web")
+var web = builder.AddProject<Projects.Web>("web")
     .WithReference(api)
     .WaitFor(api);
 
 builder.Build().Run();
 ```
 
-And add project references:
+And add project references so the `Projects.*` namespace is generated:
 
 ```bash
 dotnet add <AppHost.csproj> reference <Api.csproj>
@@ -559,14 +561,36 @@ Before validating, present the user with optional quality-of-life improvements. 
 1. **Cookie and session isolation with `dev.localhost`**: When multiple services run on `localhost`, they share cookies and session storage — which can cause hard-to-debug auth problems. Using `*.dev.localhost` subdomains isolates each service's cookies and storage. Note: URLs still include ports (e.g., `frontend.dev.localhost:5173`), but the subdomain isolation prevents cross-service cookie collisions.
    > "Would you like me to set up `dev.localhost` subdomains for your services? This gives each service its own cookie/session scope so they don't interfere with each other. URLs will look like `frontend.dev.localhost:5173` — the `*.dev.localhost` domain resolves to 127.0.0.1 automatically on most systems, no `/etc/hosts` changes needed."
 
-   **How to do it:** Update the `profiles` section in `aspire.config.json` — replace `localhost` with `<projectname>.dev.localhost` in `applicationUrl`, and use descriptive subdomains like `otlp.dev.localhost` and `resources.dev.localhost` for the infrastructure URLs. This is the same mechanism `aspire new` uses.
+   **How to do it — pick the right config file based on AppHost mode** (see "Configuration files — which is which" earlier in this doc):
 
-   Real-world example:
+   - **Single-file mode** (`apphost.cs` with `#:sdk` directive) and **polyglot AppHosts** (TypeScript, Python, Go, …): edit the `profiles` section in `aspire.config.json` at the repo root.
+   - **Full project mode** (`.csproj` AppHost): edit `Properties/launchSettings.json` inside the AppHost project directory. **Do not edit `aspire.config.json` for project-mode AppHosts** — they read launch profiles from `launchSettings.json`, so changes to `aspire.config.json` will be ignored.
+
+   In both cases, replace `localhost` with `<projectname>.dev.localhost` in `applicationUrl`, and use descriptive subdomains like `otlp.dev.localhost` and `resources.dev.localhost` for the infrastructure URLs. This is the same mechanism `aspire new` uses.
+
+   Example — `aspire.config.json` (single-file / polyglot):
 
    ```json
    {
      "profiles": {
        "https": {
+         "applicationUrl": "https://myproject.dev.localhost:17042;http://myproject.dev.localhost:15042",
+         "environmentVariables": {
+           "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://otlp.dev.localhost:21042",
+           "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://resources.dev.localhost:22042"
+         }
+       }
+     }
+   }
+   ```
+
+   Equivalent — `Properties/launchSettings.json` (full project mode):
+
+   ```json
+   {
+     "profiles": {
+       "https": {
+         "commandName": "Project",
          "applicationUrl": "https://myproject.dev.localhost:17042;http://myproject.dev.localhost:15042",
          "environmentVariables": {
            "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://otlp.dev.localhost:21042",
