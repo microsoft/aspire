@@ -667,7 +667,7 @@ public static class PromptAgentBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(tool);
 
-        builder.Resource.CustomTools.Add(tool);
+        builder.Resource.AddCustomTool(tool);
         return builder;
     }
 }

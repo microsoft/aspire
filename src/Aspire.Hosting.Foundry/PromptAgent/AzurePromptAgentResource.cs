@@ -30,7 +30,8 @@ namespace Aspire.Hosting.Foundry;
 public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IResourceWithConnectionString
 {
     private const string BeforeStartStepName = "before-start";
-    private readonly List<FoundryToolResource> _tools = [];
+    private const string RunModeAzureProvisionStepName = "run-mode-azure-provision";
+    private readonly List<IFoundryTool> _tools = [];
 
     /// <summary>
     /// Creates a new instance of the <see cref="AzurePromptAgentResource"/> class.
@@ -56,21 +57,24 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
         Annotations.Add(new ManifestPublishingCallbackAnnotation(PublishAsync));
 
         // Set up pipeline steps for deploying this prompt agent
-        Annotations.Add(new PipelineStepAnnotation(_ =>
+        Annotations.Add(new PipelineStepAnnotation(context =>
         {
             var steps = new List<PipelineStep>();
 
-            var beforeStartDeployStep = new PipelineStep
+            if (context.PipelineContext.ExecutionContext.IsRunMode)
             {
-                Name = $"deploy-{Name}-before-start",
-                Description = $"Deploys prompt agent {Name} before the application starts.",
-                Action = DeployBeforeStartAsync,
-                Tags = [WellKnownPipelineTags.DeployCompute],
-                RequiredBySteps = [BeforeStartStepName],
-                Resource = this,
-                DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName]
-            };
-            steps.Add(beforeStartDeployStep);
+                var beforeStartDeployStep = new PipelineStep
+                {
+                    Name = $"deploy-{Name}-before-start",
+                    Description = $"Deploys prompt agent {Name} before the application starts.",
+                    Action = DeployBeforeStartAsync,
+                    Tags = [WellKnownPipelineTags.DeployCompute],
+                    RequiredBySteps = [BeforeStartStepName],
+                    Resource = this,
+                    DependsOnSteps = [RunModeAzureProvisionStepName]
+                };
+                steps.Add(beforeStartDeployStep);
+            }
 
             var agentDeployStep = new PipelineStep
             {
@@ -78,7 +82,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
                 Description = $"Deploys prompt agent {Name}.",
                 Action = async (stepCtx) =>
                 {
-                    var version = await DeployAsync(stepCtx, Project).ConfigureAwait(false);
+                    var version = await DeployAsync(Project, stepCtx, stepCtx.CancellationToken).ConfigureAwait(false);
                     stepCtx.ReportingStep.Log(LogLevel.Information,
                         new MarkdownString($"Successfully deployed **{Name}** as Prompt Agent (version {version.Version})"));
                     Version.Set(version.Version);
@@ -131,12 +135,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
     /// <summary>
     /// Gets the list of tool resources attached to this agent.
     /// </summary>
-    public IReadOnlyList<FoundryToolResource> Tools => _tools;
-
-    /// <summary>
-    /// Gets the list of custom tool implementations (escape hatch for advanced scenarios).
-    /// </summary>
-    internal List<IFoundryTool> CustomTools { get; } = [];
+    public IReadOnlyList<FoundryToolResource> Tools => _tools.OfType<FoundryToolResource>().ToArray();
 
     /// <summary>
     /// Adds a tool resource to this prompt agent.
@@ -170,7 +169,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
     /// <summary>
     /// Publishes the prompt agent during the manifest publishing phase.
     /// </summary>
-    public async Task PublishAsync(ManifestPublishingContext ctx)
+    private Task PublishAsync(ManifestPublishingContext ctx)
     {
         ctx.Writer.WriteString("type", "azure.ai.agent.v0");
         ctx.Writer.WriteStartObject("definition");
@@ -181,20 +180,14 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
             ctx.Writer.WriteString("instructions", Instructions);
         }
         ctx.Writer.WriteEndObject(); // definition
+
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Deploys the prompt agent to the given Microsoft Foundry project.
     /// </summary>
-    public async Task<ProjectsAgentVersion> DeployAsync(PipelineStepContext context, AzureCognitiveServicesProjectResource project)
-    {
-        return await DeployAsync(project, context, context.CancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Deploys the prompt agent to the given Microsoft Foundry project.
-    /// </summary>
-    internal async Task<ProjectsAgentVersion> DeployAsync(AzureCognitiveServicesProjectResource project, PipelineStepContext context, CancellationToken cancellationToken)
+    private async Task<ProjectsAgentVersion> DeployAsync(AzureCognitiveServicesProjectResource project, PipelineStepContext context, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(project);
 
@@ -218,7 +211,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
     /// <summary>
     /// Builds the agent configuration, resolving all tool definitions at deploy time.
     /// </summary>
-    internal async Task<ProjectsAgentVersionCreationOptions> ToProjectsAgentVersionCreationOptionsAsync(PipelineStepContext? context, CancellationToken cancellationToken)
+    private async Task<ProjectsAgentVersionCreationOptions> ToProjectsAgentVersionCreationOptionsAsync(PipelineStepContext? context, CancellationToken cancellationToken)
     {
         var definition = new DeclarativeAgentDefinition(Model)
         {
@@ -228,12 +221,6 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
         foreach (var tool in _tools)
         {
             var agentTool = await tool.ToAgentToolAsync(context, cancellationToken).ConfigureAwait(false);
-            definition.Tools.Add(agentTool);
-        }
-
-        foreach (var customTool in CustomTools)
-        {
-            var agentTool = await customTool.ToAgentToolAsync(context, cancellationToken).ConfigureAwait(false);
             definition.Tools.Add(agentTool);
         }
 
@@ -248,6 +235,13 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
         }
 
         return options;
+    }
+
+    internal void AddCustomTool(IFoundryTool tool)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+
+        _tools.Add(tool);
     }
 
     private async Task DeployBeforeStartAsync(PipelineStepContext context)
