@@ -95,7 +95,7 @@ When reviewing pull requests:
 - **Skip Native Build**: Add `/p:SkipNativeBuild=true` to avoid slow native AOT compilation (~1-2 minutes saved)
 - **Clean Build**: `./build.sh --rebuild`
 - **Package Generation**: `./build.sh --pack` to create NuGet packages
-- Always use `-tl:false` with build commands, or any dotnet build commands
+- If you need to disable the terminal logger for `dotnet`/build-related commands, prefer setting `MSBUILDTERMINALLOGGER=false` instead of passing `-tl:false`; avoid `-tl:false` on commands that may invoke tests because it can be forwarded to the test host and fail under Microsoft.Testing.Platform native runner mode
 
 #### Build Troubleshooting
 - If temporarily introducing warnings during refactoring, add `/p:TreatWarningsAsErrors=false` to prevent build failure
