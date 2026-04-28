@@ -190,6 +190,48 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public async Task EnsureExtractedAsync_DotnetToolStorePath_ExtractsToTargetFrameworkDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var layoutRoot = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            ".dotnet",
+            "tools",
+            ".store",
+            "aspire.cli",
+            "9.4.0",
+            "aspire.cli.linux-x64",
+            "9.4.0",
+            "tools",
+            "net10.0");
+        var processPath = CreateFakeCliBinary(
+            Path.Combine(layoutRoot, "linux-x64"),
+            BundleDiscovery.GetExecutableFileName("aspire"),
+            "native-aot-cli");
+        var payload = CreateFakeBundlePayload();
+        var provider = new TestBundlePayloadProvider(payload);
+        var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
+        var service = CreateService(provider, layoutDiscovery, processPath);
+
+        await service.EnsureExtractedAsync();
+
+        var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
+        try
+        {
+            Assert.True(ReparsePoint.IsReparsePoint(bundleLink), "bundle/ should be a reparse point under the tool TFM directory");
+
+            var managedExe = Path.Combine(bundleLink,
+                BundleDiscovery.ManagedDirectoryName,
+                BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+            Assert.True(File.Exists(managedExe), $"managed exe should exist at {managedExe}");
+        }
+        finally
+        {
+            CleanupReparsePoints(layoutRoot);
+        }
+    }
+
     /// <summary>
     /// Verifies that the static <see cref="BundleService.ExtractPayloadAsync(Stream, string, CancellationToken)"/>
     /// overload correctly extracts a tar.gz stream with strip-components=1 behavior.

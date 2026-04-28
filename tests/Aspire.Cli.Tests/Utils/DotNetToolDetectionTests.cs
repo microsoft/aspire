@@ -11,6 +11,7 @@ public class DotNetToolDetectionTests
     [InlineData("/home/test/.dotnet/tools/aspire")]
     [InlineData(@"C:\Users\test\.dotnet\tools\aspire.exe")]
     [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/aspire.cli.linux-x64/10.0.0/tools/any/linux-x64/aspire")]
+    [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/aspire.cli.linux-x64/10.0.0/tools/net10.0/linux-x64/aspire")]
     [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/Aspire.Cli.linux-arm64/10.0.0/tools/any/linux-arm64/aspire")]
     [InlineData("/home/test/.dotnet/tools/.store/aspire.cli/10.0.0/aspire.cli/10.0.0/tools/net10.0/any/aspire")]
     [InlineData(@"C:\Users\test\.dotnet\tools\.store\aspire.cli\10.0.0\aspire.cli.win-x64\10.0.0\tools\any\win-x64\aspire.exe")]
