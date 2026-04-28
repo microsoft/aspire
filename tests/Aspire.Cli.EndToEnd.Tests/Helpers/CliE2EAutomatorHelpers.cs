@@ -151,25 +151,87 @@ internal static class CliE2EAutomatorHelpers
         TimeSpan? timeout = null)
     {
         var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(2);
+        var command = BuildAspireNewEmptyAppHostCommand(
+            "aspire-empty",
+            projectName,
+            outputPath,
+            channel,
+            useLocalhostTld);
+
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForAspireNewEmptyAppHostCompletionAsync(
+            projectName,
+            "C#",
+            counter,
+            AppHostLanguagePromptSelection.DefaultCSharp,
+            effectiveTimeout);
+    }
+
+    /// <summary>
+    /// Creates a TypeScript empty AppHost using the direct <c>aspire new aspire-ts-empty</c> command.
+    /// </summary>
+    internal static async Task AspireNewTypeScriptEmptyAppHostAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        SequenceCounter counter,
+        string? outputPath = null,
+        string? channel = null,
+        bool useLocalhostTld = false,
+        TimeSpan? timeout = null)
+    {
+        var effectiveTimeout = timeout ?? TimeSpan.FromMinutes(2);
+        var command = BuildAspireNewEmptyAppHostCommand(
+            "aspire-ts-empty",
+            projectName,
+            outputPath,
+            channel,
+            useLocalhostTld);
+
+        await auto.TypeAsync(command);
+        await auto.EnterAsync();
+        await auto.WaitForAspireNewEmptyAppHostCompletionAsync(
+            projectName,
+            "TypeScript",
+            counter,
+            AppHostLanguagePromptSelection.TypeScript,
+            effectiveTimeout);
+    }
+
+    private static string BuildAspireNewEmptyAppHostCommand(
+        string templateName,
+        string projectName,
+        string? outputPath,
+        string? channel,
+        bool useLocalhostTld)
+    {
         var output = string.IsNullOrWhiteSpace(outputPath) ? projectName : outputPath;
         var channelArgument = string.IsNullOrWhiteSpace(channel)
             ? string.Empty
             : $" --channel {AspireCliShellCommandHelpers.QuoteBashArg(channel)}";
         var localhostTldValue = useLocalhostTld ? "true" : "false";
-        var command =
-            $"aspire new aspire-empty --name {AspireCliShellCommandHelpers.QuoteBashArg(projectName)} " +
+
+        return
+            $"aspire new {AspireCliShellCommandHelpers.QuoteBashArg(templateName)} " +
+            $"--name {AspireCliShellCommandHelpers.QuoteBashArg(projectName)} " +
             $"--output {AspireCliShellCommandHelpers.QuoteBashArg(output)}" +
             $"{channelArgument} --localhost-tld {localhostTldValue}";
+    }
 
-        await auto.TypeAsync(command);
-        await auto.EnterAsync();
-
+    private static async Task WaitForAspireNewEmptyAppHostCompletionAsync(
+        this Hex1bTerminalAutomator auto,
+        string projectName,
+        string languageDisplayName,
+        SequenceCounter counter,
+        AppHostLanguagePromptSelection languagePromptSelection,
+        TimeSpan effectiveTimeout)
+    {
         var languagePrompt = new CellPatternSearcher()
             .Find("Which language would you like to use?");
         var agentInitPrompt = new CellPatternSearcher()
             .Find("configure AI agent environments");
-
         var result = AspireNewEmptyAppHostResult.None;
+
         await auto.WaitUntilAsync(snapshot =>
         {
             if (languagePrompt.Search(snapshot).Count > 0)
@@ -203,12 +265,12 @@ internal static class CliE2EAutomatorHelpers
             }
 
             return false;
-        }, timeout: effectiveTimeout, description: "C# empty AppHost creation prompt or completion");
+        }, timeout: effectiveTimeout, description: $"{languageDisplayName} empty AppHost creation prompt or completion");
 
         switch (result)
         {
             case AspireNewEmptyAppHostResult.LanguagePrompt:
-                await auto.EnterAsync();
+                await auto.SelectAppHostLanguageAsync(languagePromptSelection);
                 await auto.DeclineAgentInitPromptAsync(counter, effectiveTimeout);
                 return;
 
@@ -221,10 +283,34 @@ internal static class CliE2EAutomatorHelpers
                 return;
 
             case AspireNewEmptyAppHostResult.ErrorPrompt:
-                throw new InvalidOperationException($"aspire new failed while creating C# empty AppHost project '{projectName}'.");
+                throw new InvalidOperationException($"aspire new failed while creating {languageDisplayName} empty AppHost project '{projectName}'.");
 
             default:
-                throw new InvalidOperationException($"Unexpected aspire new result while creating C# empty AppHost project '{projectName}': {result}.");
+                throw new InvalidOperationException($"Unexpected aspire new result while creating {languageDisplayName} empty AppHost project '{projectName}': {result}.");
+        }
+    }
+
+    private static async Task SelectAppHostLanguageAsync(
+        this Hex1bTerminalAutomator auto,
+        AppHostLanguagePromptSelection languagePromptSelection)
+    {
+        switch (languagePromptSelection)
+        {
+            case AppHostLanguagePromptSelection.DefaultCSharp:
+                await auto.EnterAsync();
+                return;
+
+            case AppHostLanguagePromptSelection.TypeScript:
+                await auto.DownAsync();
+                await auto.WaitUntilAsync(
+                    s => new CellPatternSearcher().Find("> TypeScript (Node.js)").Search(s).Count > 0,
+                    timeout: TimeSpan.FromSeconds(5),
+                    description: "TypeScript AppHost language selected");
+                await auto.EnterAsync();
+                return;
+
+            default:
+                throw new InvalidOperationException($"Unexpected AppHost language prompt selection: {languagePromptSelection}.");
         }
     }
 
@@ -934,5 +1020,11 @@ internal static class CliE2EAutomatorHelpers
         AgentInitPrompt,
         SuccessPrompt,
         ErrorPrompt
+    }
+
+    private enum AppHostLanguagePromptSelection
+    {
+        DefaultCSharp,
+        TypeScript
     }
 }
