@@ -466,7 +466,7 @@ internal static class Hex1bTestHelpers
             case AspireTemplate.TypeScriptEmptyAppHost:
                 var typeScriptEmptyAppHostSelected = new CellPatternSearcher()
                     .Find("> Empty (TypeScript AppHost)");
-                builder.Type("TypeScript")
+                builder.Type("Empty (TypeScript")
                     .WaitUntil(s => typeScriptEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
                 break;

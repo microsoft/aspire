@@ -569,7 +569,7 @@ internal static class Hex1bAutomatorTestHelpers
                 break;
 
             case AspireTemplate.TypeScriptEmptyAppHost:
-                await auto.TypeAsync("TypeScript");
+                await auto.TypeAsync("Empty (TypeScript");
                 await auto.WaitUntilAsync(
                     s => new CellPatternSearcher().Find("> Empty (TypeScript AppHost)").Search(s).Count > 0,
                     timeout: TimeSpan.FromSeconds(5),
