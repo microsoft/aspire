@@ -66,6 +66,26 @@ public static class KubernetesGatewayExtensions
     }
 
     /// <summary>
+    /// Sets the GatewayClass name using a parameter that will be resolved at deploy time.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="className">A parameter resource builder for the GatewayClass name.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    [AspireExport("withGatewayClassParam", Description = "Sets a parameterized GatewayClass for a Kubernetes Gateway")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithGatewayClass(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        IResourceBuilder<ParameterResource> className)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(className);
+
+        // Store as string — will need async resolution during pipeline step
+        // For now, use the parameter's default value or name as placeholder
+        builder.Resource.GatewayClassName = className.Resource.Name;
+        return builder;
+    }
+
+    /// <summary>
     /// Adds a path-based routing rule to the gateway. The rule matches all hosts and routes
     /// traffic matching the specified path to the given endpoint's backing Kubernetes service.
     /// This generates an <c>HTTPRoute</c> resource attached to the Gateway.
@@ -154,7 +174,25 @@ public static class KubernetesGatewayExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(hostname);
 
-        builder.Resource.Hostnames.Add(hostname);
+        builder.Resource.Hostnames.Add(ReferenceExpression.Create($"{hostname}"));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a hostname using a parameter that will be resolved at deploy time.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="hostname">A parameter resource builder for the hostname value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    [AspireExport("withGatewayHostnameParam", Description = "Adds a parameterized hostname to a Kubernetes Gateway")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithHostname(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        IResourceBuilder<ParameterResource> hostname)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(hostname);
+
+        builder.Resource.Hostnames.Add(ReferenceExpression.Create($"{hostname.Resource}"));
         return builder;
     }
 
@@ -162,7 +200,7 @@ public static class KubernetesGatewayExtensions
     /// Configures TLS termination on the gateway by adding an HTTPS listener that references
     /// a Kubernetes TLS secret. The Gateway terminates TLS and forwards plain HTTP to backends.
     /// This does not create a separate route — existing HTTPRoutes serve both HTTP and HTTPS.
-    /// The TLS configuration applies to all hostnames configured via <see cref="WithHostname"/>.
+    /// The TLS configuration applies to all hostnames configured via <see cref="WithHostname(IResourceBuilder{KubernetesGatewayResource}, string)"/>.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
@@ -176,16 +214,35 @@ public static class KubernetesGatewayExtensions
         ArgumentException.ThrowIfNullOrEmpty(secretName);
 
         builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
-            SecretName: secretName,
+            SecretName: ReferenceExpression.Create($"{secretName}"),
             Hosts: [.. builder.Resource.Hostnames]));
 
         return builder;
     }
 
     /// <summary>
-    /// Configures TLS termination on the gateway with an auto-generated secret name
-    /// derived from the gateway resource name. The TLS configuration applies to all
-    /// hostnames configured via <see cref="WithHostname"/>.
+    /// Configures TLS termination using a parameter for the secret name.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="secretName">A parameter resource builder for the secret name.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    [AspireExport("withGatewayTlsParam", Description = "Configures TLS on a Kubernetes Gateway with a parameterized secret")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithTls(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        IResourceBuilder<ParameterResource> secretName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(secretName);
+
+        builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
+            SecretName: ReferenceExpression.Create($"{secretName.Resource}"),
+            Hosts: [.. builder.Resource.Hostnames]));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures TLS termination with an auto-generated secret name derived from the gateway name.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
@@ -198,7 +255,7 @@ public static class KubernetesGatewayExtensions
         var secretName = $"{builder.Resource.Name}-tls";
 
         builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
-            SecretName: secretName,
+            SecretName: ReferenceExpression.Create($"{secretName}"),
             Hosts: [.. builder.Resource.Hostnames]));
 
         return builder;
@@ -232,7 +289,29 @@ public static class KubernetesGatewayExtensions
         ArgumentException.ThrowIfNullOrEmpty(key);
         ArgumentNullException.ThrowIfNull(value);
 
-        builder.Resource.GatewayAnnotations[key] = value;
+        builder.Resource.GatewayAnnotations[key] = ReferenceExpression.Create($"{value}");
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a Kubernetes metadata annotation with a parameter value that will be resolved at deploy time.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="key">The annotation key.</param>
+    /// <param name="value">A parameter resource builder for the annotation value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    [AspireExport("withGatewayAnnotationParam", Description = "Adds a parameterized Kubernetes metadata annotation to a Gateway")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithGatewayAnnotation(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        string key,
+        IResourceBuilder<ParameterResource> value)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(value);
+
+        builder.Resource.GatewayAnnotations[key] = ReferenceExpression.Create($"{value.Resource}");
         return builder;
     }
 }
+

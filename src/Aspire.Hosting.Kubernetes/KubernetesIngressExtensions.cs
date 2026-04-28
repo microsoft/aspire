@@ -178,26 +178,35 @@ public static class KubernetesIngressExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(hostname);
 
-        builder.Resource.Hostnames.Add(hostname);
+        builder.Resource.Hostnames.Add(ReferenceExpression.Create($"{hostname}"));
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a hostname using a parameter that will be resolved at deploy time.
+    /// </summary>
+    /// <param name="builder">The ingress resource builder.</param>
+    /// <param name="hostname">A parameter resource builder for the hostname value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    [AspireExport("withIngressHostnameParam", Description = "Adds a parameterized hostname to a Kubernetes Ingress")]
+    public static IResourceBuilder<KubernetesIngressResource> WithHostname(
+        this IResourceBuilder<KubernetesIngressResource> builder,
+        IResourceBuilder<ParameterResource> hostname)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(hostname);
+
+        builder.Resource.Hostnames.Add(ReferenceExpression.Create($"{hostname.Resource}"));
         return builder;
     }
 
     /// <summary>
     /// Configures TLS termination for the ingress by referencing a Kubernetes TLS secret.
-    /// The secret must contain <c>tls.crt</c> and <c>tls.key</c> entries and exist in the
-    /// same namespace as the ingress. The TLS configuration applies to all hostnames
-    /// configured via <see cref="WithHostname"/>.
+    /// The TLS configuration applies to all hostnames configured via <see cref="WithHostname(IResourceBuilder{KubernetesIngressResource}, string)"/>.
     /// </summary>
     /// <param name="builder">The ingress resource builder.</param>
-    /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret containing
-    /// the TLS certificate and private key.</param>
+    /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
-    /// <example>
-    /// <code>
-    /// ingress.WithHostname("api.example.com")
-    ///        .WithTls("my-tls-secret");
-    /// </code>
-    /// </example>
     [AspireExport(Description = "Configures TLS for a Kubernetes Ingress using a K8S secret")]
     public static IResourceBuilder<KubernetesIngressResource> WithTls(
         this IResourceBuilder<KubernetesIngressResource> builder,
@@ -207,16 +216,35 @@ public static class KubernetesIngressExtensions
         ArgumentException.ThrowIfNullOrEmpty(secretName);
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
-            SecretName: secretName,
+            SecretName: ReferenceExpression.Create($"{secretName}"),
             Hosts: [.. builder.Resource.Hostnames]));
 
         return builder;
     }
 
     /// <summary>
-    /// Configures TLS termination for the ingress with an auto-generated secret name
-    /// derived from the ingress resource name. The TLS configuration applies to all
-    /// hostnames configured via <see cref="WithHostname"/>.
+    /// Configures TLS termination using a parameter for the secret name.
+    /// </summary>
+    /// <param name="builder">The ingress resource builder.</param>
+    /// <param name="secretName">A parameter resource builder for the secret name.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    [AspireExport("withIngressTlsParam", Description = "Configures TLS for a Kubernetes Ingress with a parameterized secret")]
+    public static IResourceBuilder<KubernetesIngressResource> WithTls(
+        this IResourceBuilder<KubernetesIngressResource> builder,
+        IResourceBuilder<ParameterResource> secretName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(secretName);
+
+        builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
+            SecretName: ReferenceExpression.Create($"{secretName.Resource}"),
+            Hosts: [.. builder.Resource.Hostnames]));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures TLS termination with an auto-generated secret name derived from the ingress name.
     /// </summary>
     /// <param name="builder">The ingress resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
@@ -229,7 +257,7 @@ public static class KubernetesIngressExtensions
         var secretName = $"{builder.Resource.Name}-tls";
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
-            SecretName: secretName,
+            SecretName: ReferenceExpression.Create($"{secretName}"),
             Hosts: [.. builder.Resource.Hostnames]));
 
         return builder;
@@ -284,7 +312,28 @@ public static class KubernetesIngressExtensions
         ArgumentException.ThrowIfNullOrEmpty(key);
         ArgumentNullException.ThrowIfNull(value);
 
-        builder.Resource.IngressAnnotations[key] = value;
+        builder.Resource.IngressAnnotations[key] = ReferenceExpression.Create($"{value}");
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a Kubernetes metadata annotation with a parameter value that will be resolved at deploy time.
+    /// </summary>
+    /// <param name="builder">The ingress resource builder.</param>
+    /// <param name="key">The annotation key.</param>
+    /// <param name="value">A parameter resource builder for the annotation value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    [AspireExport("withIngressAnnotationParam", Description = "Adds a parameterized Kubernetes metadata annotation to an Ingress")]
+    public static IResourceBuilder<KubernetesIngressResource> WithIngressAnnotation(
+        this IResourceBuilder<KubernetesIngressResource> builder,
+        string key,
+        IResourceBuilder<ParameterResource> value)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        ArgumentNullException.ThrowIfNull(value);
+
+        builder.Resource.IngressAnnotations[key] = ReferenceExpression.Create($"{value.Resource}");
         return builder;
     }
 

@@ -54,7 +54,7 @@ public class KubernetesIngressResource(
     /// <summary>
     /// Gets the list of hostnames this ingress matches. If empty, the ingress matches all hosts.
     /// </summary>
-    internal List<string> Hostnames { get; } = [];
+    internal List<ReferenceExpression> Hostnames { get; } = [];
 
     /// <summary>
     /// Gets the list of routing rules configured for this ingress.
@@ -71,7 +71,7 @@ public class KubernetesIngressResource(
     /// These are key-value pairs placed in the <c>metadata.annotations</c> field of the K8S Ingress,
     /// not Aspire <see cref="IResourceAnnotation"/> instances.
     /// </summary>
-    internal Dictionary<string, string> IngressAnnotations { get; } = [];
+    internal Dictionary<string, ReferenceExpression> IngressAnnotations { get; } = [];
 
     /// <summary>
     /// Gets or sets the default backend configuration for unmatched requests.
@@ -121,8 +121,8 @@ internal sealed record IngressRouteConfig(
 /// Stores TLS configuration for a <see cref="KubernetesIngressResource"/>.
 /// </summary>
 internal sealed record IngressTlsConfig(
-    string SecretName,
-    List<string> Hosts);
+    ReferenceExpression SecretName,
+    List<ReferenceExpression> Hosts);
 
 /// <summary>
 /// Stores the default backend configuration for a <see cref="KubernetesIngressResource"/>.

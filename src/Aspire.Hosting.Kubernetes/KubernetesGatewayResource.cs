@@ -54,7 +54,7 @@ public class KubernetesGatewayResource(
     /// <summary>
     /// Gets the list of hostnames this gateway matches.
     /// </summary>
-    internal List<string> Hostnames { get; } = [];
+    internal List<ReferenceExpression> Hostnames { get; } = [];
 
     /// <summary>
     /// Gets the list of routing rules configured for this gateway.
@@ -69,7 +69,7 @@ public class KubernetesGatewayResource(
     /// <summary>
     /// Gets the Kubernetes metadata annotations to add to the generated Gateway resource.
     /// </summary>
-    internal Dictionary<string, string> GatewayAnnotations { get; } = [];
+    internal Dictionary<string, ReferenceExpression> GatewayAnnotations { get; } = [];
 
     /// <summary>
     /// Gets the generated K8S Gateway object, populated during infrastructure processing.
@@ -96,5 +96,5 @@ internal sealed record GatewayRouteConfig(
 /// Configures an HTTPS listener on the Gateway with TLS termination.
 /// </summary>
 internal sealed record GatewayTlsConfig(
-    string SecretName,
-    List<string> Hosts);
+    ReferenceExpression SecretName,
+    List<ReferenceExpression> Hosts);

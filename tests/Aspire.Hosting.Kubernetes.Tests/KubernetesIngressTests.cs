@@ -338,7 +338,7 @@ public class KubernetesIngressTests
         ingress.WithTls();
 
         Assert.Single(ingress.Resource.TlsConfigs);
-        Assert.Equal("public-tls", ingress.Resource.TlsConfigs[0].SecretName);
+        Assert.Equal("public-tls", ingress.Resource.TlsConfigs[0].SecretName.Format);
     }
 
     [Fact]

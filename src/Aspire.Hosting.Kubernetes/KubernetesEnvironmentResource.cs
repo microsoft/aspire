@@ -410,10 +410,10 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
 
         // Process Ingress resources
-        ProcessIngressResources(appModel, deploymentTargets, logger);
+        await ProcessIngressResources(appModel, deploymentTargets, logger, context.CancellationToken).ConfigureAwait(false);
 
         // Process Gateway API resources
-        ProcessGatewayResources(appModel, deploymentTargets, logger);
+        await ProcessGatewayResources(appModel, deploymentTargets, logger, context.CancellationToken).ConfigureAwait(false);
     }
 
     private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
@@ -450,7 +450,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
     }
 
-    private void ProcessIngressResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger)
+    private async Task ProcessIngressResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger, CancellationToken cancellationToken)
     {
         var ingressResources = model.Resources
             .OfType<KubernetesIngressResource>()
@@ -464,7 +464,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 continue;
             }
 
-            var ingress = BuildIngressObject(ingressResource, deploymentTargets, logger);
+            var ingress = await BuildIngressObject(ingressResource, deploymentTargets, logger, cancellationToken).ConfigureAwait(false);
             if (ingress is not null)
             {
                 ingressResource.GeneratedIngress = ingress;
@@ -472,10 +472,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
     }
 
-    private static Ingress? BuildIngressObject(
+    private static async Task<Ingress?> BuildIngressObject(
         KubernetesIngressResource ingressResource,
         Dictionary<IResource, KubernetesResource> deploymentTargets,
-        ILogger logger)
+        ILogger logger,
+        CancellationToken cancellationToken)
     {
         var ingress = new Ingress
         {
@@ -492,7 +493,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var (key, value) in ingressResource.IngressAnnotations)
         {
-            ingress.Metadata.Annotations[key] = value;
+            ingress.Metadata.Annotations[key] = (await value.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
         }
 
         var routesByHost = ingressResource.Routes.GroupBy(r => r.Host ?? string.Empty);
@@ -540,12 +541,12 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             var tlsEntry = new IngressTLSV1
             {
-                SecretName = tls.SecretName,
+                SecretName = (await tls.SecretName.GetValueAsync(cancellationToken).ConfigureAwait(false))!,
             };
 
             foreach (var host in tls.Hosts)
             {
-                tlsEntry.Hosts.Add(host);
+                tlsEntry.Hosts.Add((await host.GetValueAsync(cancellationToken).ConfigureAwait(false))!);
             }
 
             ingress.Spec.Tls.Add(tlsEntry);
@@ -564,11 +565,12 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             {
                 foreach (var host in tls.Hosts)
                 {
-                    if (!hostsWithRules.Contains(host))
+                    var resolvedHost = (await host.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
+                    if (!hostsWithRules.Contains(resolvedHost))
                     {
                         ingress.Spec.Rules.Add(new IngressRuleV1
                         {
-                            Host = host,
+                            Host = resolvedHost,
                             Http = new HttpIngressRuleValueV1
                             {
                                 Paths =
@@ -645,7 +647,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         };
     }
 
-    private void ProcessGatewayResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger)
+    private async Task ProcessGatewayResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger, CancellationToken cancellationToken)
     {
         var gatewayResources = model.Resources
             .OfType<KubernetesGatewayResource>()
@@ -659,14 +661,15 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 continue;
             }
 
-            BuildGatewayObjects(gatewayResource, deploymentTargets, logger);
+            await BuildGatewayObjects(gatewayResource, deploymentTargets, logger, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private static void BuildGatewayObjects(
+    private static async Task BuildGatewayObjects(
         KubernetesGatewayResource gatewayResource,
         Dictionary<IResource, KubernetesResource> deploymentTargets,
-        ILogger logger)
+        ILogger logger,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(gatewayResource.GatewayClassName))
         {
@@ -686,7 +689,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var (key, value) in gatewayResource.GatewayAnnotations)
         {
-            gateway.Metadata.Annotations[key] = value;
+            gateway.Metadata.Annotations[key] = (await value.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
         }
 
         gateway.Spec.Listeners.Add(new GatewayListenerV1
@@ -708,16 +711,19 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 var listenerName = tlsListenerIndex == 0 ? "https" : $"https-{tlsListenerIndex}";
                 tlsListenerIndex++;
 
+                var resolvedHost = (await host.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
+                var resolvedSecretName = (await tls.SecretName.GetValueAsync(cancellationToken).ConfigureAwait(false))!;
+
                 gateway.Spec.Listeners.Add(new GatewayListenerV1
                 {
                     Name = listenerName,
                     Protocol = "HTTPS",
                     Port = 443,
-                    Hostname = host,
+                    Hostname = resolvedHost,
                     Tls = new GatewayTlsConfigV1
                     {
                         Mode = "Terminate",
-                        CertificateRefs = { new GatewayCertificateRefV1 { Name = tls.SecretName } }
+                        CertificateRefs = { new GatewayCertificateRefV1 { Name = resolvedSecretName } }
                     },
                     AllowedRoutes = new GatewayAllowedRoutesV1
                     {
@@ -823,9 +829,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         };
     }
 
-    private static HashSet<(string SecretName, string Hostname)> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
+    private static HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)> CollectTlsSecrets(DistributedApplicationModel model, KubernetesEnvironmentResource environment)
     {
-        var tlsSecrets = new HashSet<(string SecretName, string Hostname)>();
+        var tlsSecrets = new HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)>();
 
         foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
         {
@@ -855,7 +861,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     private static async Task BootstrapTlsSecretsAsync(
         PipelineStepContext context,
         KubernetesEnvironmentResource environment,
-        HashSet<(string SecretName, string Hostname)> tlsSecrets)
+        HashSet<(ReferenceExpression SecretName, ReferenceExpression Hostname)> tlsSecrets)
     {
         var @namespace = "default";
         if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
@@ -867,8 +873,11 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
         }
 
-        foreach (var (secretName, hostname) in tlsSecrets)
+        foreach (var (secretNameExpr, hostnameExpr) in tlsSecrets)
         {
+            var secretName = await secretNameExpr.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            var hostname = await hostnameExpr.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+
             var checkArgs = $"get secret {secretName} --namespace {@namespace}";
             if (environment.KubeConfigPath is not null)
             {
