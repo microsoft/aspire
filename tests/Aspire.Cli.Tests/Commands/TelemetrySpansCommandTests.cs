@@ -328,7 +328,8 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
                                 Status = new OtlpSpanStatusJson { Code = 1 },
                                 Attributes =
                                 [
-                                    new OtlpKeyValueJson { Key = "http.method", Value = new OtlpAnyValueJson { StringValue = "GET" } }
+                                    new OtlpKeyValueJson { Key = "http.method", Value = new OtlpAnyValueJson { StringValue = "GET" } },
+                                    new OtlpKeyValueJson { Key = "aspire.destination", Value = new OtlpAnyValueJson { StringValue = "backend" } }
                                 ]
                             }
                         ]
@@ -392,6 +393,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
                 "name": "GET /home",
                 "status": "Ok",
                 "source": "frontend",
+                "destination": "backend",
                 "durationMs": 50,
                 "timestamp": "1970-01-01T00:00:00Z",
                 "attributes": {
